@@ -1,4 +1,4 @@
-// 品牌规范单源（承接旧线 constants/brand.js·R23 定名）：改名/对口径只改这里（病根#5）。
+// 品牌规范单源（R23 定名）：改名/对口径只改这里（病根#5）。
 export const BRAND_NAME = 'Lucky Ducky 小棉鸭'
 // 中文标语口径正册（site 独立部署、不跟本处；mp 顾客可见口号以这里为准）
 export const BRAND_SLOGAN_CN = '体验钩织，创造幸运。'

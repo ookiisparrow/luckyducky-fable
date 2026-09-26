@@ -1,11 +1,11 @@
-/* 自绘 seek 条拖动几何·渲染层驱动（批5·根因#15：60Hz touchmove 每帧 5 字段 setData 双向过桥＝跟手延迟/掉帧源）。
+/* 自绘 seek 条拖动几何·渲染层驱动（根因#15：60Hz touchmove 每帧 5 字段 setData 双向过桥＝跟手延迟/掉帧源）。
    WXS 响应事件在 WebView 渲染器内闭环——touchmove 每帧只 setStyle 三个节点（fill 宽/handle left/preview left），
    零逻辑层往返；只在「过秒」时经 callMethod 回逻辑层刷文案+震动（位置 60fps 跟手·文案 ~10fps·可感知取舍已拍板）。
    两段式铁律：WXS 内绝不提交 seek——onMove 只改显示，松手（onEnd）才 callMethod('onSeekCommit') 由逻辑层真 seek。
    数学（clampSeek/nearestMark）与 lib/player.ts 同式同构——WXS 进不了 tsc 编译面（ES5 独立运行时），由
    tests/player-seek-wxs.test.ts 抽本函数体与 TS 单源版逐点对拍钉死（防两处数学漂移·病根#5）。
    注意：该对拍在 **Node** 里跑（new Function），Node 比 WXS 运行时宽松——写 Number()/箭头/模板串
-   照样绿、真机编译却整页白（2026-07-20 栽过一次）。语法子集由守卫 rw-mp-wxs-runtime-subset 静态咬。
+   照样绿、真机编译却整页白。语法子集由守卫 rw-mp-wxs-runtime-subset 静态咬。
    震动走 callMethod 回逻辑层（WXS 内禁 wx.*·离散低频可接受）；无 setTimeout（WXS 不能跑帧循环）。 */
 
 // 渲染层驻留状态（player 是单实例页·模块态与页面同生命周期）。几何由逻辑层经 change:cfg 一次性下发。
@@ -56,7 +56,7 @@ function previewLeft(pct) {
   return Math.min(Math.max(raw, edgePx), trackWidth - edgePx)
 }
 
-// 位置落样式·**唯一写入口**（2026-07-25 用户报「切下一段进度条仍停在拖动点」修）：
+// 位置落样式·**唯一写入口**：
 // 实测——WXS setStyle 写过一次后，wxml 上 `style="width:{{seekPct}}%"` 的数据绑定**永久失灵**
 // （换段 setData({seekPct:0}) 清不掉，之后播放推进也不再带动进度条＝拖一次进度条就死了）。
 // 故位置不许两方写：拖动走 applyAt→本函数，非拖动期由逻辑层 seekPct 经 change:pct→onPct→本函数。
@@ -86,7 +86,7 @@ function applyAt(ow, clientX) {
   }
 }
 
-// change:pct 观察者（逻辑层 seekPct → 渲染层位置·2026-07-25 修「拖动后进度条冻结」）：
+// change:pct 观察者（逻辑层 seekPct → 渲染层位置）：
 // 播放推进/换段归零/松手落位都经此回灌。拖动中（st.down）忽略——那会儿位置由 applyAt 每帧接管，
 // 逻辑层的节流回包（onSeekTick 只改文案）不该把手柄拽回旧值。
 function onPct(nv, ov, ow) {

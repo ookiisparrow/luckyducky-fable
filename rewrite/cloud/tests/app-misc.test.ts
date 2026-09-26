@@ -117,15 +117,16 @@ describe('意见反馈（黄金 admin-misc：过闸·白名单·限频）', () =
 
 describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-closed·覆盖式幂等）', () => {
   const submit = (data: Record<string, unknown>) => app({ action: 'submitCheckpointPhoto', data }) as Promise<any>
+  const F = (name: string) => `cloud://env.x/checkpoints/oU1/${name}.jpg` // 照片只收本人目录
   const seedEntered = () => control.seed('activations', [{ _id: 'a1', _openid: 'oU1', courseId: 'c1', enteredAt: 123 }])
 
   it('大白话：无身份拒；缺参拒；未进课拒（防未购造数）——全部不落库', async () => {
-    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })).error).toBe('NO_OPENID')
+    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f1') })).error).toBe('NO_OPENID')
     control.setOpenId('oU1')
     expect((await submit({ courseId: 'c1', nodeId: 'n1' })).error).toBe('BAD_ARGS')
-    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })).error).toBe('NOT_ENTITLED') // 未进课
+    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f1') })).error).toBe('NOT_ENTITLED') // 未进课
     control.seed('activations', [{ _id: 'a0', _openid: 'oU1', courseId: 'c1', enteredAt: null }]) // 激活未进课也不行
-    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })).error).toBe('NOT_ENTITLED')
+    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f1') })).error).toBe('NOT_ENTITLED')
     expect(control.dump('checkpoints').length).toBe(0)
   })
 
@@ -135,7 +136,7 @@ describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-close
     control.setBeforeGet(({ coll }: any) => {
       if (coll === 'activations') throw new Error('MOCK_DB_FAIL')
     })
-    const fail = await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })
+    const fail = await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f1') })
     control.setBeforeGet(null as never)
     expect(fail.ok).toBe(false)
     expect(fail.error).toBe('INTERNAL')
@@ -143,7 +144,7 @@ describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-close
     expect(control.dump('checkpoints').length).toBe(0)
     control.reset()
     control.setOpenId('oU1')
-    const empty = await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })
+    const empty = await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f1') })
     expect(empty.error).toBe('NOT_ENTITLED')
     expect(control.dump('checkpoints').length).toBe(0)
   })
@@ -151,30 +152,30 @@ describe('节点拍照上传（黄金 §八：进课闸·内容安全 fail-close
   it('大白话：图安全放行落库为本人提交；同节点重传覆盖不重复建档；违规拒；校验不了（能力未开/网络）也拒——证明安全才放行', async () => {
     control.setOpenId('oU1')
     seedEntered()
-    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f1' })).ok).toBe(true)
+    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f1') })).ok).toBe(true)
     const doc = control.dump('checkpoints')[0]
     expect(doc._id).toBe('sub:oU1:c1:n1')
     expect(doc._openid).toBe('oU1')
     expect(doc.secPassed).toBe(true)
     // 覆盖式幂等：同节点重传 → 仍一条·fileId 更新
-    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: 'f2' })).ok).toBe(true)
+    expect((await submit({ courseId: 'c1', nodeId: 'n1', fileId: F('f2') })).ok).toBe(true)
     expect(control.dump('checkpoints').length).toBe(1)
-    expect(control.dump('checkpoints')[0].fileId).toBe('f2')
+    expect(control.dump('checkpoints')[0].fileId).toBe(F('f2'))
     // 违规（平台判 87014）→ 拒且不入库
     control.setOpenapiFail(true, 87014)
-    expect((await submit({ courseId: 'c1', nodeId: 'n2', fileId: 'f3' })).error).toBe('IMG_RISKY')
+    expect((await submit({ courseId: 'c1', nodeId: 'n2', fileId: F('f3') })).error).toBe('IMG_RISKY')
     // 校验不了（能力未开/网络异常·非违规码）→ 同样拒（fail-closed）
     control.setOpenapiFail(true)
-    expect((await submit({ courseId: 'c1', nodeId: 'n3', fileId: 'f4' })).error).toBe('SEC_CHECK_FAIL')
+    expect((await submit({ courseId: 'c1', nodeId: 'n3', fileId: F('f4') })).error).toBe('SEC_CHECK_FAIL')
     expect(control.dump('checkpoints').length).toBe(1) // n2/n3 一条没进
   })
 
   it('大白话：courseId/nodeId 含冒号一律拒（fail-closed·同 saveCheckpoints 先例：防 sub:openid:courseId:nodeId 拼接跨课/跨节点撞键覆盖）', async () => {
     control.setOpenId('oU1')
     seedEntered()
-    const r1 = await submit({ courseId: 'c1:evil', nodeId: 'n1', fileId: 'f1' })
+    const r1 = await submit({ courseId: 'c1:evil', nodeId: 'n1', fileId: F('f1') })
     expect(r1.error).toBe('BAD_ARGS:COLON_IN_ID')
-    const r2 = await submit({ courseId: 'c1', nodeId: 'n1:evil', fileId: 'f1' })
+    const r2 = await submit({ courseId: 'c1', nodeId: 'n1:evil', fileId: F('f1') })
     expect(r2.error).toBe('BAD_ARGS:COLON_IN_ID')
     expect(control.dump('checkpoints').length).toBe(0)
   })

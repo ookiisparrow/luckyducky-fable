@@ -7,7 +7,8 @@ import { Search, RotateCcw, ClipboardCheck, RefreshCw } from 'lucide-vue-next'
 import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled, getTrialRefreshGate, refreshTrialSession } from '../api/cs'
 import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
-import { useLatest, appendNew } from '../lib/latest'
+import { failText, writeFailText } from '../lib/status'
+import { usePager, appendNew } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -20,12 +21,12 @@ const openid = ref(String(route.query.openid || ''))
 const externalUserId = ref(String(route.query.externalUserId || ''))
 const keyword = ref('')
 const msgs = ref<MsgVM[]>([])
-const cursor = ref<unknown>(null)
-const hasMore = ref(false)
+const pager = usePager()
+const hasMore = pager.hasMore
 const report = ref<ReportVM | null>(null)
 const message = ref('')
-// 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径（P2 顺手改批——此前前端默认 30
-// 分钟，首次挂载即把它当参数传给后端，用「猜的默认值」悄悄覆盖了后端实际生效口径，两个数字互相打架）。
+// 首响 SLA 阈值（分钟）：初值 5 与后端 conversations.ts DEFAULT_SLA_MS 同口径。前端若首次挂载就把自己猜的
+// 默认值当参数传给后端，会悄悄覆盖后端实际生效口径，两个数字互相打架。
 // 首次加载不传该值（见 loadReport slaMinInited 分支），让后端用它自己的 DEFAULT_SLA_MS 计算，回包后用后端
 // 权威 slaMs 回填本地显示——今后改后端默认值不用两处同步改，前端自动跟上。
 const slaMin = ref(5)
@@ -38,49 +39,39 @@ async function loadReport() {
   const r = await conversationsReport(slaMinInited ? slaMin.value * 60000 : undefined)
   reportBusy.value = false
   report.value = mapReport(r) // 出错/空档都为 null（卡隐）——出错时另透传原文，别让「加载失败」被读成「暂无数据」
-  reportErr.value = r.ok ? '' : '质检报表加载失败：' + String((r as any).error || '')
+  reportErr.value = r.ok ? '' : failText('质检报表加载失败', r.error)
   if (r.ok) {
-    const backendSlaMs = Number((r as any).slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
+    const backendSlaMs = Number(r.slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
     if (Number.isFinite(backendSlaMs) && backendSlaMs > 0) slaMin.value = Math.round(backendSlaMs / 60000) || slaMin.value
     slaMinInited = true
   }
 }
 
-// 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档·P2）
+// 发起检索时的筛选快照（翻页复用·防用户改输入框后点「更早」用新筛选+旧 cursor 串档）
 let searchFilter: { openid?: string; externalUserId?: string; keyword?: string } = {}
-const pageGen = useLatest() // 检索/翻页乱序守卫（P2·在途时又检索/翻页·旧结果别覆盖/混排新结果·根因#8）
-const searching = ref(false) // search 专属在途标志（单写布尔·more 加载闸不受旁路 message 写者干扰）
 async function search() {
   message.value = '检索中…'
-  searching.value = true
   searchFilter = { openid: openid.value.trim() || undefined, externalUserId: externalUserId.value.trim() || undefined, keyword: keyword.value.trim() || undefined }
-  const my = pageGen.begin()
+  const my = pager.begin()
   const r = await searchConversations(searchFilter)
-  if (pageGen.isStale(my)) return // 已发起更新的检索·丢弃过期结果（由更新的 search 负责复位 searching）
-  searching.value = false // 本次是最新·检索完成
+  if (pager.isStale(my)) return // 已发起更新的检索·丢弃过期结果
   msgs.value = r.ok ? mapMessages(r.messages) : []
-  cursor.value = r.ok ? r.nextCursor : null
-  hasMore.value = !!(r.ok && r.hasMore)
-  message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : '检索失败：' + String(r.error || '')
+  pager.reset(r)
+  message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : failText('检索失败', r.error)
 }
 
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  if (searching.value) return // 检索在途时不翻页（cursor 还是旧的）——覆盖 search 先于 more 的序（单写布尔·不受旁路 message 写者干扰）
-  const gen = pageGen.peek() // 绑定当前 search 代际·不递增（不反噬在途 search）·新检索会作废本页（迭代F 逮出）
-  const r = await searchConversations({ ...searchFilter, cursor: cursor.value }) // 复用检索快照·不现读输入框（防串档）
-  if (pageGen.isStale(gen)) return // 期间又检索·放弃本页（防混排）
+  const r = await pager.next((cursor) => searchConversations({ ...searchFilter, cursor })) // 复用检索快照·不现读输入框（防串档）
+  if (!r) return
   if (!r.ok) {
-    message.value = '加载更多失败：' + String(r.error || '') // 别静默吞·反复点无反应（病根#14）
+    message.value = failText('加载更多失败', r.error) // 别静默吞·反复点无反应（病根#14）
     return
   }
-  message.value = '' // 翻页成功清旧错（P2·item5：上次失败留的「加载更多失败」提示别一直挂在成功之后）
+  message.value = '' // 翻页成功清旧错（上次失败留的「加载更多失败」提示别一直挂在成功之后）
   msgs.value = appendNew(msgs.value, mapMessages(r.messages))
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
 }
 
-// —— 质检抽检（批 B7）——
+// —— 质检抽检 ——
 // sessionKey＝csSession._id（非 externalUserId·与「会话检索」上方 openid/externalUserId 输入框语义不同）。
 // 编辑态附在纯映射 QcRowVM 之外（draftScore/draftNote/busy/err 只在本组件用·mapCs.ts 保持纯映射不掺 UI 态）。
 interface QcRow extends QcRowVM {
@@ -93,11 +84,10 @@ function toQcRow(v: QcRowVM): QcRow {
   return { ...v, draftScore: v.scored ? v.score : 0, draftNote: v.scored ? v.note : '', busy: false, err: '' }
 }
 const qcRows = ref<QcRow[]>([])
-const qcCursor = ref<unknown>(null)
-const qcHasMore = ref(false)
+const qcPager = usePager()
+const qcHasMore = qcPager.hasMore
 const qcMsg = ref('')
 const qcSampling = ref(false)
-const qcGen = useLatest() // 乱序守卫（同 search/loadEntries 范式·防在途请求互相覆盖）
 
 // 池内已抽/已评（由已加载的行现算·不编未加载部分的数——诚实反映「当前看到多少」而非库内总数）
 function qcStat(): string {
@@ -114,32 +104,27 @@ function mergeQcRows(list: QcRowVM[]) {
 
 async function loadQcSampled() {
   qcMsg.value = qcRows.value.length ? qcMsg.value : '加载中…'
-  const my = qcGen.begin()
+  const my = qcPager.begin()
   const r = await listQcSampled({})
-  if (qcGen.isStale(my)) return
+  if (qcPager.isStale(my)) return
   if (!r.ok) {
-    qcMsg.value = '加载失败：' + String(r.error || '')
+    qcMsg.value = failText('加载失败', r.error)
     return
   }
   qcRows.value = mapQcRows(r.list).map(toQcRow)
-  qcCursor.value = r.nextCursor
-  qcHasMore.value = !!r.hasMore
+  qcPager.reset(r)
   qcMsg.value = qcRows.value.length ? '' : '暂无抽样记录，点「随机抽取」开始质检'
 }
 
 async function moreQc() {
-  if (!qcHasMore.value || qcCursor.value == null) return
-  const gen = qcGen.peek()
-  const r = await listQcSampled({ cursor: qcCursor.value })
-  if (qcGen.isStale(gen)) return
+  const r = await qcPager.next((cursor) => listQcSampled({ cursor }))
+  if (!r) return
   if (!r.ok) {
-    qcMsg.value = '加载更多失败：' + String(r.error || '')
+    qcMsg.value = failText('加载更多失败', r.error)
     return
   }
   qcMsg.value = ''
   mergeQcRows(mapQcRows(r.list)) // dedup-by-id（同 Conversations 消息翻页/Csat 明细范式）
-  qcCursor.value = r.nextCursor
-  qcHasMore.value = !!r.hasMore
 }
 
 async function doSampleQc() {
@@ -148,7 +133,7 @@ async function doSampleQc() {
   const r = await sampleQc(10)
   qcSampling.value = false
   if (!r.ok) {
-    qcMsg.value = '抽样失败：' + String(r.error || '')
+    qcMsg.value = writeFailText('抽样失败', r.error)
     return
   }
   const fresh = mapQcRows(r.sampled).map(toQcRow)
@@ -170,7 +155,7 @@ async function saveQc(row: QcRow) {
   const r = await saveQcMark(row.sessionKey, row.draftScore, row.draftNote.trim())
   row.busy = false
   if (!r.ok) {
-    row.err = r.error === 'ALREADY_MARKED' ? '已被评过分（可能是并发保存）' : '保存失败：' + String(r.error || '')
+    row.err = r.error === 'ALREADY_MARKED' ? '已被评过分（可能是并发保存）' : writeFailText('保存失败', r.error)
     return
   }
   row.scored = true
@@ -193,7 +178,7 @@ const trialRefreshMsg = ref('')
 
 async function loadTrialRefreshGate() {
   const r = await getTrialRefreshGate()
-  trialRefreshOn.value = !!(r.ok && (r as { enabled?: boolean }).enabled)
+  trialRefreshOn.value = !!(r.ok && r.enabled)
 }
 
 async function doTrialRefresh() {
@@ -228,13 +213,13 @@ async function doTrialRefresh() {
     trialRefreshMsg.value = CS_REFRESH_COPY.adminSuccess
     return
   }
-  const err = String((r as { error?: string }).error || '')
+  const err = String(r.error || '')
   trialRefreshMsg.value =
     err === 'HUMAN_ACTIVE'
       ? '人工处理中，默认不能刷新。如需强制请走管理端并写原因。'
       : err === 'TRIAL_ONLY'
         ? '当前环境未开放刷新'
-        : '刷新失败：' + err
+        : writeFailText('刷新失败', err)
 }
 
 onMounted(() => {
@@ -314,7 +299,7 @@ onMounted(() => {
       <EmptyState v-else-if="!message" :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
     </Card>
 
-    <!-- 质检抽检（批 B7）：closed 会话随机抽样 → 人工评分 1-5 + 备注·粒度=会话档级（非轮次，csSession 无轮次实体） -->
+    <!-- 质检抽检：closed 会话随机抽样 → 人工评分 1-5 + 备注·粒度=会话档级（非轮次，csSession 无轮次实体） -->
     <Card title="质检抽检" sub="从已结束会话里随机抽样，人工评分 1-5 + 备注留痕">
       <template #head>
         <UiButton size="sm" :disabled="qcSampling" @click="doSampleQc">

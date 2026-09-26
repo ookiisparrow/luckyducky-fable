@@ -10,8 +10,8 @@
  * @ldrw/shared 经 esbuild alias 直接从 TS 源打包（无需先 build shared dist——区别旧线两步构建）。
  *
  * 用法：npm run build:rw-cloud。部署（M5 切换后事实·深审 P3 纠错）：本仓＝生产源，rewrite/cloud/dist 是
- * 真实部署产物、部署真实生效于云环境 cloudbase-d4gcssqbv06865479；部署经 guard-deploy 闸（读类/单个非敏感
- * 放行·敏感/批量 ask 二次确认——非「全拦」）+ 人工确认。旧注释「本仓禁部署·并行期防覆盖」是切换前状态，已废。
+ * 真实部署产物、部署真实生效于云环境 cloudbase-d4gcssqbv06865479；部署经 guard-deploy 闸（tcb 只放行只读白名单，
+ * 任何部署都 ask·规则以 scripts/guard-deploy.mjs 为准）+ 人工确认。
  */
 import { build } from 'esbuild'
 import {

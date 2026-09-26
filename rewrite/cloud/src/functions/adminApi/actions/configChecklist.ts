@@ -1,15 +1,15 @@
 import { reply, readDoc, type Ctx } from '../lib'
-import { hasAdjustLedgerEntry, hasThresholdMaterial } from '../../../kit'
+import { hasAdjustLedgerEntry, hasThresholdMaterial, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
-// 人工配置清单（批 B9→2026-07-12 补口可填写化·docs/进销存ERP/ 与 docs/后台360工作站/ 之外的「配了没」总览）：
-// 27 项散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏
-// （审查批 +2：客服小程序卡片 miniappAppId/thumbMediaId 随迁入库，cs 函数环境变量配置项就此清零）。
+// 人工配置清单（「配了没」总览·部分项可在本页填写）：
+// 散落配置（云函数环境变量→本页填写自动生效 / admin 页内 DB 字段 / 纯人工外部后台项 / 资产正册）拼一屏
+// （客服小程序卡片 miniappAppId/thumbMediaId 也在库里，故清单里没有 cs 函数环境变量项）。
 // 探测「配了没」；**可填写的字段绝不回显既有值**（前端 fill.inputType 恒渲染空输入框，留空提交＝不改动，
 // 见 adminApi/actions/secureConfig.ts）——零回显铁律延伸到写入口，本文件仍只做只读探测。
 //
-// 探测规则五种（预审后主脑裁决·2026-07-12·敏感凭证入库决策后修订）：
-// ① secureConfig / config DB 文档字段存在性——决策 2026-07-12：WXKF_*/WXPAY_MCH_* 凭证与 config/pay 接缝
+// 探测规则五种：
+// ① secureConfig / config DB 文档字段存在性——WXKF_*/WXPAY_MCH_* 凭证与 config/pay 接缝
 //    字段全部收口进库（kit/secureConfig.ts 单源读取），本页可直接填写（fill 字段非空的 item）；DB 无值时
 //    云函数运行时会回退同名环境变量（迁移期兼容），但本页状态只看库（鼓励迁移，不谎报「未配」实为「仍在
 //    旧环境变量层」的暧昧态——note 里说明）。
@@ -65,7 +65,7 @@ export async function getConfigChecklist({ db }: Ctx) {
   ])
   const docs = [rWxkf, rWxpay, rPay, rVod, rSettings, rBom]
   // 读失败≠未配置：显示成 missing 会诱导管理员重填密钥
-  if (docs.some((r) => !r.ok)) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  if (docs.some((r) => !r.ok)) return reply(200, err('DOC_READ_FAIL'))
   const [wxkf, wxpay, pay, vod, settings, bom] = docs.map((r) => (r.ok && r.data) || null)
   const has = (o: Record<string, unknown> | null, f: string) => !!(o && o[f])
   // wxpay 另认 adminApi 自身环境变量（规则②·同进程 wxbill.ts 读取，可信兜底）

@@ -48,7 +48,7 @@
   color: var(--ld-content-2);
   letter-spacing: 2rpx;
 }
-/* 空车出路按钮（2026-07-25 体检批 P3）：药丸描边次级样式，与全站主按钮形体一致、但不抢主视觉 */
+/* 空车出路按钮：药丸描边次级样式，与全站主按钮形体一致、但不抢主视觉 */
 .ld-cart-hold-cta {
   margin-top: 20rpx;
   padding: 14rpx 44rpx;
@@ -120,7 +120,7 @@
   letter-spacing: -0.3rpx;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* 放开到两行（2026-07-25 体检批 P3）：原 white-space:nowrap 单行截断，
+  /* 放开到两行：white-space:nowrap 单行截断的话，
      「进阶套装 · 小伙伴们」只看得到前 6 个字，而同一件商品在下方推荐位却能显示全名。 */
   display: -webkit-box;
   -webkit-line-clamp: 2;

@@ -7,7 +7,7 @@ import { runInspect, getInspectStatus, listAnomalies, resolveAnomaly, reportClie
 import { COLLECTIONS } from '@ldrw/shared'
 
 const HOUR = 3600 * 1000
-const ctx = (data?: any, agentId = 'admin') => ({ db: cloud.database(), cloud, data, drafts: {}, agentId }) as any
+const ctx = (data?: any, agentId = 'admin') => ({ db: cloud.database(), cloud, data, agentId }) as any
 const body = (res: any) => JSON.parse(res.body)
 
 beforeEach(() => control.reset())

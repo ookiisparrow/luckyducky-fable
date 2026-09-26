@@ -10,11 +10,11 @@ import Desk from '../src/Desk.vue'
 
 const IMG = (msgid: string) => ({ at: 1000, direction: 'in', text: '[image]', msgtype: 'image', msgid, hasMedia: true })
 
-async function mountWith(media: (msgId: string) => Promise<Record<string, unknown>>) {
+async function mountWith(media: (msgId: string) => Promise<Record<string, unknown>>, messages: unknown[] = [IMG('ok'), IMG('old'), IMG('bad')]) {
   postMock.mockReset().mockImplementation(async (action: string, data: any) => {
     if (action === 'listMyActive') return { ok: true, sessions: [{ sessionId: 's1', externalUserId: 'wm-000001' }] }
     if (action === 'listQueue') return { ok: true, items: [] }
-    if (action === 'getThread') return { ok: true, messages: [IMG('ok'), IMG('old'), IMG('bad')], nextCursor: 0 }
+    if (action === 'getThread') return { ok: true, messages, nextCursor: 0 }
     if (action === 'getMediaUrl') return media(data.msgId)
     return { ok: true, panels: [] }
   })
@@ -65,6 +65,27 @@ describe('Desk.vue 图片加载点击闸', () => {
     expect(cards()[2].find('img').exists()).toBe(true)
 
     expect(mediaCalls()).toEqual(['ok', 'old', 'bad', 'bad'])
+    w.unmount()
+  })
+})
+
+describe('Desk.vue 图片气泡', () => {
+  it('大白话：下载图带上所属会话号；「查看大图」只在图加载好后出现、点了开新窗；没带媒体标记的旧图消息按文字显示', async () => {
+    const realOpen = window.open
+    const openSpy = vi.fn()
+    window.open = openSpy as never
+    const legacy = { at: 2000, direction: 'in', text: '[image]', msgtype: 'image', msgid: 'legacy' }
+    const w = await mountWith(async () => ({ ok: true, url: 'https://x/ok.jpg' }), [IMG('ok'), legacy])
+    expect(w.findAll('.media')).toHaveLength(1)
+    expect(w.findAll('.bubble .text').map((t) => t.text())).toEqual(['[image]'])
+    expect(w.find('.media-view').exists()).toBe(false)
+
+    await w.find('.media').trigger('click')
+    await flushPromises()
+    expect(postMock.mock.calls.filter((c) => c[0] === 'getMediaUrl').map((c) => c[1])).toEqual([{ sessionId: 's1', msgId: 'ok' }])
+    await w.find('.media-view').trigger('click')
+    expect(openSpy).toHaveBeenCalledWith('https://x/ok.jpg', '_blank')
+    window.open = realOpen
     w.unmount()
   })
 })

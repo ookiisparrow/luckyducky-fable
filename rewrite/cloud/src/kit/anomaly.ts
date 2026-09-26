@@ -55,7 +55,7 @@ export async function recordAnomaly(
     const coll = db.collection(COLLECTIONS.anomalies)
     // 写入（确定性 _id 幂等·**add-first**）：首见→建档；撞号（并发/重复）→原子自增 count；集合缺失→建集合重试。
     // 为何 add-first 不 update-first：真机 sdk `doc(缺失).update()` **抛错**（非返 updated:0），会被外层 fail-soft 吞掉、
-    // 再也到不了 add——测试桩却返 updated:0 掩过（根因#8「桩≠真机」·部署真机首现 anomalies 恒空逼出）。add-first 不依赖
+    // 再也到不了 add——测试桩却返 updated:0 掩过（根因#8「桩≠真机」）。add-first 不依赖
     // update-on-missing，任其抛/返0 都稳。同 runInspection 写 inspectRuns 的 add + createCollection 兜底。
     const base = { _id: fp, kind, code, severity, ctx: sctx, count: 1, firstSeen: now, lastSeen: now, resolved: false }
     let isNew = false

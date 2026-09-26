@@ -1,6 +1,6 @@
 // 后台上传前 canvas 压缩（roots: #5）：宽上限 + jpeg 质量阶梯，压到 b64SizeOk 为止。
 // 默认跟多数调用方（卡片插画 / 首页 / 目录 hero）走 900 + [0.8, 0.6, 0.45, 0.3]。
-// 商品封面/相册是更早的 720 档（M3 批3 起就写明），调用方显式覆盖，不在这里猜。
+// 商品封面/相册走 720 档，调用方显式覆盖，不在这里猜。
 import { b64SizeOk } from './mapProducts'
 
 const COMPRESS_DEFAULT_MAX_WIDTH = 900

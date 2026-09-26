@@ -10,12 +10,13 @@ vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
 vi.mock('../lib/address', () => ({ defaultAddress: vi.fn() }))
 vi.mock('../lib/cart', () => ({ freshCover: vi.fn() }))
 vi.mock('../lib/catalog', () => ({ getAllProducts: vi.fn() }))
-vi.mock('../lib/checkout', () => ({
+// resolveOrderAmountFen 用真的：云端 order.amount 是元，桩成原样返回会让「漏掉元转分」恒绿。
+vi.mock('../lib/checkout', async (importOriginal) => ({
+  resolveOrderAmountFen: (await importOriginal<typeof import('../lib/checkout')>()).resolveOrderAmountFen,
   sellableAddons: () => [],
   getDraft: () => ({ items: [{ id: 'p1', sku: '', qty: 1 }], fromCart: false }),
   summaryFen: () => ({ amountFen: 999 }),
   getIdemKey: () => 'k1',
-  resolveOrderAmountFen: (o: any, fb: number) => (o && Number.isInteger(o.amount) ? o.amount : fb),
   finishSubmitted: vi.fn(),
   mapCreateOrderError: (e: string) => e,
 }))
@@ -60,8 +61,8 @@ function modalShown() {
 }
 
 describe('结算页：建单即付进成功页', () => {
-  it('大白话：建单回来已是已付（开发环境直付）——直接进成功页，带订单号与云端实付分，不再拉支付', async () => {
-    createOrderMock.mockResolvedValue({ ok: true, order: { id: 'o1', status: 'paid', amount: 12800 } })
+  it('大白话：建单回来已是已付（开发环境直付）——直接进成功页，带订单号与云端实付（元换成分），不再拉支付', async () => {
+    createOrderMock.mockResolvedValue({ ok: true, order: { id: 'o1', status: 'paid', amount: 128 } }) // 云端 amount 单位是元
     const page = await mount()
     page.data.address = { name: 'a', phone: 'p', region: 'r', detail: 'd' }
     await page.onSubmit()

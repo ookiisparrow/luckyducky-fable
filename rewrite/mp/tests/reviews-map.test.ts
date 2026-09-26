@@ -1,6 +1,7 @@
 // 黄金 learning-content §七（评价读取半边：条数 0 视同无数据/汇总形状/星级拼装）。
 import { describe, it, expect } from 'vitest'
 import { stars, mapReviews, mapSummary } from '../lib/mapReviews'
+import reviewsWxml from '../pages/reviews/reviews.wxml?raw'
 
 describe('星级拼装（黄金 §四：实心+空心拼满 5 颗）', () => {
   it('大白话：3 星=三实两空；越界钳 0-5；非数按 0', () => {
@@ -57,5 +58,11 @@ describe('汇总映射（黄金 §七读取：条数 0 视同无数据）', () =
     expect(mapSummary({ score: '0', count: 0 })).toBeNull() // 条数 0 视同无数据
     expect(mapSummary(null)).toBeNull()
     expect(mapSummary({ count: 'abc' })).toBeNull()
+  })
+
+  it('大白话：云端汇总只数了最近一批（approx）——条数写「近 N 条」，不装成全部只有 N 条', () => {
+    expect(mapSummary({ score: '4.5', count: 200, approx: true })!.countLabel).toBe('近 200 条评价')
+    expect(mapSummary({ score: '4.5', count: 12, approx: false })!.countLabel).toBe('12 条评价')
+    expect(reviewsWxml).toContain('{{summary.countLabel}}') // 评价页头用这句，不再自己拼 count
   })
 })

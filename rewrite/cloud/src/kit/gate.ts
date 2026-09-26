@@ -10,7 +10,7 @@ export interface OpenIdCtx {
 }
 
 /**
- * openid 闸（设计约束#3：安检 fail-closed 结构强制——不过闸写不出库）。
+ * openid 闸（根因#3：安检 fail-closed 结构强制——不过闸写不出库）。
  * 无可信 openid 直接拒；有则注入 { db, OPENID, event } 执行 handler。
  */
 export function withOpenId(handler: (ctx: OpenIdCtx) => Promise<any>) {
@@ -27,7 +27,7 @@ export function currentUnionId(): string {
 }
 
 /**
- * 回调防伪判定（设计约束#3 全场最关键）：回调只应由工作流服务端调用（无用户上下文）；
+ * 回调防伪判定（根因#3 全场最关键）：回调只应由工作流服务端调用（无用户上下文）；
  * 客户端 callFunction 必带 OPENID，带身份即视为伪造。无 OPENID → true（可信服务端调用）。
  */
 export function isServerCall(): boolean {
@@ -35,7 +35,7 @@ export function isServerCall(): boolean {
 }
 
 /**
- * 管理闸（设计约束#3）：CLI/控制台服务端调用（无 openid）放行；客户端（带 openid）须
+ * 管理闸（根因#3）：CLI/控制台服务端调用（无 openid）放行；客户端（带 openid）须
  * users.isAdmin===true——防任意登录用户 callFunction 覆盖生产数据（越不像业务的入口越要默认拒）。
  */
 export function withAdminGate(handler: (ctx: OpenIdCtx) => Promise<any>) {

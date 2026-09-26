@@ -1,6 +1,5 @@
 // 品牌启动 splash（冷启动开屏·对齐 Claude Design 通过稿）：淡紫渐变底 + 居中品牌字标（轻浮动）+
-// 「创造幸运~」+ 脚注。撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（2026-07-18 丝滑战役
-// 批2 拍板升级·前身 PR #34「纯计时器固定 1.5s、不挂钩数据」设计有意识推翻）：
+// 「创造幸运~」+ 脚注。撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（不用纯计时器固定时长）：
 //  · 至少停 MIN_HOLD_MS——低于此一闪而过、观感差；
 //  · 过了 min-hold 后，父级 ready（首页数据就绪）即淡出——好网络下 splash 撤得比死等 1.5s 更快；
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
@@ -26,8 +25,8 @@ Component({
     // 父级（home）数据就绪信号：置 true 触发 observer → maybeLeave（过了 min-hold 即淡出）
     ready: { type: Boolean, value: false, observer() { this.maybeLeave() } },
   },
-  // sloganEn 恒引 lib/brand 单源（2026-07-25 体检批 P3）：本组件原硬编码「Get Ducky Get Lucky™」，
-  // 与单源的「Get ducky get lucky」大小写不一致——开屏第一眼与支付成功页两种写法（病根#5）。™ 留在模板里。
+  // sloganEn 恒引 lib/brand 单源（病根#5）：本组件硬编码的话大小写易与单源不一致，
+  // 开屏第一眼与支付成功页两种写法。™ 留在模板里。
   data: { leaving: false, sloganEn: BRAND_SLOGAN_EN },
   lifetimes: {
     attached() {

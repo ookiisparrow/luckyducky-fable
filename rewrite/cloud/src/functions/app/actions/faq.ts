@@ -1,7 +1,7 @@
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { getDb, ok, err } from '../../../kit'
 
-const FAQ_LIMIT = 20 // bounded（黄金 §七）：FAQ 量级远低于此，非近似截断
+const FAQ_LIMIT = 20 // bounded：FAQ 量级远低于此，非近似截断
 
 /**
  * 精选 FAQ 公开读（R37b·播放页求助面板内容源扩展 b 项）：常见问题单源＝客服知识库 `kb` 集合

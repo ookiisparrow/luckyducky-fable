@@ -173,9 +173,8 @@
   margin-right: 2rpx;
 }
 .coolist-qty {
-  /* 改为随流布局并与内容顶部对齐（2026-07-25 体检批 P3）：原 absolute+bottom:28rpx 把「×N」钉在行
-     底部，而行高随「有没有规格标签」变化——没标签的行更矮，「×1」就掉到图片底部、与价格不在一条线。
-     订单详情页（.co-item-qty）本就是随流写法，此处对齐同族做法。 */
+  /* 随流布局并与内容顶部对齐：absolute+bottom 把「×N」钉在行底部的话，行高随「有没有规格标签」变化——
+     没标签的行更矮，「×1」就掉到图片底部、与价格不在一条线。同订单详情页（.co-item-qty）随流写法。 */
   flex: 0 0 auto;
   align-self: flex-start;
   margin-top: 4rpx;
@@ -214,6 +213,9 @@
 .coolist-btn.primary {
   background: var(--ld-purple);
   color: #ffffff;
+}
+.coolist-btn.dim {
+  opacity: 0.5;
 }
 .coolist-btn.ghost {
   background: var(--ld-bg);

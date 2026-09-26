@@ -1,5 +1,5 @@
 /**
- * 金额品牌类型（设计约束#4：金额全链整数分）。
+ * 金额品牌类型（根因#4：金额全链整数分）。
  * 钱一律「分」整数；元只在展示层出现。把普通 number 当 Fen 用会编译失败，
  * 必须经 toFen / asFen 显式转换——浮点金额在类型边界被挡下。（守卫 rw-fen-branded-type）
  */
@@ -22,7 +22,7 @@ export function fenToYuan(fen: Fen): number {
 }
 
 /**
- * 售后行分摊额（设计约束#5 镜像消灭：钱的分摊公式只此一份）：按行金额占实付比例分摊，
+ * 售后行分摊额（根因#5 防镜像副本：钱的分摊公式只此一份）：按行金额占实付比例分摊，
  * 封顶「实付 − 同单已占额度」。申请时算定与同意时重算封顶共用本函数。
  */
 export function refundShareFen(amountFen: Fen, goodsFen: Fen, itemFen: Fen, usedFen: Fen): Fen {

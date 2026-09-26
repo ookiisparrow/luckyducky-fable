@@ -33,10 +33,9 @@
         <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，<text class="ld-mc-prog-retry">点此重试</text></view>
       </view>
       <view class="ld-mc-prog" wx:elif="{{item.totalSegments}}">
-        <!-- percent=0 不渲染 fill：min-width 下限只该抬「已学一点点」，不能让「一段没学」也显出一截紫条（自查发现·2026-07-25） -->
+        <!-- percent=0 不渲染 fill：min-width 下限只该抬「已学一点点」，不能让「一段没学」也显出一截紫条 -->
         <view class="ld-mc-prog-track"><view wx:if="{{item.percent > 0}}" class="ld-mc-prog-fill" style="width: {{item.percent}}%"></view></view>
-        <!-- 单位「段」对齐数据模型与目录页（章>课时>段落·2026-07-25 体检批 P3）：此处数的是 segments，
-             原写「集」是全仓孤例，与课程目录页的「课时/段落」对不上号，同一门课出现三种叫法。 -->
+        <!-- 单位「段」对齐数据模型与目录页（章>课时>段落）：此处数的是 segments，别另起「集」之类叫法。 -->
         <view class="ld-mc-prog-text">已学 {{item.doneCount}}/{{item.totalSegments}} 段 · {{item.percent}}%</view>
       </view>
       <view class="ld-mc-meta">

@@ -1,43 +1,75 @@
-// G1（P1·bug）home.reload() 失败清空已渲染商品轨：getAllProducts({force:true}) 失败返 null →
-// 此前 mapProducts(null) 得 [] → 与已渲染非空 products 不同 → patch.products=[] 清屏，误导「上新在路上」
-// 空态。修复：products===null 时不计算/不写入 patch.products，保留现状。
-// 源码扫描式断言（同 home-intent.test.ts 范式·rewrite/mp tsconfig 无 node:fs·E1 教训剥注释防假绿）。
-import { describe, it, expect } from 'vitest'
-import homeSrc from '../pages/home/home.ts?raw'
+// G1（P1·bug）home.reload() 强刷商品失败（getAllProducts 返 null）不能把已渲染的商品轨清空成「上新在路上」；
+// 失败态只在没有快照垫底时出面。Page 桩同 me-cont-failed.test.ts。
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-/** 剥单行注释与块注释（E1 教训：裸写正则会被注释文本假命中）。 */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+const { readSnapshotMock, getContentMock, getAllMock } = vi.hoisted(() => ({ readSnapshotMock: vi.fn(), getContentMock: vi.fn(), getAllMock: vi.fn() }))
+vi.mock('../api/learning', () => ({ trackEvent: vi.fn() }))
+vi.mock('../api/catalog', () => ({ getContent: getContentMock }))
+vi.mock('../lib/catalog', () => ({ getAllProducts: getAllMock, getProductById: vi.fn() }))
+vi.mock('../lib/loginGate', () => ({ loginGate: { maybePromptOnce: vi.fn() } }))
+vi.mock('../lib/snapshot', () => ({ readSnapshot: readSnapshotMock, writeSnapshot: vi.fn() }))
+vi.mock('../lib/coldStart', () => ({ reportColdStart: vi.fn() }))
+vi.mock('../utils/exitGuard', () => ({ armExitGuard: vi.fn(), releaseExitGuard: vi.fn(), onExitGuardBeforeLeave: vi.fn() }))
+
+let pageOpts: Record<string, any> = {}
+;(globalThis as any).Page = (o: unknown) => {
+  pageOpts = o as Record<string, any>
 }
 
-/** 截取「从某方法声明起、花括号配平到该方法体结束」的源码片段（剥注释后·同 home-intent.test.ts helper）。 */
-function methodBody(rawSrc: string, name: string): string {
-  const src = stripComments(rawSrc)
-  const start = new RegExp(`(?:export\\s+)?(?:async\\s+)?(?:function\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::\\s*[^{]+)?\\{`).exec(src)
-  if (!start) throw new Error(`未找到方法 ${name}`)
-  let depth = 0
-  let i = start.index + start[0].length - 1 // 落在起始 `{`
-  for (; i < src.length; i++) {
-    if (src[i] === '{') depth++
-    else if (src[i] === '}') {
-      depth--
-      if (depth === 0) break
-    }
+async function mount(): Promise<Record<string, any>> {
+  vi.resetModules()
+  await import('../pages/home/home')
+  const page = Object.create(pageOpts) as Record<string, any>
+  page.data = { ...pageOpts.data }
+  page.setData = function (patch: Record<string, unknown>) {
+    Object.assign(this.data as Record<string, unknown>, patch)
   }
-  return src.slice(start.index, i + 1)
+  return page
 }
 
-describe('home.reload() 失败清空已渲染商品轨 fail-soft（G1）', () => {
-  it('大白话：products 为 null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染现状不动，不清屏', () => {
-    const body = methodBody(homeSrc, 'reload')
-    // nextProducts 门控计算：null 时不跑 mapProducts
-    expect(body).toMatch(/products\s*!==\s*null\s*\?\s*mapProducts\(products\)\s*:\s*null/)
-    // 写入门控：patch.products 只在 nextProducts 非 null 时才赋值
-    expect(body).toMatch(/nextProducts\s*!==\s*null\s*&&[\s\S]{0,80}patch\.products\s*=\s*nextProducts/)
+const RAW = [{ id: 'p1', name: '小鸭', price: 128, cover: '' }]
+const ids = (page: Record<string, any>) => page.data.products.map((p: { id: string }) => p.id)
+
+beforeEach(() => {
+  ;(globalThis as any).wx = { getWindowInfo: () => ({ statusBarHeight: 20 }) }
+  readSnapshotMock.mockReset().mockReturnValue(null)
+  getContentMock.mockReset().mockResolvedValue({ ok: false })
+  getAllMock.mockReset()
+})
+
+describe('home.reload() 商品强刷失败 fail-soft（G1）', () => {
+  it('大白话：已经画出商品，这次强刷失败——商品轨原样保留，不清成空', async () => {
+    getAllMock.mockResolvedValueOnce(RAW)
+    const page = await mount()
+    await page.reload()
+    expect(ids(page)).toEqual(['p1'])
+    getAllMock.mockResolvedValueOnce(null)
+    await page.reload()
+    expect(ids(page)).toEqual(['p1'])
+    expect(page.data.loading).toBe(false)
   })
 
-  it('大白话：loadFailed 判据不受本次改动影响——仍是 products===null && !_hadSnapshot（本批只动 products 分支）', () => {
-    const body = methodBody(homeSrc, 'reload')
-    expect(body).toMatch(/loadFailed:\s*products\s*===\s*null\s*&&\s*!this\._hadSnapshot/)
+  it('大白话：有快照垫底时强刷失败不翻失败态；没快照时才亮失败态', async () => {
+    readSnapshotMock.mockReturnValue({ v: 1, savedAt: 0, home: null, products: RAW })
+    getAllMock.mockResolvedValue(null)
+    const withSnap = await mount()
+    withSnap.onLoad()
+    await withSnap.reload()
+    expect(withSnap.data.loadFailed).toBe(false)
+    expect(ids(withSnap)).toEqual(['p1'])
+
+    readSnapshotMock.mockReturnValue(null)
+    const cold = await mount()
+    cold.onLoad()
+    await cold.reload()
+    expect(cold.data.loadFailed).toBe(true)
+  })
+
+  it('大白话：强刷成功照常换上新商品、灭失败态', async () => {
+    getAllMock.mockResolvedValue([...RAW, { id: 'p2', name: '云朵鸭', price: 22, cover: '' }])
+    const page = await mount()
+    await page.reload()
+    expect(ids(page)).toEqual(['p1', 'p2'])
+    expect(page.data.loadFailed).toBe(false)
   })
 })

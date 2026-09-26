@@ -11,6 +11,7 @@ import { materialHuman, scmErrorText, productNameOf } from '../lib/mapScm'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import { useLatest } from '../lib/latest'
 import { loadErrors } from '../lib/status'
+import type { AdminFgSummary, AdminRestockPlan } from '@ldrw/shared'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -18,19 +19,19 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
-// 去开单联动（换皮丢·算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
+// 去开单联动（否则算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
 function goOutworkOrder() {
-  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g: Record<string, any>) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
+  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
   void router.push('/scm-outwork')
 }
-function goPurchaseOrder(g: Record<string, any>) {
-  setPurchaseHandoff({ supplierId: String(g.supplierId || ''), lines: (g.lines || []).map((l: Record<string, any>) => ({ materialId: String(l.materialId), qty: Number(l.gap) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
+function goPurchaseOrder(g: AdminRestockPlan['purchaseGroups'][number]) {
+  setPurchaseHandoff({ supplierId: String(g.supplierId || ''), lines: (g.lines || []).map((l) => ({ materialId: String(l.materialId), qty: Number(l.gap) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
   void router.push('/scm-purchase')
 }
 
 const targets = ref<Array<{ productId: string; sets: number }>>([{ productId: '', sets: 10 }])
-const plan = ref<Record<string, any> | null>(null)
-const fg = ref<{ packed: Array<Record<string, any>>; shipped: Array<Record<string, any>>; truncated: boolean } | null>(null)
+const plan = ref<AdminRestockPlan | null>(null)
+const fg = ref<AdminFgSummary | null>(null)
 const inv = ref<Record<string, number>>({}) // 成品现存库存 fg:<pid>__<spec> → stock
 const products = ref<Array<Record<string, any>>>([]) // 全产品目录
 const productName = (id: unknown) => productNameOf(products.value, id)
@@ -42,7 +43,7 @@ const produceRows = computed(() => {
   const packed: Record<string, number> = {}
   const shipped: Record<string, number> = {}
   const label: Record<string, string> = {}
-  const add = (arr: Record<string, any>[] | undefined, tgt: Record<string, number>) => {
+  const add = (arr: AdminFgSummary['packed'] | undefined, tgt: Record<string, number>) => {
     ;(arr || []).forEach((p) => {
       const key = String(p.productId || '') + '__' + String(p.spec || '')
       tgt[key] = (tgt[key] || 0) + (Number(p.qty) || 0)
@@ -61,7 +62,7 @@ const produceRows = computed(() => {
   return [...keys].map((k) => ({ key: k, name: label[k] || k, packed: packed[k] || 0, shipped: shipped[k] || 0, stock: inv.value[k] ?? null })).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-const calcGen = useLatest() // 乱序守卫（G6·P2）：连点/改目标后连点「算缺口」，旧回包别覆盖新请求的 plan
+const calcGen = useLatest() // 乱序守卫：连点/改目标后连点「算缺口」，旧回包别覆盖新请求的 plan
 async function calc() {
   const ts = targets.value.filter((t) => t.productId.trim())
   if (!ts.length) {
@@ -71,16 +72,18 @@ async function calc() {
   const my = calcGen.begin()
   const r = await getRestockPlan(ts.map((t) => ({ productId: t.productId.trim(), sets: Number(t.sets) })))
   if (calcGen.isStale(my)) return // 已发起更新的计算·丢弃过期回包
-  plan.value = r.ok ? (r as Record<string, any>) : null
+  plan.value = r.ok ? r : null
   message.value = r.ok ? '' : scmErrorText(r.error)
 }
 
 onMounted(async () => {
   const [r, i, d] = await Promise.all([getFgSummary(), listInventory(), listDrafts()])
-  products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
-  fg.value = r.ok ? { packed: (r.packed as Record<string, any>[]) || [], shipped: (r.shipped as Record<string, any>[]) || [], truncated: r.truncated === true } : null
+  products.value = d.ok ? d.list : []
+  // 产销汇总与库存列表都封顶 1000 个规格，任一边触顶这张表都可能缺行
+  const truncated = (r.ok && r.truncated === true) || (i.ok && i.truncated === true)
+  fg.value = r.ok ? { packed: r.packed || [], shipped: r.shipped || [], truncated } : null
   if (i.ok) {
-    const list = ((i as any).list as Record<string, any>[]) || []
+    const list = i.list || []
     const map: Record<string, number> = {}
     list.forEach((row) => {
       const id = String(row._id || '')

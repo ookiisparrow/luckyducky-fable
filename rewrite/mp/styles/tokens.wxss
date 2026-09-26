@@ -1,5 +1,5 @@
-/* 设计 token 单一来源（M2 打样载体·承接旧线 uni.scss 幸运紫色票——UI 重设计拍板后只改这里）。
-   CSS 变量在双引擎均已真机验证（M0 spike T1 ✅）。 */
+/* 设计 token 单一来源（幸运紫色票——改配色只改这里）。
+   CSS 变量在双引擎均已真机验证。 */
 page {
   /* 幸运紫 */
   --ld-purple: #a371ea; /* 强调、已验证 */
@@ -27,10 +27,10 @@ page {
   --ld-radius-sm: 10rpx; /* 商品/买家秀卡（设计 5px）*/
   --ld-radius-md: 18rpx; /* 折叠组/特写图（设计 9px）*/
   --ld-radius-pill: 999rpx;
-  /* 品牌字体（文源圆体 WenYuan Rounded SC）：分层子集 WebFont 远程加载（loadBrandFonts·utils/brandFont.ts·
-     字体分层批）——T1(tab首屏字·最先到) → T2(二级页字) → T3(GB2312兜底·UGC) 三族按 CSS 逐字回退补字，
-     到达前/失败时回退系统圆体栈（FOUT 可接受）。系统栈照抄旧线 uni.scss $font-display（逐项核对）。
-     应用范围＝全局 page（战役 flag·主脑拍板，非老线「仅标题」先例）。族名单源 utils/brandFont.ts。 */
+  /* 品牌字体（文源圆体 WenYuan Rounded SC）：分层子集 WebFont 远程加载（loadBrandFonts·utils/brandFont.ts）
+     ——T1(tab首屏字·最先到) → T2(二级页字) → T3(GB2312兜底·UGC) 三族按 CSS 逐字回退补字，
+     到达前/失败时回退系统圆体栈（FOUT 可接受）。
+     应用范围＝全局 page（拍板·不只标题）。族名单源 utils/brandFont.ts。 */
   --ld-font-brand: 'WenYuan Rounded SC', 'WenYuan Rounded SC T2', 'WenYuan Rounded SC T3', 'PingFang SC',
     'SF Pro Rounded', ui-rounded, 'Hiragino Sans GB', system-ui, sans-serif;
 }

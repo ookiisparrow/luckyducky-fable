@@ -1,22 +1,21 @@
-<!-- 课程播放页·竖屏沉浸全屏重设计（播放器重设计战役 批B：P1 常态结构重排 + P4 段落播完不自动切换；
-     批C：P2 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览；批D：P3 求助面板 + P5 返回二次确认 +
-     P5b 首次退出加桌引导）。
+<!-- 课程播放页·竖屏沉浸全屏：常态结构 + 段落播完不自动切换 + 自绘 seek 条/阻尼震感/关键节点磁吸/拖动预览
+     + 求助面板 + 返回二次确认 + 首次退出加桌引导。
      整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
      上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
-     业务逻辑与既有回归红线（playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存）一字不动；
-     唯一刻意行为变更＝段落播完不再自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
+     回归红线：playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存；
+     段落播完不自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
      自绘 seek 条两段式语义（WXS sk.onStart/onMove/onEnd + 逻辑层 onSeekTick/onSeekCommit：拖动中只改显示，松手才真 seek）+ 关键动作节点磁吸/震感
-     配方（单源 lib/haptics，见 player.ts）；缩略图窗未做（雪碧图=R36 后端未建，
-     诚实降级为时间浮窗+关键节点气泡）。
-     求助面板（P3·批D）：中央求助钮拉起底部 sheet（menu/videos/faq 三态，见 player.ts helpPanel），播放
-     不阻断，唯一暂停例外＝帮助视频内嵌播放（P3b-play，简化决策：原生 <video controls>，不做自绘控制条
-     ——辅助内容非主路径，防过度工程）。返回二次确认（P5）+ 首次成功退出加桌引导（P5b·仅一次·分端文案，
+     配方（单源 lib/haptics，见 player.ts）；拖动浮层＝时间浮窗+关键节点气泡，
+     雪碧图缩略图（R36·决策§31）素材已随 VOD 转码回写 vodSpriteVtt，mp 侧尚未接入。
+     求助面板：中央求助钮拉起底部 sheet（menu/videos/faq 三态，见 player.ts helpPanel），播放
+     不阻断，唯一暂停例外＝帮助视频内嵌播放（简化决策：原生 <video controls>，不做自绘控制条
+     ——辅助内容非主路径，防过度工程）。返回二次确认 + 首次成功退出加桌引导（仅一次·分端文案，
      动画降级为静态示意区+文案）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回箭头经此。 -->
-<!-- 自绘 seek 拖动几何·渲染层驱动（批5·根因#15）：外置 WXS 模块 sk（内联 <wxs> 里的 < 比较会被 rw-mp-wxml-well-formed 咬红，必须外置） -->
+<!-- 自绘 seek 拖动几何·渲染层驱动（根因#15）：外置 WXS 模块 sk（内联 <wxs> 里的 < 比较会被 rw-mp-wxml-well-formed 咬红，必须外置） -->
 <wxs src="./seek.wxs" module="sk" />
 <view class="ld-player">
 
-  <!-- 顶条：返回 + 两行标题（数据源=批A lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
+  <!-- 顶条：返回 + 两行标题（数据源=lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
        chapterTitle 空则只显 lessonName 脏档回退）+ 右侧留白 spacer（真机右上是原生胶囊，
        继续保持右上留白纪律，不放任何自绘元素） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
@@ -28,7 +27,7 @@
         <view class="lp-title-main">{{strip.chapterTitle}}</view>
         <view class="lp-title-sub">{{strip.lessonNo}} · {{strip.lessonName}}</view>
       </block>
-      <!-- 兜底标题按态分流（2026-07-25 体检批 P3）：missing/error 态下课程都没拿到，顶条却写「正在学习」
+      <!-- 兜底标题按态分流：missing/error 态下课程都没拿到，顶条写「正在学习」会
            自相矛盾（用户刚被告知「没找到这门课」，抬头看见「正在学习」）。 -->
       <view class="lp-title-main" wx:else>{{(strip && strip.lessonName) || title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习'))}}</view>
     </view>
@@ -77,13 +76,12 @@
       </view>
 
       <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化）。
-           top 与 segstrip 同款动态避让（2026-07-25 体检批 P2）：定位祖先是全屏 .lp-stage（顶=屏顶），
-           原先写死 top:26rpx ≈13px 整条压进状态栏、只露一道边——旁边 segstrip 早已按 capsuleBottom
-           避让，这条漏了。落在 segstrip 之下（+92rpx 是 segstrip 实测高度带间距），两条浮层不叠。 -->
+           top 与 segstrip 同款动态避让：定位祖先是全屏 .lp-stage（顶=屏顶），
+           写死 top 会整条压进状态栏、只露一道边。落在 segstrip 之下（+92rpx 是 segstrip 实测高度带间距），两条浮层不叠。 -->
       <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}" style="top: calc({{capsuleBottom}}px + {{strip ? 200 : 26}}rpx)">单击画面 播放 / 暂停</view>
 
-      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层，批D 再落）。
-           top 按原生胶囊底边动态避让（capsuleBottom+8·2026-07-13 反馈）：浮层的定位祖先是全屏 .lp-stage（inset:0·顶=屏顶），
+      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层）。
+           top 按原生胶囊底边动态避让（capsuleBottom+8）：浮层的定位祖先是全屏 .lp-stage（inset:0·顶=屏顶），
            不动态给 top 就会贴屏顶撞状态栏/胶囊。 -->
       <view class="lp-segstrip" wx:if="{{strip}}" style="top: {{capsuleBottom + 8}}px">
         <view class="lp-segs">
@@ -110,8 +108,7 @@
       <view class="lp-state-title">先激活课程才能观看</view>
       <view class="lp-state-btn" bind:tap="onGoActivate">去输入激活码</view>
     </view>
-    <!-- missing 态补出路（2026-07-25 体检批 P3）：原先整屏只有「课程不存在」五个字、一个可点的都没有，
-         而隔壁 error 态早有重试按钮——同页两种失败态待遇不一致。文案同步改用户语言。 -->
+    <!-- missing 态补出路：别只有「课程不存在」五个字、一个可点的都没有（同页 error 态有重试按钮）；文案用用户语言。 -->
     <view class="lp-video-box lp-state" wx:elif="{{state === 'missing'}}">
       <view class="lp-state-title">没找到这门课</view>
       <view class="lp-state-hint">可能课程已下架，或者这个链接不对</view>
@@ -119,7 +116,7 @@
         <view class="lp-state-btn" bind:tap="onGoCourses">去我的课程看看</view>
       </view>
     </view>
-    <!-- error 态双语义（评审修复）：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到
+    <!-- error 态双语义：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到
          （initCourse 失败·深链冷启动弱网），文案与按钮随态分流，重试都走 onRetryError（内部自分流）。 -->
     <view class="lp-video-box lp-state" wx:elif="{{state === 'error'}}">
       <view class="lp-state-title">{{current ? '这段视频暂时播放不了' : '课程内容没加载出来'}}</view>
@@ -151,14 +148,14 @@
         change:pct="{{sk.onPct}}"
         pct="{{seekPct}}"
       >
-        <!-- 拖动浮层（批5 WXS 化·常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控——避免 setData 重建
-             与 WXS setStyle 抢写 position）；命中关键动作节点再叠鸭黄气泡（缩略图窗降级——雪碧图=R36 后端未建，见 player.ts 头注） -->
+        <!-- 拖动浮层（WXS 控制·常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控——避免 setData 重建
+             与 WXS setStyle 抢写 position）；命中关键动作节点再叠鸭黄气泡（雪碧图缩略图 mp 侧尚未接入，见 player.ts 头注） -->
         <view class="lp-seek-preview">
           <view class="lp-seek-preview-time">{{curClock}}</view>
           <view wx:if="{{snapName}}" class="lp-seek-preview-bubble">✦ 关键动作 · {{snapName}}</view>
         </view>
         <view class="lp-seek-track"></view>
-        <!-- 缓冲水位（批3·bind:progress 尽力而为·灰阶介于轨道与紫填充之间·换段清零 bufferPct·低频 data 驱动·WXS 不碰） -->
+        <!-- 缓冲水位（bind:progress 尽力而为·灰阶介于轨道与紫填充之间·换段清零 bufferPct·低频 data 驱动·WXS 不碰） -->
         <view class="lp-seek-buffer" style="width: {{bufferPct}}%"></view>
         <!-- fill 宽/handle left：非拖动期播放推进由 seekPct 低频 data 驱动；拖动期由 seek.wxs setStyle 接管（seeking 冻结 seekPct·不抢写·.big 亦由 WXS toggle） -->
         <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
@@ -181,7 +178,7 @@
     </view>
   </view>
 
-  <!-- 求助面板（P3·播放器重设计战役批D）：底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。
+  <!-- 求助面板：底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。
        scrim 与 sheet 均锁背景滚动（catch:touchmove="noop"）；videos 子层内部主题列表用 scroll-view
        scroll-y 自滚（内嵌播放视图无需滚动，不放进 scroll-view）。 -->
   <view class="lp-help-mask" wx:if="{{helpPanel}}" bind:tap="onHelpClose" catch:touchmove="noop">
@@ -220,7 +217,7 @@
         </view>
       </block>
 
-      <!-- videos 子层（P3b）：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
+      <!-- videos 子层：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
       <block wx:if="{{helpPanel === 'videos'}}">
         <block wx:if="{{helpSrc}}">
           <view class="lp-help-nav">
@@ -316,7 +313,7 @@
     </view>
   </view>
 
-  <!-- 首次成功退出加桌引导（P5b·仅展示一次·分端文案·矢量循环动画降级为静态示意区+文案） -->
+  <!-- 首次成功退出加桌引导（仅展示一次·分端文案·矢量循环动画降级为静态示意区+文案） -->
   <view class="lp-dg-mask" wx:if="{{deskGuide}}" catch:touchmove="noop">
     <view class="lp-dg-dlg">
       <view class="lp-dg-title">放书签在桌面，下次点开就继续。</view>

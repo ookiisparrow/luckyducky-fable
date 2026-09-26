@@ -6,10 +6,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Boxes, Wallet, Truck, Handshake, RefreshCw, ArrowRight, ClipboardCheck } from 'lucide-vue-next'
 import { getScmOverview } from '../api/scm'
-import { materialHuman, fenLabel } from '../lib/mapScm'
+import { materialHuman, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import { useLoadStatus } from '../lib/status'
+import type { AdminScmOverview } from '@ldrw/shared'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -20,27 +21,27 @@ import UiButton from '../components/ui/Button.vue'
 const router = useRouter()
 const { message, ok: msgOk, load } = useLoadStatus()
 const busy = ref(false)
-const vm = ref<Record<string, any> | null>(null)
+const vm = ref<AdminScmOverview | null>(null)
 
 async function reload() {
   busy.value = true
   const r = await getScmOverview()
   busy.value = false
-  load(!!r.ok, '总览加载失败：' + String((r as any).error || ''))
-  vm.value = r.ok ? (r as Record<string, any>) : null
+  load(!!r.ok, '总览加载失败：' + scmErrorText(r.error))
+  vm.value = r.ok ? r : null
 }
 onMounted(reload)
 
-const lowStock = computed(() => (vm.value?.lowStock as Array<Record<string, any>>) || [])
-const payables = computed(() => (vm.value?.payables as Array<Record<string, any>>) || [])
-const recentLedger = computed(() => (vm.value?.recentLedger as Array<Record<string, any>>) || [])
+const lowStock = computed(() => vm.value?.lowStock || [])
+const payables = computed(() => vm.value?.payables || [])
+const recentLedger = computed(() => vm.value?.recentLedger || [])
 const inTransit = computed(() => vm.value?.inTransit || { purchaseCount: 0, outworkCount: 0 })
 
 const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
 // 缺料行去开单（同 ScmPlanner goOutworkOrder/goPurchaseOrder 中转手法）：带结缺口＝应发同色大团原团（1:1）；
 // 采购缺口按行预填料号+缺口量，供应商留空（lowStock 不带 supplierId·到采购页手选）。
-function fixRow(row: Record<string, any>) {
+function fixRow(row: AdminScmOverview['lowStock'][number]) {
   if (row.suggest === 'outwork') {
     const m = KNOTTED_RE.exec(String(row.materialId))
     const rawId = m ? `yarn:${m[1]}:L:raw` : String(row.materialId)
@@ -61,7 +62,7 @@ const LEDGER_BADGE: Record<string, { label: string; tone: 'green' | 'red' | 'bra
   assembly_in: { label: '产', tone: 'brand' },
   ship: { label: '销', tone: 'amber' },
 }
-function ledgerBadge(l: Record<string, any>) {
+function ledgerBadge(l: AdminScmOverview['recentLedger'][number]) {
   const hit = LEDGER_BADGE[String(l.docType)]
   if (hit) return hit
   // adjust 无固定方向：按流水正负判入/出

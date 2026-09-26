@@ -9,42 +9,22 @@
 import { ref, computed, onMounted } from 'vue'
 import { ShieldCheck, RefreshCw } from 'lucide-vue-next'
 import { getConfigChecklist, saveSecureConfig, savePayConfig } from '../api/system'
+import { failText, writeFailText } from '../lib/status'
+import type { ErrCode, AdminChecklistGroup, AdminChecklistItem } from '@ldrw/shared'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import UiButton from '../components/ui/Button.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
-type Status = 'ok' | 'missing' | 'check'
-interface FillMeta {
-  action: 'saveSecureConfig' | 'savePayConfig'
-  docId?: 'wxkf' | 'wxpay'
-  field: string
-  inputType: 'text' | 'password' | 'textarea' | 'select'
-  options?: { value: string; label: string }[]
-}
-interface Item {
-  key: string
-  name: string
-  location: string
-  purpose: string
-  status: Status
-  howTo: string
-  url: string
-  noteExtra?: string
-  fill?: FillMeta
-}
-interface Group {
-  group: string
-  items: Item[]
-}
+type Status = AdminChecklistItem['status']
 interface FillState {
   value: string // 永远从空白起（零回显铁律·从不用已存值预填）
   busy: boolean
   error: string
 }
 
-const groups = ref<Group[]>([])
+const groups = ref<AdminChecklistGroup[]>([])
 const message = ref('加载中…')
 const loading = ref(false)
 const fillState = ref<Record<string, FillState>>({})
@@ -54,31 +34,31 @@ const labelOf = (s: Status) => (s === 'ok' ? '已配' : s === 'missing' ? '未�
 
 const totalItems = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
 // 全局保存锁：任一项保存在途时全部保存按钮禁用——防先返回的整页 load() 重建 fillState 时，
-// 另一在途项的 busy 态被清、输入框复通造成二次提交/态错乱（审查批·frontend finding）
+// 另一在途项的 busy 态被清、输入框复通造成二次提交/态错乱
 const anyBusy = computed(() => Object.values(fillState.value).some((s) => s.busy))
 
 // 后端定型错误码 → 人话（非技术用户直读；未映射的原样带出便于排障）
 function errText(code: string): string {
   if (code.startsWith('TOO_LONG:')) return `内容超长（${code.slice('TOO_LONG:'.length)} 字段有长度上限），请核对后重填`
-  const map: Record<string, string> = {
+  const map: Partial<Record<ErrCode, string>> = {
     BAD_AESKEY_LEN: 'EncodingAESKey 必须是 43 位字符，请从后台完整复制后重填',
     BAD_MODE: '支付模式只能选 real 或 mock',
     BAD_DOC: '配置项标识不合法（请刷新页面后重试）',
     NO_FIELDS: '没有可保存的内容（留空提交不改动任何字段）',
   }
-  return map[code] || `保存失败：${code || '未知错误'}`
+  return map[code as ErrCode] || writeFailText('保存失败', code)
 }
 
 async function load(): Promise<boolean> {
   loading.value = true
-  const r: any = await getConfigChecklist()
+  const r = await getConfigChecklist()
   loading.value = false
   if (r.error === 'SESSION_LOST') return false // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {
-    message.value = '加载失败：' + String(r.error || '')
+    message.value = failText('加载失败', r.error)
     return false
   }
-  groups.value = (r.groups || []) as Group[]
+  groups.value = r.groups || []
   // 每次载入（含保存成功后的整页刷新）都重建填写态：所有可填项恒空白起——响应从不带回真实值，
   // 这里也绝不该拿旧输入去预填，避免误以为"已回显"。
   const nextFill: Record<string, FillState> = {}
@@ -92,19 +72,19 @@ async function load(): Promise<boolean> {
   return true
 }
 
-function canSubmit(it: Item): boolean {
+function canSubmit(it: AdminChecklistItem): boolean {
   const s = fillState.value[it.key]
   return !!s && !anyBusy.value && s.value.trim().length > 0
 }
 
-async function submitFill(it: Item) {
+async function submitFill(it: AdminChecklistItem) {
   const f = it.fill
   if (!f || anyBusy.value) return // 全局锁：在途保存未归前不受理第二笔
   const s = fillState.value[it.key]
   const value = s ? s.value.trim() : ''
   if (!value) return
   fillState.value[it.key] = { value: s.value, busy: true, error: '' }
-  const r: any = f.action === 'saveSecureConfig' ? await saveSecureConfig(f.docId || '', { [f.field]: value }) : await savePayConfig({ [f.field]: value })
+  const r = f.action === 'saveSecureConfig' ? await saveSecureConfig(f.docId || '', { [f.field]: value }) : await savePayConfig({ [f.field]: value })
   if (r.error === 'SESSION_LOST') return // 集中导登录（同上）
   if (r.ok) {
     // 整页刷新：拿到最新 status + 全部填写态清空。刷新在途期间本项仍 busy 持全局锁；刷新失败不重建
@@ -287,7 +267,7 @@ onMounted(load)
   color: var(--ld-amber);
 }
 
-/* 填写区（批 B10：带 fill 元数据的项才出现）——占满整行、居下方，输入框永远空白起 */
+/* 填写区（带 fill 元数据的项才出现）——占满整行、居下方，输入框永远空白起 */
 .row-fill {
   grid-column: 1 / -1;
   display: flex;

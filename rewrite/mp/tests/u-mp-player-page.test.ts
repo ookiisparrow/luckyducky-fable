@@ -3,13 +3,14 @@
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { urlMock, trackMock, courseMock, goBackMock } = vi.hoisted(() => ({
+const { urlMock, trackMock, courseMock, goBackMock, faqMock } = vi.hoisted(() => ({
   urlMock: vi.fn(),
   trackMock: vi.fn(),
   courseMock: vi.fn(),
   goBackMock: vi.fn(),
+  faqMock: vi.fn(),
 }))
-vi.mock('../api/learning', () => ({ trackEvent: trackMock, getHelpVideos: vi.fn(), getPublicFaq: vi.fn(), getPlaybackUrl: urlMock }))
+vi.mock('../api/learning', () => ({ trackEvent: trackMock, getHelpVideos: vi.fn(), getPublicFaq: faqMock, getPlaybackUrl: urlMock }))
 vi.mock('../lib/courses', () => ({ getCourseByIdDetailed: courseMock }))
 vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null) }))
 vi.mock('../utils/customerService', () => ({ openCustomerService: vi.fn() }))
@@ -74,6 +75,7 @@ beforeEach(() => {
   trackMock.mockReset()
   courseMock.mockReset().mockResolvedValue({ failed: false, course: COURSE })
   goBackMock.mockReset()
+  faqMock.mockReset()
 })
 
 describe('切段落点：上/下一段按钮态 + 下一段预热', () => {
@@ -265,5 +267,109 @@ describe('进页：目录与期望段地址并行', () => {
     await done
     await flush()
     expect(page.data).toMatchObject({ state: 'playing', src: 'https://v/s1' })
+  })
+})
+
+describe('续播秒：只在真把地址交给视频时才消费，失败留给重试', () => {
+  const wantS1 = async () => {
+    const page = await mount()
+    page._wantSeg = 's1'
+    page._wantAt = 42
+    return page
+  }
+
+  it('大白话：地址已预热（缓存命中）→ 直接带续播秒起播，并消费掉', async () => {
+    const page = await wantS1()
+    const { playbackCache } = await import('../lib/playbackCache')
+    await playbackCache.prefetch('c1', 's1')
+    await page.playSegment(seg('s1'), 'enter')
+    expect(page.data).toMatchObject({ state: 'playing', src: 'https://v/s1', initialTime: 42 })
+    expect(page._wantAt).toBe(0)
+  })
+
+  it('大白话：现取地址——加载骨架时 initialTime 是 0（视频还没挂），取到后才带 42 起播并消费', async () => {
+    let release!: (v: unknown) => void
+    urlMock.mockReturnValueOnce(new Promise((r) => (release = r)))
+    const page = await wantS1()
+    const p = page.playSegment(seg('s1'), 'enter')
+    expect(page.data).toMatchObject({ state: 'loading', src: '', initialTime: 0 })
+    expect(page._wantAt).toBe(42)
+    release({ ok: true, url: 'https://v/s1' })
+    await p
+    expect(page.data).toMatchObject({ state: 'playing', initialTime: 42 })
+    expect(page._wantAt).toBe(0)
+  })
+
+  it('大白话：未授权 / 取址失败 / 素材未剪都不消费续播秒，之后重试成功仍续到 42 秒', async () => {
+    for (const r of [{ ok: false, error: 'NOT_ENTITLED' }, { ok: false, error: 'TIMEOUT' }, { ok: true, url: '' }]) {
+      urlMock.mockResolvedValueOnce(r)
+      const page = await wantS1()
+      await page.playSegment(seg('s1'), 'enter')
+      expect(['denied', 'error', 'empty']).toContain(page.data.state)
+      expect(page._wantAt, JSON.stringify(r)).toBe(42)
+      await page.playSegment(seg('s1'), 'retry')
+      expect(page.data).toMatchObject({ state: 'playing', initialTime: 42 })
+      expect(page._wantAt).toBe(0)
+    }
+  })
+
+  it('大白话：换到别的段——不带续播秒，也不动留给期望段的秒', async () => {
+    const page = await wantS1()
+    await page.playSegment(seg('s2'), 'seg')
+    expect(page.data).toMatchObject({ state: 'playing', initialTime: 0 })
+    expect(page._wantAt).toBe(42)
+  })
+})
+
+describe('求助面板常见问题：失败≠没有', () => {
+  it('大白话：后台没配 CMS 问答时拉知识库——失败落 fail、真没有落 empty、有就 ok', async () => {
+    const cases: Array<[unknown, string]> = [
+      [{ ok: false, error: 'CALL_FAIL' }, 'fail'],
+      [{ ok: true, items: [] }, 'empty'],
+      [{ ok: true, items: [{ key: 'k', title: '要多久？', content: '3 小时' }] }, 'ok'],
+    ]
+    for (const [r, state] of cases) {
+      faqMock.mockResolvedValueOnce(r)
+      const page = await mount()
+      page.data.help = { ...page.data.help, faq: [] }
+      page.onHelpFaq()
+      expect(page.data).toMatchObject({ helpPanel: 'faq', helpFaqState: 'loading' })
+      await flush()
+      expect(page.data.helpFaqState).toBe(state)
+    }
+  })
+
+  it('大白话：后台已配 CMS 问答——直接进问答层，不写加载中、不再拉知识库', async () => {
+    const page = await mount()
+    page.data.help = { ...page.data.help, faq: [{ q: '要多久？', a: '3 小时' }] }
+    const patches: Record<string, unknown>[] = []
+    const set = page.setData
+    page.setData = function (patch: Record<string, unknown>, cb?: () => void) {
+      patches.push(patch)
+      set.call(this, patch, cb)
+    }
+    page.onHelpFaq()
+    expect(page.data.helpPanel).toBe('faq')
+    expect(patches.some((p) => p.helpFaqState === 'loading')).toBe(false)
+    expect(faqMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('进页与拖动几何', () => {
+  it('大白话：全段列表只本地用来挑开播段，不塞进页面数据', async () => {
+    const page = await mount()
+    expect(page.data).not.toHaveProperty('segments')
+    await page.initCourse()
+    await flush()
+    expect(page.data.state).toBe('playing')
+    expect(page.data).not.toHaveProperty('segments')
+  })
+
+  it('大白话：下发给 seek.wxs 的几何带预览防出屏边距（64rpx 按屏宽换成 px）；没量到轨道就不下发', async () => {
+    const page = await mount()
+    page.windowWidthPx = 375
+    expect(page.buildSeekCfg(100, [])).toBeNull()
+    page._seekRect = { left: 0, width: 300 }
+    expect(page.buildSeekCfg(100, [{ at: 10, name: 'A' }])).toEqual({ rect: { left: 0, width: 300 }, durSec: 100, marks: [{ at: 10, name: 'A' }], edgePx: 32, snapSec: 3 })
   })
 })

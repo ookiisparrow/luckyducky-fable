@@ -3,9 +3,9 @@ import { listMaterialDocs, recentStockLedger } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 
-// 进销存总览（见 docs/业务逻辑架构.md 链 12·B2·门5 文件级隔离：本文件=总览车道，与 scmPlanner 同级只读聚合）。
-// 批 B2：无聚合看板，低库存/应付/在途要跑 5 页各看各的——本 action 把「今天该干啥」一屏拼出来，
-// 卡片直达对应页（跳转在前端）。**只读**，写路径零新增。RBAC：不登记 ACTION_CAPS → 默认拒
+// 进销存总览（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=总览面，与 scmPlanner 同级只读聚合）。
+// 没有聚合看板的话，低库存/应付/在途要跑 5 页各看各的——本 action 把「今天该干啥」一屏拼出来，
+// 卡片直达对应页（跳转在前端）。**只读**，不写库。RBAC：不登记 ACTION_CAPS → 默认拒
 // admin:write＝仅超管（照抄 scmPlanner 同级鉴权）。
 //
 // 有界纪律（根因#7）：materials 经 listMaterialDocs()（门1 kit·内部已 .limit(500)）；本文件内直接发起
@@ -19,15 +19,15 @@ const RECENT_LEDGER_N = 8
 export async function getScmOverview({ db }: Ctx) {
   const [materials, payRes, payCountRes, orderedCountRes, issuedCountRes, recentLedgerRows, supRes] = await Promise.all([
     listMaterialDocs(), // 门1 只读出口·主档量小·内部已 bounded 500
-    db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).limit(PAYABLE_SCAN_CAP).get(),
-    db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).count(),
-    db.collection('purchaseOrders').where({ status: PURCHASE_ORDER_STATUS.ORDERED }).count(),
-    db.collection('outworkOrders').where({ status: OUTWORK_ORDER_STATUS.ISSUED }).count(),
-    recentStockLedger(RECENT_LEDGER_N), // 门1 只读出口（批K：原直碰 stockLedger 集合，绕过 SCM 门1）
+    db.collection(COLLECTIONS.outworkOrders).where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).limit(PAYABLE_SCAN_CAP).get(),
+    db.collection(COLLECTIONS.outworkOrders).where({ status: OUTWORK_ORDER_STATUS.DELIVERED }).count(),
+    db.collection(COLLECTIONS.purchaseOrders).where({ status: PURCHASE_ORDER_STATUS.ORDERED }).count(),
+    db.collection(COLLECTIONS.outworkOrders).where({ status: OUTWORK_ORDER_STATUS.ISSUED }).count(),
+    recentStockLedger(RECENT_LEDGER_N), // 门1 只读出口（不直碰 stockLedger 集合绕过门1）
     db.collection(COLLECTIONS.suppliers).limit(PAYABLE_SCAN_CAP).get(),
   ])
 
-  // ── 缺料预警：qty(stock) < threshold，gap 降序，limit 50 有界 ──
+  // ── 缺料预警：qty(stock) < threshold，gap 降序；不截条数——前端「缺料物料」卡直接数这个列表 ──
   const lowStock = (materials as any[])
     .filter((m) => Number.isInteger(m.stock) && Number.isInteger(m.threshold) && m.stock < m.threshold)
     .map((m) => ({
@@ -40,7 +40,6 @@ export async function getScmOverview({ db }: Ctx) {
       suggest: (KNOTTED_RE.test(String(m._id)) ? 'outwork' : 'purchase') as 'outwork' | 'purchase',
     }))
     .sort((a, b) => b.gap - a.gap)
-    .slice(0, 50)
 
   // ── 应付未结：delivered 未 settled 外协单按织女（供应商）分组求和（分整数·有界扫描·超界标 truncated）──
   const supName = new Map(((supRes.data || []) as any[]).map((s) => [String(s._id), String(s.name || '')]))

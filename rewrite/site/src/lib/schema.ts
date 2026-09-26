@@ -8,7 +8,7 @@ export const BRAND_IDENTITY =
 
 const abs = (path: string): string => (path.startsWith('http') ? path : SITE + (path.startsWith('/') ? path : '/' + path))
 
-/** JSON-LD 安全序列化单源（深审 2026-07-12 P3）：裸 JSON.stringify 进 set:html 时，内容含 `</script>`
+/** JSON-LD 安全序列化单源：裸 JSON.stringify 进 set:html 时，内容含 `</script>`
  *  会提前截断脚本块（HTML 解析不认字符串语义）——统一把 `<` 转 <，全站注入点只走这一个出口。 */
 export const jsonLd = (obj: Record<string, unknown> | null): string => (obj ? JSON.stringify(obj).replace(/</g, '\\u003c') : '')
 

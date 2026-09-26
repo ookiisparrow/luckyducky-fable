@@ -1,7 +1,7 @@
-// 购物车模块 store（黄金 frontend-store §一/§二钉行为·旧线 Pinia cart 的原生承接）：
+// 购物车模块 store：
 // 行身份=「商品 id + 规格 sku」双键（同商品不同规格各成独立行·同规格合并加量）；
 // 持久化 wx.storage、回灌必过 sanitizeCart 清洗（脏条目丢弃·防旧数据撑乱列表）；
-// 合计走「分」整数累加再回两位小数展示（元浮点直加会漂·黄金 §四 金额恒两位小数）。
+// 合计走「分」整数累加再回两位小数展示（元浮点直加会漂·金额恒两位小数）。
 import { readStorage, writeStorage } from '../utils/storage'
 
 export interface CartItem {
@@ -52,7 +52,7 @@ function save(): void {
 
 const keyOf = (id: string, sku: string) => (it: CartItem) => it.id === id && it.sku === (sku || '')
 
-/** 行唯一键（wx:key 用·批5）：id+sku 双键合成——单用 id 会撞 key（同商品不同规格各成独立行，见文件头行身份注释）。
+/** 行唯一键（wx:key 用）：id+sku 双键合成——单用 id 会撞 key（同商品不同规格各成独立行，见文件头行身份注释）。
  *  仅在视图层派生（getItems 返回值），不进持久化 schema。 */
 export function lineIdOf(id: string, sku: string): string {
   return id + '__' + (sku || '')
@@ -111,8 +111,8 @@ export function selectedTotalLabel(): string {
   return '¥' + (selectedTotalFen() / 100).toFixed(2)
 }
 
-/** 结算完成扣减（黄金 §一）：按「本次实际提交数量」精确扣——部分数量剩余保留；扣到 0 移除该行；
- *  双键定位不串同商品其他规格行。批5 结算链接线。 */
+/** 结算完成扣减：按「本次实际提交数量」精确扣——部分数量剩余保留；扣到 0 移除该行；
+ *  双键定位不串同商品其他规格行。 */
 export function consume(lines: Array<{ id: string; sku?: string; qty: number }>): void {
   const list = load()
   for (const line of lines) {
@@ -129,8 +129,8 @@ export function __resetForTest(): void {
   items = null
 }
 
-/** 展示层覆盖（批B 图片链提速回归修复）：云端 getProducts 下发的 cover 已从持久 cloud:// fileID
- *  换成约 2h 时效的 https 临时址（rewrite/cloud/.../catalog.ts），而购物车行的 cover 会持久化进
+/** 展示层覆盖：云端 getProducts 下发的 cover 是约 2h 时效的 https 临时址
+ *  （非持久 cloud:// fileID·见云端 catalog.ts），而购物车行的 cover 会持久化进
  *  wx.storage——隔天回灌旧址早已过期，缩略图会挂。按行 id 从「当前商品原档」（页面已拉取的全量列表）
  *  查最新 cover 展示；查不到（商品已删/停售/原档未加载）回退行内持久 cover，不改持久化契约本身。 */
 export function freshCover(line: { id: string; cover: string }, allRaw: Record<string, unknown>[]): string {
