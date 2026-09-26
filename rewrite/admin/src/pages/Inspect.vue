@@ -1,10 +1,12 @@
 <script setup lang="ts">
-// 系统巡检·体检面板（design 语言一致·批3·治病根#14 告警进人眼）：最新体检报告（A 基建存活 + B 业务不变量
+// 系统巡检·体检面板（design 语言一致·治病根#14 告警进人眼）：最新体检报告（A 基建存活 + B 业务不变量
 // 红绿灯）+ 立即巡检（手动触发一轮）+ 未处理异常入口。数据走 adminApi getInspectStatus/runInspect 真值·不编数。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlayCircle, TriangleAlert, ShieldCheck } from 'lucide-vue-next'
+import type { InspectRunRecord } from '@ldrw/shared'
 import { getInspectStatus, runInspect } from '../api/ops'
+import { failText, writeFailText } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -12,13 +14,13 @@ import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 const router = useRouter()
-const latest = ref<any>(null)
+const latest = ref<InspectRunRecord | null>(null)
 const openAnomalies = ref(0)
 const message = ref('加载中…')
 const running = ref(false)
 
 const groups = computed(() => {
-  const rs = (latest.value?.results || []) as any[]
+  const rs = latest.value?.results || []
   return [
     { key: 'infra', label: '基建存活', items: rs.filter((r) => r.layer === 'infra') },
     { key: 'invariant', label: '业务不变量', items: rs.filter((r) => r.layer === 'invariant') },
@@ -28,22 +30,22 @@ const groups = computed(() => {
 const fmt = (ms: number) => (ms ? new Date(ms).toLocaleString('zh-CN', { hour12: false }) : '')
 
 async function load() {
-  const r: any = await getInspectStatus()
+  const r = await getInspectStatus()
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  latest.value = r.latest
-  openAnomalies.value = Number(r.openAnomalies || 0)
-  message.value = r.ok ? '' : '加载失败：' + String(r.error || '')
+  latest.value = r.ok ? r.latest : null
+  openAnomalies.value = r.ok ? Number(r.openAnomalies || 0) : 0
+  message.value = r.ok ? '' : failText('加载失败', r.error)
 }
 
 async function runNow() {
   running.value = true
-  const r: any = await runInspect()
+  const r = await runInspect()
   running.value = false
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   if (!r.ok) {
-    // 巡检本身失败（超时/限频/网络）留原文·不再 load()——否则紧随的 getInspectStatus 成功会把 message 抹成 ''，
+    // 巡检本身失败（超时/限频/网络）留原文·不 load()——否则紧随的 getInspectStatus 成功会把 message 抹成 ''，
     // 操作员误以为「巡检跑过·没新异常」，恰在这块「探静默失败」的面板上制造新的静默失败（病根#14）
-    message.value = '巡检失败：' + String(r.error || '')
+    message.value = writeFailText('巡检失败', r.error)
     return
   }
   latest.value = r.run
@@ -94,6 +96,7 @@ onMounted(load)
             <div class="check-body">
               <div class="check-title">{{ c.title }}</div>
               <div class="check-detail">{{ c.detail }}</div>
+              <div v-if="c.capped" class="check-detail">只扫了前 {{ c.scanned }} 条，结论可能不全</div>
               <div v-if="c.status === 'red' && c.samples && c.samples.length" class="samples">
                 <code v-for="s in c.samples" :key="s">{{ s }}</code>
                 <span v-if="c.count && c.count > c.samples.length" class="more">等 {{ c.count }} 条</span>

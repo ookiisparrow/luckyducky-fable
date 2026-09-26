@@ -7,7 +7,7 @@ import { materialHuman, purchaseStatusLabel, yuanToFen, fenLabel, scmErrorText }
 import { dateTime } from '../lib/format'
 import { consumePurchaseHandoff } from '../lib/scmHandoff'
 import { useLoadStatus, loadErrors, confirmed } from '../lib/status'
-import { useLatest, appendNew } from '../lib/latest'
+import { usePager, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -18,15 +18,16 @@ import EmptyState from '../components/ui/EmptyState.vue'
 const orders = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
-const cursor = ref<unknown>(null) // B1（根因#7）：采购单列表翻页游标
-const hasMore = ref(false)
-// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+const pager = usePager() // 采购单列表翻页（根因#7）
+const hasMore = pager.hasMore
+const listFailed = ref(false) // 采购单没读到时不显「还没有采购单」——失败≠空态
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 const form = ref<{ purchaseId?: string; supplierId: string; lines: Array<{ materialId: string; qty: number; priceYuan: string }> } | null>(null)
 const confirmKey = ref('')
-const expanded = ref('') // 采购行项展开（换皮丢·非草稿单看不到买了啥·只显行数）
+const expanded = ref('') // 采购行项展开（非草稿单也能看买了啥，不只显行数）
 const supplierName = (id: unknown) => (sups.value.find((s) => s._id === id) || {}).name || String(id || '')
-const filter = ref('') // 状态筛选（换皮丢·恒取全部）
+const filter = ref('') // 状态筛选
 const FILTERS = [
   { key: '', label: '全部' },
   { key: 'draft', label: '草稿' },
@@ -39,7 +40,7 @@ function pickFilter(k: string) {
   void reload()
 }
 
-// 逐行小计 + 总价预览（换皮丢·建单看不到花多少钱·总价要保存后才知道）：客户端预览，服务端 savePurchase 仍权威核算
+// 逐行小计 + 总价预览（建单就看到花多少钱，不用保存后才知道）：客户端预览，服务端 savePurchase 仍权威核算
 function lineFen(l: { qty: number; priceYuan: string }): number | null {
   const fen = yuanToFen(l.priceYuan)
   return fen === null ? null : fen * (Number(l.qty) || 0)
@@ -55,42 +56,36 @@ const draftTotalFen = computed(() => {
   return sum
 })
 
-const listGen = useLatest() // 采购单乱序守卫（P2·快切 chip 时旧结果别覆盖当前筛选·根因#8）
-const saving = ref(false) // 建单在途锁（P2·防双击建两张重复草稿·后端建单无 id 幂等）
+const saving = ref(false) // 建单在途锁（防双击建两张重复草稿·后端建单无 id 幂等）
 async function reload() {
-  confirmKey.value = '' // 换筛选/刷新即复位危险态（P1·防旧武装的下单/收货/取消按钮跨上下文残留一击直发·批3 规格）
-  const my = listGen.begin()
+  confirmKey.value = '' // 换筛选/刷新即复位危险态（防旧武装的下单/收货/取消按钮跨上下文残留一击直发）
+  const my = pager.begin()
   const [p, m, s] = await Promise.all([listPurchases(filter.value || undefined), listMaterials(), listSuppliers()])
-  if (listGen.isStale(my)) return // 已切别 chip·丢弃过期采购单
-  orders.value = p.ok ? (p.list as Record<string, any>[]) : []
-  cursor.value = p.ok ? p.nextCursor : null // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
-  hasMore.value = !!(p.ok && p.hasMore)
-  mats.value = m.ok ? (m.list as Record<string, any>[]) : []
-  sups.value = s.ok ? ((s.list as Record<string, any>[]) || []).filter((x) => x.type === 'factory') : []
+  if (pager.isStale(my)) return // 已切别 chip·丢弃过期采购单（快切 chip 时旧结果别覆盖当前筛选·根因#8）
+  orders.value = p.ok ? p.list : []
+  listFailed.value = !p.ok
+  pager.reset(p) // 换筛选/刷新恒重置游标（新首页·不接续旧筛选下的位置）
+  mats.value = m.ok ? m.list : []
+  sups.value = s.ok ? (s.list || []).filter((x) => x.type === 'factory') : []
   // 分路报错（照 ScmBom.reload）：物料/供应商挂掉不装空目录
   const err = loadErrors([[p, '采购单'], [m, '物料主档'], [s, '供应商']])
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 加载更多（B1·根因#7）：复用当前状态筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（新 reload 会作废本页·防混排）
-  const r = await listPurchases(filter.value || undefined, { cursor: cursor.value })
-  if (listGen.isStale(gen)) return
+  const r = await pager.next((cursor) => listPurchases(filter.value || undefined, { cursor }))
+  if (!r) return
   if (!r.ok) {
     note(false, '', '加载更多失败：' + scmErrorText(r.error))
     return
   }
-  orders.value = appendNew(orders.value, (r.list as Record<string, any>[]) || [], (o) => o._id)
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
+  orders.value = appendNew(orders.value, r.list || [], (o) => o._id)
 }
 
 function newOrder() {
   form.value = { purchaseId: '', supplierId: '', lines: [{ materialId: '', qty: 1, priceYuan: '' }] }
 }
-// 草稿编辑（换皮丢·草稿建完只能取消重建·后端 savePurchase 收 purchaseId 支持改）：预填表单
+// 草稿编辑（后端 savePurchase 收 purchaseId 支持改）：预填表单
 function editDraft(o: Record<string, any>) {
   form.value = {
     purchaseId: String(o._id || ''),
@@ -103,7 +98,7 @@ function editDraft(o: Record<string, any>) {
 async function doSave() {
   const f = form.value
   if (!f || saving.value) return // 在途禁再发·防双击建重复草稿
-  const snap = f // 快照本次编辑目标（H1·同批G G3/G4 范式）：editDraft 无 saving 门控，await 期间若已切到另一张草稿/新建，回包收尾效果不该打过去
+  const snap = f // 快照本次编辑目标：editDraft 无 saving 门控，await 期间若已切到另一张草稿/新建，回包收尾效果不该打过去
   const lines: Array<{ materialId: string; qty: number; unitPriceFen: number }> = []
   for (const l of f.lines) {
     const fen = yuanToFen(l.priceYuan)
@@ -117,17 +112,17 @@ async function doSave() {
   const r = await savePurchase(f.supplierId, lines, f.purchaseId || undefined) // 传 purchaseId＝改草稿·空＝新建
   saving.value = false
   if (form.value === snap) {
-    note(r.ok, `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）`, scmErrorText(r.error))
+    note(r.ok, r.ok ? `草稿已${f.purchaseId ? '更新' : '建'}（总价 ${fenLabel(r.totalFen)}·服务端核算）` : '', scmErrorText(r.error))
     if (r.ok) form.value = null
   }
   void reload() // 列表刷新与目标是否已切无关·恒执行
 }
 
-// 下单/收货/取消都两步确认（换皮下单无任何确认·花钱的动作应有一道·带金额）
-async function step(fn: (_id: string) => Promise<Record<string, unknown>>, id: string, key: string) {
+// 下单/收货/取消都两步确认（花钱的动作应有一道·带金额）
+async function step(fn: (_id: string) => Promise<{ ok: boolean; error?: string }>, id: string, key: string) {
   if (!confirmed(confirmKey, key)) return
-  const r = (await fn(id)) as Record<string, any>
-  note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·换皮只写 message 致失败显成功绿
+  const r = await fn(id)
+  note(r.ok, '', scmErrorText(r.error)) // 失败走 note 设 msgOk=false（红）·只写 message 会让失败显成功绿
   void reload()
 }
 
@@ -233,7 +228,7 @@ onMounted(async () => {
         <UiButton variant="ghost" size="sm" @click="more">加载更多</UiButton>
       </div>
     </div>
-    <EmptyState v-else-if="!form" :icon="ClipboardList" :text="filter ? '这个状态下没有采购单' : '还没有采购单'" />
+    <EmptyState v-else-if="!form && !listFailed" :icon="ClipboardList" :text="filter ? '这个状态下没有采购单' : '还没有采购单'" />
   </div>
 </template>
 
@@ -241,7 +236,7 @@ onMounted(async () => {
 /* 本页独有：msgOk 双态提示行 / 草稿多行明细表单 / 采购单表右对齐列 + 可展开行项明细。
  * 页头/卡/徽章/空态/按钮/表格/工具条已交共享原语与 .ld-* 全局类。 */
 
-/* msgOk 双态提示（成功绿·失败红·换皮恒红 bug 的修复保留） */
+/* msgOk 双态提示（成功绿·失败红） */
 .msg {
   font-size: 13px;
   color: var(--ld-red);

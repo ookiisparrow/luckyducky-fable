@@ -1,6 +1,6 @@
-// 小程序版本展示单源。数字跟仓根 package.json（LD-004·release.mjs 升号时同步本文件）；
+// 小程序版本展示单源。数字跟仓根 package.json（release.mjs 升号时同步本文件）；
 // 对外名在 PUBLIC_RELEASE_NAME（空＝还没有公开版，正式包只写「发布候选」）。
-// 通道跟老板 2026-09-18 四条线：本仓 main＝开发、本仓 test＝测试、
+// 通道跟老板定的四条线：本仓 main＝开发、本仓 test＝测试、
 // 发布＝BUILD_CHANNEL/envVersion release（现有「发布候选」/公开名）、
 // 实验＝BUILD_CHANNEL experimental（给 luckyducky-fable-ablation，本仓不自动写、不回收）。
 // 日期由 stamp-mp-version-date.mjs 自动戳，人不用改 DEV_UPDATE_DATE。
@@ -71,7 +71,7 @@ export function currentAppVersionLine(): string {
 
 // 日期＝上海日历当天（YYYY-MM-DD）；第二行＝「更新 YYYY-MM-DD」，一眼能看见更新时间。
 // 自动戳：pre-commit / CI 合入 main|test / preview:mp / release.mjs / mac-sync-ends。
-export const DEV_UPDATE_DATE = '2026-09-25'
+export const DEV_UPDATE_DATE = '2026-09-26'
 
 export function formatAppVersionDetail(
   _envVersion: string,

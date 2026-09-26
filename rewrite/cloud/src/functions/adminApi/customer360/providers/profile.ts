@@ -1,14 +1,13 @@
-import { toFen, fenToYuan, asFen, PAID_ORDER_STATUSES } from '@ldrw/shared'
+import { COLLECTIONS, toFen, fenToYuan, asFen, PAID_ORDER_STATUSES } from '@ldrw/shared'
 import type { CustomerPanelProvider } from '../types'
 
-// 画像 rollup 板块（B1.3·铁律三）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
+// 画像 rollup 板块（铁律三 provider）：坐席看某客人的总消费/单数/激活与进课/最近活跃——从 orders/activations/events
 // 派生（各查 bounded·防大客户拖垮）。与看板 getDashboard 的全站聚合是不同切口
 // （这里按单个 openid·小集合），单源各表、不抽公共件（Rule of Three 未到·CLAUDE.md）。
 const ORDER_LIMIT = 200
 const ACT_LIMIT = 100
-// 已付口径（与 shared PAID_ORDER_STATUSES / 看板 GMV 同义·营收只计已付·P2 顺手改批收口，此前本文件另手抄
-// 一份同值数组）。orders.amount 存「元」（createOrder 经 fenToYuan 入库·与看板 GMV 同口径），故 totalSpent
-// 单位＝元（展示层直接 ￥，不再 /100）。
+// 已付口径（取 shared PAID_ORDER_STATUSES·与看板 GMV 同义·营收只计已付·不另手抄一份）。orders.amount 存「元」（createOrder 经 fenToYuan 入库·与看板 GMV 同口径），故 totalSpent
+// 单位＝元（展示层直接 ￥，不 /100）。
 const PAID = PAID_ORDER_STATUSES
 
 export const profileProvider: CustomerPanelProvider = {
@@ -20,12 +19,12 @@ export const profileProvider: CustomerPanelProvider = {
     // 读失败抛给编排器标 PANEL_FETCH_FAIL——空数组会被当成「真没花过钱」
     const rows = (qy: any) => qy.get().then((r: any) => (r && r.data) || [])
     const [orders, acts, lastEvt] = await Promise.all([
-      rows(db.collection('orders').where({ _openid: openid }).limit(ORDER_LIMIT)),
-      rows(db.collection('activations').where({ _openid: openid }).limit(ACT_LIMIT)),
-      rows(db.collection('events').where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
+      rows(db.collection(COLLECTIONS.orders).where({ _openid: openid }).limit(ORDER_LIMIT)),
+      rows(db.collection(COLLECTIONS.activations).where({ _openid: openid }).limit(ACT_LIMIT)),
+      rows(db.collection(COLLECTIONS.events).where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
     ])
     const paid = orders.filter((o: any) => PAID.includes(o.status))
-    // 分累加再回元（深审 P3·钱链口径）：元浮点直加会漂（0.1+0.2 类），逐单 toFen 求和后 fenToYuan 一次
+    // 分累加再回元（钱链口径）：元浮点直加会漂（0.1+0.2 类），逐单 toFen 求和后 fenToYuan 一次
     const totalSpent = fenToYuan(asFen(paid.reduce((n: number, o: any) => n + toFen(Number(o.amount) || 0), 0)))
     const entered = acts.filter((a: any) => !!a.enteredAt).length
     return {

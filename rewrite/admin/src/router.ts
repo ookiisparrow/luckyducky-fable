@@ -1,5 +1,5 @@
-// 路由（hash·静态托管友好）。信息架构按运营动作重组（M3 重写·非旧侧栏平铺）：
-// 总览 / 商品与内容 / 订单与钱 / 客服 / 进销存 / 系统 六组已齐。
+// 路由（hash·静态托管友好）。信息架构按运营动作分组（非侧栏平铺）：
+// 总览 / 商品与内容 / 订单与钱 / 客服 / 进销存 / 系统 六组。
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { client } from './api'
 import { isUploadLocked } from './lib/uploadLock'
@@ -56,7 +56,7 @@ export const router = createRouter({
 })
 
 // 会话闸：无令牌一律回登录页（fail-closed·令牌真伪由云端裁决）
-// 批量上传在途闸（P1 收口·同日案 M 记债后当批修复）：Wizard.go() 与 Courses.vue 的 onBeforeRouteLeave
+// 批量上传在途闸：Wizard.go() 与 Courses.vue 的 onBeforeRouteLeave
 // 两处消费 isUploadLocked() 均只挡各自的窄路径——Shell 侧栏「按步骤直达」是裸 router-link 改 query.step
 // （仅 query 变化＝路由 update 非 leave，onBeforeRouteLeave 不触发；也不经过 go()）、浏览器前进/后退同样绕开
 // 两点式拦截。全局 beforeEach 对任何导航（含仅 query 变化的 update）必过，一次性收口两条旁路 + 未来新增
@@ -79,10 +79,10 @@ router.beforeEach((to, from) => {
 
 // 会话失效集中导登录（单源·根因#5）：任一业务调用遇 401 → client 清令牌后回调此处导登录，
 // 各页只需早退不再各写各的跳转（治「卡死加载中/裸显 SESSION_LOST」的页间漂移）。
-// 未保存编辑提示（批D·P2·根因2）：会话过期即时跳登录页，此前未落盘的表单编辑会随组件卸载静默丢失、
+// 未保存编辑提示：会话过期即时跳登录页，未落盘的表单编辑会随组件卸载静默丢失、
 // 零提示。hasPendingSaves() 复用 serialSave 共享槽位的在途/待补存状态（各页 autosave 走 key 版 serialSave
 // 后天然登记在同一处，不需要各页各自维护一份 dirty ref）——命中即说明这次过期可能正好打断了一次未落盘的
-// 编辑，跳转前用 alert 提一句（非阻断式弹窗留给以后·这里先不做到悄无声息，见批D任务单）。
+// 编辑，跳转前用 alert 提一句（至少不悄无声息）。
 client.onSessionLost(() => {
   if (router.currentRoute.value.path !== '/login') {
     if (hasPendingSaves()) window.alert('登录已过期，本次未保存的编辑可能丢失，请重新登录后检查')

@@ -12,8 +12,8 @@ describe('激活结果三态 + 废码/网络失败分治（黄金 §一）', () 
     expect(activationView(null).kind).toBe('invalid')
   })
   it('大白话：网络失败（CALL_FAIL/BAD_RESULT）≠废码——扫真码遇网络抖动不误告「激活码不对」，归 error 态可重试；仍 fail-closed 不冒充激活（深审20260712 P3）', () => {
-    expect(activationView({ ok: false, error: 'CALL_FAIL' })).toEqual({ kind: 'error', courseId: '' })
-    expect(activationView({ ok: false, error: 'BAD_RESULT' })).toEqual({ kind: 'error', courseId: '' })
+    expect(activationView({ ok: false, error: 'CALL_FAIL' })).toEqual({ kind: 'error', courseId: '', reason: 'network' })
+    expect(activationView({ ok: false, error: 'BAD_RESULT' })).toEqual({ kind: 'error', courseId: '', reason: 'network' })
   })
 })
 

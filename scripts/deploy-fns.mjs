@@ -10,7 +10,7 @@
  * （云端实际部署版本未知 ⇒ 无清单=全部待部署，是诚实的未知态；首次授权部署后重建真清单）。
  *
  * 三道部署保险：① 默认/`--dry-run` 只报告不部署；② 真部署须 `DEPLOY_ALLOWED=1`；
- * ③ 实际 tcb 调用仍过 guard-deploy 部署闸（含敏感函数二次确认）。
+ * ③ 跑本脚本本身就过 guard-deploy 部署闸确认（Claude 会话内）。
  *
  * 用法：
  *   node scripts/deploy-fns.mjs --dry-run        # 算 diff 报告（无部署，可随时跑）
@@ -63,7 +63,7 @@ if (dryRun) {
   process.exit(0)
 }
 
-// 4. 逐函数部署（敏感函数二次确认由 guard-deploy 兜底）
+// 4. 逐函数部署
 for (const name of changed) {
   // 别名展开入口仍在：DEPLOY_ALIASES 空则 deployTargets(name) === [name]。
   // 2026-08-13 起 adminApi 只发自身，不要再部署 adminApiV2。

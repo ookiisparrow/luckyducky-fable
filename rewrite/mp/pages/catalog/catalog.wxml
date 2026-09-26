@@ -73,8 +73,7 @@
        无原生导航条，空态需自补状态栏避让，同 welcome.wxml ld-wl-body 口径） -->
   <view class="ld-cat-empty" wx:if="{{state === 'missing'}}" style="padding-top: calc({{statusBarHeight}}px + 220rpx)">
     <view class="ld-cat-empty-title">没找到这门课</view>
-    <!-- 文案改用户语言 + 补出路（2026-07-25 体检批 P3）：原文「检查一下入口，或稍后再试」是开发者口吻
-         （用户不知道什么叫「入口」），且整屏没有一个可点的地方——扫码进来的用户到此彻底没路走。 -->
+    <!-- 用户语言 + 出路：别用「入口」这类开发者口吻，且要给可点的地方——扫码进来的用户到此不能没路走。 -->
     <view class="ld-cat-empty-hint">可能课程已下架，或者这个链接不对</view>
     <view class="ld-cat-retry" bind:tap="onGoCourses">去我的课程看看</view>
   </view>

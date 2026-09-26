@@ -1,5 +1,4 @@
-// 登录软门槛（R1）——旧线 packages/miniapp 的 composables/useAuthGate.js +
-// components/LoginSheet.vue 原生 mp 移植（重写线漏搬·同播放页预取那类「老线守冻结字节、新线未随迁」）。
+// 登录软门槛（R1）。
 // openid 由云开发上下文静默可信（全仓无 wx.login/token）——此处「登录」＝用户显式勾协议同意登录，
 // 登录环节不采集头像昵称（真·一键登录·守卫 rw-mp-login-no-profile-collect·资料可后续在「编辑资料」页补）。
 // loginGate 单例（镜像 lib/privacyGate 广播范式）：各页 <login-sheet/> 订阅同一开关；
@@ -52,7 +51,7 @@ export function createLoginGate() {
     hasAgreed(): boolean {
       return readLoginHint()
     },
-    // 软门槛（旧线 ensureLogin 语义）：已同意→放行返回 true；未同意→弹登录半屏并返回 false，调用方据此中止本次动作。
+    // 软门槛：已同意→放行返回 true；未同意→弹登录半屏并返回 false，调用方据此中止本次动作。
     // 浏览类页面（首页/详情/购物车）不调用——可先逛后登录，不强制前置授权（合微信运营规范）。
     ensureLogin(): boolean {
       if (readLoginHint()) return true

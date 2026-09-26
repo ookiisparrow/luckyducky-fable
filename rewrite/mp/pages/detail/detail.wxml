@@ -16,8 +16,7 @@
   <!-- 价格卡 -->
   <view class="pdp-card pdp-price">
     <view class="pdp-price-row">
-      <!-- 划线价在前、现价在后（2026-07-25 体检批 P3）：与首页/购物车顺序统一——原先详情页反着排，
-           同一件商品在三个页面看到的价格顺序不一样。 -->
+      <!-- 划线价在前、现价在后：与首页/购物车顺序统一，同一件商品在三个页面价格顺序一致。 -->
       <text class="pdp-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
       <text class="pdp-now"><text class="pdp-cny">¥</text>{{currentPriceNum}}</text>
       <!-- 顾客看见的运费/售后短句；结算算钱仍走 SHIP=0（不在本页改钱链）。
@@ -70,7 +69,7 @@
           <text class="pdp-param-v">{{item.v}}</text>
         </view>
       </view>
-      <!-- wx:key 刻意用 index（同 about/reviews 判例）：段落无 id 字段，lead 作 key 多段空标题必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
+      <!-- wx:key 刻意用 index（同 about/reviews）：段落无 id 字段，lead 作 key 多段空标题必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
       <block wx:for="{{vm.sections}}" wx:key="index">
         <view class="pdp-detail-lead" wx:if="{{item.lead}}">{{item.lead}}</view>
         <view class="pdp-detail-p" wx:if="{{item.body}}">{{item.body}}</view>
@@ -82,7 +81,7 @@
   <view class="pdp-sec" wx:if="{{vm.kit.length}}">
     <view class="pdp-sec-head"><text class="pdp-sec-title">套装包含</text></view>
     <view class="pdp-kit-grid">
-      <!-- wx:key 刻意用 index（同 about/reviews 判例）：材料无 id 字段，name 作 key 同名不同规格必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
+      <!-- wx:key 刻意用 index（同 about/reviews）：材料无 id 字段，name 作 key 同名不同规格必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
       <view class="pdp-kit-cell" wx:for="{{vm.kit}}" wx:key="index">
         <view class="pdp-kit-name">{{item.name}}</view>
         <view class="pdp-kit-qty" wx:if="{{item.qty}}">{{item.qty}}</view>
@@ -124,7 +123,7 @@
 
 </view>
 
-<!-- 加载骨架（批5·网络慢时白屏观感）：头图块 + 两行文字骨架，参照 home ld-skeleton 手法本页自足 -->
+<!-- 加载骨架（网络慢时白屏观感）：头图块 + 两行文字骨架，参照 home ld-skeleton 手法本页自足 -->
 <view class="pdp-skeleton" wx:elif="{{loading}}">
   <view class="pdp-skeleton-hero"></view>
   <view class="pdp-skeleton-card">

@@ -1,4 +1,4 @@
-// 微信隐私授权闸（R27㉒·旧线 usePrivacyGate 黄金语义原生承接·守卫 rw-mp-privacy-gated）：
+// 微信隐私授权闸（R27·守卫 rw-mp-privacy-gated）：
 // wx.onNeedPrivacyAuthorization 触发 → 打开 privacy-sheet 弹窗 → 用户同意/拒绝回调 resolve 放行/中止本次接口。
 // 原生无响应式：可见态经订阅广播（组件 attached 订阅 / detached 退订）。工厂化是为测试各起干净实例；
 // 运行时只用单例 privacyGate。

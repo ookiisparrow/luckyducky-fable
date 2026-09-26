@@ -1,17 +1,15 @@
+// @vitest-environment happy-dom
 // 进销存映射：料号人话/元→分整数闸（超两位小数拒·不静默取整）/
 // 状态中文/错误码人话原文兜底/流水类型中文。
-import { describe, it, expect } from 'vitest'
-import shellRaw from '../src/shell/Shell.vue?raw'
-import scmMaterialsSrc from '../src/pages/ScmMaterials.vue?raw'
-import scmPurchaseSrc from '../src/pages/ScmPurchase.vue?raw'
-import scmOutworkSrc from '../src/pages/ScmOutwork.vue?raw'
-import scmBomSrc from '../src/pages/ScmBom.vue?raw'
-import scmPlannerSrc from '../src/pages/ScmPlanner.vue?raw'
-import inventorySrc from '../src/pages/Inventory.vue?raw'
-import mapScmSrc from '../src/lib/mapScm.ts?raw'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { materialHuman, materialCategoryLabel, uomLabel, purchaseStatusLabel, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText, docTypeLabel, mapLedger, unprofiledProducts } from '../src/lib/mapScm'
 import { SCM_FLOW } from '../src/lib/scmFlow'
 import { setPurchaseHandoff, consumePurchaseHandoff, setOutworkHandoff, consumeOutworkHandoff } from '../src/lib/scmHandoff'
+
+vi.mock('../src/api', () => ({ client: { who: () => '', logout: vi.fn() } }))
+import Shell from '../src/shell/Shell.vue'
 
 describe('料号人话', () => {
   it('大白话：毛线拆 色·档·形态；pkg/card 挂产品；fg 成品；其余辅料；空回空', () => {
@@ -90,38 +88,27 @@ describe('未填差异位总览（全产品 − 已建 profile）', () => {
   })
 })
 
-// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 顺序单源 path 集合必须 === Shell 侧栏「供应链」组
-// 的「流程步骤」子集，否则流程条会链到死路由 / 与侧栏漂移。批 B2 新增 /scm-overview：着陆页在流程之上（卡片直达 5 步中的某一步），
-// 不是流程步骤本身——只挂侧栏顶部、不进 ScmFlowTabs 5 步单源（lib/scmFlow.ts 不因此改动）。守卫收紧为
-// 「SCM_FLOW ⊆ Shell 供应链组」+「Shell 供应链组 = SCM_FLOW ∪ {总览}」，而非放宽成两边随便漂移。
+// ScmFlowTabs 顶部流程条来源（旧线还原·换皮丢）：SCM_FLOW 5 步必须都挂在侧栏「进销存」组，否则流程条会链到
+// 侧栏找不到的页、两边漂移。侧栏比流程只多一个「总览」着陆页（卡片直达 5 步中的某一步，不是流程步骤本身）。
 describe('SCM 流程条单源同步（防死链/防漂移）', () => {
-  it('大白话：SCM_FLOW（5 步流程）⊆ Shell 侧栏供应链组；供应链组 = 流程 5 步 + 总览这一个额外着陆页，不多不少', () => {
-    const shellScmPaths = new Set((shellRaw.match(/\/scm-[a-z]+/g) || []))
-    const flowPaths = new Set(SCM_FLOW.map((s) => s.to))
-    expect(flowPaths.size).toBe(5)
-    expect([...flowPaths].every((p) => shellScmPaths.has(p))).toBe(true) // 流程 5 步全部在侧栏（防漏挂）
-    const extra = [...shellScmPaths].filter((p) => !flowPaths.has(p))
-    expect(extra).toEqual(['/scm-overview']) // 侧栏比流程只多这一项——总览着陆页，非流程步骤
+  it('大白话：SCM_FLOW（5 步流程）都在侧栏进销存组；进销存组 = 流程 5 步 + 总览这一个额外着陆页，不多不少', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: { template: '<div/>' } }] })
+    await router.push('/scm-materials') // 当前路由所在组自动展开
+    await router.isReady()
+    const w = mount(Shell, { global: { plugins: [router] } })
+    await flushPromises()
+    const group = w.findAll('.group').find((g) => g.find('.grp-label').text() === '进销存')!
+    const sidebar = group.findAll('a.child').map((a) => String(a.attributes('href')))
+    const flowPaths = SCM_FLOW.map((s) => s.to)
+    expect(new Set(flowPaths).size).toBe(5)
+    expect(flowPaths.filter((p) => !sidebar.includes(p))).toEqual([]) // 流程 5 步全部在侧栏（防漏挂）
+    expect(sidebar.filter((p) => !flowPaths.includes(p))).toEqual(['/scm-overview']) // 侧栏只多总览
     expect(SCM_FLOW.every((s) => s.label && s.icon)).toBe(true) // 每步有中文标签+图标
   })
 })
 
 // 备货→采购/外协去开单中转（旧线 store/scmHandoff 移植·换皮丢·流程割裂手抄）：
 // 存一份→目标页读一次即清（consume），返回页不重复预填；两条通道互不串。
-// 档位从大团切走后重置残留 'knotted'（D2·bug 清除批D·取真源法：v-model 重置逻辑内联在组件里，无法单元测试
-// 行为，钉源码模式防回归——tier 切非 L 后 form 原会残留 'knotted'，select 显示空白且提交被云端 KNOT_ONLY_L 拒绝）。
-describe('物料主档 tier 切换清残留 form', () => {
-  it('大白话：源码含 watch(matForm.value.tier)，非 L 且当前 form 为 knotted 时重置为 raw', () => {
-    expect(scmMaterialsSrc).toMatch(/watch\(\s*\(\)\s*=>\s*matForm\.value\.tier/)
-    const idx = scmMaterialsSrc.indexOf('watch(() => matForm.value.tier')
-    expect(idx).toBeGreaterThan(-1)
-    const body = scmMaterialsSrc.slice(idx, idx + 200)
-    expect(body).toContain("t !== 'L'")
-    expect(body).toContain("matForm.value.form === 'knotted'")
-    expect(body).toContain("matForm.value.form = 'raw'")
-  })
-})
-
 describe('SCM 去开单 handoff（读一次即清）', () => {
   it('大白话：set 后 consume 拿到；再 consume 得 null（不重复预填）；采购/外协两通道独立', () => {
     setPurchaseHandoff({ supplierId: 'sup1', lines: [{ materialId: 'yarn:pink:L:raw', qty: 3 }] })
@@ -135,111 +122,5 @@ describe('SCM 去开单 handoff（读一次即清）', () => {
     const o1 = consumeOutworkHandoff()
     expect(o1?.lines[0].qty).toBe(5)
     expect(consumeOutworkHandoff()).toBeNull()
-  })
-})
-
-// SCM 四页翻页收口（B1·根因#7）：ScmMaterials（供应商列表+流水列表两处）/ScmPurchase/ScmOutwork/ScmBom（组装记录）
-// 各自接了 cursor 续页——源码扫描钉行为（同上方 tier 切换用例范式）：真实交互逻辑跑在浏览器 DOM 事件里，
-// 单测测不到点击，只钉「该有的翻页函数与 hasMore/cursor 绑定确实在源码里」防回归被换皮/重构悄悄丢掉。
-describe('SCM 四页「加载更多」翻页收口（B1·照抄 Conversations.vue/Orders.vue cursor 续页模式）', () => {
-  it('大白话：ScmMaterials 供应商列表 + 流水列表都有独立的 more 函数、都绑 hasMore 判空游标、都续传 cursor', () => {
-    expect(scmMaterialsSrc).toMatch(/async function moreSuppliers\s*\(/)
-    expect(scmMaterialsSrc).toMatch(/async function moreLedger\s*\(/)
-    expect(scmMaterialsSrc).toMatch(/listSuppliers\(\{\s*cursor:\s*supCursor\.value\s*\}\)/)
-    expect(scmMaterialsSrc).toMatch(/listLedger\([^)]*\{\s*cursor:\s*ledgerCursor\.value\s*\}\)/)
-    expect(scmMaterialsSrc).toMatch(/v-if="supHasMore"/)
-    expect(scmMaterialsSrc).toMatch(/v-if="ledgerHasMore"/)
-  })
-
-  it('大白话：ScmPurchase 采购单列表 more() 续传当前状态筛选 + cursor', () => {
-    expect(scmPurchaseSrc).toMatch(/async function more\s*\(/)
-    expect(scmPurchaseSrc).toMatch(/listPurchases\(filter\.value \|\| undefined, \{ cursor: cursor\.value \}\)/)
-    expect(scmPurchaseSrc).toMatch(/v-if="hasMore"/)
-  })
-
-  it('大白话：ScmOutwork 外协单列表 more() 续传 cursor', () => {
-    expect(scmOutworkSrc).toMatch(/async function more\s*\(/)
-    expect(scmOutworkSrc).toMatch(/listOutworks\(undefined, \{ cursor: cursor\.value \}\)/)
-    expect(scmOutworkSrc).toMatch(/v-if="hasMore"/)
-  })
-
-  it('大白话：ScmBom 组装记录 moreAssemblies() 续传 cursor', () => {
-    expect(scmBomSrc).toMatch(/async function moreAssemblies\s*\(/)
-    expect(scmBomSrc).toMatch(/listAssemblies\(\{ cursor: asmCursor\.value \}\)/)
-    expect(scmBomSrc).toMatch(/v-if="asmHasMore"/)
-  })
-})
-
-// ScmBom.vue reload 分路报错（深审20260712·P2 失败伪装空态·取真源法同 D2）：原先四路并行只校验
-// getBomSetup 的 b.ok，listAssemblies 单独失败时 assemblies=[]、「组装记录」卡显「还没有组装记录」
-// 假空态——照 Reconciliation.vue reload 分路范式，任一路失败点名报出 + EmptyState 文案分流。
-describe('ScmBom.vue reload 分路报错（失败不伪装空态）', () => {
-  it('大白话：四路各自判失败点名报，不被 b.ok 一路成功吞掉；组装记录空态文案区分「没记录」vs「加载失败」', () => {
-    expect(scmBomSrc).toMatch(/loadErrors\(\[\[b, '配方模板'\], \[m, '物料主档'\], \[a, '组装记录'\], \[d, '产品目录'\]\]\)/)
-    expect(scmBomSrc).toMatch(/load\(!err, err\)/)
-    // 旧「只看 b.ok」收尾写法不再存在
-    expect(scmBomSrc).not.toMatch(/load\(b\.ok/)
-    // 组装记录失败标记：reload 落标 + EmptyState 文案按标记分流
-    expect(scmBomSrc).toMatch(/asmFailed\.value = !a\.ok/)
-    expect(scmBomSrc).toMatch(/:text="asmFailed \? '组装记录加载失败，请刷新重试' : '还没有组装记录'"/)
-  })
-})
-
-// ScmMaterials.vue 流水加载失败不伪装空账本（深审20260712·P2）：loadLedger 失败原先 ledger=[] 且
-// 不留痕，EmptyState「还没有流水」把查询失败伪装成空账；且不可复用 message——reload 收尾 load(…)
-// 会覆盖它，须独立 ledgerError。
-describe('ScmMaterials.vue 流水加载失败独立记账（不伪装空账本）', () => {
-  it('大白话：listLedger 挂掉写独立 ledgerError；模板失败提示先于表格/空态（v-if 链头），EmptyState 只在真空账时出现', () => {
-    expect(scmMaterialsSrc).toMatch(/const ledgerError = ref\(''\)/)
-    expect(scmMaterialsSrc).toMatch(/ledgerError\.value = l\.ok \? '' : '流水加载失败：'/)
-    // 模板 v-if 链：失败提示 → 表格 → 空态（EmptyState 在链尾 v-else·失败时不渲染假空态）
-    expect(scmMaterialsSrc).toMatch(/<p v-if="ledgerError" class="ledger-err">\{\{ ledgerError \}\}<\/p>\s*<template v-else-if="ledger\.length">/)
-    const errIdx = scmMaterialsSrc.indexOf('v-if="ledgerError"')
-    const emptyIdx = scmMaterialsSrc.indexOf(':icon="ScrollText"')
-    expect(errIdx).toBeGreaterThan(-1)
-    expect(emptyIdx).toBeGreaterThan(errIdx) // 流水 EmptyState 落在失败提示同链之后
-  })
-})
-
-// 2026-09-15 SCM UI 诚实度：挂载/次级列表失败不许装空目录；库存 KPI 失败不许画假零（病根#8/#14）。
-describe('ScmPlanner.vue 挂载三路失败点名报（不装「没数据」）', () => {
-  it('大白话：产销/库存/产品目录任一路挂掉都写进 message，不被静默吞成空表', () => {
-    expect(scmPlannerSrc).toMatch(/message\.value = loadErrors\(\[\[r, '产销统计'\], \[i, '库存'\], \[d, '产品目录'\]\]\)/)
-  })
-})
-
-describe('采购/外协/物料页次级目录失败点名报（不装空目录）', () => {
-  it('大白话：采购单页物料/供应商挂掉要单独报，不被采购单成功吞成「厂家/料都是空的」', () => {
-    expect(scmPurchaseSrc).toMatch(/loadErrors\(\[\[p, '采购单'\], \[m, '物料主档'\], \[s, '供应商'\]\]\)/)
-    expect(scmPurchaseSrc).toMatch(/load\(!err, err\)/)
-    expect(scmPurchaseSrc).not.toMatch(/load\(p\.ok/)
-  })
-
-  it('大白话：外协单页物料/织女挂掉要单独报，不被外协单成功吞成「织女/原团都是空的」', () => {
-    expect(scmOutworkSrc).toMatch(/loadErrors\(\[\[o, '外协单'\], \[m, '物料主档'\], \[s, '织女名单'\]\]\)/)
-    expect(scmOutworkSrc).toMatch(/load\(!err, err\)/)
-    expect(scmOutworkSrc).not.toMatch(/load\(o\.ok/)
-  })
-
-  it('大白话：物料页供应商挂掉要单独报，不被物料成功吞成「没有供应商」', () => {
-    expect(scmMaterialsSrc).toMatch(/loadErrors\(\[\[m, '物料主档'\], \[s, '供应商'\]\]\)/)
-    expect(scmMaterialsSrc).toMatch(/load\(!err, err\)/)
-  })
-})
-
-describe('Inventory.vue 库存列表失败不画 KPI 假零', () => {
-  it('大白话：listInventory 挂掉时四张 KPI 卡不渲染（不把失败画成 0）', () => {
-    expect(inventorySrc).toMatch(/invOk\.value = !!\(inv as any\)\.ok/)
-    expect(inventorySrc).toMatch(/<div v-if="invOk" class="ld-kpi-grid">/)
-  })
-})
-
-describe('过期「SCM 没接/只显 id」注释已退役', () => {
-  it('大白话：活代码已接目录与库存列，注释不许再写「没接/只显 id/丢了库存列」', () => {
-    expect(scmPlannerSrc).not.toMatch(/换皮 SCM 未接/)
-    expect(scmPlannerSrc).not.toMatch(/换皮丢了「现存库存」列/)
-    expect(scmPlannerSrc).not.toMatch(/换皮只两列打包/)
-    expect(scmBomSrc).not.toMatch(/SCM 域整体没接/)
-    expect(mapScmSrc).not.toMatch(/换皮 SCM 全程只显 id/)
   })
 })

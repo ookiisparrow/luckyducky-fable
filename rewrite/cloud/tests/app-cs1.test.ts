@@ -172,7 +172,8 @@ describe('会话态接管与令牌（黄金 §四/§十一）', () => {
 describe('kfBind / dataConsent（黄金 §九/§三）', () => {
   it('大白话：无 unionid 拒；未配置拒；转换返空不写映射；成功建 ext→openid 幂等映射', async () => {
     expect((await call('kfBind', {})).error).toBe('NO_UNIONID')
-    expect((await call('kfBind', { unionid: 'u1' })).error).toBe('KF_NOT_CONFIGURED')
+    control.setUnionId('u1') // unionid 只取服务端上下文
+    expect((await call('kfBind')).error).toBe('KF_NOT_CONFIGURED')
 
     process.env.WXKF_CORPID = 'c'
     process.env.WXKF_SECRET = 's'
@@ -181,17 +182,18 @@ describe('kfBind / dataConsent（黄金 §九/§三）', () => {
       if (url.includes('idconvert')) return { external_userid: '' } // 无有效会话
       return {}
     })
-    expect((await call('kfBind', { unionid: 'u1' })).error).toBe('NO_EXTERNAL_USERID')
+    expect((await call('kfBind')).error).toBe('NO_EXTERNAL_USERID')
     expect(control.dump('kfIdentity').length).toBe(0) // 不写
 
     control.reset()
     control.setOpenId('oME')
+    control.setUnionId('u1')
     stubFetch((url) => {
       if (url.includes('gettoken')) return { access_token: 'T', expires_in: 7200 }
       if (url.includes('idconvert')) return { external_userid: 'eu-9' }
       return {}
     })
-    const r = await call('kfBind', { unionid: 'u1' })
+    const r = await call('kfBind')
     expect(r.bound).toBe(true)
     const m = control.dump('kfIdentity')[0]
     expect(m._id).toBe('ext:eu-9')

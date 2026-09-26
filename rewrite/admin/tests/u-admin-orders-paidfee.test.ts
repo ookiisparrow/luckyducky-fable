@@ -7,7 +7,7 @@ const { recordPaidFeeMock } = vi.hoisted(() => ({ recordPaidFeeMock: vi.fn() }))
 vi.mock('../src/api/money', () => ({
   listOrders: vi.fn().mockResolvedValue({
     ok: true,
-    list: [{ id: 'o1', status: 'payment_exception', items: [{ productId: 'p1', name: '材料包', qty: 1 }], amount: 9900, createdAt: Date.now(), address: { name: '张三' } }],
+    list: [{ id: 'o1', status: 'payment_exception', items: [{ productId: 'p1', name: '材料包', qty: 1 }], amount: 99, createdAt: Date.now(), address: { name: '张三' } }],
     nextCursor: null,
     hasMore: false,
   }),

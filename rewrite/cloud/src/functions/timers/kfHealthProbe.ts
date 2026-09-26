@@ -1,7 +1,7 @@
 import { ERR } from '@ldrw/shared'
 import { isServerCall, ok, err, getAccessToken, listKfAccounts, notifyAlert, getDb, getSecureConfigFields } from '../../kit'
 
-// 微信客服活体探针（黄金 cs-agent §十一·「配过一次≠一直通」）：定时探「令牌能取 + API 能真调」，
+// 微信客服活体探针（「配过一次≠一直通」）：定时探「令牌能取 + API 能真调」，
 // 静默故障（Secret 漂/可信 IP 变/权限丢）推告警。服务端专用；客户端调用拒（防刷告警）。
 // gettoken 抓不到可信 IP 问题（60020 真调才报），故必须真调一次读接口。
 const db = getDb()

@@ -1,4 +1,4 @@
-// 微信隐私授权半屏弹窗（R27㉒·配套 lib/privacyGate）。涉隐私接口页挂本组件（守卫 rw-mp-privacy-gated 扫描制）；
+// 微信隐私授权半屏弹窗（R27·配套 lib/privacyGate）。涉隐私接口页挂本组件（守卫 rw-mp-privacy-gated 扫描制）；
 // 「同意并继续」须原生 button open-type=agreePrivacyAuthorization（能力按钮）。attached 订阅/detached 退订。
 import { privacyGate } from '../../lib/privacyGate'
 

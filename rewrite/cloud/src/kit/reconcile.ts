@@ -1,6 +1,8 @@
 import { COLLECTIONS, toFen } from '@ldrw/shared'
 import { fetchTradeBill, normalizePem, type BillRow, type WxFetch } from './wxpay'
 import { getSecureConfigFields } from './secureConfig'
+import { getDocOrNull } from './db'
+import { err } from './reply'
 
 /** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
 export function toYuanAmount(v: unknown): number {
@@ -17,23 +19,16 @@ export function toFenAmount(v: unknown): number {
   return toFen(toYuanAmount(v))
 }
 
-// —— S16 对账原语单源（钱链·批B2）——与 kit/wxpay 分工：wxpay 管微信 v3 出站签名/账单解析
-// （平台接缝单点#12），本文件管「拉一日→落库→比对」编排与纯分类器。消费方：adminApi 手动路径
+// —— 对账原语单源（钱链）——与 kit/wxpay 分工：wxpay 管微信 v3 出站签名/账单解析
+// （平台接缝单点·根因#12），本文件管「拉一日→落库→比对」编排与纯分类器。消费方：adminApi 手动路径
 // （downloadBill/getBillMatch）+ timers/billReconcile 每日自动对账——同一套原语，行为单源不双轨。
-// CST 日历日助手自 reconciliation.ts 迁出成单源（此前 reconciliation 本地私有·timer 复用则必须上提）。
 
 export const DAY_MS = 86400_000
-const CST = 8 * 3600_000 // 东八区·按中国日历日分桶
-
-/** ms 时间戳 → CST 日历日 'YYYY-MM-DD' */
-export const dayKeyCST = (ts: number) => new Date(Number(ts) + CST).toISOString().slice(0, 10)
-/** 'YYYY-MM-DD' → CST 当日 00:00:00 的 ms */
-export const dayStartMsCST = (d: string) => Date.parse(d + 'T00:00:00+08:00')
 
 /** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。非 SUCCESS 行加 `:<tradeState>` 后缀：
  *  ALL 账单的退款行沿用原单微信订单号，同日先付后退会用 REFUND 行盖掉 SUCCESS 行，getBillMatch 就误报「我方有微信无」。
  *  先建集合（wxBills 动态建·往不存在的集合 doc().set() 会失败）；只对真写成功的计数（不吞错装成功）。
- *  自 adminApi/actions/wxbill.ts 原样移入（批B2·timer 复用），ensure 改本地 createCollection（kit 不 import functions/）。 */
+ *  ensure 用本地 createCollection（kit 不 import functions/）。 */
 async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
   try {
     await db.createCollection(COLLECTIONS.wxBills) // 集合不存在则建（否则 set 静默失败·count 虚高）
@@ -58,6 +53,7 @@ async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<numb
 
 /**
  * 拉一日微信交易账单 → 落 wxBills。**fail-soft 全程不抛**：凭证缺 {ok:false,error:'NO_WXPAY_CREDS'|'NO_MCHID'}，
+ * 凭证/商户号读失败 'CREDS_READ_FAIL'|'CONFIG_READ_FAIL'（与「没配置」分开：调用方对后者静默、对前者要告警），
  * 拉取失败原样透传 fetchTradeBill 的 error（含 NO_STATEMENT_EXIST 字样＝该日无账单·由调用方分诊）。
  * 凭证链（根因#9）：secureConfig/wxpay 读库优先、env 兜底（**env 是函数进程级**——timer 新函数不继承
  * adminApi 的环境变量，部署侧要么凭证入库要么本函数同配 env，否则每日静默 skipped）；mchid 取 config/pay.subMchId。
@@ -67,16 +63,18 @@ export async function pullBillDay(
   date: string,
   opts: { fetchImpl?: WxFetch; billType?: string } = {}
 ): Promise<{ ok: false; error: string } | { ok: true; count: number; rows: BillRow[] }> {
-  const creds = await getSecureConfigFields(db, 'wxpay', ['mchSerial', 'mchPrivateKey'])
+  const creds = await getSecureConfigFields(db, 'wxpay', ['mchSerial', 'mchPrivateKey'], { strict: true }).catch(() => null)
+  if (!creds) return err('CREDS_READ_FAIL')
   const serial = creds.mchSerial
   // 私钥换行常被控制台塌成空格/字面 \n（→ OpenSSL DECODER 报错）→ 稳健重建规范 PEM（对已规整值幂等，无害）
   const privateKey = normalizePem(creds.mchPrivateKey)
-  if (!serial || !privateKey) return { ok: false, error: 'NO_WXPAY_CREDS' }
-  const cfg = await db.collection(COLLECTIONS.config).doc('pay').get().catch(() => null)
-  const mchid = (cfg && cfg.data && cfg.data.subMchId) || ''
-  if (!mchid) return { ok: false, error: 'NO_MCHID' }
+  if (!serial || !privateKey) return err('NO_WXPAY_CREDS')
+  const cfg = await getDocOrNull(db.collection(COLLECTIONS.config).doc('pay')).catch(() => undefined)
+  if (cfg === undefined) return err('CONFIG_READ_FAIL')
+  const mchid = (cfg && cfg.subMchId) || ''
+  if (!mchid) return err('NO_MCHID')
   const r = await fetchTradeBill({ date, mchid: String(mchid), serial, privateKey, billType: opts.billType }, opts.fetchImpl) // undefined 走默认出站
-  if (!r.ok) return { ok: false, error: r.error || 'BILL_FETCH_FAIL' }
+  if (!r.ok) return err(r.error || 'BILL_FETCH_FAIL')
   const rows = r.rows || []
   const count = await upsertBills(db, date, rows)
   return { ok: true, count, rows }

@@ -5,8 +5,9 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
-import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
+import { mapOrderRows, orderErrorText } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
+import type { ErrCode } from '@ldrw/shared'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -16,6 +17,7 @@ import {
   buildLabelHtml,
   classifyScan,
   shortCode,
+  sameAck,
   type FulfillOrder,
   type PrintLabel,
 } from '../lib/fulfill'
@@ -31,7 +33,7 @@ const step = ref(1)
 const orders = ref<FulfillOrder[]>([])
 const loading = ref(true)
 const loadErr = ref('')
-const truncNote = ref('') // 25 页保险丝触顶提示（P2·bug sweep Round2 item11·同 getInventory truncated 惯例：触顶不静默）
+const truncNote = ref('') // 25 页保险丝触顶提示（同 getInventory truncated 惯例：触顶不静默）
 // 本次发货流水（会话态·跳步不丢·刷新页面即清）
 interface LogEntry {
   id: string
@@ -62,29 +64,32 @@ async function reload() {
         loadErr.value = '加载待发货订单失败：' + orderErrorText(r.error)
         break
       }
-      for (const o of mapOrderRows((r as any).list) as OrderRowVM[]) {
+      for (const o of mapOrderRows(r.list)) {
         if (seen.has(o.id)) continue
         seen.add(o.id)
-        // OrderRowVM 已带 addr*/items·转 FulfillOrder 形状（含 feeMismatch/refundHold）
+        // OrderRowVM 已带 addr*/items/每行已退件数·转 FulfillOrder 形状
         acc.push({
           id: o.id,
           createdAt: o.createdAtMs || 0,
           feeMismatch: o.feeMismatch,
           refundHold: o.refundHold,
-          items: o.items.map((it) => ({ name: it.name, qty: it.qty })),
+          ackRefundedQty: o.ackRefundedQty,
+          items: o.items.map((it) => ({ name: it.name, qty: it.qty, refundedQty: it.refundedQty })),
           address: { name: o.addrName, phone: o.addrPhone, region: o.addrRegion, detail: o.addrDetail },
         })
       }
-      cursor = (r as any).nextCursor
-      hasMore = !!(r as any).hasMore && cursor != null
+      cursor = r.nextCursor
+      hasMore = !!r.hasMore && cursor != null
       pages++
     }
-    // 触顶（25 页仍有下一页）不静默（P2·bug sweep Round2 item11·同 getInventory truncated 惯例）：
+    // 触顶（25 页仍有下一页）不静默（同 getInventory truncated 惯例）：
     // 备货汇总/标签清单/扫码核对都基于 orders.value，触顶后本队列不完整却不吭声，操作员会漏单不自知。
     if (hasMore && pages >= 25) truncNote.value = '订单量超出一次装载上限，列表不完整——请分批处理或联系技术缩小范围'
     orders.value = acc
   } catch (e) {
-    loadErr.value = '加载失败：' + (e instanceof Error ? e.message : String(e))
+    // 这里是页面自己的代码抛了异常（回包畸形之类），英文原文操作员看不懂；原文留控制台给技术排查
+    console.error(e)
+    loadErr.value = '加载失败：页面处理订单数据时出错，请刷新；反复出现请找技术'
   } finally {
     loading.value = false
   }
@@ -101,25 +106,31 @@ const fmtTime = (ts?: number) => dateTime(ts).slice(5) || '—'
 // —— 步2 打印 ——
 const PRINTED_KEY = 'ldrw-fulfill-printed'
 const PAPER_KEY = 'ldrw-fulfill-paper'
-function loadPrinted(): Set<string> {
+// 已打印＝订单 id → 打印那一刻标签上的已退件数。发货回传这份而不是最新列表的：标签印好后又退了件、
+// 中间刷新过队列，回传最新值会和服务端对上，照旧标签装的箱就把已退的件发出去了。
+// 旧版存的是 id 数组（没有件数），不认——当作没打印，默认勾上重打。
+type Ack = Record<string, number>
+function loadPrinted(): Record<string, Ack> {
   try {
-    const v = JSON.parse(localStorage.getItem(PRINTED_KEY) || '[]')
-    return new Set(Array.isArray(v) ? v.filter((x: unknown) => typeof x === 'string') : [])
+    const v = JSON.parse(localStorage.getItem(PRINTED_KEY) || '{}')
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {}
   } catch {
-    return new Set()
+    return {}
   }
 }
-const printed = ref<Set<string>>(loadPrinted())
+const printed = ref<Record<string, Ack>>(loadPrinted())
 function savePrinted() {
-  const alive = new Set(orders.value.map((o) => o.id))
-  localStorage.setItem(PRINTED_KEY, JSON.stringify([...printed.value].filter((id) => id && alive.has(id))))
+  const alive = new Set(orders.value.map((o) => o.id as string))
+  localStorage.setItem(PRINTED_KEY, JSON.stringify(Object.fromEntries(Object.entries(printed.value).filter(([id]) => alive.has(id)))))
 }
-function togglePrinted(id: string) {
-  const s = new Set(printed.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  printed.value = s
+function unmarkPrinted(id: string) {
+  const { [id]: _, ...rest } = printed.value
+  printed.value = rest
   savePrinted()
 }
+const isPrinted = (o: FulfillOrder) => !!printed.value[o.id as string]
+// 打印后退款件数变了：箱里是按旧标签装的，重打重装之前不许发
+const labelStale = (o: FulfillOrder) => isPrinted(o) && !sameAck(printed.value[o.id as string], o.ackRefundedQty)
 const savedPaper = localStorage.getItem(PAPER_KEY) || PAPER_PRESETS[0].key
 const paperKey = ref(PAPER_PRESETS.some((p) => p.key === savedPaper) ? savedPaper : PAPER_PRESETS[0].key)
 const preset = computed(() => PAPER_PRESETS.find((p) => p.key === paperKey.value) || PAPER_PRESETS[0])
@@ -128,7 +139,7 @@ function onPaperChange() {
 }
 const checked = ref<Set<string>>(new Set())
 function syncDefaultChecked() {
-  checked.value = new Set(shippable.value.filter((o) => !printed.value.has(o.id as string)).map((o) => o.id as string))
+  checked.value = new Set(shippable.value.filter((o) => !isPrinted(o) || labelStale(o)).map((o) => o.id as string))
 }
 function toggleCheck(id: string) {
   const s = new Set(checked.value)
@@ -155,9 +166,10 @@ async function doPrint() {
   if (printing.value || !chosen.value.length) return
   printing.value = true
   printMsg.value = ''
+  const batch = chosen.value
   try {
     const labels: PrintLabel[] = await Promise.all(
-      chosen.value.map(async (o) => ({ ...labelData(o), qrDataUrl: await QRCode.toDataURL(o.id as string, { width: 300, margin: 1 }) })),
+      batch.map(async (o) => ({ ...labelData(o), qrDataUrl: await QRCode.toDataURL(o.id as string, { width: 300, margin: 1 }) })),
     )
     const w = window.open('', '_blank')
     if (!w) {
@@ -170,9 +182,7 @@ async function doPrint() {
       w.focus()
       w.print()
     }
-    const s = new Set(printed.value)
-    labels.forEach((l) => s.add(l.id))
-    printed.value = s
+    printed.value = { ...printed.value, ...Object.fromEntries(batch.map((o) => [o.id as string, o.ackRefundedQty || {}])) }
     savePrinted()
     printMsg.value = `已生成 ${labels.length} 张标签，打印后贴箱、照清单装货`
   } finally {
@@ -209,7 +219,13 @@ function onScan() {
   scanText.value = ''
   if (res.type === 'empty') return
   if (res.type === 'order') {
-    selected.value = orders.value.find((o) => o.id === res.id) || null
+    const o = orders.value.find((x) => x.id === res.id) || null
+    if (o && labelStale(o)) {
+      selected.value = null
+      say(`这单打完标签后又有商品退款，这张标签作废（${shortCode(res.id)}）——回「打印标签」重打，按新标签重新装箱`, true)
+      return
+    }
+    selected.value = o
     say('')
     return
   }
@@ -246,24 +262,26 @@ function onScan() {
 }
 function mapShipErr(code: unknown): string {
   if (code === 'BAD_STATUS:' + 'shipped') return '这单已发过货；要改运单号请去「订单发货」页'
+  if (code === ('REFUND_LINES_CHANGED' satisfies ErrCode)) return '这单打完标签后又有商品退款，箱里的货可能多了——点「刷新队列」重打标签，按新标签重新装箱'
   return orderErrorText(code)
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
-    // 在途期第二枪静默丢弃（P1·bug 清除战役 II C1）：扫码枪连扫两箱时不吭声会让操作员误以为已处理、漏发货
+    // 在途期第二枪不静默丢弃：扫码枪连扫两箱时不吭声会让操作员误以为已处理、漏发货
     say('上一单发货还在处理中——这一枪没有生效，等出结果再重扫这张面单', true)
     return
   }
   shipping.value = true
   // await 前快照：在途期下拉框仍可改，回包后的流水/提示必须是实际提交的那家公司
   const entry = { id: order.id as string, time: Date.now(), code: shortCode(order.id), name: order.address?.name || '—', trackingNo, company: company.value }
-  const r = await shipOrder(entry.id, entry.company, trackingNo)
+  // 本机没有打印记录（别的电脑打的）才退回用当前列表的件数
+  const r = await shipOrder(entry.id, entry.company, trackingNo, printed.value[entry.id] || order.ackRefundedQty || {})
   shipping.value = false
   if (r.ok) {
     orders.value = orders.value.filter((o) => o.id !== order.id)
     sessionLog.value.unshift({ ...entry, ok: true })
     // 只在仍选中刚发的这单时清选择——发货往返期间操作员可能已扫下一箱内码选中别单（selected=B），
-    // 无条件置空会把 B 的选择抹掉、逼其重扫箱码（P3·根因#8·扫码枪快速连扫才触发）
+    // 无条件置空会把 B 的选择抹掉、逼其重扫箱码（根因#8·扫码枪快速连扫才触发）
     if (selected.value?.id === order.id) selected.value = null
     say(`已发货 ${entry.code} · ${entry.company} ${trackingNo}`)
   } else {
@@ -371,8 +389,10 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
                   <span class="po-name">{{ o.address?.name }}</span>
                   <span class="po-meta">{{ labelData(o).totalQty }} 件 · {{ fmtTime(o.createdAt) }}</span>
                   <span class="flex"></span>
-                  <Badge v-if="printed.has(o.id as string)" tone="green" class="badge-tap" title="点击取消已打印标记" @click.stop="togglePrinted(o.id as string)">已打印 ✕</Badge>
+                  <Badge v-if="labelStale(o)" tone="red">退款件数变了·标签作废重打</Badge>
+                  <Badge v-else-if="isPrinted(o)" tone="green" class="badge-tap" title="点击取消已打印标记" @click.stop="unmarkPrinted(o.id as string)">已打印 ✕</Badge>
                   <Badge v-if="o.feeMismatch" tone="red">金额异常</Badge>
+                  <Badge v-if="labelData(o).refundedLines.length" tone="amber">部分已退款</Badge>
                 </div>
               </div>
             </div>
@@ -390,6 +410,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
               <div class="pv-goods">
                 <div v-for="l in previewLabel.lines" :key="l.name" class="pv-line"><span>{{ l.name }}</span><b>× {{ l.qty }}</b></div>
               </div>
+              <p v-for="l in previewLabel.refundedLines" :key="'r-' + l.name" class="warn-line">{{ l.name }} × {{ l.qty }} 已退款，别装箱</p>
               <div class="pv-total">共 {{ previewLabel.totalQty }} 件</div>
             </template>
             <EmptyState v-else :icon="Printer" text="点左侧订单预览标签样式（所打即所见）" />
@@ -437,6 +458,7 @@ const railState = (n: number) => (n === step.value ? 'current' : n < step.value 
               <div class="ck-goods">
                 <div v-for="l in selectedLabel.lines" :key="l.name" class="ck-line"><span>{{ l.name }}</span><b>× {{ l.qty }}</b></div>
               </div>
+              <p v-for="l in selectedLabel.refundedLines" :key="'r-' + l.name" class="warn-line">{{ l.name }} × {{ l.qty }} 已退款，别发</p>
               <div class="ck-total">共 {{ selectedLabel.totalQty }} 件 · 核对无误后扫快递面单条码即发货{{ shipping ? '（发货中…）' : '' }}</div>
             </template>
             <EmptyState v-else :icon="ScanLine" text="扫箱上的内部二维码，订单核对卡显示在这里" />

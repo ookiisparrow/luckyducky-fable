@@ -39,6 +39,7 @@ describe('cloud-manager parseTcbSecretsJson：tcb secrets get --json 输出解�
 
   it('CredentialError message 不回显传入的畸形 stdout 原文（防泄漏面）', () => {
     const sentinel = 'SENTINEL_SHOULD_NOT_LEAK_INTO_MESSAGE'
+    expect.assertions(1)
     try {
       parseTcbSecretsJson(sentinel)
     } catch (e) {

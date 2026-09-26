@@ -1,14 +1,15 @@
 <script setup lang="ts">
-// 审计日志（批 B6·操作审计#4 读出口）：谁在何时做了什么操作——kit/audit.ts::recordAudit 已全量写 auditLog，
-// 此前唯一读路径是控制台裸翻数据库，本页补读出口。敏感字段（口令/webhook）已在写侧 summarize 剥离
+// 审计日志（操作审计读出口）：谁在何时做了什么操作——kit/audit.ts::recordAudit 全量写 auditLog，
+// 本页是它的读出口（否则只能控制台裸翻数据库）。敏感字段（口令/webhook）已在写侧 summarize 剥离
 // （见 kit/audit.ts），本页展示 summary 原样透传即安全。仅超管可查（未登记 ACTION_CAPS→默认拒 admin:write）。
-// 分页/翻页/乱序守卫照 Csat.vue「评价明细」样板（cursor 翻页 + dedupe-by-id + useLatest）；不编数（根因#8·T3）：
+// 翻页走 usePager（同 Csat.vue「评价明细」）；不编数（根因#8）：
 // 两张 KPI 卡纯从当前视图 entries 派生，同 Anomalies.vue「本视图条数」精神。
 import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Search, ClipboardList, AlertCircle, ShieldCheck } from 'lucide-vue-next'
 import { listAudit } from '../api/ops'
 import { mapAuditEntries, type AuditEntryVM } from '../lib/mapSystem'
-import { useLatest, appendNew } from '../lib/latest'
+import { failText } from '../lib/status'
+import { usePager, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -29,13 +30,12 @@ const operatorInput = ref('')
 const actionPrefixInput = ref('')
 
 const entries = ref<AuditEntryVM[]>([])
-const cursor = ref<unknown>(null)
-const hasMore = ref(false)
+const pager = usePager()
+const hasMore = pager.hasMore
 const message = ref('加载中…')
 const busy = ref(false)
 // 发起检索时的筛选快照（翻页复用·防切筛选后翻页串档·同 Conversations.vue searchFilter 范式）
 let filterSnapshot: { operator?: string; actionPrefix?: string; from?: number; to?: number } = {}
-const gen = useLatest() // 乱序守卫（切筛选/翻页在途时又切·旧结果别覆盖新结果）
 
 const failCount = computed(() => entries.value.filter((e) => !e.ok).length)
 
@@ -56,14 +56,13 @@ async function load() {
     from,
     to,
   }
-  const my = gen.begin()
+  const my = pager.begin()
   const r = await listAudit(filterSnapshot)
-  if (gen.isStale(my)) return // 期间又切筛选·丢弃过期结果
+  if (pager.isStale(my)) return // 期间又切筛选·丢弃过期结果
   busy.value = false
   entries.value = r.ok ? mapAuditEntries(r.entries) : []
-  cursor.value = r.ok ? r.nextCursor : null
-  hasMore.value = !!(r.ok && r.hasMore)
-  if (!r.ok) message.value = '加载失败：' + String(r.error || '')
+  pager.reset(r)
+  if (!r.ok) message.value = failText('加载失败', r.error)
   // actionPrefix 页内过滤可能使本页命中为空、但后面页仍有匹配（hasMore 不受 actionPrefix 影响）——
   // 不能笼统说「没有更多了」，须允许「本页无匹配，可继续翻」的语义（云端 listAudit 头注同一处说明）。
   else if (entries.value.length) message.value = ''
@@ -71,18 +70,13 @@ async function load() {
 }
 
 async function more() {
-  if (!hasMore.value || cursor.value == null) return
-  if (busy.value) return // 主查询在途时不翻页（cursor 还是旧的）
-  const g = gen.peek() // 绑定当前主查询代际·不递增（不反噬在途主查询）
-  const r = await listAudit({ ...filterSnapshot, cursor: cursor.value })
-  if (gen.isStale(g)) return // 期间又切筛选·放弃本页
+  const r = await pager.next((cursor) => listAudit({ ...filterSnapshot, cursor }))
+  if (!r) return
   if (!r.ok) {
-    message.value = '加载更多失败：' + String(r.error || '')
+    message.value = failText('加载更多失败', r.error)
     return
   }
   entries.value = appendNew(entries.value, mapAuditEntries(r.entries))
-  cursor.value = r.nextCursor
-  hasMore.value = !!r.hasMore
   message.value = entries.value.length ? '' : hasMore.value ? '本页无匹配，点“加载更多”继续翻' : '没有匹配的记录'
 }
 

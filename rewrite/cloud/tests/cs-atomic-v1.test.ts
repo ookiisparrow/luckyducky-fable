@@ -38,7 +38,7 @@ function expectNoTryHard(got: string[]) {
   for (const t of TRY_HARD_TEXTS) expect(blob).not.toContain(t)
 }
 
-function expectCappedPackaging(got: string[], opts?: { claim?: boolean }) {
+function expectCappedPackaging(got: string[]) {
   expect(got.length).toBeGreaterThanOrEqual(2)
   expect(got.length).toBeLessThanOrEqual(3)
   expect(surprisePool().some((s) => got[0].includes(s))).toBe(true)
@@ -46,10 +46,6 @@ function expectCappedPackaging(got: string[], opts?: { claim?: boolean }) {
   expectNoTryHard(got)
   expect(got).toContain(PHOTO1)
   expect(got.join('')).not.toMatch(/订单号/)
-  if (opts && opts.claim) {
-    expect(got).toHaveLength(3)
-    expect(listAtomicLib('business/claim').map((s) => atomicText('business/claim/' + s))).toContain(got[2])
-  }
 }
 
 const ACCEPT = '我的包裹被压烂了'

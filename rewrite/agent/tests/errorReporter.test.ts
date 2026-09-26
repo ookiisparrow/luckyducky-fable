@@ -83,13 +83,16 @@ describe('agent errorReporter（批 B7·治病根#14 client-error 通道）', ()
 
   it('大白话：post 返回 rejected Promise 时 reportError 本身不抛、且不留下未处理的 rejection', async () => {
     const { reportError } = await import('../src/lib/errorReporter')
+    // 不用 vi.fn：vi.fn 记录 settledResults 时会给返回的 promise 挂 then，rejection 被它「处理」掉，
+    // 删了源码里的 .catch 这条也照样绿；普通函数 + 让出一个宏任务，vitest 才能抓到未处理的 rejection
+    let calls = 0
     const cli = {
       hasSession: () => true,
-      post: vi.fn(() => Promise.reject(new Error('network fail'))),
+      post: () => (calls++, Promise.reject(new Error('network fail'))),
     }
     expect(() => reportError(cli, '网络失败错误')).not.toThrow()
-    await Promise.resolve()
-    await Promise.resolve()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(calls).toBe(1)
   })
 
   it('大白话：installErrorReporter 接管 app.config.errorHandler 后调用即触发一次上报', async () => {

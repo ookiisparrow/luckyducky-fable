@@ -3,7 +3,7 @@
 // 鸭徽 logo「运营控制台」、「导航」小标题、顶层（数据看板=独立项·其余=可展开组；上新与店面内容拆开）、
 // 底部管理员条。进上新向导路由切「按步直达」聚焦步导航（决策§27·lib/nav）。
 //
-// 现侧栏即活 IA：看板独立项，其余六组可展开（商品与上新 / 店面内容 / 订单履约 / 客服 360 / 进销存 / 系统）。
+// 侧栏即 IA：看板独立项，其余六组可展开（商品与上新 / 店面内容 / 订单履约 / 客服 360 / 进销存 / 系统）。
 // 「商品与上新」「进销存」做成展开组，好让全部子页可达（nav 与 router 要双向同步，改一边记得改另一边）。NAV 每个 path 都内联在此。
 import { ref, computed, type Component } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -73,10 +73,10 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
     group: '进销存',
     icon: Factory,
     items: [
-      // 总览（批 B2）：着陆页，供应链组顶部——不进 ScmFlowTabs 5 步流程条单源（lib/scmFlow.ts
+      // 总览：着陆页，供应链组顶部——不进 ScmFlowTabs 5 步流程条单源（lib/scmFlow.ts
       // SCM_FLOW 焊死=5，见 scm-ui.test.ts「SCM 流程条单源同步」golden：总览是流程之上的聚合入口，
-      // 不是流程步骤，故只挂侧栏、不挂流程条——该 golden 断言已同批改写以显式放行这一条额外项，
-      // 而非放宽成「随便漂移」（仍锁「flow 5 步 ⊆ Shell 供应链组」不变量,见该测试）。
+      // 不是流程步骤，故只挂侧栏、不挂流程条——该 golden 显式放行这一条额外项，
+      // 仍锁「flow 5 步 ⊆ Shell 供应链组」不变量）。
       { label: '总览', path: '/scm-overview' },
       { label: '物料与供应商', path: '/scm-materials' },
       { label: '采购单', path: '/scm-purchase' },
@@ -95,8 +95,8 @@ const NAV: Array<{ group: string; icon: Component; solo?: boolean; items: Array<
       { label: '激活码批次', path: '/batches' },
       { label: '外部后台', path: '/external' },
       { label: '系统设置', path: '/settings' },
-      { label: '人工配置清单', path: '/config-checklist' }, // 批 B9·只探测状态·不改六组结构，系统组内追加一项
-      { label: '审计日志', path: '/audit' }, // 批 B6·操作审计#4 读出口·系统组内追加一项（同 B9 精神：组数仍六、不重排）
+      { label: '人工配置清单', path: '/config-checklist' }, // 只探测状态·系统组内一项
+      { label: '审计日志', path: '/audit' }, // 操作审计读出口·系统组内一项
     ],
   },
 ]
@@ -125,7 +125,7 @@ function loadExpanded(): Set<string> {
 }
 const expanded = ref<Set<string>>(loadExpanded())
 // 当前路由所在组（恒展开·组头点击视作 no-op）——防组头 toggle 把 route 命中的当前组悄悄塞进持久展开集
-// （可见态被 route 命中盖过恒不变、却把该组反向写进 localStorage 下次点才移·意图反转·P3·根因#8）
+// （可见态被 route 命中盖过恒不变、却把该组反向写进 localStorage 下次点才移·意图反转·根因#8）
 const curGroup = computed(() => currentNavGroup(NAV, route.path))
 function toggleGroup(g: string) {
   if (g === curGroup.value) return // 当前组恒开·组头点击不做「翻转 expanded」的无效且污染 localStorage 的写
@@ -138,7 +138,7 @@ const isOpen = (g: { group: string; items: Array<{ path: string }> }) =>
   curGroup.value === g.group || expanded.value.has(g.group)
 
 function logout() {
-  client.logout()
+  void client.logout() // 本地令牌同步清掉，服务端吊销不等回包
   void router.push('/login')
 }
 </script>
@@ -317,7 +317,7 @@ aside {
   color: var(--ld-content);
 }
 /* 向导步链接排除在 router-link-exact-active 之外（5 步同 path 仅 query.step 不同·exact-active 不看 query→5 步会
- * 全部命中同时高亮·当前步指示失效）——步高亮单独由 .wiz-step.wiz-on 驱动（P2·根因#8）。 */
+ * 全部命中同时高亮·当前步指示失效）——步高亮单独由 .wiz-step.wiz-on 驱动（根因#8）。 */
 .item.router-link-exact-active:not(.wiz-step) {
   background: var(--ld-bg-lilac);
   border-color: var(--ld-purple-line);

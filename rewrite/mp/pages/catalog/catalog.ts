@@ -1,5 +1,5 @@
-// 课程目录主页（C1·播放器重设计战役 批E）：hero 产品主图 + 大章节>小课时两层目录（段落层级只活在播放页
-// segstrip，不在此出现）。数据源＝批A 落地的 lib/mapLearning mapCatalog（课时状态判定/续播段解耦，见其头注）。
+// 课程目录主页（设计 C1）：hero 产品主图 + 大章节>小课时两层目录（段落层级只活在播放页
+// segstrip，不在此出现）。数据源＝lib/mapLearning mapCatalog（课时状态判定/续播段解耦，见其头注）。
 // 课程结构走 lib/courses 会话缓存（本会话内不变·根因账本#15）；学习进度每次实时（onShow 重拉，同
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞。
 import { tapHaptic } from '../../lib/haptics'
@@ -77,7 +77,7 @@ Page({
     }
     const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
     this.setData({ state: 'ok', chapters, continueTarget })
-    // 续播段取址预热（批3·根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；
+    // 续播段取址预热（根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；
     // 纯 cache 暖（不 setData·新鲜命中 no-op·在途去重·err 吞掉）。段为空（全课无可播）时 prefetch 自 no-op。
     if (continueTarget) void playbackCache.prefetch(courseId, continueTarget.segmentId)
   },
@@ -92,7 +92,7 @@ Page({
     tapHaptic()
     goBackOrHome()
   },
-  // 「没找到这门课」空态的出路（2026-07-25 体检批 P3）：原空态整屏无可点处。
+  // 「没找到这门课」空态的出路：否则整屏无可点处。
   // 去「我的课程」而非首页——能走到本页的都是学员，那里才是他找得到自己课的地方。
   onGoCourses() {
     tapHaptic()
@@ -100,8 +100,8 @@ Page({
   },
   // 「开始学习」CTA：continueTarget 非空跳播放页续播；为空（全课无可播段）诚实提示，不留死跳转。
   onStart() {
-    // 加载中先说加载中（2026-07-25 体检批 P3）：state 未到 'ok' 时 continueTarget 天然为空，
-    // 原先一律弹「课程视频整理中」——页面还在转圈时点一下就得到一句不实的结论。
+    // 加载中先说加载中：state 未到 'ok' 时 continueTarget 天然为空，
+    // 一律弹「课程视频整理中」的话，页面还在转圈时点一下就得到一句不实的结论。
     if (this.data.state === 'loading') {
       wx.showToast({ title: '课程还在加载，稍等一下', icon: 'none' })
       return
@@ -112,7 +112,7 @@ Page({
       return
     }
     tapHaptic()
-    // 续播到秒（批3·数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段起播·不拼）；点课时行（onTapLesson）不带 t＝从头。
+    // 续播到秒（数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段起播·不拼）；点课时行（onTapLesson）不带 t＝从头。
     const at = t.resumeAt > 0 ? '&t=' + t.resumeAt : ''
     wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId + at })
   },

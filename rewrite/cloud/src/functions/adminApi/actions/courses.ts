@@ -1,15 +1,17 @@
-import { reply, ensure, cleanCourse, manager, readDoc, type Ctx } from '../lib'
-import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd } from '../../../kit'
+import { reply, ensure, readDoc, type Ctx } from '../lib'
+import { cleanCourse, manager } from '../catalog'
+import { isVodFileId, makeVodUploadSignature, callVodApi, setOrAdd, str, err } from '../../../kit'
 import { mergePendingGc } from './products'
+import { COLLECTIONS } from '@ldrw/shared'
 
-// —— VOD 转码管线（决策§31 批2）——课程视频主路径升级为「admin 直传 VOD + 任务流自动转码」；
-// 帮助视频线（HelpVideos）恒走下方云存储直传老路，不迁。
+// —— VOD 转码管线（决策§31）——课程视频主路径是「admin 直传 VOD + 任务流自动转码」；
+// 帮助视频线（HelpVideos）恒走下方云存储直传。
 
 /** VOD 直传签名（UGC 签名·kit/vod.ts 纯本地 HMAC）：未配置回 VOD_NOT_CONFIGURED——admin 借此
  *  回退云存储直传老路（迁移期不断档），secureConfig/vod 填入即自动切换、零部署。 */
 export async function getVodUploadSignature({ db }: Ctx) {
   const sig = await makeVodUploadSignature(db)
-  if (!sig) return reply(200, { ok: false, error: 'VOD_NOT_CONFIGURED' })
+  if (!sig) return reply(200, err('VOD_NOT_CONFIGURED'))
   return reply(200, { ok: true, signature: sig })
 }
 
@@ -36,17 +38,17 @@ function pickVodPlayUrl(mi: any): string {
 /**
  * 转码状态同步（on-demand·admin 点「同步转码状态」触发）：查草稿里「VOD FileId 已回填、vodUrl 未
  * 就绪」的段，批量 DescribeMediaInfos（≤20/次官方上限），就绪段回写 vodUrl/vodPoster（封面缺口）/
- * vodSpriteVtt（R36 雪碧图·批3 预览窗消费）/dur（转码元数据回填空时长·手填不覆盖，顺修 mm:ss 口径）。
+ * vodSpriteVtt（R36 雪碧图）/dur（转码元数据回填空时长·手填不覆盖，mm:ss 口径）。
  * 选择拉模式而非事件回调：云函数无公网回调入口、开 HTTP 访问服务只为此不值当；admin 发布前本就要
  * 打开本页，点一下同步即拿最新（VOD 任务记录保留 72h，远大于运营节奏）。rev 递增走乐观并发既有轨——
  * admin 同步后须重载草稿（前端 syncVod() 已自动 load()），否则下次自动保存撞 DRAFT_CONFLICT（诚实拒绝）。
  */
 export async function syncVodMedia({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
-  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
-  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const courseId = str(data.courseId, 200)
+  if (!courseId) return reply(400, err('NO_COURSE_ID'))
+  const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
+  if (!got.data) return reply(400, err('NO_DRAFT'))
   const course: Record<string, any> = { ...got.data }
   delete course._id
   const pending = segsOf(course).filter(isPendingVod)
@@ -74,15 +76,15 @@ export async function syncVodMedia({ db, data }: Ctx) {
     if (durSec > 0 && !sg.dur) sg.dur = fmtDur(durSec)
   }
   const next = { ...course, rev: (Number(course.rev) || 0) + 1 }
-  await setOrAdd(db.collection('coursesDraft'), courseId, next)
+  await setOrAdd(db.collection(COLLECTIONS.coursesDraft), courseId, next)
   return reply(200, { ok: true, ready, processing, rev: next.rev })
 }
 
 // 视频直传凭证（主路径）：manager-node 签发 COS 上传元数据，浏览器 PUT 直传
 export async function getVideoUploadMeta({ data }: Ctx) {
-  // 与 name 同款消毒（深审 P3）：客户端串直接拼对象键，'../' 类字符不入路径
-  const courseId = String(data.courseId || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
-  const name = String(data.name || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
+  // 与 name 同款消毒：客户端串直接拼对象键，'../' 类字符不入路径
+  const courseId = (str(data.courseId, 200) || 'misc').replace(/[^\w-]/g, '').slice(0, 40) || 'misc'
+  const name = (str(data.name, 200) || 'seg').replace(/[^\w-]/g, '').slice(0, 40) || 'seg'
   const ext = data.ext === 'mov' ? 'mov' : 'mp4'
   const cloudPath = `videos/${courseId}/${name}-${Date.now()}.${ext}`
   try {
@@ -97,38 +99,38 @@ export async function getVideoUploadMeta({ data }: Ctx) {
     })
   } catch (e) {
     console.error('getVideoUploadMeta fail', e)
-    return reply(200, { ok: false, error: 'META_UNAVAILABLE' })
+    return reply(200, err('META_UNAVAILABLE'))
   }
 }
 
 // —— 课程草稿（步骤④ 视频编排；与小程序 courses 同形，发布前学员不可见）——
 export async function getCourseDraft({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
-  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  await ensure(db, 'coursesDraft')
-  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const courseId = str(data.courseId, 200)
+  if (!courseId) return reply(400, err('NO_COURSE_ID'))
+  await ensure(db, COLLECTIONS.coursesDraft)
+  const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   if (got.data) return reply(200, { ok: true, course: got.data })
-  const pub = await readDoc(db.collection('courses').doc(courseId).get())
-  if (!pub.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
+  const pub = await readDoc(db.collection(COLLECTIONS.courses).doc(courseId).get())
+  if (!pub.ok) return reply(200, err('DOC_READ_FAIL'))
   if (pub.data) return reply(200, { ok: true, course: pub.data, fromPublished: true })
   return reply(200, { ok: true, course: null })
 }
 
 export async function saveCourseDraft({ db, data }: Ctx) {
   const c = cleanCourse(data.course)
-  if (!c) return reply(400, { ok: false, error: 'BAD_COURSE' })
-  await ensure(db, 'coursesDraft')
-  const drafts2 = db.collection('coursesDraft')
-  // 乐观并发（课程链路审计 2026-07-17·根因#1）：整份覆盖 + 无版本比对＝两处并发编辑（双页签/双管理员）
+  if (!c) return reply(400, err('BAD_COURSE'))
+  await ensure(db, COLLECTIONS.coursesDraft)
+  const drafts2 = db.collection(COLLECTIONS.coursesDraft)
+  // 乐观并发（根因#1）：整份覆盖 + 无版本比对＝两处并发编辑（双页签/双管理员）
   // 后保存者静默吃掉先保存者的改动。客户端带上拉草稿时的 rev，不符即拒（前端提示重新载入，不静默覆盖）；
   // 不带 baseRev 的调用（旧版前端/脚本）按原语义覆盖——部署窗口内前后端版本错开不卡死保存。
   // get→set 间仍有毫秒级 TOCTOU 窗（真实冲突场景是人差几分钟的编辑，非毫秒并发；同实例内已有 serialSave 串行）。
   const got = await readDoc(drafts2.doc(c.id).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠rev=0：停写，不按空草稿覆盖
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠rev=0：停写，不按空草稿覆盖
   const curRev = got.data ? Number(got.data.rev) || 0 : 0
   const baseRev = Number(data.baseRev)
-  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, { ok: false, error: 'DRAFT_CONFLICT', rev: curRev })
+  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
   const next = { ...c, rev: curRev + 1 }
   await setOrAdd(drafts2, c.id, next)
   return reply(200, { ok: true, rev: next.rev })
@@ -137,28 +139,28 @@ export async function saveCourseDraft({ db, data }: Ctx) {
 // 收集课程文档引用的全部 videoFileId（发布时孤儿视频 GC 用）
 const collectVideoIds = (c: any): string[] => segsOf(c).filter((sg) => sg.videoFileId).map((sg) => String(sg.videoFileId))
 
-// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）+ 孤儿视频缓期 GC（深审 P3：每次替换视频都生成
+// 发布：草稿整体覆盖 courses（引用模型，老学员自动生效）+ 孤儿视频缓期 GC（每次替换视频都生成
 // 新 cloudPath、旧文件无人删 → 云存储只增不减）。GC 基线取「旧发布 − 新发布」：发布那刻旧发布不再引用
 // 的文件才进回收队列（草稿期替换不删——已发布课程可能仍在引用旧文件，删了学员播放即断）。
-// 缓期而非立删（课程链路审计 2026-07-17·根因#1）：正在观看被替换段的学员手里持有旧文件的临时签名 URL
+// 缓期而非立删（根因#1）：正在观看被替换段的学员手里持有旧文件的临时签名 URL
 // （有效期 ≤2h），发布同步物理删除会让其播放中途 404。待删清单记在已发布课程文档 pendingGc 字段
 // （getCourses 逐层白名单天然不外泄；不建新集合免控制台锁权限人工步），cleanupEvents 每日删已过缓期项；
 // 重新引用回来的文件自动出队（keep 过滤）。缓期长度与承接规则和商品图同一份（products.mergePendingGc）。
 export async function publishCourse({ db, data }: Ctx) {
-  const courseId = String(data.courseId || '')
-  if (!courseId) return reply(400, { ok: false, error: 'NO_COURSE_ID' })
-  const got = await readDoc(db.collection('coursesDraft').doc(courseId).get())
-  if (!got.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' })
-  if (!got.data) return reply(400, { ok: false, error: 'NO_DRAFT' })
+  const courseId = str(data.courseId, 200)
+  if (!courseId) return reply(400, err('NO_COURSE_ID'))
+  const got = await readDoc(db.collection(COLLECTIONS.coursesDraft).doc(courseId).get())
+  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
+  if (!got.data) return reply(400, err('NO_DRAFT'))
   const course: Record<string, any> = { ...got.data }
   delete course._id
-  // 发布闸（决策§31 批2）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
+  // 发布闸（决策§31）：VOD 段转码未就绪（vodUrl 未回写）不放行——「传完 ≠ 可播」，放行了学员端
   // 该段只会 url:null 显示成「素材未剪」假象（伪成功·病根#14）。admin 点「同步转码状态」全就绪再发布。
   const pendingVod = segsOf(course).filter(isPendingVod).length
-  if (pendingVod) return reply(200, { ok: false, error: 'VOD_PROCESSING', pending: pendingVod })
-  const coursesColl = db.collection('courses')
+  if (pendingVod) return reply(200, err('VOD_PROCESSING', { pending: pendingVod }))
+  const coursesColl = db.collection(COLLECTIONS.courses)
   const prev = await readDoc(coursesColl.doc(courseId).get()) // GC 基线：读旧发布
-  if (!prev.ok) return reply(200, { ok: false, error: 'DOC_READ_FAIL' }) // 读失败≠空发布：停写停入队，不拿空基线 GC
+  if (!prev.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空发布：停写停入队，不拿空基线 GC
   const prevDoc = prev.data
   const keep = new Set(collectVideoIds(course))
   const orphans = [...new Set(collectVideoIds(prevDoc))].filter((id) => !keep.has(id))

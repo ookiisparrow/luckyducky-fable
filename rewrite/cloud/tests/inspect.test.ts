@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { runInspection, sendDailyHeartbeat } from '../src/kit'
+import { main as inspectTimer } from '../src/functions/timers/inspect'
 import { COLLECTIONS, refundShareFen, toFen, asFen, fenToYuan } from '@ldrw/shared'
 
 const HOUR = 3600 * 1000
@@ -345,9 +346,9 @@ describe('runInspection（巡检机·探出静默失败）', () => {
     expect(docGets).toBe(0)
   })
 
-  it('大白话：空库/集合缺失也不抛、给出完整三查结果（fail-soft·巡检不反噬）', async () => {
+  it('大白话：空库/集合缺失也不抛、给出完整四查结果（fail-soft·巡检不反噬）', async () => {
     const run = await runInspection('timer')
-    expect(run.results.length).toBe(3)
+    expect(run.results.length).toBe(4)
     expect(run.summary).toBeDefined()
   })
 
@@ -396,6 +397,28 @@ describe('sendDailyHeartbeat（A5 每日心跳·全绿也报平安·确定性 id
       vi.unstubAllGlobals()
     }
     expect(calls.length).toBe(1) // 红灯照发心跳（不因有红项而不报平安）
+  })
+
+  it('大白话：定时巡检有项扫描到上限→当日心跳带上 capped 条数，不报「全绿」', async () => {
+    control.setOpenId('')
+    control.seed(COLLECTIONS.config, [{ _id: 'x', v: 1 }])
+    // 500 条已退款售后、对应订单都不在：钱守恒扫描触顶但查不出超退→绿 + capped
+    control.seed(
+      COLLECTIONS.afterSales,
+      Array.from({ length: 500 }, (_, i) => ({ _id: 'X' + i + '__l1', orderId: 'X' + i, status: 'refunded', refundAmount: 1 })),
+    )
+    const lines: string[] = []
+    const errSpy = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => void lines.push(String(a[0])))
+    try {
+      await inspectTimer()
+    } finally {
+      errSpy.mockRestore()
+    }
+    const hb = lines.find((l) => l.startsWith('[LD_HEARTBEAT]'))
+    expect(hb).toContain('1 项扫描到上限')
+    expect(hb).not.toContain('全绿')
+    // 当日心跳档是给直查库的人看的，也得带 capped，否则 red=0 读起来还是全绿
+    expect(control.dump(COLLECTIONS.inspectRuns).find((r: any) => String(r._id).startsWith('hb:')).summary).toMatchObject({ red: 0, capped: 1 })
   })
 
   it('大白话：心跳非异常·绝不落 recordAnomaly（不污染 anomalies 账本）', async () => {

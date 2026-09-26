@@ -368,8 +368,8 @@ export const repoChecks = [
   {
     id: 'deploy-gated',
     roots: ['铁律'],
-    desc: '生产部署闸（接管 tcb + wechatide 官方 CLI，用户拍板 A/2026-07-24 正式接入批）：**实跑** guard-deploy 断言行为——敏感函数/批量部署/wechatide 写工具（upload/cloud_fn_deploy/cloud_db_write_*/cloud_manage_storage）→ask 二次确认、读类/单个非敏感→放行、提交信息字样不误拦。行为偏离即红（grep 易被注释蒙混，故跑真行为）',
-    run() {
+    desc: '生产部署闸（接管 tcb + wechatide 官方 CLI）：**实跑** guard-deploy 断言行为——tcb 与 wechatide 各自白名单只读外一律 ask（tcb 含 invoke/detail/code update/config update/secrets/db）、批量部署 ask、包装器/runner 前缀与循环/条件/命令替换里的程序位不漏、提交信息字样不误拦；package.json script 正文过同一道闸，包了会确认的命令即红。行为偏离即红（grep 易被注释蒙混，故跑真行为）',
+    run(root = ROOT) {
       const abs = join(ROOT, 'scripts/guard-deploy.mjs')
       if (!existsSync(abs)) return ['scripts/guard-deploy.mjs 不存在（部署闸缺失）']
       const decide = (command) => {
@@ -381,9 +381,41 @@ export const repoChecks = [
         }
       }
       const cases = [
-        ['tcb fn deploy createOrder', 'ask'], // 敏感函数 → 确认
-        ['tcb fn deploy getProducts', 'ask'], // 批I 起 READONLY_FNS=[]：旧线纯读函数已清退·部署同名=新建孤儿 → 一律 ask（唯一放行洞已堵）
-        ['tcb fn invoke getProducts', 'allow'], // 读类（invoke 非写）→ 放行
+        ['tcb fn deploy createOrder', 'ask'], // 部署 → 确认
+        ['tcb fn deploy getProducts', 'ask'], // 云端不存在的名字：部署即静默新建孤儿函数 → 同样 ask
+        // tcb 白名单外一律 ask：invoke 无 OPENID 被当服务端调用放行（能直调回调翻单已付）；detail/secrets 明文吐密钥
+        ['tcb fn invoke getProducts', 'ask'],
+        ['tcb fn invoke payCallback --params {"trade_state":"SUCCESS"}', 'ask'],
+        ['tcb fn code update payCallback', 'ask'], // 覆盖线上代码
+        ['tcb fn config update adminApi', 'ask'], // 改环境变量
+        ['tcb fn detail app', 'ask'], // 明文打印环境变量（私钥泄露事故原命令）
+        ['tcb secrets get --json', 'ask'], // 打印临时密钥
+        ['tcb db nosql execute --command [{"TableName":"secureConfig","CommandType":"QUERY"}]', 'ask'],
+        ['env -u http_proxy -u https_proxy tcb fn deploy adminApi', 'ask'], // 运维手册的部署写法：env 带选项前缀
+        ['cloudbase fn deploy adminApi', 'ask'], // 同一 CLI 的另一个 bin 名
+        ['tcb fn log payCallback -e cloudbase-x', 'allow'], // 白名单只读
+        ['tcb fn list', 'allow'],
+        ['tcb env list', 'allow'],
+        ['tcb fn deploy app --help', 'allow'], // 只看帮助
+        ['tcb fn deploy createOrder -- --help', 'ask'], // `--` 后的 --help 是普通参数，部署照跑
+        ['tcb fn invoke payCallback -- -h', 'ask'],
+        [`tcb fn invoke payCallback --params '{"a":" -h "}'`, 'ask'], // 引号里的 -h 不是独立参数
+        // 循环/条件/命令替换/后台/进程替换里的程序位
+        ['for f in app adminApi; do tcb fn deploy $f; done', 'ask'],
+        ['if [ -d dist ]; then tcb fn deploy app; fi', 'ask'],
+        ['R=$(tcb fn invoke payCallback)', 'ask'],
+        ['echo `tcb fn detail app`', 'ask'],
+        ['true & tcb fn detail app', 'ask'],
+        ['diff <(tcb fn detail a) <(tcb fn detail b)', 'ask'],
+        ['echo $(tcb fn list)', 'allow'], // 替换里的白名单只读不误拦
+        ['timeout 120 tcb fn deploy app', 'ask'],
+        ['eval "tcb fn deploy app"', 'ask'],
+        // runner 带选项
+        ['npx -y @cloudbase/cli fn deploy app', 'ask'],
+        ['npx --yes tcb fn code update payCallback', 'ask'],
+        ['sudo npx @cloudbase/cli@2 fn deploy app', 'ask'],
+        ['npm exec tcb -- fn detail app', 'ask'],
+        ['pnpm tcb fn detail app', 'ask'],
         ['git commit -m chore-tcb-deploy-fns', 'allow'], // 提交信息提字样 → 不拦
         ['DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // 批量部署 → 确认
         // 深审 P1 绕过实录（防回归）：三种自然命令形态过去全放行，现须一律 ask
@@ -391,13 +423,18 @@ export const repoChecks = [
         ['npx @cloudbase/cli fn deploy payCallback', 'ask'], // runner + 包名（bin=tcb）
         ['env DEPLOY_ALLOWED=1 node scripts/deploy-fns.mjs', 'ask'], // env 前缀不进 envPrefix
         ['export DEPLOY_ALLOWED=1; node scripts/deploy-fns.mjs', 'ask'], // export 被 ';' 拆段
-        // wechatide 官方 CLI 接管（2026-07-24 正式接入批）：写工具一律 ask，读类/项目列表管理放行
+        // wechatide：白名单（settings.json 的 mcp__wechat-devtools__* allow ＋ auto_preview）放行，其余 ask
         ['wechatide -c x upload --project rewrite/mp --upload-version 1.0.0', 'ask'], // 发布体验版
         ['wechatide -c x cloud_fn_deploy --dir dist/app', 'ask'], // 云函数部署
         ['wechatide -c x cloud_db_write_doc --collection orders', 'ask'], // 云数据库写
         ['wechatide -c x cloud_manage_storage --action upload', 'ask'], // 云存储写
+        ['wechatide -c x cloud_fn_info --names app', 'ask'], // 函数详情含环境变量
+        ['wechatide -c x cloud_db_read_doc --collection secureConfig', 'ask'], // 可读出密钥文档
         ['wechatide -c x project_list', 'allow'], // 只读列出项目
         ['wechatide -c x cloud_query_storage', 'allow'], // 只读查云存储（不与 cloud_manage_storage 误撞）
+        ['wechatide -c ldrw-cli auto_preview --project rewrite/mp', 'allow'], // 推手机预览，不碰生产
+        ['wechatide -c x cloud_manage_msg_push --action subscribe', 'ask'], // 白名单外的工具（含 CLI 新增的）一律 ask
+        ['wechatide -c x cloud_fn_deploy --help', 'allow'],
         ['git commit -m chore-wechatide-upload-skill', 'allow'], // 提交信息提字样 → 不拦
       ]
       const bad = []
@@ -405,12 +442,9 @@ export const repoChecks = [
         const got = decide(cmd)
         if (got !== want) bad.push(`guard-deploy「${cmd}」期望 ${want}、实际 ${got}——生产部署闸行为偏离（接管 tcb 安全线）`)
       }
-      // 写工具禁包 npm script（2026-07-25 补机器守）：本闸读的是 Bash 命令**文本**，`npm run <name>` 这层
-      // 间接让它看不进 package.json 里真正执行的命令——把任何写工具包成 script 即等于开一个静默绕过的洞。
-      // 实证：`npm run upload:mp` 经本闸判定为 allow（而 `wechatide … upload` 直打是 ask）。
-      // 此前这条纪律只写在 guard-deploy.mjs 头注里（靠人记）；2026-07-25 加 preview:mp（只读预览·合规）时
-      // 顺手焊成机器守——同一位置最容易手滑把 upload 也包进去。tcb 侧同理一并咬。
-      const pkgPath = join(ROOT, 'package.json')
+      // 受管命令禁包 npm script：本闸读的是 Bash 命令文本，`npm run <name>` 这层间接让它看不进 package.json
+      // 里真正执行的命令，包进去即开一个静默绕过的洞。拿 script 正文过一遍真闸，与直打同判，不另抄工具清单。
+      const pkgPath = join(root, 'package.json')
       if (existsSync(pkgPath)) {
         let scripts = {}
         try {
@@ -418,13 +452,10 @@ export const repoChecks = [
         } catch {
           /* package.json 解析失败另有守卫管 */
         }
-        const WRITE_TOOLS = ['upload', 'cloud_fn_deploy', 'cloud_fn_inc_deploy', 'cloud_db_write_doc', 'cloud_db_write_struct', 'cloud_manage_storage']
         for (const [name, body] of Object.entries(scripts)) {
           const cmd = String(body)
-          if (!/\bwechatide\b/.test(cmd)) continue
-          const hit = WRITE_TOOLS.find((t) => new RegExp('\\b' + t + '\\b').test(cmd))
-          if (hit)
-            bad.push(`package.json script「${name}」把 wechatide 写工具「${hit}」包进了 npm script——部署闸读命令文本、看不进 npm run 内层，等于静默绕过（写工具必须整行手打；只读类如 auto_preview 不在此限）`)
+          if (/\b(?:tcb|cloudbase|wechatide|deploy-fns)\b/.test(cmd) && decide(cmd) !== 'allow')
+            bad.push(`package.json script「${name}」包了一条部署闸会确认的命令——闸看不进 npm run 内层，等于静默绕过（这类命令必须整行手打；白名单只读如 auto_preview 不在此限）`)
         }
       }
       return bad
@@ -433,34 +464,50 @@ export const repoChecks = [
   {
     id: 'rw-user-writes-throttled',
     roots: ['#13'],
-    desc: '用户端可调写 action 必经 withRateLimit（根因#13）：防刷库、堆垃圾、猜码爆破（activateCourse/confirmEnter）',
-    run() {
-      // export 名 → 所在 action 文件（rewrite 按域聚合·一文件多 action，故按 withRateLimit('<name>' 精确核到具体导出）
-      const targets = [
-        ['createOrder', 'orders'],
-        ['trackEvent', 'learning'],
-        ['activateCourse', 'learning'],
-        ['confirmEnter', 'learning'],
-        ['login', 'user'],
-        ['updateProfile', 'user'],
-        ['submitFeedback', 'feedback'],
-        ['submitCheckpointPhoto', 'checkpoint'],
-        ['kfBind', 'cs'],
-        ['dataConsent', 'cs'],
-        ['submitReview', 'reviews'],
-      ]
+    desc: '用户端 action 必经频控（根因#13）：从 app/index.ts 的 ACTIONS 注册表推导，每个 action 要么定义处被 withRateLimit(\'<同名>\' 包裹，要么在本守卫的只读豁免表——新加写 action 忘了频控即红',
+    run(root = ROOT) {
+      // 只读豁免表：不写库的 action 刷了也不会堆垃圾数据或爆破激活码，不强制频控
+      const READ_ONLY = {
+        getProducts: '公开商品目录只读',
+        getProductDetail: '公开商品详情只读',
+        getContent: '公开内容配置只读',
+        getPageContent: '公开页面内容只读',
+        getCourses: '公开课程目录只读',
+        getPublicFaq: '公开 FAQ 只读',
+        getReviews: '公开评价分页只读',
+        getRatingSummary: '公开评分摘要只读',
+        getMyCourses: '只读本人已解锁课程',
+        getMyProgress: '只读本人学习进度',
+        getMyOrders: '只读本人订单（游标分页）',
+        getOrderById: '只读本人单张订单',
+        getMyAfterSales: '只读本人售后单（游标分页）',
+      }
+      const dir = 'rewrite/cloud/src/functions/app'
+      const indexAbs = join(root, dir, 'index.ts')
+      if (!existsSync(indexAbs)) return [`${dir}/index.ts 缺失——频控守卫的 action 注册表丢了`]
+      const index = stripComments(readFileSync(indexAbs, 'utf8'))
+      const body = (index.match(/const ACTIONS\b[\s\S]*?=\s*Object\.assign\(\s*Object\.create\(null\)\s*,\s*\{([\s\S]*?)\}\s*(?:satisfies\b|\))/) || [])[1]
+      const names = body ? body.split(',').map((x) => x.trim()).filter(Boolean) : []
+      if (!names.length) return [`${dir}/index.ts 的 ACTIONS 注册表解析不到 action——守卫失效（先修解析）`]
+      // `key: handler` / `...spread` 看不出真正挂的是哪个导出，跳过＝放一个没核频控的 action 进来
+      const opaque = names.filter((x) => !/^\w+$/.test(x))
+      if (opaque.length)
+        return [`${dir}/index.ts 的 ACTIONS 注册表有非简写条目（${opaque.join(' / ')}）——无法推导频控覆盖，改回简写 \`name,\` 或扩展本守卫解析`]
+      const fileOf = {}
+      for (const m of index.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]\.\/actions\/(\w+)['"]/g))
+        for (const n of m[1].split(',')) fileOf[n.trim()] = m[2]
       const bad = []
-      for (const [name, file] of targets) {
-        const f = `rewrite/cloud/src/functions/app/actions/${file}.ts`
-        const abs = join(ROOT, f)
-        if (!existsSync(abs)) {
-          bad.push(`${f} 缺失`)
+      for (const name of names) {
+        if (READ_ONLY[name]) continue
+        const f = `${dir}/actions/${fileOf[name]}.ts`
+        const abs = join(root, f)
+        if (!fileOf[name] || !existsSync(abs)) {
+          bad.push(`app action ${name} 找不到定义文件（只认 ./actions/<域> 具名导入）——无法核频控`)
           continue
         }
-        const src = readFileSync(abs, 'utf8')
-        if (!new RegExp(`withRateLimit\\(\\s*['"]${name}['"]`).test(src)) {
-          bad.push(`${f} 的 ${name} 未经 withRateLimit——用户可调写函数无频控可被刷/爆破（根因#13）`)
-        }
+        const src = stripComments(readFileSync(abs, 'utf8'))
+        if (!new RegExp(`export const ${name}\\s*=\\s*(?:\\w+\\(\\s*)*withRateLimit\\(\\s*['"]${name}['"]`).test(src))
+          bad.push(`${f} 的 ${name} 定义处未被 withRateLimit('${name}' 包裹——用户可调 action 无频控可被刷/爆破（根因#13）；确属只读就登记进本守卫 READ_ONLY 并写理由`)
       }
       return bad
     },
@@ -950,14 +997,15 @@ export const repoChecks = [
     // （scm.ts 的 PURCHASE_ORDER_TRANSITIONS / OUTWORK_ORDER_TRANSITIONS·集合名＝X 的 camelCase + s）。
     id: 'rw-status-transitions-declared',
     roots: ['#2'],
-    desc: '状态写入只走声明流转（根因#2）：rewrite/cloud 的 transition()/条件 CAS 的边与 status 字面量，须在 rewrite/shared 的 order.ts、cs.spec.ts、scm.ts 声明表内——越流转或打错状态名即红',
-    run() {
+    desc: '状态写入只走声明流转（根因#2）：rewrite/cloud 的 transition()/条件 CAS 的边与 status 字面量，须在 rewrite/shared 的 order.ts、cs.spec.ts、scm.ts 声明表内；.add/.set 建档写的 status 须属该表 initial——越流转、打错状态名或跳过初始态建档即红',
+    run(root = ROOT) {
       const SPECS = ['rewrite/shared/src/order.ts', 'rewrite/shared/src/cs.spec.ts', 'rewrite/shared/src/scm.ts']
-      const base = join(ROOT, 'rewrite/cloud/src/functions')
+      const base = join(root, 'rewrite/cloud/src/functions')
       if (!existsSync(base)) return []
       const edges = {} // coll -> Set('from=>to')
       const states = {} // coll -> Set(state)
       const specOf = {} // coll -> spec 路径（报错用）
+      const initials = {} // coll -> Set(initial)；只有 *_STATUS_SPEC 形态声明了 initial
       const addEdges = (coll, spec, body) => {
         edges[coll] ??= new Set()
         states[coll] ??= new Set()
@@ -972,17 +1020,20 @@ export const repoChecks = [
       }
       const bad = []
       for (const spec of SPECS) {
-        if (!existsSync(join(ROOT, spec))) {
+        if (!existsSync(join(root, spec))) {
           bad.push(`${spec} 缺失——状态机声明单源丢了（根因#2）`)
           continue
         }
-        const src = readFileSync(join(ROOT, spec), 'utf8')
+        const src = readFileSync(join(root, spec), 'utf8')
         for (const bm of src.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
           const coll = (bm[1].match(/collection:\s*'(\w+)'/) || [])[1]
           if (!coll) continue
           addEdges(coll, spec, bm[1])
-          for (const lm of bm[1].matchAll(/(?:initial|terminal):\s*\[([^\]]*)\]/g))
-            for (const s of lm[1].matchAll(/'([a-z_]+)'/g)) states[coll].add(s[1])
+          for (const lm of bm[1].matchAll(/(initial|terminal):\s*\[([^\]]*)\]/g))
+            for (const s of lm[2].matchAll(/'([a-z_]+)'/g)) {
+              states[coll].add(s[1])
+              if (lm[1] === 'initial') (initials[coll] ??= new Set()).add(s[1])
+            }
         }
         for (const tm of src.matchAll(/export const ([A-Z_]+)_TRANSITIONS\b[^=]*=\s*\[([\s\S]*?)\n\]/g)) {
           const coll = tm[1].toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase()) + 's'
@@ -1010,7 +1061,7 @@ export const repoChecks = [
       const undeclaredOf = (coll, from, to) => from.filter((f) => !edges[coll].has(f + '=>' + to))
       for (const p of files) {
         const src = readFileSync(p, 'utf8')
-        const rel = relative(ROOT, p)
+        const rel = relative(root, p)
         // transition(coll, …, [from…] | fromFor('x'), 'to')
         const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(?:\[([^\]]*)\]|fromFor\(\s*['"]([a-z_]+)['"]\s*\))\s*,\s*['"]([a-z_]+)['"]/g
         let tm
@@ -1046,6 +1097,9 @@ export const repoChecks = [
           if (!coll || !COLLS.has(coll)) continue
           if (!states[coll].has(wm[1]))
             bad.push(`${rel}：写 ${coll}.status='${wm[1]}' 不是 ${specOf[coll]} 声明状态（${[...states[coll]].join('/')}）——打错状态名或先改声明（根因#2）`)
+          // 建档：status 与 .add/.set({ data: { 之间无花括号＝仍在这次建档的 data 顶层（跨过嵌套对象的认不出·只漏不误报）
+          else if (initials[coll] && !initials[coll].has(wm[1]) && /\.(?:add|set)\(\s*\{\s*data:\s*\{[^{}]*$/.test(src.slice(Math.max(0, wm.index - 600), wm.index)))
+            bad.push(`${rel}：建档写 ${coll}.status='${wm[1]}' 不在 ${specOf[coll]} 的 initial（${[...initials[coll]].join('/')}）——跳过初始态直接建档，要么改从 initial 建再 transition()，要么把它登记进 initial（根因#2）`)
         }
       }
       return bad

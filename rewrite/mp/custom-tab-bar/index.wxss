@@ -1,5 +1,5 @@
-/* 悬浮胶囊 TabBar（2026-07-16 悬浮形态；2026-09-11 只留图标）。
-   高度对齐去字前版本：外垫 12 + tab 上下 20 + icon 38（原先文字与 icon 横排，高度由 icon 决定）。 */
+/* 悬浮胶囊 TabBar（只留图标）。
+   高度：外垫 12 + tab 上下 20 + icon 38。 */
 .ld-tabbar {
   position: fixed;
   left: 44rpx;
