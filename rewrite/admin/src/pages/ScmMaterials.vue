@@ -6,7 +6,7 @@ import { listMaterials, saveMaterial, listSuppliers, saveSupplier, adjustStock, 
 import { materialHuman, materialCategoryLabel, uomLabel, scmErrorText, mapLedger, type LedgerRow } from '../lib/mapScm'
 import { stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../lib/stocktake'
 import { dateTime } from '../lib/format'
-import { useLoadStatus, loadErrors } from '../lib/status'
+import { useLoadStatus } from '../lib/status'
 import { useLatest, appendNew } from '../lib/latest'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import UiButton from '../components/ui/Button.vue'
@@ -20,20 +20,24 @@ import { Boxes, Factory, TriangleAlert, ScrollText, ClipboardCheck } from 'lucid
 const mats = ref<Array<Record<string, any>>>([])
 const sups = ref<Array<Record<string, any>>>([])
 const ledger = ref<LedgerRow[]>([])
-const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部·换皮丢了行内按料查流水）
-// B1（根因#7）：供应商列表 + 流水列表两处翻页态（照 Orders.vue/Conversations.vue 模式）。
+const ledgerMat = ref('') // 当前流水按哪个料号过滤（空=全部）
+// 根因#7：供应商列表 + 流水列表两处翻页态（照 Orders.vue/Conversations.vue 模式）。
 const supCursor = ref<unknown>(null)
 const supHasMore = ref(false)
 const ledgerCursor = ref<unknown>(null)
 const ledgerHasMore = ref(false)
-// 流水加载失败独立记账（P2·深审20260712 失败伪装空账本）：不复用 message——reload 收尾 load(…)
+// 流水加载失败独立记账（防失败伪装空账本）：不复用 message——reload 收尾 load(…)
 // 会覆盖它；失败时 ledger=[] 若无此标记，EmptyState「还没有流水」＝把查询失败伪装成空账。
 const ledgerError = ref('')
-// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+// 物料读失败：物料表/盘点表/KPI 不能画成「没有物料」「低库存 0」，原因由 message 报
+const matsFailed = ref(false)
+// 供应商读失败原因（空=读成功）：KPI/供应商列不能画成「0 家」「没挂供应商」；进盘点重报提示时沿用
+const supsError = ref('')
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
-// 行内按料号查流水（换皮只有全局最近流水·listLedger 支持 materialId 过滤）
-const ledgerGen = useLatest() // 流水乱序守卫（P2·item6：照 latest.ts 范式·快速切料号连查·旧回包别盖新查询结果）
+// 行内按料号查流水（listLedger 支持 materialId 过滤）
+const ledgerGen = useLatest() // 流水乱序守卫（照 latest.ts 范式·快速切料号连查·旧回包别盖新查询结果）
 async function loadLedger(materialId?: string) {
   const my = ledgerGen.begin()
   const l = await listLedger(materialId)
@@ -41,12 +45,12 @@ async function loadLedger(materialId?: string) {
   ledger.value = l.ok ? mapLedger(l.list) : []
   ledgerCursor.value = l.ok ? l.nextCursor : null
   ledgerHasMore.value = !!(l.ok && l.hasMore)
-  ledgerError.value = l.ok ? '' : '流水加载失败：' + String(l.error || '') // 独立 ref·不被 reload 的 load() 抹掉
+  ledgerError.value = l.ok ? '' : '流水加载失败：' + scmErrorText(l.error) // 独立 ref·不被 reload 的 load() 抹掉
   ledgerMat.value = materialId || ''
   stocktakeExitConfirm.value = false // 刷新即复位危险态（防旧武装退出确认跨刷新残留一击直发）
 }
 
-// 流水「加载更多」（B1）：复用当前料号筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
+// 流水「加载更多」：复用当前料号筛选·续游标追加·去重防双击重复追加同一页（同 Conversations more() 范式）
 async function moreLedger() {
   if (!ledgerHasMore.value || ledgerCursor.value == null) return
   const gen = ledgerGen.peek() // 绑定当前查询代际·不递增（新查询会作废本页·防混排）
@@ -61,7 +65,7 @@ async function moreLedger() {
   ledgerHasMore.value = !!l.hasMore
 }
 
-// 供应商「加载更多」（B1）：现行上限 200 内首屏零变化，翻页可续查曾被永久挤出的超上限旧档
+// 供应商「加载更多」：首屏上限 200，翻页可续查超上限的旧档
 async function moreSuppliers() {
   if (!supHasMore.value || supCursor.value == null) return
   const s = await listSuppliers({ cursor: supCursor.value })
@@ -77,12 +81,12 @@ async function moreSuppliers() {
 const matForm = ref({ category: 'yarn', name: '', uom: 'count', color: '', tier: 'L', form: 'raw', productId: '', slug: '', supplierId: '', threshold: 0 })
 const supForm = ref({ supplierId: '', name: '', type: 'factory', contact: '', note: '' })
 const adj = ref({ materialId: '', delta: 0, reason: '' })
-const adjustId = ref('') // 本次调整意图的幂等键（生成一次·重试复用·成功才换新·根因#4·同 runAssembly B1）
+const adjustId = ref('') // 本次调整意图的幂等键（生成一次·重试复用·成功才换新·根因#1·同 runAssembly）
 const adjustBusy = ref(false)
-const supBusy = ref(false) // 供应商建档在途锁（P2·防双击建重复供应商）
+const supBusy = ref(false) // 供应商建档在途锁（防双击建重复供应商）
 
-// ── 批量盘点模式（批 B3）：一屏批量录实盘→差异预览→复用既有 adjustStock 幂等键一次提交
-// （SCM-Z 靠人项「期初盘点录入·不录=账实必偏」工具化：逐行开调整单弹窗太慢，本模式一次拉全量对完）──
+// ── 批量盘点模式：一屏批量录实盘→差异预览→复用 adjustStock 幂等键一次提交
+// （期初盘点不录则账实必偏，逐行开调整单弹窗太慢，本模式一次拉全量对完）──
 interface StocktakeUiRow {
   materialId: string
   uom: string
@@ -100,7 +104,7 @@ const stocktakeExitConfirm = ref(false) // 退出二次确认（未提交差异�
 
 const stocktakeReasonValid = computed(() => stocktakeReason.value.trim().length > 0)
 // 待提交范围须先排除已锁定行（成功=已生效不重发；提交中=避免同行并发重复调用同一 adjustId）——
-// 评审 P2：只按 stock/actual 算差异会把已成功/在途行也算进「待提交」计数、并在批量提交时对其重发
+// 只按 stock/actual 算差异会把已成功/在途行也算进「待提交」计数、并在批量提交时对其重发
 // adjustStock（服务端幂等挡下不致双记账，但计数会话人、且是冗余请求）。计数/批量提交/单行重试三处
 // 共此口径，不重复写排除逻辑。
 function pendingStocktakeRows(): StocktakeUiRow[] {
@@ -112,10 +116,12 @@ const stocktakeSummary = computed(() => ({
   failed: stocktakeRows.value.filter((r) => r.status === 'failed').length,
 }))
 
-// 进入盘点：拉一份全量快照（listMaterials 本就 limit 500 整取无分页·B1 刻意不收口留给本模式）+ 生成本次盘点单号
+// 进入盘点：拉一份全量快照（listMaterials 本就 limit 500 整取无分页·刻意留给本模式）+ 生成本次盘点单号
 async function enterStocktake() {
   const m = await listMaterials()
   const list = m.ok ? (m.list as Record<string, any>[]) : []
+  if (m.ok) mats.value = list // mats 与 matsFailed 同步描述最近一次物料读取，KPI 才不会按旧失败画 0
+  matsFailed.value = !m.ok
   stocktakeRows.value = list.map((mat) => ({
     materialId: String(mat._id),
     uom: String(mat.uom || ''),
@@ -128,9 +134,14 @@ async function enterStocktake() {
   stocktakeReason.value = '期初盘点'
   stocktakeExitConfirm.value = false
   stocktakeMode.value = true
-  // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）。只报失败：这里只查了物料，
-  // 成功时若走 load(true) 会收回 reload 报的供应商失败，而那条仍然有效。
-  if (!m.ok) load(false, '加载失败：' + String(m.error || ''))
+  reportLoad(m) // 拉取失败不写错误会与「确实没有物料」撞成同一假空态（病根14）
+}
+
+// 分路报错（照 ScmBom.reload）。业务码走 scmErrorText 译人话：loadErrors 只认传输层码，业务码只能挂括号。
+// 供应商那路沿用最近一次 reload 的结果——进盘点只查了物料，成功时要收回陈旧的物料错误、但不能收回仍有效的供应商错误。
+function reportLoad(m: { ok: boolean; error?: unknown }) {
+  const err = [m.ok ? '' : '物料主档加载失败：' + scmErrorText(m.error), supsError.value].filter(Boolean).join('；')
+  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
 // 有未提交差异（已填合法且差异≠0、尚未成功）——退出前拦一道，防手滑丢盘点结果
@@ -156,7 +167,7 @@ function exitStocktake() {
 // 单行提交（批量提交与单行重试共用同一实现）：失败重试复用同一 adjustId（stocktakeAdjustId 纯函数·
 // 单号+料号恒同键）——一旦提交过一次（成败均算），模板 :disabled 即锁死该行 actual 输入（离开待盘
 // 初态就锁，不只锁提交中/成功两态），不会再对同键送出不同 delta。
-// 评审 P1：锁定范围须覆盖失败态，否则「网络报错但服务端其实已成功」时，管理员会把 actual 改成别的
+// 锁定范围须覆盖失败态，否则「网络报错但服务端其实已成功」时，管理员会把 actual 改成别的
 // 数再重试——同一 adjustId 撞服务端幂等键静默 no-op（r.ok=true, applied=0），前端却据 r.ok 判成功，
 // 账实悄悄不符。锁死后重试恒复用同一 delta，幂等跳过＝已生效的同一结果，杜绝这层错配。
 async function submitOneStocktakeRow(row: StocktakeUiRow) {
@@ -187,7 +198,7 @@ async function retryStocktakeRow(materialId: string) {
   if (stocktakeBusy.value) return
   const row = stocktakeRows.value.find((r) => r.materialId === materialId)
   if (!row || row.status !== 'failed') return
-  stocktakeBusy.value = true // 评审 P2：单行重试也占用全局闸，防与「提交盘点」按钮并发触碰同一批行
+  stocktakeBusy.value = true // 单行重试也占用全局闸，防与「提交盘点」按钮并发触碰同一批行
   await submitOneStocktakeRow(row)
   stocktakeBusy.value = false
   void reload()
@@ -205,7 +216,7 @@ function stocktakeDiffText(stock: number, actual: unknown): string {
   return d > 0 ? `+${d}` : `${d}`
 }
 
-// 主档按 类别→料号 排序（换皮丢了排序·长表乱序不好扫）
+// 主档按 类别→料号 排序（长表乱序不好扫）
 const sortedMats = computed(() =>
   [...mats.value].sort((a, b) => (a.category === b.category ? String(a._id).localeCompare(String(b._id)) : String(a.category || '').localeCompare(String(b.category || ''))))
 )
@@ -216,17 +227,17 @@ const lowStockCount = computed(() => mats.value.filter((m) => m.threshold && m.s
 // 改调整表单即换新幂等键（不同意图·不复用旧 id 被后端当重复拒）；毛线越档带结在模板 v-if 前置拦
 watch(adj, () => (adjustId.value = ''), { deep: true })
 
-// 毛线按团/件计（换皮 uom 选择对毛线仍开放·毛线只能 count·按克会污染三档槽语义）：category=yarn 强制 count
+// 毛线按团/件计（毛线只能 count·按克会污染三档槽语义）：category=yarn 强制 count
 watch(() => matForm.value.category, (c) => {
   if (c === 'yarn') matForm.value.uom = 'count'
 })
-// 档位从大团切走后重置残留 'knotted'（D2·bug 清除批D）：模板 v-if（139-150 行）只隐藏「带结」option 不重置
+// 档位从大团切走后重置残留 'knotted'：模板里「带结」option 的 v-if 只隐藏选项、不重置
 // v-model，tier 切非 L 后 form 仍持 'knotted'，select 显示空白且提交被云端 KNOT_ONLY_L 拒绝、报错与界面所见对不上。
 // 同仓先例：ScmBom.vue「切主键清残留下级字段」纪律。
 watch(() => matForm.value.tier, (t) => {
   if (t !== 'L' && matForm.value.form === 'knotted') matForm.value.form = 'raw'
 })
-// 编辑既有供应商（换皮丢·填完只能新建·后端 saveSupplier 收 supplierId 支持改+note）：点列表回填
+// 编辑既有供应商（后端 saveSupplier 收 supplierId 支持改+note）：点列表回填
 function editSupplier(s: Record<string, any>) {
   supForm.value = { supplierId: String(s._id || ''), name: String(s.name || ''), type: String(s.type || 'factory'), contact: String(s.contact || ''), note: String(s.note || '') }
 }
@@ -237,13 +248,13 @@ function resetSupForm() {
 async function reload() {
   const [m, s] = await Promise.all([listMaterials(), listSuppliers()])
   mats.value = m.ok ? (m.list as Record<string, any>[]) : []
+  matsFailed.value = !m.ok
   sups.value = s.ok ? (s.list as Record<string, any>[]) : []
   supCursor.value = s.ok ? s.nextCursor : null
   supHasMore.value = !!(s.ok && s.hasMore)
+  supsError.value = s.ok ? '' : '供应商加载失败：' + scmErrorText(s.error)
   await loadLedger(ledgerMat.value || undefined) // 保持当前料号筛选（内部已复位 stocktakeExitConfirm）
-  // 分路报错（照 ScmBom.reload）：供应商挂掉不装空目录
-  const err = loadErrors([[m, '物料主档'], [s, '供应商']])
-  load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
+  reportLoad(m)
   stocktakeExitConfirm.value = false // 刷新即复位危险态
 }
 
@@ -255,7 +266,7 @@ async function doSaveMaterial() {
 
 async function doSaveSupplier() {
   if (supBusy.value) return // 在途禁再发·防双击建两个重复供应商（后端建档无 id 幂等）
-  const snap = supForm.value // 快照本次编辑目标（H1·同批G G3/G4 范式）：editSupplier 无 supBusy 门控，await 期间若已切到
+  const snap = supForm.value // 快照本次编辑目标：editSupplier 无 supBusy 门控，await 期间若已切到
   // 另一供应商/新建（resetSupForm 也会换新对象），回包收尾效果（note 会按新表单误报）不该打过去
   supBusy.value = true
   const r = await saveSupplier({ ...supForm.value })
@@ -268,7 +279,7 @@ async function doSaveSupplier() {
 }
 
 async function doAdjust() {
-  if (adjustBusy.value) return // 在途禁再发（防快速双击·换皮无此闸）
+  if (adjustBusy.value) return // 在途禁再发（防快速双击）
   if (!adjustId.value) adjustId.value = 'adm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) // 本意图生成一次
   adjustBusy.value = true
   const r = await adjustStock(adj.value.materialId, Number(adj.value.delta), adj.value.reason.trim(), adjustId.value)
@@ -293,13 +304,13 @@ onMounted(reload)
 
     <ScmFlowTabs />
 
-    <div class="ld-kpi-grid">
+    <div v-if="!matsFailed" class="ld-kpi-grid">
       <KpiCard label="物料数" :value="mats.length" :icon="Boxes" />
-      <KpiCard label="供应商 / 织女" :value="sups.length" :icon="Factory" />
+      <KpiCard label="供应商 / 织女" :value="supsError ? '—' : sups.length" :icon="Factory" />
       <KpiCard label="低库存预警" :value="lowStockCount" :icon="TriangleAlert" :tone="lowStockCount > 0 ? 'red' : 'neutral'" />
     </div>
 
-    <!-- 批量盘点入口（批 B3）：一屏批量录实盘→差异预览→一次提交，工具化 SCM-Z 靠人项「期初盘点录入」 -->
+    <!-- 批量盘点入口：一屏批量录实盘→差异预览→一次提交 -->
     <div v-if="!stocktakeMode" class="stocktake-entry">
       <UiButton variant="ghost" @click="enterStocktake"><ClipboardCheck :size="16" />批量盘点</UiButton>
     </div>
@@ -391,7 +402,7 @@ onMounted(reload)
       </div>
   
       <!-- 物料主档表 -->
-      <Card flush :title="'物料主档（' + mats.length + '）'">
+      <Card flush :title="matsFailed ? '物料主档' : '物料主档（' + mats.length + '）'">
         <template v-if="sortedMats.length">
           <div class="ld-thead">
             <div class="ld-th grow">料号</div>
@@ -415,12 +426,13 @@ onMounted(reload)
                 <span v-if="m.threshold && m.stock <= m.threshold" class="low-tag">低于 {{ m.threshold }}</span>
               </div>
               <div class="ld-td sup-cell" :style="{ width: '210px' }">
-                <span class="muted sup-name">{{ (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}</span>
+                <span class="muted sup-name">{{ supsError ? '读取失败' : (sups.find((s) => s._id === m.supplierId) || {}).name || '—' }}</span>
                 <UiButton variant="ghost" size="sm" title="看这个料的流水" @click="loadLedger(m._id)">流水</UiButton>
               </div>
             </div>
           </div>
         </template>
+        <p v-else-if="matsFailed" class="ledger-err">物料主档没读出来，列表暂不可用（原因见上方提示）</p>
         <EmptyState v-else :icon="Boxes" text="还没有物料档，先在上方「建物料档」建档" />
       </Card>
   
@@ -429,7 +441,7 @@ onMounted(reload)
         <template v-if="ledgerMat" #head>
           <UiButton variant="ghost" size="sm" @click="loadLedger()">← 看全部</UiButton>
         </template>
-        <!-- 失败提示优先于表格/空态：查询挂掉别显「还没有流水」假空账（P2·深审20260712） -->
+        <!-- 失败提示优先于表格/空态：查询挂掉别显「还没有流水」假空账 -->
         <p v-if="ledgerError" class="ledger-err">{{ ledgerError }}</p>
         <template v-else-if="ledger.length">
           <div class="ld-thead">
@@ -463,7 +475,7 @@ onMounted(reload)
       </Card>
     </template>
 
-    <!-- 批量盘点面板（批 B3）：全屏内整页表格·退出模式回落正常物料页 -->
+    <!-- 批量盘点面板：全屏内整页表格·退出模式回落正常物料页 -->
     <template v-else>
       <p v-if="message" class="ld-status" :class="msgOk ? 'msg-ok' : 'msg-err'">{{ message }}</p>
       <Card flush title="批量盘点">
@@ -525,6 +537,7 @@ onMounted(reload)
             </div>
           </div>
         </template>
+        <p v-else-if="matsFailed" class="ledger-err">物料主档没读出来，暂时没法盘点（原因见上方提示）</p>
         <EmptyState v-else :icon="Boxes" text="没有物料档可盘点" />
       </Card>
     </template>
@@ -532,7 +545,7 @@ onMounted(reload)
 </template>
 
 <style scoped>
-/* 提示行成功绿/失败红（复用全局 .ld-status·本页 msgOk 切换语义色·换皮期恒红 bug 已在管道修） */
+/* 提示行成功绿/失败红（复用全局 .ld-status·本页 msgOk 切换语义色） */
 .msg-ok {
   color: var(--ld-green);
 }
@@ -671,7 +684,7 @@ onMounted(reload)
 }
 
 
-/* 批量盘点模式（批 B3）：入口按钮 + 顶部工具条 + 汇总行 + 失败行重试（本页独有·不进全局样式） */
+/* 批量盘点模式：入口按钮 + 顶部工具条 + 汇总行 + 失败行重试（本页独有·不进全局样式） */
 .stocktake-entry {
   display: flex;
   justify-content: flex-end;

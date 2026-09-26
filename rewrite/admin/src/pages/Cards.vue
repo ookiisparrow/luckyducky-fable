@@ -7,11 +7,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
 import { b64SizeOk } from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
-import { buildFrontSvg, buildBackSvg, type CardModel } from '../lib/cardSvg'
+import type { AdminCardDoc } from '@ldrw/shared'
+import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
 import { serialSave } from '../lib/serialSave'
 import { compressImage } from '../lib/compressImage'
 import { saveBlob } from '../lib/saveBlob'
-// 视图层原语（批F 共享 UI）+ lucide 图标——仅新增 import，管道零改。
+// 视图层原语（共享 UI）+ lucide 图标。
 // 注意：lucide 的 Image 与全局 Image 同名，别名 ImageIcon 防遮蔽。
 import UiButton from '../components/ui/Button.vue'
 import Card from '../components/ui/Card.vue'
@@ -27,15 +28,16 @@ const route = useRoute()
 const router = useRouter()
 const productId = props.wizardProductId || String(route.query.productId || '')
 
-const card = ref<CardModel | null>(null)
+const card = ref<AdminCardDoc | null>(null)
 const artUrl = ref('')
 const loading = ref(true)
-const loadErr = ref('')
+const loadErr = ref('') // 加载失败：不出编辑器
+const opErr = ref('') // 操作失败：编辑器留着，改了就能再试
 const busyArt = ref(false)
 const autoState = ref('') // '' | saving | saved | error
 const product = ref<Record<string, any> | null>(null)
 const coverUrl = ref('')
-// 死胡同改选择器（UX 体检批3）：顶层导航直入无 productId 时列商品可选，不再甩红错叫人绕路
+// 死胡同改选择器：顶层导航直入无 productId 时列商品可选，不甩红错叫人绕路
 const pickRows = ref<{ id: string; name: string; coverUrl: string }[] | null>(null)
 // 同路由只改 query 不重跑 setup（productId 是 setup 期常量）——Shell 按 productId 重挂本页
 function pickProduct(id: string) {
@@ -48,7 +50,7 @@ const PRESETS = [
 ]
 const SWATCHES = ['#f6e9b8', '#fbe3ea', '#e3edfb', '#e6f2e7', '#fcfaff', '#ffffff'] // structure-ok 卡面衬底候选色（印刷卡面·非 UI 主题·卡面本就自选色）
 
-function freshCard(): CardModel {
+function freshCard(): AdminCardDoc {
   const p = product.value || {}
   return {
     productId,
@@ -75,33 +77,38 @@ onMounted(async () => {
   if (!productId) {
     // 无 productId＝选择器模式：列全部商品（listDrafts 本页早已 import·量小全量）供点选
     const dr = await listDrafts().catch(() => null)
-    if ((dr as any)?.ok) {
-      const urls = (dr as any).urls || {}
-      pickRows.value = (((dr as any).list as Record<string, any>[]) || []).map((p) => ({
+    if (dr?.ok) {
+      const urls = dr.urls || {}
+      pickRows.value = (dr.list || []).map((p) => ({
         id: String(p.id || p._id || ''),
         name: String(p.name || '未命名商品'),
         coverUrl: p.cover ? String(urls[String(p.cover)] || '') : '',
       }))
-    } else loadErr.value = launchErrorText((dr as any)?.error || '网络异常')
+    } else loadErr.value = launchErrorText(dr?.error || '网络异常')
     loading.value = false
     return
   }
   // 载入产品（取名/封面·「取商品封面图」用）+ 卡片草稿
   const [dr, r] = await Promise.all([listDrafts(), getCard(productId)])
-  if ((dr as any).ok) {
-    const urls = (dr as any).urls || {}
-    product.value = ((dr as any).list as Record<string, any>[]).find((p) => String(p.id || p._id) === productId) || null
-    if (product.value?.cover) coverUrl.value = urls[String(product.value.cover)] || ''
+  if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
+  // 商品没读到不能往下走：新卡会拿「新商品」和猜的课程号落库，「取商品封面图」也会谎报没封面。
+  // 读到了但找不到也一样：listDrafts 只回最新 100 个商品
+  const found = dr.ok ? dr.list.find((p) => String(p.id || p._id) === productId) : undefined
+  if (!found) {
+    loadErr.value = '商品信息没加载到：' + (dr.ok ? '没找到这个商品（商品超过 100 个时列表不全）' : launchErrorText(dr.error))
+    loading.value = false
+    return
   }
-  if ((r as any).error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
-  if ((r as any).ok) {
-    card.value = ((r as any).card as CardModel) || freshCard()
-    artUrl.value = String((r as any).artUrl || '')
-    if (!(r as any).card && product.value?.cover) {
+  product.value = found
+  if (dr.ok && found.cover) coverUrl.value = dr.urls?.[String(found.cover)] || ''
+  if (r.ok) {
+    card.value = r.card || freshCard()
+    artUrl.value = String(r.artUrl || '')
+    if (!r.card && product.value?.cover) {
       card.value.front.art = String(product.value.cover)
       artUrl.value = coverUrl.value
     }
-  } else loadErr.value = launchErrorText((r as any).error)
+  } else loadErr.value = launchErrorText(r.error)
   loading.value = false
   void nextTick(() => (loaded = true))
 })
@@ -121,18 +128,18 @@ watch(
   },
   { deep: true }
 )
-// pendingStatus（P1 复审补漏·根因#8）：finalize() 定稿写并入本队列而非旁路直发——旁路会与随后触发的
+// pendingStatus（根因#8）：finalize() 定稿写并入本队列而非旁路直发——旁路会与随后触发的
 // 新 autosave 并发在途，谁的响应后到就把谁的 status 落库，慢网下刚定的 final 可能被晚到的旧 draft
 // autosave 盖回去（settled()-only 方案只排空「点击那一刻已在途」的链，堵不住这条）。pendingStatus 让
 // 队列里「当前及尾随补跑」的每一轮 run() 都携带 next 状态，直到 finalize 收尾才清空。
-let pendingStatus: CardModel['status'] | null = null
+let pendingStatus: AdminCardDoc['status'] | null = null
 async function autosave() {
   if (!card.value) return
   const payload = pendingStatus ? { ...card.value, status: pendingStatus } : card.value
-  const r = await saveCard(payload as unknown as Record<string, unknown>)
-  autoState.value = (r as any).ok ? 'saved' : 'error'
+  const r = await saveCard(payload)
+  autoState.value = r.ok ? 'saved' : 'error'
 }
-// 串行化·防慢网下两次自动保存乱序覆盖（P2·根因#8）；key='cards:'+productId（批D·P1）：改走模块级共享
+// 串行化·防慢网下两次自动保存乱序覆盖（根因#8）；key='cards:'+productId：走模块级共享
 // 槽位，快速切走再切回本页（或向导内切步再切回）重建组件实例时，新实例接管旧实例仍在途的补存链，防旧
 // 快照晚到覆盖新实例已存的编辑；按 productId 分槽——不同商品的卡面互不干扰。
 const flushSave = serialSave(autosave, 'cards:' + productId)
@@ -149,7 +156,7 @@ const ratio = computed(() => {
 })
 const prevW = computed(() => (ratio.value > 1 ? 200 : 290))
 const isPreset = (p: { w: number; h: number }) => card.value && card.value.sizeMM.w === p.w && card.value.sizeMM.h === p.h
-// 尺寸失焦即校正（P2·清空/0/负数会写 NaN 进 sizeMM·塌陷预览+导出无效印刷 SVG）：clamp 到 40–300 整数·非法回退 85
+// 尺寸失焦即校正（清空/0/负数会写 NaN 进 sizeMM·塌陷预览+导出无效印刷 SVG）：clamp 到 40–300 整数·非法回退 85
 function clampDims() {
   if (!card.value) return
   const fix = (n: number) => (Number.isFinite(n) && n > 0 ? Math.min(300, Math.max(40, Math.round(n))) : 85)
@@ -162,27 +169,28 @@ async function pickArt(e: Event) {
   if (!file || busyArt.value || !card.value) return
   const b64 = await compressImage(file)
   if (!b64SizeOk(b64)) {
-    loadErr.value = '图片压缩后仍超限，换小一点的图'
+    opErr.value = '图片压缩后仍超限，换小一点的图'
     return
   }
   busyArt.value = true
   const r = await uploadImage(b64, productId, 'jpg')
   busyArt.value = false
-  if ((r as any).ok) {
-    card.value.front.art = String((r as any).fileID || '')
-    artUrl.value = String((r as any).url || '')
-    loadErr.value = ''
+  if (r.ok) {
+    card.value.front.art = String(r.fileID || '')
+    artUrl.value = String(r.url || '')
+    opErr.value = ''
     void afterCardArtChanged()
-  } else loadErr.value = launchErrorText((r as any).error)
+  } else opErr.value = launchErrorText(r.error)
 }
 function useCover() {
   if (!card.value) return
   if (!product.value?.cover) {
-    loadErr.value = '该商品还没有封面图（去第 1 步上传）'
+    opErr.value = '该商品还没有封面图（去第 1 步上传）'
     return
   }
   card.value.front.art = String(product.value.cover)
   artUrl.value = coverUrl.value
+  opErr.value = ''
   void afterCardArtChanged()
 }
 /** 向导第 5 步只要上传：图到位后自动定稿（印刷批次仍认 cardFinal），并通知向导重算进度 */
@@ -198,17 +206,17 @@ async function afterCardArtChanged() {
 async function finalize() {
   if (!card.value) return
   if (!card.value.front.art) {
-    loadErr.value = '正面还没有图案——取商品封面图或上传插画'
+    opErr.value = '正面还没有图案——取商品封面图或上传插画'
     return
   }
-  // 先落库、成功才翻定稿态（审核补漏·病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
+  // 先落库、成功才翻定稿态（病根#14 伪成功）：不乐观翻——防前端显「已定稿」而后端仍 draft，
   // 第 5 步码批次依赖 cardFinal 落库·否则生成失败且排障无线索。
   if (saveTimer) {
     clearTimeout(saveTimer) // 取消未触发的防抖定时器（只挡得住这半·同 Products/HomeContent 约定）
     saveTimer = null
   }
   const next = card.value.status === 'final' ? 'draft' : 'final'
-  // 定稿写并入同一条 serialSave 队列（P1 复审补漏·根因#8）：不再旁路直发 saveCard，改走 flushSave()
+  // 定稿写并入同一条 serialSave 队列（根因#8）：不旁路直发 saveCard，走 flushSave()
   // 本尊（非 .settled()）——trigger() 对「已在途」的链只标脏、不并发再发一次 POST，会等其跑完再补跑
   // 一轮；期间若又有新 autosave 触发（watch 的 700ms 计时器到点），一样标脏排进同一条链，不会跟本次
   // 定稿写并发在途。pendingStatus 保证链上「当前轮 + 尾随补跑轮」发出的都是 next 状态，不被旧 draft
@@ -219,9 +227,9 @@ async function finalize() {
   if (!card.value) return // 排空期间页面被卸载（embed 模式随向导切步）——card 已置空则不再往下写
   if (autoState.value === 'saved') {
     card.value.status = next
-    loadErr.value = ''
+    opErr.value = ''
   } else {
-    loadErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
+    opErr.value = (next === 'final' ? '定稿' : '取消定稿') + '保存失败：请重试'
   }
 }
 
@@ -250,6 +258,7 @@ function downloadSvg(kind: 'front' | 'back') {
       </div>
     </header>
 
+    <p v-if="opErr" class="err-line">{{ opErr }}</p>
     <p v-if="loadErr" class="err-line">{{ loadErr }}</p>
     <p v-else-if="loading" class="ld-status">加载中…</p>
 
@@ -763,7 +772,7 @@ function downloadSvg(kind: 'front' | 'back') {
   margin: 0;
   color: var(--ld-content-2);
 }
-/* 选择器模式（批3 死胡同改造）：导航直入的商品挑选列表 */
+/* 选择器模式（防死胡同）：导航直入的商品挑选列表 */
 .pick-list {
   display: flex;
   flex-direction: column;

@@ -30,15 +30,15 @@ const dropKfState = (db: any, id: string): Promise<void> =>
  * text.menu_id（点击回传）与 text.content（自由打字），真机验证后按实际收口。
  */
 
-// ── 一批消息处理：去重认领 + 防吞单（审计 P2） ──
+// ── 一批消息处理：去重认领 + 防吞单 ──
 
 /**
- * 原子认领去重（确定性 _id 撞号即已处理过·根因#1 幂等）。三态（外审 R1-R4·P1.4·根因#8）：
+ * 原子认领去重（确定性 _id 撞号即已处理过·根因#1 幂等）。三态（根因#8）：
  * - `first`：本次认领成功（首见）→ 处理；
  * - `duplicate`：撞号·真重复（已认领过）→ 跳过安全；
  * - `error`：add 因基建失败（DB 权限/集合缺/瞬时）→ **绝不可当重复静默跳过**（会无回复、无告警、不重试＝永久吞消息）。
  *
- * 旧实现把 add 的任何异常都返 false（=已处理·跳过），基建错也被当重复 → 真实客服消息静默丢失。改为 add 失败后
+ * 若把 add 的任何异常都返 false（=已处理·跳过），基建错也被当重复 → 真实客服消息静默丢失。故 add 失败后
  * **回查该 seen 文档是否真存在**：存在＝真撞号（duplicate）；不存在＝add 没写进去（基建错·error），消息未认领须重试。
  */
 type ClaimResult = 'first' | 'duplicate' | 'error'
@@ -52,8 +52,8 @@ export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
 }
 
 /**
- * 逐条处理一批客服消息（防吞单·审计 P2）：① 原子认领去重（撞号跳过）② 每条包 try/catch——
- * 单条失败**不再中断整批**（原来 handleMessage 抛错会 unwind 整个 sync 循环：游标不推进 +
+ * 逐条处理一批客服消息（防吞单）：① 原子认领去重（撞号跳过）② 每条包 try/catch——
+ * 单条失败**不中断整批**（否则 handleMessage 抛错会 unwind 整个 sync 循环：游标不推进 +
  * 已认领的消息永久跳过 = 静默吞掉顾客消息）；失败时 **撤回认领 + alert HANDLE_FAILED**。
  * 返回 true＝本批没处理完（有失败，或到了 deadline 停下）。调用方据此**保留旧游标**下次重拉：成功项 seen 去重、
  * 失败项和没轮到的重试——顾客消息至少处理一次。（抛错路径均为瞬时：DB/网络；send errcode 不抛·已自 alert。）
@@ -73,7 +73,7 @@ export async function processKfBatch(
       const claim = await firstSeen(db, msgid)
       if (claim === 'duplicate') continue // 真重复·已处理过·跳过安全
       if (claim === 'error') {
-        // 认领基础设施错误（DB 权限/集合缺/瞬时）：告警 + 本批失败 → 调用方保留旧游标重试，绝不静默跳过吞消息（外审 P1.4）
+        // 认领基础设施错误（DB 权限/集合缺/瞬时）：告警 + 本批失败 → 调用方保留旧游标重试，绝不静默跳过吞消息
         console.error('[kf] claim failed (infra)', { msgid })
         alert('security', 'kfCallback', 'CLAIM_FAILED', {})
         anyFailed = true
@@ -117,7 +117,7 @@ export function recognize(text: string): { cat: Category; word: string } | null 
 
 /**
  * 从客服消息 wire 取 external_userid（根因#8 真机字段位置·桩测过≠真机字段对）：text 消息在**顶层**
- * external_userid；event 消息（进会话 enter_session 等）在 **event 子对象**里。曾只取顶层 → event
+ * external_userid；event 消息（进会话 enter_session 等）在 **event 子对象**里。只取顶层的话 event
  * 取到空 touser → send_msg 报 40058（不合法参数）。两处都经此函数取，杜绝再取错层。
  */
 export function extUserId(msg: any): string {
@@ -146,7 +146,7 @@ function menu(head: string, items: MenuItem[], tail = '或直接打字告诉我�
   }
 }
 
-/** 首张菜单（无关键词命中 / 进会话）：四大入口 + 评价服务（B4.3）+ 找人工。测版可多一颗刷新按钮。 */
+/** 首张菜单（无关键词命中 / 进会话）：四大入口 + 评价服务 + 找人工。测版可多一颗刷新按钮。 */
 export function rootMenu(opts?: { trialRefresh?: boolean }): MsgMenuContent {
   const items: MenuItem[] = [
     { id: 'cat:logistics', content: '📦 我的订单 / 物流' },
@@ -165,7 +165,7 @@ export async function welcomeMenu(db: any): Promise<MsgMenuContent> {
   return rootMenu({ trialRefresh: gate.on })
 }
 
-// ── 满意度评分（CSAT·B4.3·会话后评分 1-5 + 可选备注·确定性菜单不靠生成）──
+// ── 满意度评分（CSAT·会话后评分 1-5 + 可选备注·确定性菜单不靠生成）──
 /** 评分气泡：5 档星级（点一下即评分·rate:1..5）。 */
 function rateMenu(): MsgMenuContent {
   return menu(
@@ -226,7 +226,7 @@ function menuFor(cat: Category, word: string): MsgMenuContent {
       { id: 'aftersale:apply', content: '去申请售后' },
       { id: 'human', content: '转人工（承诺/纠纷）' },
     ])
-  // tutorial（探索线·P6 待研究）：先给课程入口 + 人工
+  // tutorial（探索线）：先给课程入口 + 人工
   return menu(`看你在问「${word}」相关 👇`, [
     { id: 'course:open', content: '去看教程 / 课程' },
     { id: 'human', content: '转人工' },
@@ -237,13 +237,13 @@ function menuFor(cat: Category, word: string): MsgMenuContent {
 type Route =
   | { type: 'menu'; content: MsgMenuContent }
   // faqKey：FAQ 叶子答案的键（=kb 文档 _id·同菜单叶子 menu_id）；答案由 handleMessage 从 kb 单源读
-  // （B4.1·不再在本文件写死 FAQ 文案）。
+  // （不在本文件写死 FAQ 文案）。
   | { type: 'faq'; faqKey: string }
   // fallbackText：小程序卡片需封面素材(thumb_media_id)+已发布小程序，未配齐时降级为这段文字（防 40058·见下）
   | { type: 'miniprogram'; page: string; title: string; fallbackText: string }
   | { type: 'order_query' }
   | { type: 'transfer' }
-  // CSAT（B4.3）：score=点选的 1-5 分；note=可选备注文案（预设标签映射后）
+  // CSAT：score=点选的 1-5 分；note=可选备注文案（预设标签映射后）
   | { type: 'csat'; score: number }
   | { type: 'csat_note'; note: string }
   | { type: 'text'; content: string; bubbles?: boolean; pieces?: string[] }
@@ -254,8 +254,7 @@ export function route(menuId: string): Route {
   if (menuId === 'aftersale:apply')
     return {
       type: 'miniprogram',
-      // 新线 app.json 注册路由（课程链路审计 2026-07-17·kf-card-page-registered 守卫已扩新线面锁此处）：
-      // 原 'pages/aftersales/index' 是旧线 uni-app 路径记法，新线原生小程序注册的是 目录/同名文件
+      // mp app.json 注册的路由（守卫 kf-card-page-registered 锁此处）：原生小程序注册的是 目录/同名文件
       page: 'pages/aftersales/aftersales',
       title: '申请售后',
       fallbackText: '申请售后请在小程序「我的 → 订单 → 申请售后」操作。需要我协助可点「转人工」。',
@@ -263,7 +262,7 @@ export function route(menuId: string): Route {
   if (menuId === 'course:open')
     return {
       type: 'miniprogram',
-      // 原 'pkg-video/courses/index' 是旧线分包规划路径，新线无分包、课程列表页为 my-courses（守卫锁同上）
+      // mp 无分包、课程列表页为 my-courses（守卫锁同上）
       page: 'pages/my-courses/my-courses',
       title: '我的课程',
       fallbackText:
@@ -273,7 +272,7 @@ export function route(menuId: string): Route {
     const cat = menuId.slice(4) as Category
     return { type: 'menu', content: menuFor(cat, '该分类') }
   }
-  // CSAT（B4.3）：评价入口 → 评分菜单；rate:N → 记分；csatnote:tag → 记可选备注（预设标签）
+  // CSAT：评价入口 → 评分菜单；rate:N → 记分；csatnote:tag → 记可选备注（预设标签）
   if (menuId === 'csat') return { type: 'menu', content: rateMenu() }
   const score = parseRate(menuId)
   if (score) return { type: 'csat', score }
@@ -282,15 +281,15 @@ export function route(menuId: string): Route {
     return { type: 'csat_note', note: CSAT_REASONS[tag] ?? '' }
   }
   // FAQ 叶子答案：键含「:」且非上述结构路由（人工/查单/卡片/分类/评分）→ 当作 kb FAQ 键，答案由 handleMessage
-  // 从 kb 单源读（B4.1）；未含「:」的未知 id → 兜底回根菜单（与原行为一致）。
+  // 从 kb 单源读；未含「:」的未知 id → 兜底回根菜单。
   if (menuId.includes(':')) return { type: 'faq', faqKey: menuId }
   return { type: 'menu', content: rootMenu() }
 }
 
-// ── 知识库 FAQ 答案（单源·B4.1）──
+// ── 知识库 FAQ 答案（单源）──
 /**
  * 从 kb 集合读 FAQ 答案（_id=faqKey·同菜单叶子 menu_id）。未命中 / 未启用（enabled:false）/ 无答案 → 返 null，
- * 调用方兜底回根菜单。**答案只在 kb、admin 经 adminApi listKb/saveKb 维护**——本文件不再写死 FAQ 文案（根因#5 防漂移）。
+ * 调用方兜底回根菜单。**答案只在 kb、admin 经 adminApi listKb/saveKb 维护**——本文件不写死 FAQ 文案（根因#5 防漂移）。
  */
 async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   if (!faqKey) return null
@@ -299,7 +298,7 @@ async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   return d.answer ? String(d.answer) : null
 }
 
-// ── 满意度评分入库（CSAT·B4.3）──
+// ── 满意度评分入库（CSAT）──
 interface CsatInput {
   externalUserId: string
   openid: string | null
@@ -307,7 +306,7 @@ interface CsatInput {
   note?: string
 }
 /**
- * 记一条满意度评分（B4.3）。**不信前端·根因#3**：score 越界（非 1..5）一律 fail-closed 不入库——防伪造/脏分
+ * 记一条满意度评分。**不信前端·根因#3**：score 越界（非 1..5）一律 fail-closed 不入库——防伪造/脏分
  * 污染满意度均分。确定性 _id=`csat:<euid>:<createdAt>`；并在 kfState 记最近一条
  * （`csatlast:<euid>`）供「补充备注」菜单回写——只在 CSAT 交互时读写、不进每条消息热路径。返回 csat 文档 id。
  */
@@ -318,8 +317,8 @@ export async function recordCsat(db: any, input: CsatInput): Promise<string | nu
   if (!euid) return null
   const createdAt = Date.now()
   const id = 'csat:' + euid + ':' + createdAt
-  // 评分写库失败不静默吞、不谎报成功（深审 P2·病根#14）：旧版两次 .set().catch(()=>{}) 后恒返回 id——写没成功
-  // 也回 csatId＝假成功（getCsatReport 会漏这条·且调用方以为记上了）。改：评分主写失败→告警 + 返回 null
+  // 评分写库失败不静默吞、不谎报成功（病根#14）：若两次 .set().catch(()=>{}) 后恒返回 id——写没成功
+  // 也回 csatId＝假成功（getCsatReport 会漏这条·且调用方以为记上了）。故：评分主写失败→告警 + 返回 null
   // （调用方据 null 可知没记上）；指针（csatlast·仅供 attachCsatNote 找最近记录）写失败非致命，告警但评分已落。
   let wrote = true
   await db
@@ -351,7 +350,7 @@ export async function recordCsat(db: any, input: CsatInput): Promise<string | nu
   return id
 }
 
-/** 回写最近一条满意度的备注（B4.3·点「补充原因」预设标签时·非热路径）。无最近记录则静默跳过。 */
+/** 回写最近一条满意度的备注（点「补充原因」预设标签时·非热路径）。无最近记录则静默跳过。 */
 export async function attachCsatNote(db: any, externalUserId: string, note: string): Promise<void> {
   const euid = String(externalUserId || '')
   if (!euid || !note) return
@@ -390,7 +389,7 @@ export async function summarizeOrders(db: any, openid: string): Promise<string> 
   if (!list.length) return '没查到你名下的订单。如果刚下单可稍后再试，或点「转人工」。'
   // refund_required 用词对齐 admin/src/lib/format.ts 的选择："待退款"而非"退款处理中"（后者与售后 approved 状态撞车，见该文件同款注释）
   const STAT: Record<string, string> = { pending: '待支付', paid: '已支付/待发货', shipped: '已发货', refund_required: '待退款', payment_exception: '支付异常待处理', done: '已完成', closed: '已关闭' }
-  // 运单号在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——曾错取顶层 o.trackingNo→永远显示不出（外审 P2.19·根因#8）
+  // 运单号在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——取顶层 o.trackingNo 会永远显示不出（根因#8）
   const lines = list.map((o: any) => {
     const tracking = o.shipping && o.shipping.trackingNo
     return `· 订单 ${o.id || o._id}：${STAT[o.status] || o.status}${tracking ? '（运单 ' + tracking + '）' : ''}`
@@ -423,18 +422,18 @@ export async function kfUserHasRecentOrder(db: any, euid: string, knownOpenid?: 
   return hit !== false
 }
 
-// ── 承面 C 会话入队（M0.c·让 csSession 有真实 writer·会话进自建工作台待接队列）──
+// ── 会话入队（csSession 的 writer·会话进自建工作台待接队列）──
 /**
- * 转人工时把这通会话写入 csSession 待接队列（承面 C 坐席台 `listQueue` 读它·阶段0地基）。
+ * 转人工时把这通会话写入 csSession 待接队列（坐席台 `listQueue` 读它）。
  * 确定性 _id=`wxkf:<openKfId>:<externalUserId>`（一顾客一活会话）：用 `add`——撞 id 即会话已在队列
  * （pending/active/…）→ 抛错被吞 → **不 clobber**（坐席已认领的 active 不被顾客再点转人工重置回 pending·根因#1 幂等）。
- * 创建于**初始态 pending**（cs.spec.ts `initial`）——非 `transition()`（状态流转 claim/close/escalate 是坐席台 action·车道 A）。
- * best-effort：入队失败不反噬顾客回复/平台转接（同 ensureKfIdentity）。closed 会话重开为新 pending 属会话生命周期（车道 A）。
+ * 创建于**初始态 pending**（cs.spec.ts `initial`）——非 `transition()`（状态流转 claim/close/escalate 是坐席台 action）。
+ * best-effort：入队失败不反噬顾客回复/平台转接（同 ensureKfIdentity）。closed 会话重开为新 pending 属会话生命周期。
  */
 /**
- * 三态返回（深审 F4·同 firstSeen 三态款·根因#8）：'queued'＝真正新入队（首建/closed 重开）；'already'＝已在
+ * 三态返回（同 firstSeen 三态款·根因#8）：'queued'＝真正新入队（首建/closed 重开）；'already'＝已在
  * 队列/接待中（撞号不 clobber）；'failed'＝基建错（add 没写进去且回查确认 doc 不存在）——**绝不可当成功**：
- * 曾把任何 add 异常都当撞号吞掉，DB 故障时会话没入队、顾客却收到「已为你转接」＝假转接无人接。
+ * 若把任何 add 异常都当撞号吞掉，DB 故障时会话没入队、顾客却收到「已为你转接」＝假转接无人接。
  * 调用方（transfer 分支）据 'failed' 改话术如实提示重试。
  */
 export async function enqueueSession(
@@ -468,16 +467,16 @@ export async function enqueueSession(
     }
     // 撞确定性 _id＝该顾客已有会话 doc：pending/active/escalated 不动（不 clobber·坐席已认领的不被重置·根因#1）；
     // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
-    // 老客二次点「找人工」曾被此撞 id 静默吞、永进不了队列（2026-07-02 真机逼出·调试日志 AD）。
+    // 否则老客二次点「找人工」会被此撞 id 静默吞、永进不了队列。
     // createdAt 刷新＝重新排队（FIFO 队尾）+ getThread 消息流从重开起算（不翻旧会话历史）。
-    // qc/qcSampledAt 一并**真删字段**（批R 修复·原批 B7 patch 成 `qc: null` 有语义 bug）：conversations.ts 的
+    // qc/qcSampledAt 一并**真删字段**（patch 成 `qc: null` 有语义 bug）：conversations.ts 的
     // saveQcMark/listQcSampled 用 DB 层 CAS `_.exists(false)` 判「未评过」——该条件要求字段真缺失，patch 成
     // null 只是把值改成 null、字段仍「存在」，_.exists(false) 永远判「已评过」→ 重开后 saveQcMark 永远 409
     // ALREADY_MARKED、listQcSampled(onlyPending) 也漏收（sampleQc 的内存 `!s.qc` 判断与此不一致：!null 为
-    // true，能选中候选，DB CAS 却写不进——两套判断对同一字段的「清空」语义打架）。改用 `_.remove()`（真删
+    // true，能选中候选，DB CAS 却写不进——两套判断对同一字段的「清空」语义打架）。故用 `_.remove()`（真删
     // 键·对齐 $unset）才能让内存真值判断与 DB exists(false) 判断同一套语义。
     const _ = db.command
-    const r = await transition('csSession', id, ['closed'], 'pending', {
+    const r = await transition(COLLECTIONS.csSession, id, ['closed'], 'pending', {
       agentId: null,
       claimedAt: null,
       createdAt: now,
@@ -487,12 +486,12 @@ export async function enqueueSession(
     }).catch(() => ({ moved: false })) /* best-effort：不反噬顾客回复 */
     queued = !!(r && (r as any).moved)
   }
-  if (queued) await notifyOnlineAgents(db, id) // M⑦ 推送线·fail-soft（sendAgentCard 内吞错·不反噬入队）
+  if (queued) await notifyOnlineAgents(db, id) // 推送·fail-soft（sendAgentCard 内吞错·不反噬入队）
   return queued ? 'queued' : 'already'
 }
 
-// 新会话入队 → 推「新会话待接」到在线坐席手机（M⑦ 承面C 增强·推送线·fail-soft）。
-// 在线坐席＝agentState.status='online'；其 wecomUserId 从 adminConfig 同 _id doc 取（坐席账号加的字段·M⑦ 地基）。
+// 新会话入队 → 推「新会话待接」到在线坐席手机（fail-soft）。
+// 在线坐席＝agentState.status='online'；其 wecomUserId 从 adminConfig 同 _id doc 取（坐席账号加的字段）。
 // 全程 fail-soft（sendAgentCard 内吞错·此处 try/catch 兜查询）：推送失败绝不反噬顾客转人工入队（守卫 enqueue-push-fail-soft）。
 async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
   try {
@@ -504,11 +503,11 @@ async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
       .catch(() => ({ data: [] }))
     const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
     if (!ids.length) return
-    // 键映射（深审 F1）：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
+    // 键映射：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
     // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
     const docIds = ids.map((id: string) => (id === 'admin' ? 'auth' : id))
     const cfg = await db
-      .collection('adminConfig')
+      .collection(COLLECTIONS.adminConfig)
       .where({ _id: db.command.in(docIds) })
       .limit(docIds.length)
       .get()
@@ -564,9 +563,9 @@ export interface DispatchCtx {
 }
 
 /**
- * 「谁在接待」单源判定（深审 F3·调试日志 AC/AD 语义的唯一出口）：pending/active/escalated＝人工链路占用中
+ * 「谁在接待」单源判定：pending/active/escalated＝人工链路占用中
  * （bot 须让位）→ 返状态串；closed/无会话＝bot 可应答 → 返 null。handleMessage 与 index.ts 进会话欢迎
- * （enter_session）都过它——曾只有 handleMessage 查、enter_session 直发欢迎菜单＝排队中顾客重开聊天窗被
+ * （enter_session）都过它——若只有 handleMessage 查、enter_session 直发欢迎菜单，排队中顾客重开聊天窗会被
  * bot 抢话（且点菜单又被本闸静默＝发了菜单点了没反应的自相矛盾）。
  */
 export async function heldStatus(
@@ -579,9 +578,35 @@ export async function heldStatus(
   return hs === 'pending' || hs === 'active' || hs === 'escalated' ? hs : null
 }
 
-// 关单评分标记（深审 F2·CSAT 闭环）：closeConversation 发「回复 1-5 分」提示时立 `csatask:<euid>` 标记，
+// 关单评分标记（CSAT 闭环）：closeConversation 发「回复 1-5 分」提示时立 `csatask:<euid>` 标记，
 // 本文件收到纯数字 1-5 且标记在 48h 窗口内才记分——防顾客随口发的数字被误当评分（副作用绑提示·不裸吃数字）。
 const CSAT_ASK_TTL_MS = 48 * 3600_000
+
+// 关单评分闭环（CSAT_PROMPT「回复 1-5 分」的兑现）：自由文本纯数字 1-5 + 48h 内有 csatask 标记
+// → 记分 + 消费标记 + 回可选原因菜单（与菜单评分路径同款收尾）。无标记/过期 → 返 false 落回正常分流（不误记）。
+async function handleCsatScoreText(
+  ctx: DispatchCtx,
+  incoming: Incoming,
+  openidOf: () => Promise<string | null>
+): Promise<boolean> {
+  if (incoming.menuId) return false
+  const m = /^\s*([1-5])\s*$/.exec(incoming.text)
+  if (!m) return false
+  const { db, openKfId, send } = ctx
+  const to = incoming.externalUserId
+  const ask = await docData(db, COLLECTIONS.kfState, 'csatask:' + to)
+  const askAt = ask && Number(ask.at)
+  if (!(askAt && Date.now() - askAt < CSAT_ASK_TTL_MS)) return false
+  await dropKfState(db, 'csatask:' + to)
+  const openid = await openidOf()
+  const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
+  if (!csatId) {
+    await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
+    return true
+  }
+  await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
+  return true
+}
 
 /** 处理单条入站消息：menu_id 优先按路由走，否则自由文本走关键词识别→高亮气泡。 */
 export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promise<void> {
@@ -592,10 +617,10 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   // 测版刷新：闸开时口令/按钮拦在 Jev、关键词、人工让位之前（人工接待中默认拒刷）。
   if (await interceptTrialRefresh(db, incoming, openKfId, send)) return
 
-  // 人工接管时 bot 不抢话（平台态恒 1 后「谁在接待」由**我方** csSession 状态机判·非平台 service_state·调试日志 AC）：
+  // 人工接管时 bot 不抢话（平台态恒 1 后「谁在接待」由**我方** csSession 状态机判·非平台 service_state）：
   // pending/active/escalated＝排队中/坐席接待中/待商户——bot 静默（消息仍归档+身份桥接在 index 侧不受影响·坐席经
-  // getThread 看到顾客新消息）；closed/无会话＝bot 正常应答。曾靠平台 state 3 让 bot 让位（AB），随转 3 退役改此判。
-  // **例外：顾客明确再点「找人工」不许装死**（调试日志 AD·闸太宽把求人工也吞了）——回一句当前状态、不重复入队。
+  // getThread 看到顾客新消息）；closed/无会话＝bot 正常应答。
+  // **例外：顾客明确再点「找人工」不许装死**（闸太宽会把求人工也吞了）——回一句当前状态、不重复入队。
   const hs = await heldStatus(db, openKfId, to)
   if (hs === 'pending' || hs === 'active' || hs === 'escalated') {
     if (incoming.menuId && route(incoming.menuId).type === 'transfer') {
@@ -612,26 +637,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
     return
   }
 
-  // 关单评分闭环（深审 F2·CSAT_PROMPT「回复 1-5 分」的兑现）：自由文本纯数字 1-5 + 48h 内有 csatask 标记
-  // → 记分 + 消费标记 + 回可选原因菜单（与菜单评分路径同款收尾）。无标记/过期 → 落回下面正常分流（不误记）。
-  if (!incoming.menuId) {
-    const m = /^\s*([1-5])\s*$/.exec(incoming.text)
-    if (m) {
-      const ask = await docData(db, COLLECTIONS.kfState, 'csatask:' + to)
-      const askAt = ask && Number(ask.at)
-      if (askAt && Date.now() - askAt < CSAT_ASK_TTL_MS) {
-        await dropKfState(db, 'csatask:' + to)
-        const openid = await openidOf()
-        const csatId = await recordCsat(db, { externalUserId: to, openid, score: Number(m[1]) })
-        if (!csatId) {
-          await send(buildText(to, openKfId, '评分没记上，请稍后再评一次 🙏'))
-          return
-        }
-        await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
-        return
-      }
-    }
-  }
+  if (await handleCsatScoreText(ctx, incoming, openidOf)) return
 
   const r: Route = incoming.menuId
     ? route(incoming.menuId)
@@ -643,7 +649,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
           const textLen = String(incoming.text || '').length
           const human = wantsHuman(incoming.text)
           const hello = looksGreeting(incoming.text)
-          // Jev 并行只为取证；人工/招呼选句不靠它。08:55 只有 [kf] jev greeting、没有梯子日志。
+          // Jev 并行只为取证；人工/招呼选句不靠它。
           const evP = tryJevClassify(gate.key, incoming.text)
           const hasRecentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId, ctx.openid)
           const useEv = human ? HUMAN_LADDER_EV : hello ? GREET_EV : await evP
@@ -694,10 +700,10 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
 
   switch (r.type) {
     case 'transfer': {
-      // 承面 C：转人工 = 会话进**自建工作台**待接队列（pending·幂等·坐席台 listQueue 读它）+ 给顾客文字确认。
-      // **不动平台 service_state**（根因#12·调试日志 AC）：坐席回复走
-      // send_msg API、仅智能助手态(1)可发——曾在此调 transferToServicer 转 3（原生接待台模式）致坐席发送
-      // 全被 95018 拒（2026-07-02 真机逼出）。人工排队/认领/结束由 csSession 状态机管，平台侧全程留 1。
+      // 转人工 = 会话进**自建工作台**待接队列（pending·幂等·坐席台 listQueue 读它）+ 给顾客文字确认。
+      // **不动平台 service_state**（根因#12）：坐席回复走
+      // send_msg API、仅智能助手态(1)可发——调 transferToServicer 转 3（原生接待台模式）会让坐席发送
+      // 全被 95018 拒。人工排队/认领/结束由 csSession 状态机管，平台侧全程留 1。
       let pack = await readPackSession(db, to)
       if (pack.state !== 'human') {
         pack = (await loadAndAdvancePack(db, to, null, incoming.text, { toHuman: true, userAsksHuman: true })).session
@@ -711,7 +717,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
         epoch,
       })
       const q = await enqueueSession(db, openKfId, to)
-      // 深审 F4：基建错入队失败＝如实提示重试，不发假「已转接」（会话没进队列·无人会接）
+      // 基建错入队失败＝如实提示重试，不发假「已转接」（会话没进队列·无人会接）
       await send(
         buildText(
           to,
@@ -724,7 +730,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       return
     }
     case 'faq': {
-      // FAQ 答案从 kb 单源读（B4.1）；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
+      // FAQ 答案从 kb 单源读；kb 无此条/未启用 → 兜底回根菜单（不写死答案）
       const ans = await faqAnswer(db, r.faqKey)
       if (ans) await send(buildText(to, openKfId, ans))
       else await send(buildMsgMenu(to, openKfId, await welcomeMenu(db)))
@@ -762,7 +768,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
       return
     }
     case 'csat': {
-      // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注（B4.3）；写失败如实告知不发菜单
+      // 记分（fail-closed 校验 1..5·绑 openid 若可解析）→ 再问可选备注；写失败如实告知不发菜单
       const openid = await openidOf()
       const csatId = await recordCsat(db, { externalUserId: to, openid, score: r.score })
       if (!csatId) {

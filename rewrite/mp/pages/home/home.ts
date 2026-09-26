@@ -1,4 +1,4 @@
-// 首页（重设计 9 板块·M2）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
+// 首页（9 板块）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
 import { tapHaptic } from '../../lib/haptics'
@@ -53,7 +53,7 @@ Page({
     })
     void this.reload()
   },
-  hidden: false, // 已切走本 tab 标记（H·完备性扫描新增）：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
+  hidden: false, // 已切走本 tab 标记：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
   // 实例常驻不销毁（不适用 checkout 那套 onUnload→this.unloaded 家族）——quick-add 的 await 恢复点据此判断
   // 是否还站在本页，不把迟到回包的导航/角标同步/toast 打到用户已经切走之后的当前页面上。
   onShow() {
@@ -105,7 +105,7 @@ Page({
     })
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onLoad + 下拉刷新可能并发触发·丢弃被更晚 reload 取代的过期回包
-  _hadSnapshot: false, // onLoad 是否已用首屏快照渲染过（批2·SWR）：为 true 时网络失败不整页翻失败态（已有真内容垫着）
+  _hadSnapshot: false, // onLoad 是否已用首屏快照渲染过（SWR）：为 true 时网络失败不整页翻失败态（已有真内容垫着）
   async reload() {
     const seq = ++this._seq
     // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）；
@@ -113,7 +113,7 @@ Page({
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
     if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
-    // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动（G1）：
+    // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动：
     // 无条件 mapProducts(null)⇒[] 会把已有非空商品轨清成空，误导「上新在路上」空态。
     const nextProducts = products !== null ? mapProducts(products) : null
     const patch: Record<string, unknown> = {
@@ -141,12 +141,12 @@ Page({
     const id = String(e.currentTarget.dataset.id || '')
     if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
-  _addSeq: 0, // onAddProduct 代次（H3·完备性扫描新增·同 reload._seq 范式）：本页是 tabBar 页（onUnload 正常导航
+  _addSeq: 0, // onAddProduct 代次（同 reload._seq 范式）：本页是 tabBar 页（onUnload 正常导航
   // 基本不触发，不适用 checkout 那套 this.unloaded 家族），连点不同商品「+」可并发在途——不设代际复核则更晚一次
-  // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段（Round4 复审补漏）。
-  // 首页「+」快速加购（2026-07-08 用户拍板改真加购；2026-07-13 用户拍板：「+」统一加入购物车，多规格默认加
-  // 首个规格·不再跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
-  // ——决策纯函数见 lib/quickAdd（navigate 分支已随本次决策删除·取不到出 null）。
+  // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段。
+  // 首页「+」快速加购（用户拍板：「+」统一加入购物车，多规格默认加
+  // 首个规格·不跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
+  // ——决策纯函数见 lib/quickAdd（取不到出 null）。
   async onAddProduct(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
     if (!id) return
@@ -157,8 +157,8 @@ Page({
     if (payload) {
       cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
       trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
-      if (this.hidden) return // 已切走 home tab（H·完备性扫描新增）：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
-      if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts:24 范式）
+      if (this.hidden) return // 已切走 home tab：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
+      if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts refresh() 范式）
       // 多规格被默认加了首规格时把规格名亮给用户（自绘 ping 不受原生 toast 字数限制）——静默替选规格必须可见
       this.ping(payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
     } else {

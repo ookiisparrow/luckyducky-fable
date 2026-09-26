@@ -8,7 +8,7 @@ import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../a
 import { getCsatReport } from '../api/cs'
 import { mapAgents, type AgentRow } from '../lib/mapSystem'
 import { mapCsat } from '../lib/mapCs'
-import { useLoadStatus, confirmed } from '../lib/status'
+import { useLoadStatus, confirmed, failText, writeFailText } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -22,7 +22,7 @@ const { message, ok: msgOk, note, load } = useLoadStatus() // reload 成功不�
 const busy = ref(false)
 const form = ref({ name: '', key: '', wecomUserId: '' })
 const confirmId = ref('')
-const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（换皮不回显·超管拿不到明文转交坐席）
+const lastCreated = ref<{ name: string; key: string } | null>(null) // 建号后回显口令（不回显则超管拿不到明文转交坐席）
 const csatAvg = ref<string | null>(null) // 整体均分（并行调 getCsatReport·与坐席表无关联维度）
 
 // KPI（真·从 rows 聚合，非另造）：在线坐席数 / 接待中总数 / 今日结束总数
@@ -31,13 +31,13 @@ const activeTotal = computed(() => rows.value.reduce((s, r) => s + r.activeCount
 const closedTotal = computed(() => rows.value.reduce((s, r) => s + r.todayClosed, 0))
 
 async function reload() {
-  confirmId.value = '' // 刷新即复位危险态（P1·防旧武装的停用确认残留、重进同一行一击直发·批3 规格）
+  confirmId.value = '' // 刷新即复位危险态（防旧武装的停用确认残留、重进同一行一击直发）
   const [r, csat] = await Promise.all([listAgents(), getCsatReport()])
   rows.value = r.ok ? mapAgents(r.agents) : []
   const csatVm = mapCsat(csat)
   // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
   csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
-  load(r.ok && !!csatVm, !r.ok ? '加载失败：' + String(r.error || '') : '满意度报表加载失败')
+  load(r.ok && !!csatVm, !r.ok ? failText('加载失败', r.error) : '满意度报表加载失败')
 }
 
 async function doCreate() {
@@ -56,7 +56,7 @@ async function doCreate() {
     void reload()
   } else {
     const e = String(r.error || '')
-    note(false, '', e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : '建号失败：' + e)
+    note(false, '', e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : writeFailText('建号失败', e))
   }
 }
 
@@ -66,7 +66,7 @@ async function toggle(row: AgentRow) {
   confirmId.value = ''
   const r = await disableAgent(row.id, !row.disabled)
   if (!r.ok) {
-    note(false, '', '操作失败：' + String(r.error || ''))
+    note(false, '', writeFailText('操作失败', r.error))
     return
   }
   note(true, row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`, '')
@@ -78,7 +78,7 @@ async function bindWecom(row: AgentRow) {
   if (v === null) return
   const r = await setAgentWecomUserId(row.id, v)
   if (!r.ok) {
-    note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : '绑定失败：' + String(r.error || ''))
+    note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : writeFailText('绑定失败', r.error))
     return
   }
   note(true, '', '')
@@ -238,7 +238,7 @@ onMounted(reload)
   border-radius: var(--ld-radius-sm);
 }
 
-/* KPI 行小字注（批 B6·同 Csat.vue kpi-note 各自定义·scoped 边界不共享） */
+/* KPI 行小字注（同 Csat.vue kpi-note 各自定义·scoped 边界不共享） */
 .kpi-note {
   font-size: 11.5px;
   color: var(--ld-content-2);

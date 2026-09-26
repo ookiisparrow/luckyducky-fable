@@ -1,4 +1,4 @@
-// 评价映射（纯函数·黄金 learning-content §七 + frontend-store §四星级拼装）。
+// 评价映射（纯函数·含星级拼装）。
 import { dateTime } from './mapOrders'
 
 export interface ReviewVM {
@@ -12,7 +12,7 @@ export interface ReviewVM {
   timeLabel: string
 }
 
-/** 星级：实心+空心拼满 5 颗（黄金 §四）；越界钳 [0,5]。 */
+/** 星级：实心+空心拼满 5 颗；越界钳 [0,5]。 */
 export function stars(rating: unknown): string {
   const n = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)))
   return '★'.repeat(n) + '☆'.repeat(5 - n)
@@ -48,7 +48,7 @@ export interface SummaryVM {
   tags: Array<{ tag: string; n: number }>
 }
 
-/** 汇总映射（黄金 §七读取半边：**条数为 0 视同无数据**——返回 null 页面不渲染假汇总头）。 */
+/** 汇总映射（**条数为 0 视同无数据**——返回 null 页面不渲染假汇总头）。 */
 export function mapSummary(summary: unknown): SummaryVM | null {
   const s = (summary && typeof summary === 'object' ? summary : {}) as Record<string, any>
   const count = Number(s.count)

@@ -37,11 +37,12 @@ export const RED_PATHS = [
   'rewrite/cloud/src/kit/transition.ts',
   'rewrite/cloud/src/kit/inventory.ts',
   'rewrite/cloud/src/kit/reconcile.ts',
-  // shared 契约：金额品牌类型/订单域/结算规则/状态机声明
+  // shared 契约：金额品牌类型/订单域/结算规则/状态机声明/北京时间换算（订单号时间戳与对账日界由此出）
   'rewrite/shared/src/money.ts',
   'rewrite/shared/src/order.ts',
   'rewrite/shared/src/checkout.ts',
   'rewrite/shared/src/status.ts',
+  'rewrite/shared/src/cst.ts',
   // mp 交易流页面（下单→支付→售后）
   'rewrite/mp/pages/cart/',
   'rewrite/mp/pages/checkout/',

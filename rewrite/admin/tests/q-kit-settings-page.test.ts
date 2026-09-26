@@ -82,3 +82,78 @@ describe('Settings.vue webhook 不回显', () => {
     expect(w2.text()).toContain('加载失败：网络不通')
   })
 })
+
+describe('Settings.vue webhook 输入框不明文常驻', () => {
+  it('大白话：新地址默认按密码框显示、不让浏览器自动填；点眼睛才明文，再点又藏回去', async () => {
+    loadWith({ alertWebhookSet: false })
+    const w = mount(Settings)
+    await flushPromises()
+    const input = () => w.find('.secret-row input')
+    expect(input().attributes('type')).toBe('password')
+    expect(input().attributes('autocomplete')).toBe('new-password')
+    await w.find('.eye-btn').trigger('click')
+    expect(input().attributes('type')).toBe('text')
+    await w.find('.eye-btn').trigger('click')
+    expect(input().attributes('type')).toBe('password')
+  })
+})
+
+describe('Settings.vue 载入与保存参数', () => {
+  it('大白话：载入失败时点保存被拦下、不发请求（防空表单盖掉已存的告警地址和网址前缀）', async () => {
+    getSettingsMock.mockResolvedValue({ ok: false, status: 500, error: 'X' })
+    const w = mount(Settings)
+    await flushPromises()
+    await btn(w, '保存').trigger('click')
+    await flushPromises()
+    expect(saveSettingsMock).not.toHaveBeenCalled()
+    expect(w.text()).toContain('设置未成功载入，暂不能保存')
+  })
+
+  it('大白话：填了不像企微机器人的地址，本地就拦、不发请求', async () => {
+    loadWith({})
+    const w = mount(Settings)
+    await flushPromises()
+    await w.find('.secret-row input').setValue('https://evil.example/hook')
+    await btn(w, '保存').trigger('click')
+    await flushPromises()
+    expect(saveSettingsMock).not.toHaveBeenCalled()
+    expect(w.text()).toContain('webhook 形态不对')
+  })
+
+  it('大白话：填新地址、改前缀、关一个事件后保存——参数带齐；成功后显示新尾号、输入框清空', async () => {
+    loadWith({ urlPrefix: 'https://old/', alertEvents: { MISMATCH: false } })
+    const w = mount(Settings)
+    await flushPromises()
+    const hook = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abcd-9876'
+    await w.find('.secret-row input').setValue(hook)
+    await w.find('input[placeholder="https://…"]').setValue(' https://new/ ')
+    await w.findAll('.switch')[0].trigger('click')
+    await btn(w, '保存').trigger('click')
+    await flushPromises()
+    expect(saveSettingsMock).toHaveBeenCalledWith({ alertWebhook: hook, urlPrefix: 'https://new/', alertEvents: { MISMATCH: false, UNKNOWN_ORDER: false } })
+    expect(w.text()).toContain('已保存')
+    expect(w.text()).toContain('已配置 · 尾号 9876')
+    expect((w.find('.secret-row input').element as HTMLInputElement).value).toBe('')
+  })
+})
+
+describe('Settings.vue 没有中文映射的码挂括号', () => {
+  it('大白话：载入、保存、清除被拒都写「X失败（码）」，不写成「X失败：码」', async () => {
+    getSettingsMock.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
+    const w = mount(Settings)
+    await flushPromises()
+    expect(w.text()).toContain('加载失败（DOC_READ_FAIL）')
+
+    loadWith({ alertWebhookSet: true, alertWebhookTail: 'wxyz' })
+    saveSettingsMock.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
+    const w2 = mount(Settings)
+    await flushPromises()
+    await btn(w2, '保存').trigger('click')
+    await flushPromises()
+    expect(w2.text()).toContain('保存失败（DOC_READ_FAIL）')
+    await btn(w2, '清除').trigger('click')
+    await btn(w2, '确认清除').trigger('click')
+    await flushPromises()
+    expect(w2.text()).toContain('清除失败（DOC_READ_FAIL）')
+  })
+})

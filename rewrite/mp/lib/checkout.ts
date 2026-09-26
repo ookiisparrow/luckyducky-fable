@@ -1,4 +1,4 @@
-// 结算草稿（旧线 cart store 的 checkoutItems 半边·临时态不持久化——冷启动不残留旧草稿）：
+// 结算草稿（临时态不持久化——冷启动不残留旧草稿）：
 // 购物车「去结算」快照选中项（fromCart=true·提交成功按实际数量精确扣车）；
 // 详情「立即购买」单件成稿（fromCart=false·不动购物车）。金额分口径与 cart 同源。
 import { CHECKOUT_ADDONS, COUPON, SHIP, type CheckoutAddon } from './checkoutConst'
@@ -18,12 +18,12 @@ export interface DraftLine {
   price: number // 元
   qty: number
   cover: string
-  lineId: string // 行唯一键（wx:key 用·批5）：id+sku 双键合成，同 cart.lineIdOf 口径
+  lineId: string // 行唯一键（wx:key 用）：id+sku 双键合成，同 cart.lineIdOf 口径
 }
 
 let draftItems: DraftLine[] = []
 let fromCart = false
-// 幂等键（批E·P1 防网络超时重试双建单）：结算草稿创建时生成一次、随草稿存活；提交失败重试（同一
+// 幂等键（防网络超时重试双建单）：结算草稿创建时生成一次、随草稿存活；提交失败重试（同一
 // 草稿未变）复用同一个键——云端 createOrder 据此把「同一次提交的重试」CAS 折叠成同一笔订单，
 // 网络超时后用户点第二次不会重复扣库存/建二单。草稿清空（finishSubmitted/__resetForTest）即失效，
 // 下次结算重新生成，不会跨草稿误粘。
@@ -83,7 +83,7 @@ export function finishSubmitted(): void {
 }
 
 /** 建单成功页展示金额（分）：优先取 createOrder 回包权威值（order.amount 为元）；
- * 回包缺失/非数字才回退调用方传入的前端自算值（防御分支，正常必有 amount）（bug sweep R1 #1）。 */
+ * 回包缺失/非数字才回退调用方传入的前端自算值（防御分支，正常必有 amount）。 */
 export function resolveOrderAmountFen(order: unknown, fallbackFen: number): number {
   const o = (order && typeof order === 'object' ? order : {}) as Record<string, unknown>
   const n = Number(o.amount)
@@ -112,7 +112,7 @@ export const CREATE_ORDER_ERR_COPY: Record<string, string> = {
   CALL_FAIL: '网络不好，稍后再试',
 }
 
-/** 建单失败错误码 → 人话文案（云端拒单原样透传·前端只做展示映射，不吞成通用失败）（bug sweep R1 #2）。 */
+/** 建单失败错误码 → 人话文案（云端拒单原样透传·前端只做展示映射，不吞成通用失败）。 */
 export function mapCreateOrderError(msg: string): string {
   const m = String(msg || '')
   if (m.startsWith(OUT_OF_STOCK_PREFIX)) return '有商品库存不足'

@@ -2,7 +2,7 @@
  * 状态码 → 中文标签单源（orders / afterSales / purchaseOrders / outworkOrders）。
  *
  * 与状态机声明的类型绑定（Record<OrderStatus,...> 等）：canonical 状态集合新增/改名，这里漏配标签直接
- * 编译期报错（根因#2 同款纪律）——比此前 admin/mp 各自散抄 `Record<string,string>` 强，那种写法加了新状态
+ * 编译期报错（根因#2 同款纪律）——写成 `Record<string,string>` 的话，加了新状态
  * 忘配标签只会在页面上悄悄显示原始状态码，不会报错。
  *
  * 订单/售后各导两份、不强合——语境有意不同（CLAUDE.md「本质相同还是碰巧长得像」判断结果＝碰巧长得像）：
@@ -14,7 +14,7 @@
  * 一份副本（见 rewrite/mp/lib/mapOrders.ts / mapAftersales.ts 头注），改用 scripts/check-structure.mjs 的
  * rw-mp-copies-synced 守卫焊住「状态码集合」与本文件一致（措辞允许不同，状态漏配不允许）。
  * admin 无此限制（vite.config.ts 经 esbuild alias 直连本模块 TS 源，同 rewrite/cloud/build.mjs 既有先例），
- * 直接 import 用，不再手抄。
+ * 直接 import 用。
  */
 import type { OrderStatus, AfterSaleStatus } from './order'
 import type { PurchaseOrderStatus, OutworkOrderStatus } from './scm'

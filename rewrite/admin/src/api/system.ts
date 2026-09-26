@@ -14,7 +14,7 @@ export const listBatchCodes = (batchId: string, page?: { cursor?: unknown; limit
 export const getSettings = () => client.post('getSettings')
 export const saveSettings = (patch: Record<string, unknown>) => client.post('saveSettings', patch)
 
-// 人工配置清单（批 B9→可填写升级）：散落配置一屏拼「配了没」（条数由后端 groups 动态计·不手抄）；带 fill 元数据的项可在本页直接填写保存
+// 人工配置清单：散落配置一屏拼「配了没」（条数由后端 groups 动态计·不手抄）；带 fill 元数据的项可在本页直接填写保存
 export const getConfigChecklist = () => client.post('getConfigChecklist')
 export const saveSecureConfig = (docId: string, fields: Record<string, string>) => client.post('saveSecureConfig', { docId, fields })
 export const savePayConfig = (patch: Record<string, string>) => client.post('savePayConfig', patch)
@@ -25,6 +25,6 @@ export const getBillMatch = (from?: string, to?: string) => client.post('getBill
 export const downloadBill = (date: string) => client.post('downloadBill', { date })
 
 export const listInventory = () => client.post('listInventory')
-// threshold＝per-SKU 低库存阈值（后端 saveStock 早支持·换皮漏传·恒硬编码 10）；undefined=不改
+// threshold＝per-SKU 低库存阈值（后端 saveStock 支持）；undefined=不改
 export const saveStock = (productId: string, spec: string, stock: number | null, expectedUpdatedAt: number, threshold?: number) =>
   client.post('saveStock', { productId, spec, stock, expectedUpdatedAt, threshold })

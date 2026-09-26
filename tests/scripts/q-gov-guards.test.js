@@ -120,6 +120,17 @@ describe('rw-status-transitions-declared 建档状态须属 initial', () => {
     expect(bad.join('\n')).toMatch(/approved.*initial/)
   })
 
+  // 生产源码的 .collection()/transition() 集合名实参已全部是 COLLECTIONS.x，守卫对真实代码只靠认这种写法的分支——钉住它，别让它坏了还恒绿
+  it('.add 建档用 COLLECTIONS.x 写非 initial 状态 → 红', () => {
+    const bad = run("await db.collection(COLLECTIONS.afterSales).add({ data: { _id: x, status: 'approved' } })\n")
+    expect(bad.join('\n')).toMatch(/approved.*initial/)
+  })
+
+  it('transition(COLLECTIONS.x, …) 走未声明边 → 红', () => {
+    const bad = run("await transition(COLLECTIONS.afterSales, id, ['refunded'], 'approved')\n")
+    expect(bad.join('\n')).toMatch(/未声明边 refunded→approved/)
+  })
+
   it('update 写非 initial 状态不受建档规则约束', () => {
     expect(run("await db.collection('afterSales').doc(x).update({ data: { status: 'approved' } })\n")).toEqual([])
   })

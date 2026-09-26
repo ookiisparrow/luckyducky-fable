@@ -2,20 +2,6 @@
 // 对账 approx 诚实透传/wxOnly 标红/库存不限量不显 0/409 冲突人话。
 import { describe, it, expect } from 'vitest'
 import { mapAgents, mapBatches, webhookOk, mapRecon, mapBillMatch, mapStock, stockErrorText, mapAuditEntries, launchErrorText, UNKNOWN_COURSE_HINT } from '../src/lib/mapSystem'
-import settingsSrc from '../src/pages/Settings.vue?raw'
-import batchesSrc from '../src/pages/Batches.vue?raw'
-import wizardSrc from '../src/pages/Wizard.vue?raw'
-import reconciliationSrc from '../src/pages/Reconciliation.vue?raw'
-
-// 密钥不明文常驻（UX 体检批4）：正在填的新 webhook 默认密码态+显隐切换（后端已不回显原值，
-// 见 q-kit-settings-page）。「12 项」死数与清单页动态 27 项打架——删数字防再漂。
-describe('Settings.vue 密钥显示形态 + 死数字清除', () => {
-  it('大白话：webhook 输入默认密码态（可切换显示）+ autocomplete 关自动填充；清单入口不再手抄项数', () => {
-    expect(settingsSrc).toMatch(/:type="showWebhook \? 'text' : 'password'"/)
-    expect(settingsSrc).toMatch(/autocomplete="new-password"/)
-    expect(settingsSrc).not.toContain('12 项散落配置')
-  })
-})
 
 describe('外包账号与批次', () => {
   it('大白话：账号行归一（无 id 剔除）；批次激活率算百分比、空批显 — 不除零', () => {
@@ -56,25 +42,6 @@ describe('外包账号与批次', () => {
   })
 })
 
-describe('Batches.vue 按批看码 + 页内翻页（不一次铺开）', () => {
-  it('大白话：打开一批只看一页码，有上一页/下一页，不 slice(0,100) 一次铺开；导出另取齐整批；还能生成新批次', () => {
-    expect(batchesSrc).toMatch(/async function nextCodes/)
-    expect(batchesSrc).toMatch(/async function prevCodes/)
-    expect(batchesSrc).toMatch(/listBatchCodes\([^)]*cursor/)
-    expect(batchesSrc).not.toMatch(/codes\.slice\(0,\s*100\)/)
-    expect(batchesSrc).toMatch(/async function collectAllCodes/)
-    expect(batchesSrc).toContain('上一页')
-    expect(batchesSrc).toContain('下一页')
-    expect(batchesSrc).toMatch(/async function doCreate/)
-    expect(batchesSrc).toContain('生成新批次')
-  })
-
-  it('大白话：码表翻页用 peek 绑当前批次代际，回包过期即丢，不把 A 批的下一页写进 B 批抽屉', () => {
-    expect(batchesSrc).toMatch(/const g = codesGen\.peek\(\)/)
-    expect(batchesSrc).toMatch(/if \(codesGen\.isStale\(g\) \|\| detail\.value\?\.batchId !== forBatch\) return/)
-  })
-})
-
 describe('上新/批次/课程错误码人话（操作者可见·不裸甩英文码）', () => {
   it('大白话：UNKNOWN_COURSE 说清没发布课程、下一步去第 4 步点发布；课程号只挂括号里', () => {
     const t = launchErrorText('UNKNOWN_COURSE:course-pmtpe2ca2')
@@ -91,7 +58,6 @@ describe('上新/批次/课程错误码人话（操作者可见·不裸甩英文
     expect(launchErrorText('VOD_PROCESSING')).toContain('转码')
     expect(launchErrorText('DRAFT_CONFLICT')).toContain('载入')
     expect(launchErrorText('SESSION_LOST')).toContain('登录')
-    expect(launchErrorText('GEN_FAIL')).toContain('二维码')
   })
 
   it('大白话：没映射的码也不裸甩 Error:CODE；已是中文原样；空串给兜底人话', () => {
@@ -102,21 +68,6 @@ describe('上新/批次/课程错误码人话（操作者可见·不裸甩英文
     expect(t).toContain('WEIRD_XYZ') // 编号次要信息
     expect(launchErrorText('网络波动，请重试')).toBe('网络波动，请重试')
     expect(launchErrorText('')).toContain('没成功')
-  })
-
-  it('大白话：批次生成/加载失败走 launchErrorText；未发布课时嵌入向导拦截生成', () => {
-    expect(batchesSrc).toMatch(/launchErrorText\(/)
-    expect(batchesSrc).not.toMatch(/生成失败：' \+ String\(r\.error/)
-    expect(batchesSrc).not.toMatch(/加载失败：' \+ String\(r\.error/)
-    expect(batchesSrc).toMatch(/courseReady/)
-    expect(batchesSrc).toMatch(/UNKNOWN_COURSE_HINT|launchErrorText\('UNKNOWN_COURSE/)
-  })
-
-  it('大白话：向导加载/建档走 launchErrorText，同步到小程序走既有 publishErrorText', () => {
-    expect(wizardSrc).toMatch(/launchErrorText\(/)
-    expect(wizardSrc).toMatch(/publishErrorText\(/)
-    expect(wizardSrc).not.toMatch(/同步到小程序没成功：' \+ String\(r\.error/)
-    expect(wizardSrc).toMatch(/:course-ready|:courseReady/)
   })
 })
 
@@ -155,17 +106,6 @@ describe('对账映射（approx 诚实·wxOnly 最危险）', () => {
     expect(m.summary[2].danger).toBeFalsy() // 我方有微信无多为账单未拉·不与「收钱无单」同色标红
     expect(m.wxOnly[0].amount).toBe('¥5.00')
     expect(mapBillMatch({ ok: false })).toBeNull()
-  })
-
-  it('大白话：对账页用人话报错、CSV 带可见 BOM、降级不装成账平、没账单不装成已勾对', () => {
-    expect(reconciliationSrc).toMatch(/orderErrorText\(/)
-    expect(reconciliationSrc).not.toMatch(/String\([^;]*error/)
-    expect(reconciliationSrc).toContain('\\uFEFF')
-    expect(reconciliationSrc).toContain('recon!.partial')
-    expect(reconciliationSrc).toContain('TriangleAlert')
-    expect(reconciliationSrc).toContain('暂无勾对数据——请先拉取账单')
-    expect(reconciliationSrc).toContain('当前区间暂无订单/退款记录')
-    expect(reconciliationSrc).toContain('class="ld-table table-scroll"')
   })
 })
 

@@ -29,7 +29,7 @@ const TABS = [
 
 const tab = ref('paid')
 const counts = ref<Record<string, number>>({})
-const countsPartial = ref(false) // P2·bug sweep Round2 item14：某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
+const countsPartial = ref(false) // 某状态 .count() 失败时角标别把占位 0 当真值显示（同 Dashboard todoPartial 风格）
 const rows = ref<OrderRowVM[]>([])
 const cursor = ref<unknown>(null)
 const hasMore = ref(false)
@@ -44,10 +44,10 @@ const clearConfirmId = ref('')
 type Acts = Record<string, { activated?: boolean; entered?: boolean } | undefined>
 const drawer = ref<{ row: OrderRowVM; mode: 'ship' | 'view'; company: string; trackingNo: string; acts: Acts | null; actsErr?: string; error?: string } | null>(null)
 
-// 列表页脚分母＝当前标签计数（换皮恒用 counts.all·在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
+// 列表页脚分母＝当前标签计数（恒用 counts.all 的话在「待发货」栏也显全量总数·误导以为本栏还有一堆没翻）
 const tabTotal = computed(() => counts.value[tab.value || 'all'])
 
-// 批量发货（P1·上量瓶颈）：仅待发货 tab 且非搜索态可批量
+// 批量发货（上量瓶颈）：仅待发货 tab 且非搜索态可批量
 const selectedIds = ref<string[]>([])
 const batch = ref<{
   company: string
@@ -56,10 +56,10 @@ const batch = ref<{
   done: boolean
 } | null>(null)
 
-const listGen = useLatest() // 列表乱序守卫（P2·快切标签/搜索时旧结果别覆盖新标签·根因#8）
-const reloading = ref(false) // reload 专属在途标志（迭代G：more 的加载闸原用多写者 message 文案·脆弱·改此单写布尔）
+const listGen = useLatest() // 列表乱序守卫（快切标签/搜索时旧结果别覆盖新标签·根因#8）
+const reloading = ref(false) // reload 专属在途标志（more 的加载闸用单写布尔，不靠多写者 message 文案）
 async function reload() {
-  clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（P1·防旧武装的「去核对」残留、重进同一行一击直发·批3 规格）
+  clearConfirmId.value = '' // 换标签/搜索/翻页/发货成功后自动刷新即复位危险态（防旧武装的「去核对」残留、重进同一行一击直发）
   message.value = '加载中…'
   reloading.value = true
   moreErr.value = ''
@@ -67,23 +67,23 @@ async function reload() {
   const [r, c] = await Promise.all([listOrders(tab.value, undefined, 20, activeQ.value), orderCounts()])
   if (listGen.isStale(my)) return // 已切别标签/搜索·丢弃过期列表（防高亮标签与内容错配·由更新的 reload 负责复位 reloading）
   reloading.value = false // 本次是最新·加载完成
-  if ((r as any).error === 'SESSION_LOST') return
-  rows.value = r.ok ? mapOrderRows((r as any).list) : []
-  cursor.value = r.ok ? (r as any).nextCursor : null
-  hasMore.value = !!(r.ok && (r as any).hasMore)
+  if (r.error === 'SESSION_LOST') return
+  rows.value = r.ok ? mapOrderRows(r.list) : []
+  cursor.value = r.ok ? r.nextCursor : null
+  hasMore.value = !!(r.ok && r.hasMore)
   if (selectedIds.value.length) {
     const vis = new Set(rows.value.map((x) => x.id))
     selectedIds.value = selectedIds.value.filter((id) => vis.has(id))
   }
-  if (c.ok && (c as any).counts) counts.value = (c as any).counts as Record<string, number>
-  countsPartial.value = c.ok ? !!(c as any).partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
+  if (c.ok && c.counts) counts.value = c.counts
+  countsPartial.value = c.ok ? !!c.partial : true // 计数请求本身失败也按不可信处理（不误显陈旧/占位数字）
   message.value = r.ok ? '' : '加载失败：' + orderErrorText(r.error)
 }
 
 async function more() {
   if (!hasMore.value || cursor.value == null) return
   if (reloading.value) return // reload 在途时不翻页（cursor 还是旧的·会跳页）——覆盖 reload 先于 more 的序（单写布尔·不受 message 多写者干扰）
-  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页（迭代F 逮出）
+  const gen = listGen.peek() // 绑定当前 reload 代际·不递增（不反噬在途 reload）·任何新 reload 会作废本页
   const r = await listOrders(tab.value, cursor.value, 20, activeQ.value)
   if (listGen.isStale(gen)) return // 期间发生过 reload（切标签/搜索/刷新/动作后刷新）·放弃本页（防混排 + 游标跳页）
   if (!r.ok) {
@@ -91,9 +91,9 @@ async function more() {
     return
   }
   moreErr.value = ''
-  rows.value = appendNew(rows.value, mapOrderRows((r as any).list))
-  cursor.value = (r as any).nextCursor
-  hasMore.value = !!(r as any).hasMore
+  rows.value = appendNew(rows.value, mapOrderRows(r.list))
+  cursor.value = r.nextCursor
+  hasMore.value = !!r.hasMore
 }
 
 function pickTab(k: string) {
@@ -124,7 +124,7 @@ function openDrawer(row: OrderRowVM, mode: 'ship' | 'view') {
   drawer.value = { row, mode, company: row.company || COMPANIES[0], trackingNo: row.trackingNo || '', acts: null }
   void getOrderDetail(row.id).then((r) => {
     if (drawer.value?.row.id !== row.id) return
-    if (r.ok) drawer.value.acts = (r as any).activations || {}
+    if (r.ok) drawer.value.acts = r.activations || {}
     else drawer.value.actsErr = '激活状态没加载到：' + orderErrorText(r.error) // 失败≠无激活（病根#14）
   })
 }
@@ -146,7 +146,7 @@ function timeline(row: OrderRowVM) {
     },
   ]
 }
-// 状态徽章 tone（批2 refactor·同文件字面重复 ×2 去重）：三输入——feeMismatch/refundHold 优先分支 + status 分支。
+// 状态徽章 tone：三输入——feeMismatch/refundHold 优先分支 + status 分支。
 // refundHold（退款↔履约状态同步）：有在途售后或每行都退够件数，绝不能让「待发货」绿标误导操作员点发货。
 function badgeTone(row: { feeMismatch: boolean; paymentException?: boolean; refundHold?: boolean; status: string }): 'neutral' | 'brand' | 'green' | 'red' | 'amber' {
   if (row.paymentException || row.feeMismatch) return 'red'
@@ -183,7 +183,7 @@ async function doShip() {
   }
 }
 
-// —— 批量发货（P1·上量瓶颈）：多选 paid 非异常单 → 一次发 ——
+// —— 批量发货（上量瓶颈）：多选 paid 非异常单 → 一次发 ——
 const canBatch = computed(() => tab.value === 'paid' && !activeQ.value)
 const shippableInList = computed(() => rows.value.filter((r) => r.canShip))
 const isSel = (id: string) => selectedIds.value.includes(id)
@@ -232,7 +232,7 @@ async function doBatchShip() {
     live.forEach((r) => (r.error = res.error ? orderErrorText(res.error) : '发货失败'))
     return
   }
-  const byId = Object.fromEntries(((res as any).results || []).map((x: any) => [x.id, x]))
+  const byId = Object.fromEntries((res.results || []).map((x) => [x.id, x]))
   live.forEach((r) => {
     const x = byId[r.id]
     r.stale = x?.error === 'REFUND_LINES_CHANGED'
@@ -454,7 +454,7 @@ onMounted(reload)
         <!-- 商品 + 逐商品激活态 -->
         <div class="items-card">
           <div class="addr-label">商品 · 激活状态</div>
-          <!-- :key＝productId__spec（与后端 lineId 同构）：旧单 lineKey 只有 productId，同品多规格同单会撞键（P3·深审20260712） -->
+          <!-- :key＝productId__spec（与后端 lineId 同构）：只用 productId 当键的话同品多规格同单会撞键 -->
           <div v-for="it in drawer.row.items" :key="(it.productId || it.name) + '__' + it.spec" class="ditem">
             <b>{{ it.name }}{{ it.spec ? `（${it.spec}）` : '' }} ×{{ it.qty }}</b>
             <em v-if="it.refundedQty" class="act-tag refunded">已退 {{ it.refundedQty }} 件·别发</em>
@@ -684,21 +684,7 @@ onMounted(reload)
   gap: 8px;
 }
 
-/* 右滑抽屉（壳层公共段 .drawer-mask/.drawer-head/.drawer-title/@keyframes slidein 单源在
- * styles/console.css·三页逐字节一致收敛·病根#5；.drawer 本体宽度等页面差异留此不动） */
-.drawer {
-  width: 420px;
-  max-width: 92vw;
-  height: 100%;
-  background: var(--ld-bg);
-  border-left: 1px solid var(--ld-line);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  animation: slidein 0.18s ease;
-}
+/* 右滑抽屉：.drawer/.drawer-close 等壳层单源在 styles/console.css */
 .drawer-oid {
   margin-top: 6px;
   display: flex;
@@ -709,15 +695,6 @@ onMounted(reload)
 }
 .drawer-badge {
   margin-left: 8px;
-}
-.drawer-close {
-  display: flex;
-  padding: 6px;
-  border: none;
-  border-radius: 8px;
-  background: var(--ld-bg-grey);
-  color: var(--ld-content-2);
-  cursor: pointer;
 }
 .drawer-close:disabled {
   opacity: 0.5;

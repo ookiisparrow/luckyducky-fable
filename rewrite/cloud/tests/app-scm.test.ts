@@ -549,7 +549,6 @@ describe('备货计算器与产销统计（黄金 §K：只读·带结不外购�
   })
 
   it('大白话：成品规格超过 20 个，产销统计不被聚合默认 20 条截断；到扫描上限如实标 truncated', async () => {
-    control.setAggregateDefaultLimit(20) // 真 sdk 聚合不写 limit 只回 20 条
     const fgRows = (n: number) => Array.from({ length: n }, (_, i) => ({ _id: `assembly_in:a${i}:fg:p${i}__`, docType: 'assembly_in', itemKey: `fg:p${i}__`, delta: 1 }))
     control.seed('stockLedger', fgRows(25))
     const fg = await post('getFgSummary', SUPER, {})

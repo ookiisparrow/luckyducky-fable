@@ -1,7 +1,7 @@
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { getDb, ok, err, getTempUrls, IMAGE_URL_MAX_AGE, isDocMissing } from '../../../kit'
 
-// 图片换址策略（批1·根因#15/#7/#12）：cover/图册等长命展示图统一带 maxAge（容器级签发缓存复用·省重签）
+// 图片换址策略（根因#15/#7/#12）：cover/图册等长命展示图统一带 maxAge（容器级签发缓存复用·省重签）
 // + imageProc（默认关·数据万象未开通时 withImageProc 空返原址·见 kit/storage.ts）。视频/一次性址不带此策略。
 const IMG_OPTS = { maxAge: IMAGE_URL_MAX_AGE, imageProc: true }
 
@@ -20,10 +20,10 @@ async function swapImgs(targets: [any, string | number][]): Promise<void> {
 }
 
 /**
- * 商品列表（公开只读·黄金 admin-misc §二：按排序升序下发；只下发在售——
+ * 商品列表（公开只读：按排序升序下发；只下发在售——
  * listed:false 停售不露给顾客，旧无 listed 字段的商品仍命中＝可售，向后兼容免回灌）。
  *
- * 批1·列表瘦身 + 签发缓存（根因#7 规模 + #15 加载链路冗余）：列表卡片只用
+ * 列表瘦身 + 签发缓存（根因#7 规模 + #15 加载链路冗余）：列表卡片只用
  * cover，图册 images[] 是详情页才需要的——列表若连图册一起签，是 N 商品 × M 图的临时址签发（规模杀手）+ 白下
  * 发一大坨列表用不到的字段。故此**列表只签 cover、不下发 images**（图册收窄进 getProductDetail 详情页专拉）。
  * cover 库内存 cloud:// 裸 fileID，客户端 <image> 每张图都要多付一次 fileID→临时址解析（~100-300ms/文件）才开始
@@ -45,7 +45,7 @@ export const getProducts = async () => {
 }
 
 /**
- * 单商品详情（公开只读·批1 列表瘦身配套）：列表 getProducts 省流不下发 images[]，
+ * 单商品详情（公开只读·配合列表瘦身）：列表 getProducts 省流不下发 images[]，
  * 详情页按 id 拉本档全字段（含 images 图册）补齐画廊。id 口径＝products 文档 `_id`（admin publishProduct 以 draft
  * id set 到 products.doc(id)·mp 侧 p.id||p._id 双键读，二者对齐——已核 shared/seed/products.ts + adminApi/products.ts）。
  * id 空 → BAD_ARGS；无档/停售（listed:false）fail-soft 返回 { product: null }（同 getContent 口径·前端保持列表项降级
@@ -89,8 +89,8 @@ async function swapHomeImages(home: any): Promise<void> {
 }
 
 /**
- * 首页内容（公开只读·黄金 learning-content §九：无记录返回空，前端回退默认文案）。
- * 批B·图片链加载提速（根因#15）：见 getProducts 头注释（同权衡/同 fail-soft 口径）。
+ * 首页内容（公开只读：无记录返回空，前端回退默认文案）。
+ * 图片换址提速（根因#15）：见 getProducts 头注释（同权衡/同 fail-soft 口径）。
  */
 export const getContent = async () => {
   const db = getDb()
@@ -106,7 +106,7 @@ export const getContent = async () => {
 }
 
 /**
- * 页面内容 CMS 公开只读（批A·5 页可编辑内容·写侧样板 adminApi/content.savePageContent）：
+ * 页面内容 CMS 公开只读（5 页可编辑内容·写侧样板 adminApi/content.savePageContent）：
  * content 集合每页一 doc（_id=page 键名），未知 page fail-closed 拒（同白名单·根因#3 不信前端）。catalogPlayer.catalog.heroImage 若为 cloud:// fileID，服务端换临时
  * URL 再下发（fileID 不出口·同 swapHomeImages/getProducts 换址口径与 fail-soft 权衡）；无文档返回 null。
  */

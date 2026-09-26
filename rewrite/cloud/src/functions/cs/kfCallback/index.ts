@@ -13,16 +13,16 @@ import {
   SCENE_COMMENT,
 } from '../../../kit'
 import { handleMessage, welcomeMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, resolveOpenid, type Incoming } from './dispatch'
-import { archiveInbound, archiveOutbound } from './archive' // 会话归档（B5.1·入站/出站落档）
+import { archiveInbound, archiveOutbound } from './archive' // 会话归档（入站/出站落档）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
 // 验签 + AES 解密 + fail-closed 由 kit.defineKfCallback 强制（根因#3）；本函数只做「收到事件 → 拉消息
-// → 分流回消息」。corpid/secret/token/aesKey + 小程序卡片 miniappAppId/thumbMediaId（配置清单审查批随迁）
+// → 分流回消息」。corpid/secret/token/aesKey + 小程序卡片 miniappAppId/thumbMediaId
 // 经 kit/secureConfig 读库（/admin 人工配置清单页填写自动生效，无需再改环境变量+重新部署·env 兜底）。
 // 外壳验签与 onEvent 用的是同一文档：每事件读一次、两处共用（见 main），每事件仍取最新值——填写即生效。
 const db = getDb()
 
-// §查订单·平台原生身份桥接（根因#3 不信前端·best-effort 不反噬消息处理）：顾客的 external_userid 经微信客服
+// 查订单·平台原生身份桥接（根因#3 不信前端·best-effort 不反噬消息处理）：顾客的 external_userid 经微信客服
 // `kf/customer/batchget` 反查 unionid → users 找 openid → 建 `ext→openid` 映射（dispatch.resolveOpenid 读它查订单）。
 // **绕开客户联系 idconvert 的 48002 墙**（用微信客服自己的顾客接口·平台原生）。已建映射即跳（省 batchget）。
 // 两端配合：login 存 unionid，本处 batchget 建 kfIdentity。knownOpenid 是本条消息开头已读到的映射（'' = 未绑定）。
@@ -31,7 +31,7 @@ async function ensureKfIdentity(db: any, token: string, euid: string, knownOpeni
     if (!euid || knownOpenid) return // 已建映射·不重复 batchget
     const unionid = await kfCustomerBatchget(token, euid)
     if (!unionid) return
-    const u = await db.collection('users').where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
+    const u = await db.collection(COLLECTIONS.users).where({ unionid }).limit(1).get().catch(() => ({ data: [] }))
     const openid = u.data && u.data[0] && u.data[0]._openid
     if (!openid) return
     await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).set({ data: { openid, unionid, updatedAt: Date.now() } })
@@ -90,10 +90,10 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
       else await archiveOutbound(db, payload, openKfId, payload?.touser === euid ? openid : undefined) // 出站回复落档（仅记真发出的·fail-soft 不反噬发送）
       return res
     }
-    // 转人工不再调平台 service_state 转接（根因#12·调试日志 AC）：
-    // 平台会话恒智能助手态(1)，人工由承面C 自建工作台（csSession 队列）承接——转 3 会让坐席 send_msg 全被 95018 拒。
+    // 转人工不调平台 service_state 转接（根因#12）：
+    // 平台会话恒智能助手态(1)，人工由自建工作台（csSession 队列）承接——转 3 会让坐席 send_msg 全被 95018 拒。
     const ctx = { db, openKfId, cfg, send, openid }
-    // 自由打字过 msgSecCheck（Issue #113）：违规不归档不分流；接口抖动 fail-open 放行并记日志。
+    // 自由打字过 msgSecCheck：违规不归档不分流；接口抖动 fail-open 放行并记日志。
     // 菜单回传（menu_id）是我方预设文案，不送审。v2 必带 openid——尚未建身份桥则跳过（等同 fail-open，不打无意义 INFRA）。
     if (msg.msgtype === 'text' && !(msg.text && msg.text.menu_id)) {
       if (openid) {
@@ -110,9 +110,9 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
         }
       }
     }
-    await archiveInbound(db, msg, openKfId, openid) // 入站客户消息落档（B5.1·有 msgid 才记·确定性 _id 幂等·fail-soft）
+    await archiveInbound(db, msg, openKfId, openid) // 入站客户消息落档（有 msgid 才记·确定性 _id 幂等·fail-soft）
     // 回复前确保会话为「智能助手接待」态(service_state=1)：新会话默认 0未处理，不置态 send_msg 报 95018 静默无回复
-    // （调试日志 AB·迁移到企业微信内后平台默认态漂移·根因#12）。人工/排队态 bot 不抢话（skip·仍尽力建身份桥接）。
+    // （迁移到企业微信内后平台默认态漂移·根因#12）。人工/排队态 bot 不抢话（skip·仍尽力建身份桥接）。
     if (euid) {
       const gate = await ensureSmartAssistant(token, { openKfId, externalUserId: euid })
       if (gate === 'skip') {
@@ -122,7 +122,7 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
     }
     // 先回顾客（回复优先·batchget 延迟不拖累回复），再 best-effort 建身份桥接
     if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
-      // 深审 F3：排队/接待中顾客重开聊天窗（enter_session）不发欢迎菜单——bot 抢话且顾客点菜单又被
+      // 排队/接待中顾客重开聊天窗（enter_session）不发欢迎菜单——bot 抢话且顾客点菜单又被
       // held 闸静默＝发了菜单点了没反应；「谁在接待」判定单源 heldStatus（与 handleMessage 同口径）。
       if (!(euid && (await heldStatus(db, openKfId, euid))))
         await send(buildMsgMenu(euid, openKfId, await welcomeMenu(db))) // 进会话欢迎（euid 在 event 子对象·根因#8）
@@ -130,11 +130,11 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
       const incoming = normalize(msg)
       if (incoming) await handleMessage(ctx, incoming)
     }
-    await ensureKfIdentity(db, token, euid, openid) // §查订单·回复后再 batchget 反查建 ext→openid 映射（best-effort·不延迟回复）
+    await ensureKfIdentity(db, token, euid, openid) // 查订单·回复后再 batchget 反查建 ext→openid 映射（best-effort·不延迟回复）
   }
 
-  // 防超时吞消息（外审 R1-R4·P1.5·根因#8）：函数超时见 cloudbaserc.json kfCallback.timeout，单批 limit 降到
-  // KF_BATCH_LIMIT（旧默认 1000 一批逐条串行处理可能做不完）；KF_TIME_BUDGET_MS 墙钟预算在每条消息认领前查
+  // 防超时吞消息（根因#8）：函数超时见 cloudbaserc.json kfCallback.timeout，单批 limit 降到
+  // KF_BATCH_LIMIT（一批 1000 逐条串行处理可能做不完）；KF_TIME_BUDGET_MS 墙钟预算在每条消息认领前查
   // （processKfBatch deadline）——临近超时即停、剩下的不认领，绝不在「已认领但副作用未完成」时被硬超时杀掉
   // （那会下次因 seen 跳过＝吞消息）。平台游标不透明、推不到批中间，所以只在整批处理完才推进+落库：
   // 停下时游标仍在上次落的位置，下次回调重拉这批，处理过的按 seen 跳过、没轮到的补上。
@@ -151,7 +151,7 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
       alert('security', 'kfCallback', 'SYNCMSG_FAILED', { errcode: r.errcode })
       break
     }
-    // 防吞单（审计 P2）：单条失败不中断整批、撤回认领；本批没处理完（失败或预算用尽）则**保留旧游标**下次重拉
+    // 防吞单：单条失败不中断整批、撤回认领；本批没处理完（失败或预算用尽）则**保留旧游标**下次重拉
     const unfinished = await processKfBatch(db, r.msg_list, handleOne, startedAt + KF_TIME_BUDGET_MS)
     if (unfinished) {
       break // 不推进游标：下次重拉，成功项 seen 去重、失败项和没轮到的重试

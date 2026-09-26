@@ -1,12 +1,12 @@
-import { reply, str, type Ctx } from '../lib'
-import { pageQuery } from '../../../kit'
+import { reply, type Ctx } from '../lib'
+import { pageQuery, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { applyTrialRefresh, loadTrialRefreshGate, trialRefreshDenyStatus } from '../../cs/kfCallback/trialRefresh'
 
-// 客服会话检索（后台360工作站 B5.1·板块#9·外包管控底座）：坐席按客户（openid / externalUserId）+ 渠道筛选 →
-// cursor 翻页拉会话时间轴（归档单源 conversations·由 cs/kfCallback 落档）。供坐席查历史 + 质检取证（B5.3 依赖）。
+// 客服会话检索（外包管控底座）：坐席按客户（openid / externalUserId）+ 渠道筛选 →
+// cursor 翻页拉会话时间轴（归档单源 conversations·由 cs/kfCallback 落档）。供坐席查历史 + 质检取证。
 //
-// 越权读他人会话全文（§1.5·根因#3·同 360 读）：index.ts ACTION_CAPS['searchConversations']='customer:view' 能力闸
+// 越权读他人会话全文（根因#3·同 360 读）：index.ts ACTION_CAPS['searchConversations']='customer:view' 能力闸
 // + shouldAudit 默认留痕（search* 非 ^get·自动记「查了谁的会话」）——闸均在分发处收口，
 // 本 action 只取参→分页→回结果、不自己碰审计/能力。
 //
@@ -18,7 +18,7 @@ const DEFAULT_LIMIT = 30
 
 export async function searchConversations({ db, data }: Ctx) {
   const d = data || {}
-  // 客户范围（可选）：优先 openid（kfBind 绑定后稳定），否则 externalUserId；渠道可叠加（wxkf/未来承面C）。
+  // 客户范围（可选）：优先 openid（kfBind 绑定后稳定），否则 externalUserId；渠道可叠加（wxkf 等）。
   const openid = String(d.openid || '').trim()
   const externalUserId = String(d.externalUserId || '').trim()
   const channel = String(d.channel || '').trim()
@@ -49,11 +49,11 @@ export async function searchConversations({ db, data }: Ctx) {
   })
 }
 
-// ── 质检 + 报表 + SLA（B5.3·板块#11·依赖归档·车道 E）──
+// ── 质检 + 报表 + SLA（依赖归档）──
 // 近 REPORT_SAMPLE 条会话的运营度量：会话量 / 首次响应时长 / SLA 达标 / 答复率。聚合属运营统计（无逐人 PII·同
-// dashboard 不另设 cap 闸）。bounded 样本读（根因#7/#18·超量标 approx·同 dashboard）。
+// dashboard 不另设 cap 闸）。bounded 样本读（根因#7·超量标 approx·同 dashboard）。
 // 配对口径：按客户（externalUserId 优先·稳定·无则 openid）把消息按 at 升序，每条入站找其后首个出站算「首次响应」。
-// 诚实标注（根因#8）：当前出站含机器人自动应答（近实时）→首响多近 0；人工接待时长待承面C 人工回复落档后才显著。
+// 诚实标注（根因#8）：当前出站含机器人自动应答（近实时）→首响多近 0；人工接待时长待人工回复落档后才显著。
 const REPORT_SAMPLE = 1000
 const DEFAULT_SLA_MS = 5 * 60_000 // 首次响应 SLA 默认 5 分钟（前端可传 slaMs 覆盖）
 
@@ -120,19 +120,19 @@ export async function conversationsReport({ db, data }: Ctx) {
     ok: true,
     sampleSize: rows.length,
     approx: rows.length >= REPORT_SAMPLE, // 触顶＝近似（只算样本·同 dashboard）
-    slaMs, // 本次实际生效阈值（前端未传 slaMs 时＝DEFAULT_SLA_MS·权威口径回传，前端据此初始化输入框，不各自硬编默认值·P2 顺手改批）
+    slaMs, // 本次实际生效阈值（前端未传 slaMs 时＝DEFAULT_SLA_MS·权威口径回传，前端据此初始化输入框，不各自硬编默认值）
     volume: { messages: rows.length, inbound, outbound, customers: byCustomer.size },
-    // 答复率＝有出站回复的入站占比（解决率近似·MVP·承面C 人工接入后更准）
+    // 答复率＝有出站回复的入站占比（解决率近似·人工接入后更准）
     response: { avgResponseMs, maxResponseMs, answered, unanswered, answeredRate: inbound ? pct(answered / inbound) : 0 },
     // SLA：首次响应超 slaMs 的占比（已答复中）+ 未答复数（也算违约信号）
     sla: { slaMs, breaches, breachRate: answered ? pct(breaches / answered) : 0, unanswered },
   })
 }
 
-// ── 质检抽检（B7·板块#11 续）──
+// ── 质检抽检 ──
 // 粒度＝客户会话档级（csSession 文档，非「轮次」——csSession 跨轮复用重开、消息无 sessionId，轮次实体不存在）。
 // sessionKey＝csSession._id（形如 `wxkf:<openKfId>:<externalUserId>`——**不是**
-// externalUserId：csat.ts 的明细行已改名为 externalUserId 字段、不再借用 sessionKey 之名，这里前端跳「查会话」
+// externalUserId：csat.ts 的明细行用 externalUserId 字段，这里前端跳「查会话」
 // 时仍须解出 externalUserId 传给 searchConversations，别把 csSession._id 当 externalUserId 传错接口）。
 // 鉴权：均走 adminApi 现行机制——本文件三个 action 都不登记 ACTION_CAPS（见 index.ts），默认高权
 // ADMIN_DEFAULT_CAP='admin:write'，坐席（cap 仅 agent:handle）一律 403 不可达；审计走 shouldAudit 现行装置
@@ -182,7 +182,7 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
     .get() // 读失败上抛（网关 500）——不当「候选池已抽完」（根因#14）
   const rows: any[] = (res && res.data) || []
   // qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次「找人工」时
-  // cs/kfCallback/dispatch.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt（批 B7 修复），
+  // cs/kfCallback/dispatch.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt，
   // 故这里按 !qc && !qcSampledAt 过滤即可筛出未评过的候选，不会漏收重开后的新一轮会话。
   const candidates = rows.filter((s: any) => !s.qc && !s.qcSampledAt)
   // Fisher-Yates 部分洗牌（池已有界·简单实现足够）
@@ -226,20 +226,20 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
 export async function saveQcMark({ db, data, agentId }: Ctx): Promise<any> {
   const d = data || {}
   const sessionKey = String(d.sessionKey || '').trim()
-  if (!sessionKey) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!sessionKey) return reply(400, err('BAD_ARGS'))
   const score = Number(d.score)
-  if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, { ok: false, error: 'BAD_ARGS:SCORE_RANGE' })
+  if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, err('BAD_ARGS:SCORE_RANGE'))
   const note = str(d.note, QC_NOTE_MAX).trim()
   const got = await db.collection(COLLECTIONS.csSession).doc(sessionKey).get().catch(() => null)
   const s = got && got.data ? got.data : null
-  if (!s) return reply(404, { ok: false, error: 'NOT_FOUND' })
+  if (!s) return reply(404, err('NOT_FOUND'))
   const now = Date.now()
   const _ = db.command
   const r = await db
     .collection(COLLECTIONS.csSession)
     .where({ _id: sessionKey, qc: _.exists(false) })
     .update({ data: { qc: { score, note, by: String(agentId || 'admin'), at: now } } })
-  if (!r || !r.stats || r.stats.updated !== 1) return reply(409, { ok: false, error: 'ALREADY_MARKED' })
+  if (!r || !r.stats || r.stats.updated !== 1) return reply(409, err('ALREADY_MARKED'))
   return reply(200, { ok: true })
 }
 
@@ -333,12 +333,12 @@ async function collectRefreshTargets(db: any, d: Record<string, any>): Promise<R
  */
 export async function refreshTrialSession({ db, data, agentId }: Ctx): Promise<any> {
   const gate = await loadTrialRefreshGate(db)
-  if (!gate.on) return reply(trialRefreshDenyStatus(), { ok: false, error: 'TRIAL_ONLY' })
+  if (!gate.on) return reply(trialRefreshDenyStatus(), err('TRIAL_ONLY'))
   const d = data || {}
   const reason = String(d.reason || '').trim()
-  if (!reason) return reply(400, { ok: false, error: 'REASON_REQUIRED' })
+  if (!reason) return reply(400, err('REASON_REQUIRED'))
   const targets = await collectRefreshTargets(db, d)
-  if (!targets.length) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!targets.length) return reply(400, err('BAD_ARGS'))
   const force = !!d.force
   const results = []
   for (const t of targets) {

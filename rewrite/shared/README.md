@@ -13,6 +13,7 @@
 - `errors.ts` 错误码权威登记册（前端分支契约·只追加不改名）· `limits.ts` 交易输入边界常量 · `checkout.ts` 结算/优惠/运费常量单源
 - `moduleMap.ts` app action→业务模块映射（仓根 `modules.json` 的运行时镜像·`rewrite/cloud/tests/module-map.test.ts` 锁同步）
 - `observability.ts` 运行期可观测契约 · `index.ts` 桶导出
+- `cst.ts` 北京时间换算（订单号/批次号/心跳日 id/对账日桶·cloud 与 admin 共用）
 - `seed/course.ts` 课程种子单一来源（cloud `ops/seedCourses` 从这派生 `SEED_COURSES`·样例数据只改这一处）
 
 ## 红线

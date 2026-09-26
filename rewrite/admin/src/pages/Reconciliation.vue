@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 财务对账（design/console.pen S16 视觉·M3 UI 批8）：内部对账（应收/退款/净额·全量精确 + 按日表·真值）
+// 财务对账（design/console.pen S16 视觉）：内部对账（应收/退款/净额·全量精确 + 按日表·真值）
 // + 外部微信官方账单逐笔勾对（四类差异·「微信有我方无」最危险标红——真对账口）+ 导出 CSV（客户端真生成）。
 // 诚实边界：设计稿「微信手续费≈0.6% / 微信实际到账」为估算/结算数据，后端 getReconciliation 无——不伪造，
 // 只渲染应收−退款=净额真等式；默认近 30 天窗，from/to 可自定义；导出 CSV。
@@ -10,6 +10,7 @@ import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/m
 import { orderErrorText } from '../lib/mapMoney'
 import { useLatest } from '../lib/latest'
 import { saveBlob } from '../lib/saveBlob'
+import { dayKeyCST, dayStartMsCST } from '@ldrw/shared'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -25,7 +26,7 @@ const busy = ref(false)
 const from = ref('') // 自定义对账区间起（空=默认近 30 天窗）
 const to = ref('')
 
-// 窗内合计（所选区间真值·后端 summary 就绪·换皮误用 cumulative 全时值致口径错乱：窗内订单数与全时钱额混排、tfoot 穿帮）
+// 窗内合计（所选区间真值·别用 cumulative 全时值：窗内订单数与全时钱额混排会口径错乱、tfoot 穿帮）
 const totals = computed(() => (recon.value ? recon.value.summary : null))
 // 全账累计（money 锚·恒可信·横幅+顶部小条用）
 const cum = computed(() => {
@@ -33,11 +34,11 @@ const cum = computed(() => {
   const find = (kw: string) => recon.value!.cumulative.find((c) => c.label.includes(kw))?.value || '¥0.00'
   return { income: find('收入'), refund: find('退款'), net: find('净额') }
 })
-// 内部异常总笔数（B2 修后·换皮误当数组恒 0·明细块永不渲染）
+// 内部异常总笔数（各明细块单号数之和）
 const exCount = computed(() => (recon.value ? recon.value.exceptions.reduce((n, e) => n + e.ids.length, 0) : 0))
 
-const listGen = useLatest() // 对账乱序守卫（P2·快改区间时旧结果别覆盖新区间·根因#8）
-// 返回本次刷新是否成功（P2·bug 顺手改批遗漏本处·同 Batches/Kb/HelpVideos 判例）：pullBill/pullRange 据此判断
+const listGen = useLatest() // 对账乱序守卫（快改区间时旧结果别覆盖新区间·根因#8）
+// 返回本次刷新是否成功（同 Batches/Kb/HelpVideos）：pullBill/pullRange 据此判断
 // reload 自身有没有失败，别让 reload 写的失败文案被后续「成功」文案无条件覆盖（病根#14 失败必可观测）。
 // 乱序命中（listGen.isStale）时早退不改 message，调用方按「未确认成功」处理，回 false 保守。
 async function reload(): Promise<boolean> {
@@ -48,7 +49,7 @@ async function reload(): Promise<boolean> {
   if ((r as any).error === 'SESSION_LOST' || (m as any).error === 'SESSION_LOST') return false
   recon.value = mapRecon(r)
   match.value = mapBillMatch(m)
-  // 分路报错（P1·bug 清除战役 II C2）：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
+  // 分路报错：单路失败别被另一路成功吞掉——mapRecon/mapBillMatch 只在 ok!==true
   // 或响应体缺 cumulative/summary 容器时才回 null（合法空数据容器仍在、只是内部数组/数值为空，不会误判成失败）。
   const bad: string[] = []
   if (!recon.value) bad.push('内部对账加载失败：' + orderErrorText((r as any).error))
@@ -81,7 +82,7 @@ async function pullBill() {
   const r = await downloadBill(billDate.value)
   const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）；busy 贯穿拉取+刷新防连点
   busy.value = false
-  // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（P2·病根#14 顺手改批遗漏本处）
+  // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（病根#14）
   if (!r.ok) message.value = '拉取失败：' + orderErrorText(r.error)
   else if (!reloadOk) message.value = '账单已拉取入库，但对账刷新失败：' + message.value
   else message.value = '账单已拉取入库，勾对已刷新'
@@ -89,22 +90,20 @@ async function pullBill() {
 
 // CST 起止（含端）逐日列表（cap 62 天·防误填超长区间刷爆）
 function daysBetween(a: string, b: string): string[] {
-  const CST = 8 * 3600_000
-  const s = Date.parse(a + 'T00:00:00+08:00')
-  const e = Date.parse(b + 'T00:00:00+08:00')
+  const s = dayStartMsCST(a)
+  const e = dayStartMsCST(b)
   const out: string[] = []
   if (!Number.isFinite(s) || !Number.isFinite(e) || s > e) return out
-  for (let t = s; t <= e && out.length < 62; t += 86400_000) out.push(new Date(t + CST).toISOString().slice(0, 10))
+  for (let t = s; t <= e && out.length < 62; t += 86400_000) out.push(dayKeyCST(t))
   return out
 }
 
-// 区间批量拉账单（换皮退成一次一天·核对一个月要手填 30 次）：按对账区间逐日 downloadBill 后刷新勾对。
+// 区间批量拉账单（一次一天的话核对一个月要手填 30 次）：按对账区间逐日 downloadBill 后刷新勾对。
 // 区间空则默认近 30 天窗（与后端默认对齐）。
 async function pullRange() {
   if (busy.value) return
-  const CST = 8 * 3600_000
-  const today = new Date(Date.now() + CST).toISOString().slice(0, 10)
-  const f = /^\d{4}-\d{2}-\d{2}$/.test(from.value) ? from.value : new Date(Date.now() - 29 * 86400_000 + CST).toISOString().slice(0, 10)
+  const today = dayKeyCST(Date.now())
+  const f = /^\d{4}-\d{2}-\d{2}$/.test(from.value) ? from.value : dayKeyCST(Date.now() - 29 * 86400_000)
   const t = /^\d{4}-\d{2}-\d{2}$/.test(to.value) ? to.value : today
   const days = daysBetween(f, t)
   if (!days.length) {
@@ -120,7 +119,7 @@ async function pullRange() {
   }
   const reloadOk = await reload() // 先刷新对账；busy 贯穿拉取+刷新防连点
   busy.value = false
-  // reload 失败别被无条件覆盖——保留其错误原文拼在区间拉取结果后（P2·病根#14 顺手改批遗漏本处）
+  // reload 失败别被无条件覆盖——保留其错误原文拼在区间拉取结果后（病根#14）
   message.value = reloadOk
     ? `区间账单已拉取 ${ok}/${days.length} 天，勾对已刷新`
     : `区间账单已拉取 ${ok}/${days.length} 天，但对账刷新失败：` + message.value

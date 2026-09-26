@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// 数据看板（照 design/控制台.pen PxuIO 视觉语言重写·M-adminImpl 批1）：套新卡片/KPI/表格语言，
-// 数据仍全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8·T3），
-// 保留真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警（换皮曾删·复原不再丢）。
+// 数据看板（design/控制台.pen PxuIO 视觉语言）：卡片/KPI/表格语言，
+// 数据全绑云端真值。设计的「成交额趋势柱图 / 热销商品 Top5」当前后端无数据源——不编数（根因#8），
+// 只放真实的 KPI/转化漏斗/段位分析/最近动态 + owner 待处理行动条 + 交易异常告警。
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Users, ShoppingBag, Wallet, QrCode, GraduationCap, RefreshCw, TriangleAlert, Truck, RotateCcw, Boxes, Flame, PauseCircle, PackagePlus, Inbox, ShieldAlert } from 'lucide-vue-next'
-import { getDashboard, orderCounts, refundCounts } from '../api/money'
+import { getDashboard, refundCounts } from '../api/money'
 import { listInventory } from '../api/system'
 import { listDrafts } from '../api/products'
 import { getInspectStatus } from '../api/ops'
@@ -13,6 +13,7 @@ import { mapDashboard, deriveDashboardTodos } from '../lib/mapMoney'
 import { mapDraftRows } from '../lib/mapProducts'
 import { LOW_STOCK_THRESHOLD } from '../lib/thresholds'
 import { dateTime } from '../lib/format'
+import { failText } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -24,7 +25,7 @@ const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
 const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
 const todoPartial = ref(false) // 待处理计数有副请求加载失败＝true（病根#14：别把「没加载到」显示成「无待办」）
-// 异常账本未处理数（UX 体检批2·病根#14 信息架构层）：与 /anomalies 页同账本（服务端 count·
+// 异常账本未处理数（病根#14 信息架构层）：与 /anomalies 页同账本（服务端 count·
 // getInspectStatus 纯只读），让账本高危信号进看板人眼；「钱链告警」是另一套定向口径（getTxAlerts
 // 三类），两格并存各自为真
 const openAnomalies = ref(0)
@@ -32,7 +33,7 @@ const message = ref('加载中…')
 const busy = ref(false)
 
 const alertCount = computed(() => (vm.value?.alerts || []).reduce((n, a) => n + a.ids.length, 0))
-// 钱链告警按类型定位（P2 修复·根因：getTxAlerts 三类 id 形状不同——feeMismatch 是订单 _id（Orders 页
+// 钱链告警按类型定位（getTxAlerts 三类 id 形状不同——feeMismatch 是订单 _id（Orders 页
 // 搜索精确匹配 _id 能找到），refundMismatch/stuckRefunds 是 afterSales 复合 _id（`orderId__lineId[__ovrN]`，
 // Orders/Refunds 两页搜索都搜不到这种复合 id）。金额不符单唯一对应 Orders 页；其余两类只能去 Refunds 页
 // （虽然 Refunds 搜索也不认复合 id，但至少落在能看到售后记录的正确页面——不去 /orders 那种连页面都错的死路）。
@@ -53,7 +54,8 @@ const TODOS = computed(() => [
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
   { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' },
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
-  { key: 'money', label: '钱链告警', n: alertCount.value, to: alertsHaveRefundType.value ? '/refunds' : '/orders', icon: TriangleAlert, tone: 'red' },
+  // 告警没读全时格子显示「?」：列出 0 条不等于没有告警
+  { key: 'money', label: '钱链告警', n: alertCount.value, unknown: !!vm.value?.alertsPartial, to: alertsHaveRefundType.value ? '/refunds' : '/orders', icon: TriangleAlert, tone: 'red' },
   { key: 'anomaly', label: '异常未处理', n: openAnomalies.value, to: '/anomalies', icon: ShieldAlert, tone: 'red' },
 ])
 const todoTotal = computed(() => TODOS.value.reduce((s, t) => s + t.n, 0))
@@ -76,15 +78,15 @@ const funnelMax = computed(() => Math.max(1, ...(vm.value?.funnel || []).map((f)
 
 async function load() {
   busy.value = true
-  // 行动条计数复用服务端精确口径（orderCounts/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败（client 不抛·回 ok:false）不拖累看板
-  const [d, oc, rc, inv, dr, ins] = await Promise.all([getDashboard(), orderCounts(), refundCounts(), listInventory(), listDrafts(), getInspectStatus()])
+  // 行动条计数复用服务端精确口径（getDashboard.toShip/refundCounts·根因#7）+ 库存按 SKU 实算；任一失败（client 不抛·回 ok:false）不拖累看板
+  const [d, rc, inv, dr, ins] = await Promise.all([getDashboard(), refundCounts(), listInventory(), listDrafts(), getInspectStatus()])
   busy.value = false
   if (d.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   vm.value = mapDashboard(d)
   // 上新未完成＝筹备中（未上架）商品数（复用 productState 三态口径）；失败副请求由 deriveDashboardTodos
-  // 以 .ok 识别、回传 partial——不再兜成 0 把「没加载到」伪装成「无待办」（病根#14）
+  // 以 .ok 识别、回传 partial——不兜成 0 把「没加载到」伪装成「无待办」（病根#14）
   const t = deriveDashboardTodos({
-    orderCounts: oc,
+    dashboard: d,
     refundCounts: rc,
     inventory: inv,
     drafts: { ok: dr.ok, rows: dr.ok ? mapDraftRows(dr.list, dr.urls, dr.listed) : [] },
@@ -94,7 +96,7 @@ async function load() {
   // 异常计数失败并入 partial 信号（同病根#14 口径：不把「没加载到」伪装成 0）
   todoPartial.value = t.partial || !ins.ok
   openAnomalies.value = ins.ok ? Number(ins.openAnomalies) || 0 : 0
-  message.value = vm.value ? '' : '看板加载失败：' + String(d.error || '')
+  message.value = vm.value ? '' : failText('看板加载失败', d.error)
 }
 
 onMounted(load)
@@ -126,16 +128,17 @@ onMounted(load)
       <!-- 待处理行动条（owner 行动入口·真值）：数字直接点进对应页 -->
       <Card v-if="todoTotal" title="待处理" :sub="`共 ${todoTotal} 项`">
         <div class="todos">
-          <button v-for="t in TODOS" :key="t.key" class="todo" :class="[t.tone, { zero: !t.n }]" @click="router.push(t.to)">
+          <button v-for="t in TODOS" :key="t.key" class="todo" :class="[t.tone, { zero: !t.n && !t.unknown }]" @click="router.push(t.to)">
             <component :is="t.icon" :size="18" :stroke-width="1.8" class="todo-ico" />
-            <div class="todo-txt"><span class="todo-n">{{ t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
+            <div class="todo-txt"><span class="todo-n">{{ t.unknown ? '?' : t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
           </button>
         </div>
       </Card>
-      <p v-else-if="!todoPartial" class="ok-line">今日无待处理事项 ✓</p>
+      <p v-else-if="!todoPartial && !vm.alertsPartial" class="ok-line">今日无待处理事项 ✓</p>
       <!-- 副请求加载失败：不显绿色全清（病根#14 别把「没加载到」当「无待办」→ 漏发货）·提示刷新 -->
       <p v-if="todoPartial" class="ld-status">部分待处理计数没能加载，显示的数字可能不全，请刷新看真实待办</p>
 
+      <p v-if="vm.alertsPartial" class="ld-status">钱链告警没读全：部分异常没查到，告警可能不全，请刷新</p>
       <!-- 交易异常告警（有则必显）：每类各带自己的「去处理」——三类 id 形状不同，落点不能共用一个按钮 -->
       <div v-if="vm.alerts.length" class="alert">
         <div class="alert-ico"><TriangleAlert :size="20" :stroke-width="1.8" /></div>

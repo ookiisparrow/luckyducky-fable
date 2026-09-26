@@ -8,6 +8,7 @@ import { getHomeContent, saveHomeContent } from '../../api/content'
 import { uploadImage } from '../../api/products'
 import { normalizeHome, homePayload } from '../../lib/mapContent'
 import { b64SizeOk } from '../../lib/mapProducts'
+import { launchErrorText } from '../../lib/mapSystem'
 import { compressImage } from '../../lib/compressImage'
 import { usePageContent } from '../../lib/usePageContent'
 import UiButton from '../ui/Button.vue'
@@ -44,7 +45,7 @@ async function uploadTo(assign: (_fileID: string) => void, ev: Event) {
     assign(fid)
     if (fid) sessionUrls.value[fid] = String(r.url || '') // 缩略预览（本会话）
     message.value = ''
-  } else message.value = '图片上传失败：' + String(r.error || '')
+  } else message.value = launchErrorText(r.error)
 }
 
 function addCourseRow() {
@@ -394,7 +395,7 @@ input[type='file'] {
 }
 .course-row {
   display: grid;
-  /* minmax(0,1fr)（批6·治整页横向溢出）：裸 1fr=minmax(auto,1fr)，轨道被内容最小宽撑住不肯缩，
+  /* minmax(0,1fr)（治整页横向溢出）：裸 1fr=minmax(auto,1fr)，轨道被内容最小宽撑住不肯缩，
      配右栏固定 375px 预览把整页顶出横向滚动条（实测 1353>1249）；min 归零允许轨道随容器收缩 */
   grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 8px;

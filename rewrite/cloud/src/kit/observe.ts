@@ -4,7 +4,7 @@ import { pushBotAlert, type BotAlert } from './botpush'
 import { COLLECTIONS, type AnomalyKind } from '@ldrw/shared'
 
 /**
- * 可观测性告警标记（设计约束「钱链静默失败必须主动可告警」）。
+ * 可观测性告警标记（钱链静默失败必须主动可告警·根因#14）。
  * 平台指标看不见语义级失败（回调 ACK 200 但金额不符/收钱无单/伪造回调/爆破锁定）——
  * 统一 [LD_ALERT] 结构化单行日志，控制台按关键字配日志告警。
  * 企微机器人推送经 notifyAlert 内部 botpush 单点，签名不变。
@@ -46,7 +46,7 @@ const SEV_TO_KIND: Record<AlertSev, AnomalyKind> = {
 }
 
 /**
- * 告警 + 企微推送（推送接缝随观测批接上·签名不变·现落 [LD_ALERT] 行）+ **桥接落 bug 账本**（批4·病根14 持久化延伸）：
+ * 告警 + 企微推送（落 [LD_ALERT] 行 + 经 botpush 推送）+ **桥接落 bug 账本**（病根14 持久化延伸）：
  * 所有动作失败告警自动进 anomalies 账本·控制台可查·指纹去重不刷屏。alertOnHigh:false——本函数已 alert 过、
  * recordAnomaly 不再重复推告警（防递归 + 防双日志）。fail-soft：落账失败绝不反噬告警本身。
  */
@@ -78,7 +78,7 @@ export async function notifyRecall(summary: Record<string, number>): Promise<voi
 }
 
 /**
- * A5 巡检机每日心跳（观测批②「全绿也报平安」·终结「告警的告警」递归）：证明巡检机活着——「该来的消息没来」
+ * 巡检机每日心跳（「全绿也报平安」·终结「告警的告警」递归）：证明巡检机活着——「该来的消息没来」
  * 本身可被发现。经同一 botpush 唯一接缝（sev='heartbeat'·`[LD_HEARTBEAT]` 前缀）复用 alertWebhook（人工配置
  * 清单不新增条目）。语义＝「巡检机存活」非「系统正常」：red>0 照发心跳，但消息只报 green/red 计数、不写「正常」；
  * 红项另有 notifyAlert 告警通道。心跳非异常——**不接 recordAnomaly**（不污染 anomalies 账本）。去重由调用方

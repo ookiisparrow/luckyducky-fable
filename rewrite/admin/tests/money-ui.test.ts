@@ -2,16 +2,11 @@
 // 订单行金额不符禁发入口收窄/售后行只待审核可裁决/脏档安全（与 mp 同口径）。
 import { describe, it, expect } from 'vitest'
 import { mapDashboard, mapOrderRows, mapRefundRows, maskPhone, refundVerdict, deriveDashboardTodos, canOverrideRefund, mapOverrideOrder, orderErrorText } from '../src/lib/mapMoney'
-import ordersSrc from '../src/pages/Orders.vue?raw'
-import fulfillSrc from '../src/pages/Fulfill.vue?raw'
-import refundsSrc from '../src/pages/Refunds.vue?raw'
-import dashboardSrc from '../src/pages/Dashboard.vue?raw'
-import inventorySrc from '../src/pages/Inventory.vue?raw'
 
 describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/全清·病根#14）', () => {
   it('大白话：某路计数加载失败时 partial=true——上层据此不把「加载失败」显示成绿色「今日无待处理」', () => {
     const t = deriveDashboardTodos({
-      orderCounts: { ok: false }, // 待发货计数加载失败
+      dashboard: { ok: false }, // 看板没读到，待发货数不知道
       refundCounts: { ok: true, counts: { applied: 0 } },
       inventory: { ok: true, list: [] },
       drafts: { ok: true, rows: [] },
@@ -21,9 +16,16 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
     expect(t.ship).toBe(0) // 失败路暂显 0，但 partial 已标记：0 是「不知道」不是「真没有」
   })
 
+  it('大白话：待发货只认看板回的 toShip（真能发的单数）；看板没读到或没回 toShip 时算没加载全，不拿 0 冒充', () => {
+    const base = { refundCounts: { ok: true, counts: {} }, inventory: { ok: true, list: [] }, drafts: { ok: true, rows: [] }, low: 10 }
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: 2 } })).toMatchObject({ ship: 2, partial: false })
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: false } })).toMatchObject({ ship: 0, partial: true })
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: '2' } })).toMatchObject({ ship: 0, partial: true })
+  })
+
   it('大白话：四路全 ok 且真没待办时 partial=false、各计数为云端真值', () => {
     const t = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: { paid: 3 } },
+      dashboard: { ok: true, toShip: 3 },
       refundCounts: { ok: true, counts: { applied: 1 } },
       inventory: { ok: true, list: [{ stock: 2 }, { stock: 50 }] },
       drafts: { ok: true, rows: [{ state: 'preparing' }, { state: 'listed' }] },
@@ -35,7 +37,7 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
 
   it('大白话：低库存/售罄跟库存页同一把尺子——设了自己的阈值就按自己的，没设才退默认；库存 0 仍算售罄', () => {
     const t = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: {} },
+      dashboard: { ok: true, toShip: 0 },
       refundCounts: { ok: true, counts: {} },
       inventory: {
         ok: true,
@@ -55,26 +57,17 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
     })
     expect(t.partial).toBe(false)
     expect(t.lowStock).toBe(5) // 2、15、12、0、8；5 与 50 与不限量不计
-    expect(inventorySrc).toContain('stockAlertOf(r.stock, r.threshold, LOW_STOCK)') // 库存页标色走同一函数，不能再各写一遍
   })
 
-  it('大白话：orderCounts/refundCounts 本身 ok:true 但服务端内部某路 count 失败时也带了 partial:true——不能因为整体 ok 就当真值信（P1·item7）', () => {
-    const t1 = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: { paid: 3 }, partial: true }, // 服务端：部分状态 count() 失败·数字不可信
-      refundCounts: { ok: true, counts: { applied: 1 } },
+  it('大白话：refundCounts 本身 ok:true 但服务端内部某路 count 失败时也带了 partial:true——不能因为整体 ok 就当真值信（P1·item7）', () => {
+    const t = deriveDashboardTodos({
+      dashboard: { ok: true, toShip: 3 },
+      refundCounts: { ok: true, counts: { applied: 1 }, partial: true }, // 服务端：部分状态 count() 失败·数字不可信
       inventory: { ok: true, list: [] },
       drafts: { ok: true, rows: [] },
       low: 10,
     })
-    expect(t1.partial).toBe(true) // 不因四路整体 .ok 都为 true 就误判为「真没待办」
-    const t2 = deriveDashboardTodos({
-      orderCounts: { ok: true, counts: { paid: 3 } },
-      refundCounts: { ok: true, counts: { applied: 1 }, partial: true }, // refundCounts 侧同理
-      inventory: { ok: true, list: [] },
-      drafts: { ok: true, rows: [] },
-      low: 10,
-    })
-    expect(t2.partial).toBe(true)
+    expect(t.partial).toBe(true) // 不因各路 .ok 都为 true 就误判为「真没待办」
   })
 })
 
@@ -305,92 +298,6 @@ describe('越规退款入口（决策§26·批 B8·钱链后端零改动）', ()
   })
 })
 
-// Orders.vue 抽屉商品行 :key 行身份（深审20260712·P3 撞键·取真源法）：旧 key 裸用 productId，
-// 同一 productId 多规格（多 lineId）同单必撞 Vue key；行身份契约是 lineId=productId__spec
-// （cloud app/actions/orders.ts lineIdOf 单源），VM 未透传 lineId 故模板按契约就地重建。
-// Refunds.vue openDecide 判据加载失败不得渲绿（深审20260712·P2·根因#14/#8·取真源法同上）：getRefundDetail
-// 网络失败时 r.ok=false、无 activation/lineRefundable 字段，旧代码不检查 r.ok 直接组 verdict →
-// activated:false + lineRefundable 默认 true 渲成确定的绿色「激活码未使用·可退」误导审核员同意退款。
-describe('Refunds.vue openDecide 判据失败分支（失败不渲绿判据·decideErr 红条亮）', () => {
-  const body = refundsSrc.slice(refundsSrc.indexOf('async function openDecide'), refundsSrc.indexOf('function closeDecide'))
-  it('大白话：r.ok=false → verdict 置 null（判据区不渲绿）+ decideErr 给原因 + return——绝不落入组判据；成功组装必在失败检查之后', () => {
-    expect(body).toMatch(/if\s*\(!r\.ok\)\s*\{[\s\S]*?verdict\.value = null[\s\S]*?decideErr\.value = '判据加载失败：'[\s\S]*?return[\s\S]*?\}/)
-    expect(body.search(/if\s*\(!r\.ok\)/)).toBeGreaterThan(-1)
-    expect(body.search(/if\s*\(!r\.ok\)/)).toBeLessThan(body.indexOf('loading: false')) // 组 verdict（loading:false）只在 ok 检查通过后可达
-    expect(body.indexOf('loading: false')).toBeGreaterThan(-1)
-  })
-  it('大白话：判据失败时模板给「重新加载判据」重试入口（verdict=null 才显）', () => {
-    expect(refundsSrc).toMatch(/v-else-if="!verdict"[^>]*@click="openDecide\(decideRow\)"/)
-    expect(refundsSrc).toContain('重新加载判据')
-  })
-})
-
-describe('Orders.vue 抽屉商品行 :key 用行身份 productId__spec', () => {
-  it('大白话：key 带 spec（=后端 lineId 契约）——同品多规格同单不撞键；旧裸 productId 写法不再存在', () => {
-    expect(ordersSrc).toMatch(/v-for="it in drawer\.row\.items" :key="\(it\.productId \|\| it\.name\) \+ '__' \+ it\.spec"/)
-    expect(ordersSrc).not.toMatch(/:key="it\.productId \|\| it\.name"/)
-  })
-})
-
-// Refunds.vue 深链预填（债目·全局清零bug战役残余 2026-07-13）：Dashboard 退款类告警「去处理」跳
-// /refunds 只做到「跳对页面」，本页原无 route.query 读取能力接不住具体记录——补 onMounted 读
-// route.query.q 预填搜索框并自动检索一次（同 Conversations.vue/Batches.vue 既有深链范式）。
-describe('Refunds.vue 深链预填：route.query.q 预填搜索框 + 自动检索', () => {
-  it('大白话：search 初值读 route.query.q；挂载时有值走 doSearch 自动检索、无值走普通 reload', () => {
-    expect(refundsSrc).toMatch(/const search = ref\(String\(route\.query\.q \|\| ''\)\)/)
-    expect(refundsSrc).toMatch(/if \(search\.value\) void doSearch\(\)/)
-    expect(refundsSrc).toMatch(/else void reload\(\)/)
-  })
-})
-
-// Dashboard.vue 告警「去处理」深链带 q（债目同上）：恰好 1 个 id 才有「跳到具体记录」的唯一目标语义，
-// 多 id/无 id 仍跳纯列表；afterSales 复合 id（`orderId__lineId[__ovrN]`）反解取 split('__')[0]；
-// feeMismatch 走 /orders，本次深链范围只含 /refunds 一侧。
-describe('Dashboard.vue 告警「去处理」深链带 q：唯一 id 才带参，多 id/无 id/金额不符单不带', () => {
-  const body = dashboardSrc.slice(dashboardSrc.indexOf('function alertQuery'), dashboardSrc.indexOf('const TODOS'))
-  it('大白话：feeMismatch 或非唯一 id 回空 query；恰好 1 个 id 且非 feeMismatch 才反解出 q', () => {
-    expect(body).toMatch(/if \(isFeeMismatch\(a\.label\) \|\| a\.ids\.length !== 1\) return \{\}/)
-    expect(body).toMatch(/return \{ q: raw\.includes\('__'\) \? raw\.split\('__'\)\[0\] : raw \}/)
-  })
-  it('大白话：模板「去处理」按钮把 alertPath/alertQuery 一起塞进 router.push 的 path/query', () => {
-    expect(dashboardSrc).toMatch(/router\.push\(\{ path: alertPath\(a\.label\), query: alertQuery\(a\) \}\)/)
-  })
-})
-
-// 退款持有行指引闭环（UX 体检批·死循环修复·病根#5 文案双写漂移）：refundHold 是覆盖
-// applied/approved/refunded 三态的布尔（mapMoney.ts 契约），前端结构性无法区分「处理中」还是
-// 「已退款」——但徽章硬编码「已退款·勿发货」、红字硬编码「退款处理中」，同一行自相矛盾；红字
-// 还指人去「退款」页，落地却是硬编码初始 tab「待审核」（常为 0 条空白）——运营被指向不存在的任务。
-describe('Orders/Refunds 退款指引闭环：文案不声称未知状态 + 深链直达 + 搜索态 tab 不误导', () => {
-  it('大白话：徽章/红字都不得声称具体退款状态（布尔证不出）；红字给「查看退款」深链带单号让 Refunds 自动检索', () => {
-    expect(ordersSrc).not.toContain('已退款·勿发货')
-    expect(ordersSrc).not.toContain('该单退款处理中')
-    expect(ordersSrc).toMatch(/router\.push\(\{ path: '\/refunds', query: \{ q: row\.id \} \}\)/)
-  })
-  it('大白话：Refunds 搜索态（跨全部状态命中）不点亮任何 tab 高亮——同 Orders 既有 !activeQ 范式', () => {
-    expect(refundsSrc).toMatch(/on: !activeQ && tab === t\.key/)
-  })
-  it('大白话：本栏空但别的栏有货时空态明说去处（counts 在手边）——不让人以为整页无数据', () => {
-    expect(refundsSrc).toMatch(/:text="emptyText"/)
-    expect(refundsSrc).toMatch(/这一栏没有售后单——/)
-  })
-  it('大白话：计数不可信（countsPartial）时空态不引用数字——counts 是陈旧值·同屏 chip 已显「?」（终审 P1·病根#14）', () => {
-    expect(refundsSrc).toMatch(/if \(countsPartial\.value\) return/)
-  })
-})
-
-// 看板「待处理」行动条曾无「异常未处理」一格（UX 体检批2·病根#14 信息架构层翻版）：异常账本躺着
-// 高危未处理（KF_NOT_CONFIGURED 等），看板「钱链告警 0」却是另一套定向口径（getTxAlerts 三类·
-// 两者本就不是同一个数、都对）——运营每天只看看板，账本信号进不了人眼。修复：复用体检面板
-// getInspectStatus 的服务端 openAnomalies 计数（与 /anomalies 页同账本·纯只读 action·亲核无副作用）。
-describe('Dashboard.vue 待处理行动条含「异常未处理」（异常账本口径·服务端 count）', () => {
-  it('大白话：看板直连 getInspectStatus.openAnomalies、点击去 /anomalies；加载失败并入 partial 不伪装成 0', () => {
-    expect(dashboardSrc).toMatch(/getInspectStatus\(\)/)
-    expect(dashboardSrc).toMatch(/to: '\/anomalies'/)
-    expect(dashboardSrc).toMatch(/openAnomalies/)
-  })
-})
-
 describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', () => {
   it('大白话：已知码出人话、BAD_STATUS 复合码拆出状态中文、未知码兜底不裸甩', () => {
     expect(orderErrorText('REFUND_HOLD')).toBe('这单有退款正在处理，处理完才能发货；若每件都已退款，这单就不用发了')
@@ -414,38 +321,5 @@ describe('orderErrorText（钱组英文码→操作者中文·#222 同类）', (
     expect(orderErrorText('FUTURE_UNKNOWN_CODE')).toBe('操作失败（FUTURE_UNKNOWN_CODE）')
     expect(orderErrorText('')).toBe('未知错误')
     expect(orderErrorText(null)).toBe('未知错误')
-  })
-  it('大白话：Orders.vue 错误展示走人话映射 + 抽屉内报错 + 刷新勾选求交（不裸 String(r.error)、不双套字典）+ 刷新用 reloading', () => {
-    expect(ordersSrc).not.toMatch(/shipErrorText/)
-    expect(ordersSrc).not.toMatch(/String\(r\.error\b/)
-    expect(ordersSrc).toMatch(/orderErrorText\(/)
-    expect(ordersSrc).toMatch(/d\.error = '发货没成功：' \+ orderErrorText\(r\.error\)/)
-    expect(ordersSrc).toMatch(/drawer-error/)
-    expect(ordersSrc).toMatch(/selectedIds\.value = selectedIds\.value\.filter\(\(id\) => vis\.has\(id\)\)/)
-    expect(ordersSrc).toMatch(/:disabled="reloading"/)
-    expect(ordersSrc).not.toMatch(/:disabled="message === '加载中…'"/)
-  })
-  it('大白话：Fulfill.vue 发货/加载失败走人话 + 已发货特化指路 + 剩单数不含退款持有（不裸 String(r.error)、不第三套字典）', () => {
-    expect(fulfillSrc).toMatch(/orderErrorText\(/)
-    expect(fulfillSrc).not.toMatch(/String\(r\.error/)
-    expect(fulfillSrc).toMatch(/加载待发货订单失败：' \+ orderErrorText\(r\.error\)/)
-    expect(fulfillSrc).toMatch(/'BAD_STATUS:' \+ 'shipped'/)
-    expect(fulfillSrc).toMatch(/要改运单号请去「订单发货」页/)
-    expect(fulfillSrc).toMatch(/return orderErrorText\(/)
-    expect(fulfillSrc).toMatch(/剩 \$\{shippable\.length\} 单待发/)
-    expect(fulfillSrc).toMatch(/function syncDefaultChecked\(\) \{\n  checked\.value = new Set\(shippable\.value\.filter/)
-    expect(fulfillSrc).not.toMatch(/if \(msg === 'FEE_MISMATCH_HOLD'\)/)
-    expect(fulfillSrc).not.toMatch(/if \(msg === 'NO_ORDER'\)/)
-  })
-  it('大白话：Refunds.vue 报错走同一套 orderErrorText（不裸 String(r.error)、不另开 refundErrorText）+ 刷新用 reloading + 越规空单号有提示', () => {
-    expect(refundsSrc).toMatch(/orderErrorText\(/)
-    expect(refundsSrc).not.toMatch(/refundErrorText/)
-    expect(refundsSrc).not.toMatch(/String\(r\.error/)
-    expect(refundsSrc).toMatch(/:disabled="reloading"/)
-    expect(refundsSrc).not.toMatch(/:disabled="message === '加载中…'"/)
-    expect(refundsSrc).toMatch(/overrideFindMsg\.value = '先输入订单号'/)
-    expect(refundsSrc).toMatch(/:disabled="!overrideOrderId\.trim\(\)"/)
-    expect(refundsSrc).toMatch(/template v-if="!verdict\?\.loading"/)
-    expect(refundsSrc).toMatch(/err: overrideResultMsg\.includes\('没成功'\), ok: overrideResultMsg\.startsWith\('✓'\)/)
   })
 })

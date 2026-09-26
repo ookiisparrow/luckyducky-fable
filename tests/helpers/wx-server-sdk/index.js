@@ -8,6 +8,7 @@
 //   - doc(id).get() 缺失即 reject（源码大量 .catch(()=>null) 依赖此）；
 //   - where(...).update() 返回 { stats:{updated} }（activateCourse 一码一用抢占）；
 //   - add({data:{_id}}) 撞已存在 _id 抛错（genQrcodes/submitReview 库级唯一约束）。
+// 不模拟事务：云函数没有用 runTransaction/startTransaction 的地方。
 
 const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   store: {},
@@ -25,23 +26,34 @@ const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   tempUrlCalls: [],
 })
 
-const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
+// JSON 往返保留真云序列化语义（undefined 键被丢等），但 Date 要原样存取：真云存的是日期类型，不是 ISO 串
+const clone = (v) =>
+  v === undefined
+    ? undefined
+    : JSON.parse(
+        JSON.stringify(v, function (k, x) {
+          return this[k] instanceof Date ? { __mockDate: this[k].getTime() } : x
+        }),
+        (k, x) => (x && typeof x === 'object' && '__mockDate' in x ? new Date(x.__mockDate) : x)
+      )
+// 真云服务端 get()/聚合单次最多取 1000 条
+const MAX_LIMIT = 1000
 
 const command = {
   in: (val) => ({ __op: 'in', val }),
   neq: (val) => ({ __op: 'neq', val }),
   lt: (val) => ({ __op: 'lt', val }),
-  gt: (val) => ({ __op: 'gt', val }), // 大于（承面C 坐席台 cursor 增量：listQueue FIFO / getThread 轮询取新消息）
+  gt: (val) => ({ __op: 'gt', val }), // 大于（坐席台 cursor 增量：listQueue FIFO / getThread 轮询取新消息）
   gte: (val) => ({ __op: 'gte', val }), // 大于等于（库存原子扣减：扣的那一刻库存仍够才扣）
-  exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件，债#21）
+  exists: (val) => ({ __op: 'exists', val }), // 字段存在/缺失（CAS 初始化窗口前置条件）
   inc: (val) => ({ __op: 'inc', val }), // 原子自增（recordAnomaly 去重计数·真 sdk 服务端原子加，避免读-改-写并发窗）
-  aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和·债#18续）
+  aggregate: { sum: (expr) => ({ __aggOp: 'sum', expr }) }, // 聚合算子（GMV 求和）
   // 字段级删除（真 sdk 标准写路径算子，对齐 MongoDB $unset·与下方注释警告的「未验证查询组合子」范畴不同——
   // 这是常规写操作，非查询条件组合）：patch 成 `null` ≠ 字段不存在——CAS 条件 `_.exists(false)` 只认「字段
-  // 真缺失」，值为 null 仍算「存在」（批R 修复：csSession 重开清质检标记若 patch 成 null，saveQcMark/
+  // 真缺失」，值为 null 仍算「存在」（例：csSession 重开清质检标记若 patch 成 null，saveQcMark/
   // listQcSampled 的 exists(false) 永远判定「已评过」，质检评分永久 409）。真删字段才是正确表达「清空」的写法。
   remove: () => ({ __op: 'remove' }),
-  // 注：pageQuery 复合游标 tiebreaker（批1 bug sweep）**不用** _.and()/_.or()——P2 复核发现这会是全仓
+  // 注：pageQuery 复合游标 tiebreaker **不用** _.and()/_.or()——这会是全仓
   // 首次用该组合、只被本桩验证过、从未打过真实云数据库；改用桩里已验证过的单字段 lt/eq 拆两条查询
   // 内存合并（见 kit/paging.ts 注释），因此这里刻意不补 and/or 语义，避免留一套没有生产用途、也没有
   // 真机验证过的桩能力躺在这里给后人误当「已验证」参照抄用。
@@ -59,12 +71,12 @@ function matchOne(docVal, cond) {
   if (cond && typeof cond === 'object' && cond.__op) {
     if (cond.__op === 'in') return Array.isArray(cond.val) && cond.val.includes(docVal)
     if (cond.__op === 'neq') return docVal !== cond.val
-    if (cond.__op === 'lt') return docVal < cond.val
-    if (cond.__op === 'gt') return docVal > cond.val
-    // 同真库：null/缺字段不参与数值比较（JS 的 null >= 0 为真，不能直接比）
+    // 同真库只在同类型间比大小：null/缺字段不参与（JS 的 null >= 0 为真），Date 字段也不和数字比（JS 会把 Date 转数字）
+    if (cond.__op === 'lt') return typeof docVal === typeof cond.val && docVal < cond.val
+    if (cond.__op === 'gt') return typeof docVal === typeof cond.val && docVal > cond.val
     if (cond.__op === 'gte') return typeof docVal === typeof cond.val && docVal >= cond.val
     if (cond.__op === 'exists') return cond.val ? docVal !== undefined : docVal === undefined
-    return false
+    throw new Error('MOCK: 桩不支持查询操作符 ' + cond.__op) // 静默当「不匹配」会让用错操作符的查询在测试里假绿
   }
   return docVal === cond
 }
@@ -104,7 +116,7 @@ class DocRef {
     this.id = id
   }
   async get() {
-    // 写前注入同款读侧钩子（批H：casDecrement 瞬时读故障测试）：可对 doc(id).get() 单点注入抛错
+    // 写前注入同款读侧钩子（casDecrement 瞬时读故障测试用）：可对 doc(id).get() 单点注入抛错
     // （非「无档」的真读失败，如网络/DB 瞬时故障），与下方「无档」reject 区分——回调收到 {coll,id}
     // （Query.get() 的 beforeGet 收到 {coll,filter,skip,limit}，字段不同，测试按需解构，互不干扰）。默认无。
     if (typeof G.beforeGet === 'function') await G.beforeGet({ coll: this.coll, id: this.id })
@@ -158,8 +170,8 @@ class Query {
     return this
   }
   orderBy(field, dir = 'asc') {
-    // 链式多列排序（批1 bug sweep·pageQuery 复合游标 tiebreaker）：累积多次 .orderBy() 调用，
-    // 先到先比、平局看下一列——单次调用行为不变（零改既有用法）。
+    // 链式多列排序（pageQuery 复合游标 tiebreaker）：累积多次 .orderBy() 调用，
+    // 先到先比、平局看下一列——单次调用行为不变。
     this._order = this._order || []
     this._order.push({ field, dir })
     return this
@@ -172,8 +184,10 @@ class Query {
     this._skip = n
     return this
   }
-  field() {
-    return this // 投影在测试里忽略
+  field(proj) {
+    if (Object.values(proj).some((v) => v !== true)) throw new Error('MOCK: field() 只实现了包含式投影')
+    this._field = proj
+    return this
   }
   doc(id) {
     return new DocRef(this.coll, id)
@@ -197,11 +211,14 @@ class Query {
     return out
   }
   async get() {
-    // 写前注入同款读侧钩子（批1 bug sweep·kit/inventory getInventory 分页扫描单页失败测试）：
+    // 写前注入同款读侧钩子（kit/inventory getInventory 分页扫描单页失败测试用）：
     // 可在具体页（按 coll/skip 判断）注入抛错，模拟真机分页扫描中单页 .get() 失败（非到底）。默认无。
+    if (this._limit > MAX_LIMIT) throw new Error('MOCK: limit 超过真云上限 ' + MAX_LIMIT)
     if (typeof G.beforeGet === 'function')
       await G.beforeGet({ coll: this.coll, filter: this._filter, skip: this._skip, limit: this._limit })
-    return { data: this._rows().map(clone) }
+    const keep = this._field && ['_id', ...Object.keys(this._field)]
+    const pick = (d) => (keep ? Object.fromEntries(keep.filter((k) => k in d).map((k) => [k, d[k]])) : d)
+    return { data: this._rows().map((d) => clone(pick(d))) }
   }
   async count() {
     // 写前注入同款钩子（测试：精确聚合异常→兜底近样本口径场景，逼真机 count() 失败·默认无）
@@ -209,13 +226,16 @@ class Query {
     return { total: rows(this.coll).filter((d) => matchDoc(d, this._filter)).length }
   }
   async update({ data }) {
+    ensureColl(this.coll)
     // 写前注入（测试并发：条件更新 where 求值前让「并发方」先改库·验 CAS 真在咬）。默认无。
     if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
-    const hit = this._rows()
+    // 真云 where().update() 改全部匹配文档，不受读取的默认 100 条截断
+    const hit = rows(this.coll).filter((d) => matchDoc(d, this._filter))
     hit.forEach((d) => applyPatch(d, clone(data)))
     return { stats: { updated: hit.length } }
   }
   async remove() {
+    ensureColl(this.coll)
     if (typeof G.beforeRemove === 'function') await G.beforeRemove({ coll: this.coll, filter: this._filter })
     const arr = rows(this.coll)
     const before = arr.length
@@ -241,8 +261,8 @@ class Query {
   }
 }
 
-// 聚合管线（最小实现·债#18续 + SCM 产销统计续）：支持 .match(filter).group({_id, key:$.sum('$field' | 常数)}).end()。
-// _id 为 '$field' 时真按该字段值分桶（真实 wx-server-sdk 语义）；_id:null 仍是单桶（GMV/评分求和等既有用法不变）。
+// 聚合管线（最小实现）：支持 .match(filter).group({_id, key:$.sum('$field' | 常数)}).end()。
+// _id 为 '$field' 时真按该字段值分桶（真实 wx-server-sdk 语义）；_id:null 是单桶（GMV/评分求和）。
 class Aggregate {
   constructor(coll) {
     this.coll = coll
@@ -264,8 +284,8 @@ class Aggregate {
   async end() {
     // 聚合前注入（测试：精确聚合异常→兜底口径场景，可按 coll 判断选择性抛错）。默认无。
     if (typeof G.beforeAggregate === 'function') await G.beforeAggregate({ coll: this.coll, match: this._match })
-    // 真 sdk 聚合不写 limit 只回 20 条；桩默认不截断，要逼真的测试经 setAggregateDefaultLimit(20) 打开
-    const cap = this._limit ?? G.aggregateDefaultLimit
+    if (this._limit > MAX_LIMIT) throw new Error('MOCK: limit 超过真云上限 ' + MAX_LIMIT)
+    const cap = this._limit ?? 20 // 真云聚合不写 limit 只回 20 条
     const docs = rows(this.coll).filter((d) => matchDoc(d, this._match))
     if (!this._group) return { list: docs.slice(0, cap).map(clone) }
     const idExpr = this._group._id
@@ -345,7 +365,7 @@ const cloud = {
     // 记录每次调用的批大小：真 sdk 单次 fileList 上限 50，getTempUrls 分批逻辑靠此断言（桩对齐真 SDK）
     G.tempUrlCalls.push(list.length)
     if (list.length > 50) throw new Error('MOCK: getTempFileURL fileList 超 50 上限（真 sdk 会拒）')
-    // 接受 string | { fileID, maxAge } 双形（批1·带 maxAge 换长效址·真 sdk 同支持）：取 fileID 作 key
+    // 接受 string | { fileID, maxAge } 双形（带 maxAge 换长效址·真 sdk 同支持）：取 fileID 作 key
     return {
       fileList: list.map((it) => {
         const id = typeof it === 'string' ? it : it.fileID
@@ -367,7 +387,7 @@ const cloud = {
     }
     return { fileContent: Buffer.from('mock-image-bytes'), statusCode: 200 }
   },
-  // 云调用 mock（cloud.openapi.*·债#26 发货上传走它）：嵌套属性任意命中、调用记录入参，
+  // 云调用 mock（cloud.openapi.*·发货上传走它）：嵌套属性任意命中、调用记录入参，
   // openapiFail 时抛错（模拟能力未开通/权限未声明）、否则返 openapiResult（默认 errCode:0 成功）。
   // 真 sdk openapi 绑定名 + config.json 权限属真机验（根因#8），桩只锁「接缝被调 + 成功/失败分支」。
   openapi: (() => {
@@ -411,13 +431,12 @@ const control = {
     G.beforeCount = null
     G.beforeRemove = null
     G.beforeAggregate = null
-    G.aggregateDefaultLimit = undefined
     G.uncreated = new Set()
     G.deletedFiles = []
     G.tempUrlCalls = []
   },
   seed(coll, docs) {
-    G.store[coll] = (G.store[coll] || []).concat(JSON.parse(JSON.stringify(docs)))
+    G.store[coll] = (G.store[coll] || []).concat(clone(docs))
   },
   setOpenId(id) {
     G.openid = id
@@ -426,7 +445,7 @@ const control = {
     G.unionid = id
   },
   dump(coll) {
-    return JSON.parse(JSON.stringify(G.store[coll] || []))
+    return clone(G.store[coll] || [])
   },
   lastUpload() {
     return G.lastUpload ? { ...G.lastUpload } : null
@@ -467,9 +486,6 @@ const control = {
   setBeforeAggregate(fn) {
     G.beforeAggregate = fn
   },
-  setAggregateDefaultLimit(n) {
-    G.aggregateDefaultLimit = n
-  },
   // 注入「remove() 前」副作用（测试：删失败场景，可按 coll 判断选择性抛错）
   setBeforeRemove(fn) {
     G.beforeRemove = fn
@@ -481,7 +497,7 @@ const control = {
   setCallFunctionFail(v) {
     G.callFunctionFail = !!v
   },
-  // 云调用 mock 控制（债#26 发货上传）
+  // 云调用 mock 控制（发货上传）
   openapiCalls() {
     return JSON.parse(JSON.stringify(G.openapiCalls))
   },

@@ -2,12 +2,10 @@
 // 跨课隔离/在途去重/定向失效/预取）。
 import { describe, it, expect } from 'vitest'
 import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSeek, lessonStrip, nearestMark } from '../lib/player'
-// 源码扫描式断言（同 home-cards.test.ts 的 ?raw 范式·rewrite/mp tsconfig 无 node:fs）：续播秒/缓冲水位接线是
-// wxml 绑定⟷ts 方法成对（错题本 E2），这里用文本断言逼出成对。
+// wxml/wxss 无运行时可挂载，绑定与样式只能静态断言；页面行为（续播秒消费、FAQ 失败分治、seek 几何）在
+// u-mp-player-page.test.ts 挂载真页面测，seek.wxs 在 player-seek-wxs.test.ts 真跑。
 import playerWxmlRaw from '../pages/player/player.wxml?raw'
-import playerTsRaw from '../pages/player/player.ts?raw'
 import playerWxssRaw from '../pages/player/player.wxss?raw'
-import seekWxsRaw from '../pages/player/seek.wxs?raw'
 
 const COURSE = {
   id: 'c1',
@@ -118,68 +116,11 @@ describe('播放地址缓存（黄金 §六）', () => {
   })
 })
 
-describe('播放页续播秒 + 缓冲水位接线（源码扫描·wxml⟷ts 成对·E2）', () => {
-  const stripWxml = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '')
-  const stripTs = (s: string) => s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
-  /** 花括号配平截出 playSegment 整个方法体（剥注释后·G2 用例共用）。 */
-  const playSegmentBody = (): string => {
-    const ts = stripTs(playerTsRaw)
-    const start = ts.indexOf('async playSegment(')
-    if (start < 0) throw new Error('未找到 playSegment 方法')
-    let depth = 0
-    let i = ts.indexOf('{', start)
-    const bodyStart = i
-    for (; i < ts.length; i++) {
-      if (ts[i] === '{') depth++
-      else if (ts[i] === '}') {
-        depth--
-        if (depth === 0) break
-      }
-    }
-    return ts.slice(bodyStart, i + 1)
-  }
-  it('大白话：wxml 主 video 有 initial-time 与 bind:progress；ts 定义 onVideoProgress（绑定与方法成对·抄一半真机报错）', () => {
-    const wxml = stripWxml(playerWxmlRaw)
+describe('播放页续播秒 + 缓冲水位的 wxml 绑定（静态·handler 存在性归守卫 rw-mp-wxml-handlers-exist）', () => {
+  it('大白话：wxml 主 video 有 initial-time 与 bind:progress（少了续播秒/缓冲水位就断线）', () => {
+    const wxml = playerWxmlRaw.replace(/<!--[\s\S]*?-->/g, '')
     expect(wxml).toMatch(/initial-time\s*=\s*"\{\{\s*initialTime\s*\}\}"/) // 续播秒首挂载读取
     expect(wxml).toMatch(/bind:progress\s*=\s*"onVideoProgress"/) // 缓冲水位通道
-    const ts = stripTs(playerTsRaw)
-    expect(ts).toMatch(/\bonVideoProgress\s*\(/) // 方法真实定义（不止绑定）
-  })
-  it('大白话：playSegment loading 骨架态仍含 initialTime: 0（骨架占位·<video> 未挂载不读它）', () => {
-    const ts = stripTs(playerTsRaw)
-    expect(ts).toMatch(/initialTime:\s*0/)
-  })
-
-  // G2：_wantAt 消费时机从「取址前无条件清零」挪到「真正把非空 src 交给挂载 video」的成功路径——
-  // 首次取址/取址失败后重试，续播秒此前会被无条件消费永久丢失；裁决：peek 命中 / 取址成功且 url 非空
-  // 才消费，取址异常（denied/error）与 url 为空（empty 素材未剪）都不消费，留给重试续到秒。
-  it('大白话：initialTime 消费点恰好两处（peek 命中分支 + 取址成功分支），不再是无条件顶部消费', () => {
-    const body = playSegmentBody()
-    const consumeCount = (body.match(/if\s*\(initialTime\s*>\s*0\)\s*this\._wantAt\s*=\s*0/g) || []).length
-    expect(consumeCount).toBe(2) // 唯二消费点：peek 命中 + 取址成功
-  })
-
-  it('大白话：peek 命中分支内消费（消费点落在 if (peeked) 到该分支 return 之间）', () => {
-    const body = playSegmentBody()
-    const peekedIdx = body.indexOf('if (peeked) {')
-    expect(peekedIdx).toBeGreaterThan(-1)
-    const peekedReturnIdx = body.indexOf('return', peekedIdx)
-    const consumeIdx = body.indexOf('this._wantAt = 0', peekedIdx)
-    expect(consumeIdx).toBeGreaterThan(peekedIdx)
-    expect(consumeIdx).toBeLessThan(peekedReturnIdx)
-  })
-
-  it('大白话：失败分支（NOT_ENTITLED→denied / 取址异常→error / url 为空→empty）都不消费 _wantAt——留给重试续到秒', () => {
-    const body = playSegmentBody()
-    const catchIdx = body.indexOf('catch (e)')
-    const emptyIdx = body.indexOf("state: 'empty'")
-    expect(catchIdx).toBeGreaterThan(-1)
-    expect(emptyIdx).toBeGreaterThan(-1)
-    // catch 块（denied/error 两态）范围：从 catch (e) 到 empty 分支之前（两块紧邻·顺序 catch→url 判空）
-    expect(body.slice(catchIdx, emptyIdx)).not.toContain('_wantAt = 0')
-    // empty 分支：从 state:'empty' 到该分支 return
-    const emptyReturnIdx = body.indexOf('return', emptyIdx)
-    expect(body.slice(emptyIdx, emptyReturnIdx)).not.toContain('_wantAt = 0')
   })
 })
 
@@ -298,46 +239,21 @@ describe('nearestMark（磁吸判定·拖动·纯函数）', () => {
   })
 })
 
-describe('求助面板 FAQ 失败分治（根因#14·库挂≠没有常见问题）', () => {
-  it('大白话：getPublicFaq 失败要落 fail，不能把空列表画成「还在整理」', () => {
-    const load = playerTsRaw.slice(playerTsRaw.indexOf('async loadHelpFaq()'), playerTsRaw.indexOf('onHelpBackMenu()'))
-    expect(load).toMatch(/if\s*\(\s*!r\.ok\s*\)/)
-    expect(load).toMatch(/helpFaqState:\s*'fail'/)
-    expect(load.indexOf("helpFaqState: 'fail'")).toBeLessThan(load.indexOf("helpFaqState: 'empty'"))
+describe('求助面板 FAQ 失败分治的界面出口（静态·拉取分治在 u-mp-player-page）', () => {
+  it('大白话：wxml 有 fail 态「暂时查不到」，与「还在整理中」空态分开', () => {
     expect(playerWxmlRaw).toContain("helpFaqState === 'fail'")
     expect(playerWxmlRaw).toContain('暂时查不到')
     expect(playerWxmlRaw).toContain('还在整理中')
   })
 })
 
-describe('播放页死状态（data.segments / CMS FAQ 假 loading）', () => {
-  const stripWxml = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '')
-  const stripTs = (s: string) => s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
-  it('大白话：全段列表只本地用来挑开播段，不再塞进页面 data——界面不绑、代码也不读 this.data.segments', () => {
-    const ts = stripTs(playerTsRaw)
-    const wxml = stripWxml(playerWxmlRaw)
-    expect(ts).not.toMatch(/this\.data\.segments/)
-    const dataStart = ts.indexOf('data: {')
-    const dataEnd = ts.indexOf('courseId:')
-    expect(dataStart).toBeGreaterThan(-1)
-    expect(dataEnd).toBeGreaterThan(dataStart)
-    expect(ts.slice(dataStart, dataEnd)).not.toMatch(/\bsegments\s*:/)
-    expect(ts).not.toMatch(/setData\(\{[^}]*\bsegments\b/)
-    expect(wxml).not.toMatch(/\{\{\s*segments\s*\}\}/)
-    expect(ts).toMatch(/flattenSegments\(/) // 本地挑开播段还在
-  })
-  it('大白话：后台已经配了常见问题时，进 FAQ 不再先写成加载中——界面看的是问题条数，加载中永远不露面', () => {
-    const ts = stripTs(playerTsRaw)
-    const onHelp = ts.slice(ts.indexOf('onHelpFaq('), ts.indexOf('loadHelpFaq('))
-    const faqIdx = onHelp.search(/help\.faq/)
-    const retIdx = onHelp.indexOf('return')
-    expect(faqIdx).toBeGreaterThan(-1)
-    expect(retIdx).toBeGreaterThan(faqIdx)
-    expect(onHelp.slice(0, retIdx)).not.toMatch(/helpFaqState:\s*'loading'/)
+describe('播放页死状态（静态·data 不含 segments 在 u-mp-player-page）', () => {
+  it('大白话：界面不绑全段列表 segments', () => {
+    expect(playerWxmlRaw.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(/\{\{\s*segments\s*\}\}/)
   })
 })
 
-describe('播放页样式与注释跟现在的做法一致', () => {
+describe('播放页样式（静态）', () => {
   it('大白话：内容站常见问题的问答样式，不被知识库条目的同名 class 盖掉', () => {
     expect(playerWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-q \{/)
     expect(playerWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-a \{/)
@@ -348,15 +264,5 @@ describe('播放页样式与注释跟现在的做法一致', () => {
     const cmsAStart = playerWxssRaw.indexOf('.lp-help-faq-a {')
     const cmsA = playerWxssRaw.slice(cmsAStart, playerWxssRaw.indexOf('}', cmsAStart))
     expect(cmsA).not.toMatch(/font-size/)
-  })
-
-  it('大白话：预览浮层位置由 seek.wxs previewLeft 和 seekCfg.edgePx 算，不再提已删的 previewLeftPx', () => {
-    expect(playerTsRaw).not.toContain('previewLeftPx')
-    expect(playerWxssRaw).not.toContain('previewLeftPx')
-    expect(seekWxsRaw).not.toContain('previewLeftPx')
-    expect(playerTsRaw).not.toContain('内联 px')
-    expect(playerWxssRaw).not.toContain('内联 px')
-    expect(playerTsRaw).toContain('seekCfg.edgePx')
-    expect(seekWxsRaw).toContain('function previewLeft')
   })
 })

@@ -1,10 +1,11 @@
-import { reply, str, issueSession, principalOf } from '../lib'
-import { getCachedKfToken, getWecomOAuthUserId, alert } from '../../../kit'
+import { reply, issueSession, principalOf } from '../lib'
+import { getCachedKfToken, getWecomOAuthUserId, alert, str, err } from '../../../kit'
+import { COLLECTIONS } from '@ldrw/shared'
 
-// M⑦ 车道 B·企业微信自建应用内 OAuth 免登（承面C 增强·工单 §2.2）。
+// 企业微信自建应用内 OAuth 免登（坐席台用）。
 //
 // 定位＝pre-auth（坐席无口令·index.ts 特殊分发·在能力闸前·同 login 受认证频控）：企微内打开应用 → snsapi_base
-// 静默授权拿 code → 本 action 换 userid → 反查绑定账号（M⑦ 地基填的 wecomUserId）→ 签发服务端 session 令牌
+// 静默授权拿 code → 本 action 换 userid → 反查绑定账号（agents.ts 写入的 wecomUserId）→ 签发服务端 session 令牌
 //（lib.issueSession 单源·口令登录同款），之后请求以令牌作 key（checkKey 会话解析·同口令闸的 fail-closed 语义）。
 //
 // fail-closed（守卫 wecom-login-gated·根因#3 信任边界）：无 code / OAuth 换不到 userid / userid 未绑定账号 /
@@ -12,21 +13,21 @@ import { getCachedKfToken, getWecomOAuthUserId, alert } from '../../../kit'
 
 export async function loginByWecomCode({ db, data }: { db: any; data: any }) {
   const code = str((data && data.code) || '', 512).trim()
-  if (!code) return reply(400, { ok: false, error: 'BAD_ARGS' })
+  if (!code) return reply(400, err('BAD_ARGS'))
   // 令牌不持密钥：复用缓存令牌做 OAuth 换取（根因#3）。缓存空（kfCallback/探针近期无活动）→ 客户端可回退口令或重试。
   const token = await getCachedKfToken(db)
-  if (!token) return reply(503, { ok: false, error: 'KF_TOKEN_UNAVAILABLE' })
+  if (!token) return reply(503, err('KF_TOKEN_UNAVAILABLE'))
   const userid = await getWecomOAuthUserId(token, code)
-  if (!userid) return reply(401, { ok: false, error: 'BAD_CODE' }) // code 失效 / 非企业成员（返 openid 非 userid）
+  if (!userid) return reply(401, err('BAD_CODE')) // code 失效 / 非企业成员（返 openid 非 userid）
   // 反查绑定账号（超管 auth 或外包 agent·wecomUserId 应唯一）。limit(2) 才能发现撞号——
   // limit(1) 会静默捡第一条、登错身份。读失败不当「没绑」。
-  const hit = await db.collection('adminConfig').where({ wecomUserId: userid }).limit(2).get().catch(() => null)
-  if (!hit) return reply(503, { ok: false, error: 'WECOM_ID_LOOKUP_FAIL' })
+  const hit = await db.collection(COLLECTIONS.adminConfig).where({ wecomUserId: userid }).limit(2).get().catch(() => null)
+  if (!hit) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
   const rows = (hit.data || []) as any[]
-  if (rows.length > 1) return reply(409, { ok: false, error: 'WECOM_ID_TAKEN' })
+  if (rows.length > 1) return reply(409, err('WECOM_ID_TAKEN'))
   const acct = rows[0] || null
-  if (!acct) return reply(403, { ok: false, error: 'NO_BOUND_ACCOUNT' }) // userid 未绑任何坐席账号·fail-closed 拒登
-  if (acct.disabled) return reply(403, { ok: false, error: 'ACCOUNT_DISABLED' })
+  if (!acct) return reply(403, err('NO_BOUND_ACCOUNT')) // userid 未绑任何坐席账号·fail-closed 拒登
+  if (acct.disabled) return reply(403, err('ACCOUNT_DISABLED'))
   // 签发高熵 session 令牌（lib.issueSession 单源·口令登录同款·存 sessions 数组容多设备）；
   // 签发失败告警留痕后返空、前端按 NO_SESSION_TOKEN 拒登（同口令登录）
   const sessionToken = await issueSession(db, acct._id, 'wecom', userid).catch((e) => {

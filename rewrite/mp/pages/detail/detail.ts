@@ -1,4 +1,4 @@
-// 商品详情（M2·重设计对齐 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
+// 商品详情（对齐设计 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
 import { BRAND_SLOGAN_CN } from '../../lib/brand'
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
@@ -12,7 +12,7 @@ import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
 import { navigateOrRedirect } from '../../lib/nav'
 
-// 图册窗口（病根#15 图片面·批B）：current±1 才渲染，circular 时首尾邻接也算窗口内——
+// 图册窗口（病根#15 图片面）：current±1 才渲染，circular 时首尾邻接也算窗口内——
 // swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
 function computeGalleryWindow(len: number, current: number): boolean[] {
   const circular = len > 1 // 与 wxml `circular="{{vm.gallery.length > 1}}"` 同源判断
@@ -26,7 +26,7 @@ function computeGalleryWindow(len: number, current: number): boolean[] {
 Page({
   data: {
     loading: true,
-    loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试（P2·bug sweep R1 #3）
+    loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试
     vm: null as DetailVM | null,
     skuIndex: -1,
     currentPriceNum: 0, // 数字部分（¥ 小、数字大）
@@ -71,7 +71,7 @@ Page({
     void this.loadDetail(id, seq)
     void this.loadRating(id, seq)
   },
-  // 图册补齐（批1·列表瘦身不下发 images·详情页按 id 拉全档补进 swiper·根因#15）：列表项首帧已渲染
+  // 图册补齐（列表不下发 images·详情页按 id 拉全档补进 swiper·根因#15）：列表项首帧已渲染
   // （gallery 仅 cover·零等待），详情回包到达把完整 gallery setData 补齐；详情失败/无更多图保持列表项降级
   // （gallery 剩 cover·不裂不崩）。沿用 _seq 代次：连点重试/快速切商品时过期回包丢弃。
   async loadDetail(id: string, seq: number) {

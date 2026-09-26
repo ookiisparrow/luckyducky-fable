@@ -75,3 +75,25 @@ describe('ConfigChecklist.vue 保存后刷新失败不锁页', () => {
     expect(w2.text()).toContain('加载失败：网络不通')
   })
 })
+
+describe('ConfigChecklist.vue 保存被拒的未知码', () => {
+  it('大白话：没有中文映射的码挂括号，不写成「保存失败：码」', async () => {
+    getConfigChecklistMock.mockReset().mockResolvedValue({ ok: true, groups: [{ group: '支付', items: [item('mchId')] }] })
+    savePayConfigMock.mockReset().mockResolvedValue({ ok: false, status: 400, error: 'BAD_MCHID' })
+    const w = mount(ConfigChecklist)
+    await flushPromises()
+    await w.find('input.fill-input').setValue('123')
+    await w.find('.row-fill button').trigger('click')
+    await flushPromises()
+    expect(w.find('.fill-error').text()).toBe('保存失败（BAD_MCHID）')
+  })
+})
+
+describe('ConfigChecklist.vue 载入被拒的未知码', () => {
+  it('大白话：挂括号，不写成「加载失败：码」', async () => {
+    getConfigChecklistMock.mockReset().mockResolvedValue({ ok: false, status: 500, error: 'X1' })
+    const w = mount(ConfigChecklist)
+    await flushPromises()
+    expect(w.text()).toContain('加载失败（X1）')
+  })
+})

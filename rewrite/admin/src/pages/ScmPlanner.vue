@@ -18,7 +18,7 @@ import EmptyState from '../components/ui/EmptyState.vue'
 import UiButton from '../components/ui/Button.vue'
 
 const router = useRouter()
-// 去开单联动（换皮丢·算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
+// 去开单联动（否则算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
 function goOutworkOrder() {
   setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g: Record<string, any>) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
   void router.push('/scm-outwork')
@@ -61,7 +61,7 @@ const produceRows = computed(() => {
   return [...keys].map((k) => ({ key: k, name: label[k] || k, packed: packed[k] || 0, shipped: shipped[k] || 0, stock: inv.value[k] ?? null })).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-const calcGen = useLatest() // 乱序守卫（G6·P2）：连点/改目标后连点「算缺口」，旧回包别覆盖新请求的 plan
+const calcGen = useLatest() // 乱序守卫：连点/改目标后连点「算缺口」，旧回包别覆盖新请求的 plan
 async function calc() {
   const ts = targets.value.filter((t) => t.productId.trim())
   if (!ts.length) {

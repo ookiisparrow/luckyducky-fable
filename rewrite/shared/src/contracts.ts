@@ -6,60 +6,14 @@
 // rewrite/mp/lib/payFlow.ts（收银台五参）/ lib/mapOrders.ts（订单文档）/ lib/playbackCache.ts（r.url）/
 // pages/order-list/order-list.ts（nextCursor/hasMore）——再改本文件与哨兵测试。
 // 纯类型零运行时：只 export type/interface，不 export 值（esbuild 内联零产物影响）。
+// 订单文档形状与库内文档同一份（order.ts OrderDoc）：响应就是库里读出来的单。
+import type { OrderDoc, AfterSaleDoc } from './order'
 
 /** 成功包：{ ok:true, ...data } 整包展开（kit/reply.ts ok() 无 data 信封）。 */
 type AppOk<T> = { ok: true } & T
 /** 失败包：恒含 ok/error 两键；extra 动态键（如 CODE_TAKEN 带 courseId）刻意不建模——锁了拦创新。 */
 type AppErr = { ok: false; error: string }
 type AppResp<T> = AppOk<T> | AppErr
-
-/** 订单地址快照（createOrder 白名单四要素）。 */
-interface AppOrderAddress {
-  name: string
-  phone: string
-  region: string
-  detail: string
-}
-
-/** 订单行（下单快照·9 键）。price 单位「元」——库记元、运算走分（orders.ts 金额注释）。 */
-interface AppOrderLine {
-  productId: string
-  lineId: string
-  name: string
-  spec: string
-  price: number
-  qty: number
-  enteredQty: number
-  refundable: boolean
-  cover: string
-}
-
-/**
- * 订单文档：基础 12 键 + 生命周期可选键。paidAt 是 payMode 条件键（mock 建单即有、real 支付后才有——
- * 两条路径哨兵各锁一例）；paidAt 之外的生命周期键由 callbacks/adminApi 写入，第一批仅类型登记、
- * 不进键集合断言（锁它们要造全生命周期夹具＝脆而无谓）；mp mapOrders 消费 shipping/shippedAt。
- */
-interface AppOrderDoc {
-  _id: string
-  id: string
-  _openid: string
-  items: AppOrderLine[]
-  goods: number
-  coupon: number
-  ship: number
-  amount: number
-  address: AppOrderAddress
-  reserved: { productId: string; spec: string; qty: number }[]
-  status: string
-  createdAt: number
-  paidAt?: number
-  closedAt?: number
-  doneAt?: number
-  shippedAt?: number
-  shipping?: { company: string; trackingNo: string }
-  cancelledBy?: string
-  entVer?: number
-}
 
 /** wx.requestPayment 收银台五参（mp 消费面：payFlow.ts PaymentParams 手抄副本）。 */
 interface WxPaymentParams {
@@ -71,9 +25,126 @@ interface WxPaymentParams {
 }
 
 // ── 五个热 action 的响应契约（钱链×4 + 学习链×1）──
-export type CreateOrderResp = AppResp<{ order: AppOrderDoc }>
+export type CreateOrderResp = AppResp<{ order: OrderDoc }>
 /** pay 双分支：0 元直付 {paid,paidAt}（paid 写 boolean 不写字面量 true——ok() 泛型推断会宽化）| 收银台 {payment}。 */
 export type PayResp = AppResp<{ paid: boolean; paidAt: number } | { payment: WxPaymentParams }>
-export type GetMyOrdersResp = AppResp<{ list: AppOrderDoc[]; nextCursor: unknown; hasMore: boolean }>
-export type GetOrderByIdResp = AppResp<{ order: AppOrderDoc }>
+export type GetMyOrdersResp = AppResp<{ list: OrderDoc[]; nextCursor: unknown; hasMore: boolean }>
+export type GetOrderByIdResp = AppResp<{ order: OrderDoc }>
 export type GetPlaybackUrlResp = AppResp<{ url: string | null }>
+
+// ── 后台 adminApi 钱链 action 的成功包字段（admin api/money.ts 用；失败包与 ok/status 由 admin client 统一建模）──
+// 键与单位的真源是 tests/contracts/admin-money.json（云端测试对着真 adminApi 锁）；那边变了，这里跟着改。
+// 发货两项与越规退款不在那份契约里，照 adminApi actions/orders.ts、refunds.ts 的回包写。
+
+/** pageQuery 游标分页。 */
+interface AdminPage<T> {
+  list: T[]
+  nextCursor: unknown
+  hasMore: boolean
+}
+/** listOrders 的单：库内文档 + 发货闸标记（与 shipOne 同一判据）。 */
+export interface AdminOrderRow extends OrderDoc {
+  /** 有在途售后或每行都退够件数：不能发货。 */
+  refundHold: boolean
+  /** 每行已退件数，键是 lineId（旧单 productId）。 */
+  refundedQty: Record<string, number>
+}
+/** listRefunds 的售后单：库内文档 + 从订单 join 的收货人。 */
+export interface AdminRefundRow extends AfterSaleDoc {
+  buyerName: string
+  buyerPhone: string
+}
+/** 买家对某商品所属课程的激活态。 */
+export interface AdminActivation {
+  courseId: string
+  activated: boolean
+  entered: boolean
+  code: string
+  enteredAt: number | null
+}
+
+export type AdminOrdersPage = AdminPage<AdminOrderRow>
+export type AdminRefundsPage = AdminPage<AdminRefundRow>
+/** orderCounts / refundCounts：各状态 + all 的精确计数；partial＝有一路 count 失败，数字不可信。 */
+export interface AdminStatusCounts {
+  counts: Record<string, number>
+  partial: boolean
+}
+/** getOrderDetail：键是 productId。 */
+export interface AdminOrderDetail {
+  activations: Record<string, AdminActivation>
+}
+/** getRefundDetail：lineRefundable 绑本单这一行（非课程级）；refundableQty 行缺失时为 null。 */
+export interface AdminRefundDetail {
+  activation: AdminActivation
+  lineRefundable: boolean
+  refundableQty: number | null
+  lineFound: boolean
+}
+/** shipOrder 成功：wxShip＝微信发货信息是否上报成功。 */
+export interface AdminShipped {
+  wxShip: boolean
+  refundedQty: Record<string, number>
+}
+/** shipOrders：逐单独立，整包 ok 不代表每单都发出去了。 */
+export interface AdminShipBatch {
+  okCount: number
+  failCount: number
+  results: Array<{ id: string; ok: boolean; error?: string }>
+}
+/** overrideRefund：新建售后单的 _id。 */
+export interface AdminOverrideRefund {
+  id: string
+}
+/** getDashboard。gmv 是元；txAlerts.partial＝钱链异常有一路没查到，三类列表可能不全。 */
+export interface AdminDashboard {
+  stats: { users: number; orders: number; gmv: number; codesTotal: number; codesActivated: number; learners: number }
+  approx: { gmv: boolean; hot: boolean; stuck: boolean; sampleSize: number }
+  funnel: { ordered: number; paid: number; activated: number }
+  /** 真能发的单数（paid、无金额不符、不被退款拦，与 shipOne 同判据）。 */
+  toShip: number
+  txAlerts: { feeMismatch: string[]; refundMismatch: string[]; stuckRefunds: string[]; partial: boolean }
+  hot: Array<{ segId: string; name: string; count: number }>
+  stuck: Array<{ segId: string; name: string; count: number }>
+  recentActivity: Array<{ type: string; at: number; text: string }>
+}
+
+// ── 后台商品组 action 的成功包字段（admin api/products.ts 用）──
+// 这组没有契约 JSON 锁，照 adminApi actions/products.ts、cards.ts 与 catalog.ts storeImage 的回包写。
+
+/** listDrafts：最新 100 个商品草稿（库内文档原样，字段不在这里建模）。urls：图片 fileID → 临时地址，换不到的不在里面。
+ *  listed、cardFinal 键是商品 id；hasVideo、coursePublished、hasBatch 键是课程 id。 */
+export interface AdminDrafts {
+  list: Array<Record<string, unknown>>
+  urls: Record<string, string>
+  listed: Record<string, boolean>
+  cardFinal: Record<string, boolean>
+  hasVideo: Record<string, boolean>
+  coursePublished: Record<string, boolean>
+  hasBatch: Record<string, boolean>
+}
+/** listShowcase：products 集合按 sort 排的前 100 个（库内文档原样）+ 封面临时地址。 */
+export interface AdminShowcase {
+  list: Array<Record<string, unknown>>
+  urls: Record<string, string>
+}
+/** 卡面档：saveCard 按这个形状清洗后写库。 */
+export interface AdminCardDoc {
+  productId: string
+  courseId: string
+  name: string
+  status: 'draft' | 'final'
+  front: { art: string; bg: string; showBrand: boolean }
+  back: { bg: string; brandText: string; texts: { title: string; sub: string; scanHint: string; warning: string } }
+  sizeMM: { w: number; h: number }
+}
+/** getCard：没建过卡时 card 是 null；artUrl 是正面图的临时地址（不是云存储图或换不到时为 ''）。 */
+export interface AdminCard {
+  card: AdminCardDoc | null
+  artUrl: string
+}
+/** uploadImage：fileID 写进档里，url 是给页面预览的临时地址（换不到为 ''）。 */
+export interface AdminUploaded {
+  fileID: string
+  url: string
+}

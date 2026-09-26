@@ -18,8 +18,8 @@ import { isOwnCheckpointFile, deleteOwnCheckpointFiles } from './checkpoint'
 const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 
 /**
- * 微信登录（静默）：用可信 openid upsert users，返回用户（黄金 admin-misc §五）。
- * 确定性 _id=OPENID（设计约束#1）：并发首登撞键即幂等；老随机 _id 档 where 命中即用（惰性迁移）。
+ * 微信登录（静默）：用可信 openid upsert users，返回用户。
+ * 确定性 _id=OPENID（根因#1）：并发首登撞键即幂等；老随机 _id 档 where 命中即用（惰性迁移）。
  * unionid 桥接 best-effort：有则存进用户档（客服查订单反查用），绝不反噬登录。
  */
 export const login = withOpenId(
@@ -53,7 +53,7 @@ async function storeUnionId(db: any, OPENID: string, user: any): Promise<void> {
 }
 
 /**
- * 保存用户资料（黄金 admin-misc §五：白名单+截断+归属，不信前端）。
+ * 保存用户资料（白名单+截断+归属，不信前端）。
  * 白名单 {nickname,bio,avatar}；avatar 只接受云存储地址（cloud://）或空串（清除）——拒注入任意 URL。
  */
 export const updateProfile = withOpenId(

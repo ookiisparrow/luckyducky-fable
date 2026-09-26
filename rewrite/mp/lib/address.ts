@@ -1,4 +1,4 @@
-// 收货地址簿（黄金 frontend-store §五·旧线 Pinia address 原生承接）：
+// 收货地址簿：
 // 空簿不内置样例（真支付误发样例人=错发货）；新增 id 取现有最大+1（回灌后天然不撞号）；默认唯一。
 import { readStorage, writeStorage } from '../utils/storage'
 
@@ -40,7 +40,7 @@ function save(): void {
   writeStorage(KEY, { list: load() })
 }
 
-// 下一个 id：现有最大+1（不用模块计数器——回灌后计数器归零会撞已存 id·旧线审定语义）
+// 下一个 id：现有最大+1（不用模块计数器——回灌后计数器归零会撞已存 id）
 const nextId = (l: Address[]) => l.reduce((m, a) => Math.max(m, a.id || 0), 0) + 1
 
 export function getList(): Address[] {

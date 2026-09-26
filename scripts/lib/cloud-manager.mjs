@@ -1,7 +1,7 @@
 // 生产环境凭证桥接（本地运维脚本专用，只读面：db-export.mjs / check-indexes.mjs 消费）。
 //
 // 云函数运行时靠 SCF 自动注入 TENCENTCLOUD_SECRETID/SECRETKEY/SESSIONTOKEN（见
-// rewrite/cloud/src/functions/adminApi/lib.ts::manager()），本地脚本没有这层注入。改走
+// rewrite/cloud/src/functions/adminApi/catalog.ts::manager()），本地脚本没有这层注入。改走
 // `tcb secrets get --json`——CloudBase CLI 官方支持的「登录态换临时密钥」桥接（--help 原文：
 // 获取当前登录态的临时密钥，可用于初始化 manager-node / node-sdk），复用已登录的 CLI 会话、
 // 不新落盘一份密钥文件。envId 默认取 scripts/lib/env.mjs 的生产环境单源，不新开定义。
@@ -47,7 +47,7 @@ export function parseTcbSecretsJson(stdout) {
 
 let _manager = null
 
-// 取 manager-node 实例（懒加载 + 单例缓存，同 adminApi/lib.ts::manager() 精神一致）。
+// 取 manager-node 实例（懒加载 + 单例缓存，同 adminApi/catalog.ts::manager() 精神一致）。
 // 凭证优先级：① 环境变量（与云函数运行时命名一致，便于 CAM 子账号密钥场景）；
 // ② tcb secrets get --json 桥接已登录态。两者皆无 / 执行失败 → CredentialError。
 export async function getManager(envId = PROD_ENV) {

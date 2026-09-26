@@ -1,4 +1,5 @@
 import { toFen, COLLECTIONS } from '@ldrw/shared'
+import type { OrderDoc } from '@ldrw/shared'
 import {
   defineNotifyCallback,
   transition,
@@ -10,10 +11,10 @@ import {
   isEmptyDoc,
 } from '../../kit'
 
-// 支付结果回调（黄金 orders-money·payCallback 节全量）。防伪/ACK/id 提取由 defineNotifyCallback 强制。
+// 支付结果回调。防伪/ACK/id 提取由 defineNotifyCallback 强制。
 // pending→paid 直接翻单（库存自下单持有）；closed→paid 复活前必须重抢库存——抢不到进 refund_required
 // （钱已收无法履约·告警人工退款·绝不超卖）。入参兼容 v3 resource 与旧 v2 字段。
-// 部署命名：M5 切换日同名替换（回调点位绑定控制台工作流 paynotify）。
+// 回调点位绑定控制台工作流 paynotify。
 const ACK = { errcode: 0, errmsg: 'OK' }
 
 /**
@@ -36,17 +37,25 @@ export async function reserveWithRetry(
   return res
 }
 
+// 回调里的收款字段（v3 amount.* 与旧 v2 字段兼容）。金额单位都是分。
+// 核对用订单总额 total（微信原单金额）：payer_total 是扣掉微信/银行立减后的用户实付，
+// 拿它核对会把用了优惠的正常单判成少付；它只存 payerTotal 备查。
+// paidFee 保留 NaN：它要参与核对（NaN 必判不符）；落库前各分支自己归一。payerTotal 不参与核对，
+// 在源头把非数归成 null，免得 paid / refund_required 各分支把 NaN 写进库。
+function paidFieldsOf(e: any) {
+  const paidFee = e.amount && e.amount.total != null ? Number(e.amount.total) : Number(e.totalFee)
+  const payerTotal = e.amount && e.amount.payer_total != null ? Number(e.amount.payer_total) : null
+  const transactionId = String(e.transaction_id || e.transactionId || '')
+  return { paidFee, payerTotal: Number.isFinite(payerTotal) ? payerTotal : null, transactionId }
+}
+
 export const main = defineNotifyCallback<any>({
   ack: ACK,
   refId: (e) => String(e.out_trade_no || e.outTradeNo || ''),
   onNotify: async ({ id, event: e }) => {
     const success = e.trade_state === 'SUCCESS' || (e.returnCode === 'SUCCESS' && e.resultCode === 'SUCCESS')
     if (!success) return // 未成功：留 pending（等重付或超时关单）
-    // 核对用订单总额 total（微信原单金额）：payer_total 是扣掉微信/银行立减后的用户实付，
-    // 拿它核对会把用了优惠的正常单判成少付；它只存 payerTotal 备查。
-    const paidFee = e.amount && e.amount.total != null ? Number(e.amount.total) : Number(e.totalFee)
-    const payerTotal = e.amount && e.amount.payer_total != null ? Number(e.amount.payer_total) : null
-    const transactionId = String(e.transaction_id || e.transactionId || '')
+    const { paidFee, payerTotal, transactionId } = paidFieldsOf(e)
     // 读失败≠无此单（病根#14）：只有真缺档才告警 ACK；其余读失败告警后抛——不 ACK，微信重推时幂等重跑自愈。
     // 当无单 ACK 掉，已付款单会留在 pending、被关单定时器关掉。
     const readFail = async (code: string, cause?: unknown) => {
@@ -59,7 +68,8 @@ export const main = defineNotifyCallback<any>({
       .get()
       .catch((err: unknown) => (isDocMissing(err) ? null : readFail('ORDER_READ_FAIL', err)))
     if (isEmptyDoc(initial)) return void (await notifyAlert('money', 'payCallback', 'UNKNOWN_ORDER', { id }))
-    const expectedFee = toFen(initial.data.amount as number)
+    const order: OrderDoc = initial.data
+    const expectedFee = toFen(order.amount)
     const mismatch = paidFee !== expectedFee
     const mismatchDirection = paidFee < expectedFee ? 'underpaid' : paidFee > expectedFee ? 'overpaid' : 'unknown'
     // amount 只在建单时写入，initial 算出的应付额就是流转时的应付额：目标态与 patch 同源
@@ -74,7 +84,7 @@ export const main = defineNotifyCallback<any>({
 
     // 正常路径：pending → paid；金额不符进入 payment_exception（库存自下单持有，异常单不得履约）。
     // transition 内部重读或条件写失败会抛：同样先告警再抛（不 ACK，靠微信重推幂等重跑）
-    const p = await transition(COLLECTIONS.orders, id, ['pending'], mismatch ? 'payment_exception' : 'paid', payPatch).catch(
+    const p = await transition<OrderDoc>(COLLECTIONS.orders, id, ['pending'], mismatch ? 'payment_exception' : 'paid', payPatch).catch(
       (err: unknown) => readFail('REREAD_FAIL', err)
     )
     if (p.moved) {
@@ -86,7 +96,7 @@ export const main = defineNotifyCallback<any>({
     }
     if (!p.doc) return readFail('REREAD_FAIL') // 上面已读到单：这里没 doc＝读后被删，不 ACK 留给重推
 
-    // 关单复活漏窗（P1·根因#1 修复）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
+    // 关单复活漏窗（根因#1）：p.doc 是条件更新**前**的读。若读到的仍是 'pending' 但 moved=false，
     // 说明读后被并发推进（关单定时器抢先转 closed）——不能拿「读时值」当「现在值」，须重读一次现值再分发。
     let status = String(p.doc.status || '')
     if (status === 'pending') {
@@ -120,7 +130,7 @@ export const main = defineNotifyCallback<any>({
         ...payPatch(),
         revivedAt: Date.now(),
       })).catch(async (err: unknown) => {
-        const now = await getDb().collection(COLLECTIONS.orders).doc(id).get().then((g: any) => g.data, () => null)
+        const now: OrderDoc | null = await getDb().collection(COLLECTIONS.orders).doc(id).get().then((g: any) => g.data, () => null)
         if (!now || now.status !== 'paid') await restoreStock(re.reserved)
         return readFail('REVIVE_FAIL', err)
       })

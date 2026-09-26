@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// 审计日志（批 B6·操作审计#4 读出口）：谁在何时做了什么操作——kit/audit.ts::recordAudit 已全量写 auditLog，
-// 此前唯一读路径是控制台裸翻数据库，本页补读出口。敏感字段（口令/webhook）已在写侧 summarize 剥离
+// 审计日志（操作审计读出口）：谁在何时做了什么操作——kit/audit.ts::recordAudit 全量写 auditLog，
+// 本页是它的读出口（否则只能控制台裸翻数据库）。敏感字段（口令/webhook）已在写侧 summarize 剥离
 // （见 kit/audit.ts），本页展示 summary 原样透传即安全。仅超管可查（未登记 ACTION_CAPS→默认拒 admin:write）。
-// 分页/翻页/乱序守卫照 Csat.vue「评价明细」样板（cursor 翻页 + dedupe-by-id + useLatest）；不编数（根因#8·T3）：
+// 分页/翻页/乱序守卫照 Csat.vue「评价明细」样板（cursor 翻页 + dedupe-by-id + useLatest）；不编数（根因#8）：
 // 两张 KPI 卡纯从当前视图 entries 派生，同 Anomalies.vue「本视图条数」精神。
 import { ref, computed, onMounted } from 'vue'
 import { RotateCcw, Search, ClipboardList, AlertCircle, ShieldCheck } from 'lucide-vue-next'
 import { listAudit } from '../api/ops'
 import { mapAuditEntries, type AuditEntryVM } from '../lib/mapSystem'
+import { failText } from '../lib/status'
 import { useLatest, appendNew } from '../lib/latest'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -63,7 +64,7 @@ async function load() {
   entries.value = r.ok ? mapAuditEntries(r.entries) : []
   cursor.value = r.ok ? r.nextCursor : null
   hasMore.value = !!(r.ok && r.hasMore)
-  if (!r.ok) message.value = '加载失败：' + String(r.error || '')
+  if (!r.ok) message.value = failText('加载失败', r.error)
   // actionPrefix 页内过滤可能使本页命中为空、但后面页仍有匹配（hasMore 不受 actionPrefix 影响）——
   // 不能笼统说「没有更多了」，须允许「本页无匹配，可继续翻」的语义（云端 listAudit 头注同一处说明）。
   else if (entries.value.length) message.value = ''
@@ -77,7 +78,7 @@ async function more() {
   const r = await listAudit({ ...filterSnapshot, cursor: cursor.value })
   if (gen.isStale(g)) return // 期间又切筛选·放弃本页
   if (!r.ok) {
-    message.value = '加载更多失败：' + String(r.error || '')
+    message.value = failText('加载更多失败', r.error)
     return
   }
   entries.value = appendNew(entries.value, mapAuditEntries(r.entries))

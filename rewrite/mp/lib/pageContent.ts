@@ -14,9 +14,9 @@ const flight = createInflight<unknown>()
 // 该页 CMS 内容对象（拉不到/未部署/未知 page → null·调用方经 mapPages 回退默认文案·永不空屏）。
 // 命中缓存直接复用；在途去重（并发同页复用同一 promise）；仅成功回包写缓存（含 content:null 的成功空态·
 // 避免每次重拉），失败（网络/未部署）返 null 且不缓存、不覆盖既有。
-// 无需再挂「代次 token」防乱序：同页请求已被 inflight 串行化（在途即复用、结算才清键，不存在同页两只
-// 在途请求）；原全局单计数器 token 反而在「跨页并发」时误伤——A 页在途时 B 页发起会把 A 的成功回包
-// 判为过期、跳过缓存写入，弱网多页快速切换下 A 页每次回来都白拉一遍（课程链路审计 2026-07-17）。
+// 无需挂「代次 token」防乱序：同页请求已被 inflight 串行化（在途即复用、结算才清键，不存在同页两只
+// 在途请求）；全局单计数器 token 反而会在「跨页并发」时误伤——A 页在途时 B 页发起会把 A 的成功回包
+// 判为过期、跳过缓存写入，弱网多页快速切换下 A 页每次回来都白拉一遍。
 export async function getPageContent(page: PageKey): Promise<unknown> {
   if (page in cache) return cache[page]
   return flight.run(page, async () => {

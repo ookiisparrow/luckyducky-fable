@@ -17,7 +17,7 @@ import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
 
 const template = ref<{ commonLines: Array<{ materialId: string; qtyPerSet: number }>; yarnSlots: Array<{ tier: string; form: string; qtyPerSet: number }> }>({ commonLines: [], yarnSlots: [] })
-// 未保存的模板编辑保护（审核补漏·P2 数据丢失）：用户改模板即标脏；reload 有脏则不覆盖模板（防
+// 未保存的模板编辑保护（防数据丢失）：用户改模板即标脏；reload 有脏则不覆盖模板（防
 // doSaveProfile 的 void reload() 用服务端旧值回灌、静默吞掉未存编辑）。程序化载入经 tplGuard 抑制误标。
 const tplDirty = ref(false)
 let tplGuard = false
@@ -25,13 +25,13 @@ watch(template, () => { if (!tplGuard) tplDirty.value = true }, { deep: true })
 const profiles = ref<Array<Record<string, any>>>([])
 const mats = ref<Array<Record<string, any>>>([])
 const assemblies = ref<Array<Record<string, any>>>([])
-const asmCursor = ref<unknown>(null) // B1（根因#7）：组装记录列表翻页游标
+const asmCursor = ref<unknown>(null) // 组装记录列表翻页游标（根因#7）
 const asmHasMore = ref(false)
-// 组装记录加载失败标记（P2·深审20260712 失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
+// 组装记录加载失败标记（防失败伪装空态）：listAssemblies 单独失败时 assemblies=[]，
 // EmptyState 若仍显「还没有组装记录」＝把查询失败伪装成空账——文案按此标记分流。
 const asmFailed = ref(false)
 const products = ref<Array<Record<string, any>>>([]) // 全产品目录
-// 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（接回 listDrafts 一并复原）
+// 产品名解析 + 未填差异位总览 + 组装规格 SKU 下拉（数据取自 listDrafts）
 const productName = (id: unknown) => productNameOf(products.value, id)
 const unprofiled = computed(() => unprofiledProducts(products.value, profiles.value))
 const runSkus = computed(() => {
@@ -39,23 +39,23 @@ const runSkus = computed(() => {
   return Array.isArray(p?.skus) ? (p!.skus as Record<string, any>[]).map((s) => String(s.name || '')).filter(Boolean) : []
 })
 const shortCount = computed(() => preview.value.filter((l) => (l as any).short > 0 || (l as any).missing).length) // 执行前缺料预警
-// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不再抹掉动作刚设的成功/失败原文。
+// 动作反馈(note)/加载态(load) 收口（病根#14）：reload 成功不抹掉动作刚设的成功/失败原文。
 const { message, ok: msgOk, note, load } = useLoadStatus()
 
 const prof = ref({ productId: '', L: '', M: '', S: '', packagingMaterialId: '', cardMaterialId: '' })
 const run = ref({ productId: '', spec: '', sets: 1 })
 const preview = ref<Array<Record<string, any>>>([])
 const runConfirm = ref(false)
-const expanded = ref('') // 组装记录用料展开（换皮丢·点单号看扣了哪些料）
+const expanded = ref('') // 组装记录用料展开（点单号看扣了哪些料）
 
-// 下拉候选（换皮退成裸文本框·易打错料号）：共用料限非毛线非成品（毛线走三档槽·颜色由差异位定）；专属件按类过滤
+// 下拉候选（裸文本框易打错料号）：共用料限非毛线非成品（毛线走三档槽·颜色由差异位定）；专属件按类过滤
 const commonCandidates = computed(() => mats.value.filter((m) => m.category !== 'yarn' && !String(m._id).startsWith('fg:')))
 const packagingList = computed(() => mats.value.filter((m) => m.category === 'packaging'))
 const cardList = computed(() => mats.value.filter((m) => m.category === 'card'))
 const profileIds = computed(() => profiles.value.map((p) => String(p._id))) // 差异位建议 + 执行可选（有差异位才可组装）
 const allProductIds = computed(() => products.value.map((p) => String(p.id || p._id)).filter(Boolean)) // 全产品（差异位可选未建过的）
 
-// 编辑既有差异位（换皮丢·填完只能新建覆盖）：点列表项回填表单
+// 编辑既有差异位：点列表项回填表单
 function editProfile(p: Record<string, any>) {
   prof.value = {
     productId: String(p._id || ''),
@@ -73,15 +73,15 @@ watch(() => prof.value.productId, (id) => {
   if (!prof.value.packagingMaterialId && packagingList.value.some((m) => m._id === 'pkg:' + pid)) prof.value.packagingMaterialId = 'pkg:' + pid
   if (!prof.value.cardMaterialId && cardList.value.some((m) => m._id === 'card:' + pid)) prof.value.cardMaterialId = 'card:' + pid
 })
-// B1 幂等键：每次组装意图生成一次·重试复用·成功才换新（换皮在 api 内每次现生成→双击/慢网双扣料双入库）
+// 幂等键：每次组装意图生成一次·重试复用·成功才换新（在 api 内每次现生成的话双击/慢网双扣料双入库）
 const pendingAsmId = ref('')
 // 全局模板载入成功才放开「保存模板」——载入失败时 template 为空 {commonLines:[],yarnSlots:[]}，加一槽即通过 cleanTemplate，
 // 保存就整块 .set 覆盖 singleton 配方模板、抹掉真实 commonLines/其余 yarnSlots；resolveBom 读此单例，后续 runAssembly 全按残缺
-// 配方扣料→产销/库存错乱（P2·同 Settings 载入失败门·首次成功后恒 true·template 保住已载入值不再置回 false）
+// 配方扣料→产销/库存错乱（同 Settings 载入失败门·首次成功后恒 true·template 保住已载入值不再置回 false）
 let bomLoaded = false
 
 async function reload() {
-  runConfirm.value = false // 刷新即复位危险态（P1·防旧武装的「执行组装」确认残留、重进一击直扣料·批3 规格）
+  runConfirm.value = false // 刷新即复位危险态（防旧武装的「执行组装」确认残留、重进一击直扣料）
   const [b, m, a, d] = await Promise.all([getBomSetup(), listMaterials(), listAssemblies(), listDrafts()])
   if (b.ok) {
     const t = (b.template as Record<string, any>) || {}
@@ -90,7 +90,7 @@ async function reload() {
       tplGuard = true
       template.value = { commonLines: t.commonLines || [], yarnSlots: t.yarnSlots || [] }
       void nextTick(() => (tplGuard = false))
-      bomLoaded = true // 仅在「真实模板回灌进内存」时才放开保存——若因 tplDirty 跳过回灌，template 仍是初次失败后的空/残缺值，此时置真会重开覆盖 singleton 的洞（P2 补·batch11 原置于块外的漏）
+      bomLoaded = true // 仅在「真实模板回灌进内存」时才放开保存——若因 tplDirty 跳过回灌，template 仍是初次失败后的空/残缺值，此时置真会重开覆盖 singleton 的洞
     }
     profiles.value = (b.profiles as Record<string, any>[]) || []
   }
@@ -100,13 +100,13 @@ async function reload() {
   asmHasMore.value = !!(a.ok && a.hasMore)
   asmFailed.value = !a.ok
   products.value = d.ok ? ((d as any).list as Record<string, any>[]) : []
-  // 分路报错（P2·深审20260712）：原先只校验 getBomSetup 一路，listMaterials/listAssemblies/listDrafts
+  // 分路报错：只校验 getBomSetup 一路的话，listMaterials/listAssemblies/listDrafts
   // 单独失败被吞成空数组、页面显假空态——照 Reconciliation.vue reload 范式，任一路失败都点名报出。
   const err = loadErrors([[b, '配方模板'], [m, '物料主档'], [a, '组装记录'], [d, '产品目录']])
   load(!err, err) // 只在加载失败时写·成功静默不抹动作反馈
 }
 
-// 组装记录「加载更多」（B1·根因#7）：续游标追加·去重防双击重复追加同一页
+// 组装记录「加载更多」（根因#7）：续游标追加·去重防双击重复追加同一页
 async function moreAssemblies() {
   if (!asmHasMore.value || asmCursor.value == null) return
   const r = await listAssemblies({ cursor: asmCursor.value })
@@ -121,7 +121,7 @@ async function moreAssemblies() {
 
 async function doSaveTemplate() {
   if (!bomLoaded) {
-    // 模板未成功载入即保存 = 拿空模板整块覆盖 singleton 配方、后续扣料错乱（P2）——拒绝并提示刷新
+    // 模板未成功载入即保存 = 拿空模板整块覆盖 singleton 配方、后续扣料错乱——拒绝并提示刷新
     note(false, '', '模板未成功载入，暂不能保存（避免覆盖已有配方模板·请刷新重试）')
     return
   }
@@ -132,14 +132,14 @@ async function doSaveTemplate() {
 
 async function doSaveProfile() {
   const p = prof.value
-  // trim productId（D1·双保险：前端管体验后端管闸）——按钮文案 213 行已用 trim 比对，提交理应同口径，
+  // trim productId（双保险：前端管体验后端管闸）——「保存/更新差异位」按钮文案已用 trim 比对，提交理应同口径，
   // 否则尾随空格能在此处混过、落成与文案判断不一致的幽灵 _id。
   const r = await saveBomProfile({ productId: p.productId.trim(), yarnColors: { L: p.L, M: p.M, S: p.S }, packagingMaterialId: p.packagingMaterialId, cardMaterialId: p.cardMaterialId })
   note(r.ok, '差异位已保存', scmErrorText(r.error))
   void reload()
 }
 
-const previewGen = useLatest() // 乱序守卫（G5·P2）：旧预演回包别把已被 watch(run) 深清的预演表重新灌回
+const previewGen = useLatest() // 乱序守卫：旧预演回包别把已被 watch(run) 深清的预演表重新灌回
 async function doPreview() {
   // 新预演＝新组装意图·换新幂等键（防拿旧 id 组装改过的产品/套数）
   pendingAsmId.value = ''
@@ -165,7 +165,7 @@ async function doRun() {
     preview.value = []
     void reload()
   } else {
-    // 失败保留 pendingAsmId：重试复用同一幂等键·撞 id 幂等闸挡双扣（B1 修·后端 _id=assemblyId 确定性 claim）
+    // 失败保留 pendingAsmId：重试复用同一幂等键·撞 id 幂等闸挡双扣（后端 _id=assemblyId 确定性 claim）
     note(false, '', scmErrorText(r.error))
   }
 }
@@ -174,11 +174,11 @@ async function doRun() {
 watch(run, () => {
   pendingAsmId.value = ''
   runConfirm.value = false
-  preview.value = [] // 改产品/规格/套数即清旧预演·防显 A 的缺料表 + 「有 N 项缺料」警告落到 B（P2·误导执行决策）
-  previewGen.begin() // 同步作废在途旧预演请求（复审 G5 补漏）：不这样做，watch 只清了 preview，旧回包稍后到达时
+  preview.value = [] // 改产品/规格/套数即清旧预演·防显 A 的缺料表 + 「有 N 项缺料」警告落到 B（误导执行决策）
+  previewGen.begin() // 同步作废在途旧预演请求：不这样做，watch 只清了 preview，旧回包稍后到达时
   // previewGen 的代际号未变·isStale 判「不过期」·把已被这里清空的 preview 重新灌回，正是上一行注释要挡的场景
 }, { deep: true })
-// 切产品后清残留的旧规格（P2·根因#8）：run.spec 不在新产品 SKU 里时，规格 <select> 只显空白却仍持旧值 '红'，
+// 切产品后清残留的旧规格（根因#8）：run.spec 不在新产品 SKU 里时，规格 <select> 只显空白却仍持旧值 '红'，
 // doRun 原样发给后端生成 fg:<新产品>__红 这个不存在的幻影成品 SKU（扣料对、成品入错规格·产销/库存出假行）。
 // 单独监听 productId（非 deep run·否则会把用户刚选的规格也一起清掉）；新产品含同名规格则保留。
 watch(() => run.value.productId, () => {
@@ -253,7 +253,7 @@ onMounted(reload)
           <p v-if="!profiles.length" class="hint">还没有差异位——填上面表单保存</p>
         </div>
 
-        <!-- 未填差异位总览（换皮丢·没建过差异位的在售产品完全不出现·组装前会被拒却发现不了·接回 listDrafts 全目录） -->
+        <!-- 未填差异位总览（否则没建过差异位的在售产品完全不出现·组装前会被拒却发现不了·用 listDrafts 全目录） -->
         <div v-if="unprofiled.length" class="unprof">
           <h3 class="grp-title warn">未填差异位（打包前必填·{{ unprofiled.length }}）</h3>
           <div class="chip-wrap">
@@ -268,7 +268,7 @@ onMounted(reload)
             <option value="">选产品（须有差异位）…</option>
             <option v-for="pid in profileIds" :key="pid" :value="pid">{{ productName(pid) }}</option>
           </select>
-          <!-- 组装规格：有 SKU 走下拉（换皮退成裸文本框·易与商品实际 SKU 不一致·拼错成品入错 spec）·无 SKU 退文本 -->
+          <!-- 组装规格：有 SKU 走下拉（裸文本框易与商品实际 SKU 不一致·拼错成品入错 spec）·无 SKU 退文本 -->
           <select v-if="runSkus.length" v-model="run.spec"><option value="">规格（可空）…</option><option v-for="s in runSkus" :key="s" :value="s">{{ s }}</option></select>
           <input v-else v-model="run.spec" placeholder="规格（可空）" />
           <input v-model.number="run.sets" type="number" min="1" placeholder="套数" />

@@ -1,5 +1,5 @@
-// 进销存 SCM 页面顺序单源（旧线 utils/scmFlow.js 移植·用户 2026-07-02「按工作流程顺序排序+顶部切换标签」拍板）。
-// 新线 5 页版：建档(物料/配方) → 算缺口/统计(备货产销) → 补料(采购/外协)。ScmFlowTabs.vue 消费本表；
+// 进销存 SCM 页面顺序单源（用户拍板「按工作流程顺序排序+顶部切换标签」）。
+// 5 页：建档(物料/配方) → 算缺口/统计(备货产销) → 补料(采购/外协)。ScmFlowTabs.vue 消费本表；
 // Shell 侧栏「供应链」组用同一批 path（tests/scm-ui.test.ts 焊死：SCM_FLOW path 集合 === Shell SCM 组）。
 // 新增/调整 SCM 页面只改这一处 + Shell 对应组 + router。
 import { Warehouse, Blocks, CalendarRange, ClipboardList, Handshake } from 'lucide-vue-next'

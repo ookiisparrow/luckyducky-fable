@@ -6,7 +6,7 @@ import { Search, Boxes, CircleCheck, TriangleAlert, XCircle, Infinity as Infinit
 import { listInventory, saveStock } from '../api/system'
 import { listDrafts } from '../api/products'
 import { mapStock, stockErrorText, type StockRow } from '../lib/mapSystem'
-import { useLoadStatus } from '../lib/status'
+import { useLoadStatus, failText } from '../lib/status'
 import { LOW_STOCK_THRESHOLD, stockAlertOf, type StockAlert } from '../lib/thresholds'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
@@ -25,13 +25,13 @@ interface Row extends StockRow {
 const rows = ref<Row[]>([])
 const truncNote = ref('')
 const invOk = ref(false) // listInventory 成功才信 KPI；失败不画假零
-// 动作反馈/加载态收口（病根#14）：reload 成功不再抹掉 doSave 刚设的 409 冲突原文等动作反馈。
+// 动作反馈/加载态收口（病根#14）：reload 成功不抹掉 doSave 刚设的 409 冲突原文等动作反馈。
 const { message, load } = useLoadStatus()
 const busy = ref(false)
 const saving = ref(false) // 在途闸：同一 expectedUpdatedAt 二发必 409，成功后会显假冲突
 const editKey = ref('')
 const editVal = ref('')
-const editThreshold = ref('') // per-SKU 阈值编辑（换皮丢·后端 saveStock 早支持 threshold）
+const editThreshold = ref('') // per-SKU 阈值编辑（后端 saveStock 支持 threshold）
 const search = ref('')
 const filter = ref<'all' | StockAlert>('all')
 
@@ -78,7 +78,7 @@ async function reload() {
     status: stockAlertOf(r.stock, r.threshold, LOW_STOCK),
   }))
   truncNote.value = m.truncNote
-  load((inv as any).ok, '加载失败：' + String((inv as any).error || '')) // 只在加载失败时写·成功不抹动作反馈（409 冲突原文留住）
+  load((inv as any).ok, failText('加载失败', (inv as any).error)) // 只在加载失败时写·成功不抹动作反馈（409 冲突原文留住）
 }
 
 function startEdit(row: Row) {
@@ -89,7 +89,7 @@ function startEdit(row: Row) {
 
 async function doSave(row: Row) {
   if (saving.value) return
-  const key = editKey.value // 快照发起时的编辑目标（G4·P2）：回包后若已切到别行编辑，不清新行正开着的 editKey
+  const key = editKey.value // 快照发起时的编辑目标：回包后若已切到别行编辑，不清新行正开着的 editKey
   const v = editVal.value.trim()
   const stock = v === '' ? null : Number(v)
   if (stock !== null && (!Number.isInteger(stock) || stock < 0)) {
@@ -107,7 +107,7 @@ async function doSave(row: Row) {
   const r = await saveStock(row.productId, row.spec, stock, row.updatedAt, threshold)
   saving.value = false
   if (r.ok) {
-    if (editKey.value === key) editKey.value = '' // 仍是发起时那行才收起编辑态，别顶掉新打开的行内编辑（G4）
+    if (editKey.value === key) editKey.value = '' // 仍是发起时那行才收起编辑态，别顶掉新打开的行内编辑
     message.value = ''
   } else {
     message.value = stockErrorText(r.error, r.status) // 失败提示不受目标切换影响，全局可见（同既有行为）
@@ -133,7 +133,7 @@ onMounted(reload)
       <KpiCard label="SKU 总数" :value="counts.all" :icon="Boxes" />
       <KpiCard label="在售" :value="counts.onsale" :icon="CircleCheck" />
       <KpiCard label="低库存预警" :value="counts.low" :icon="TriangleAlert" />
-      <!-- 0 是好状态不该红（批6·防红色语义稀释·狼来了效应） -->
+      <!-- 0 是好状态不该红（防红色语义稀释·狼来了效应） -->
       <KpiCard label="售罄" :value="counts.out" :icon="XCircle" :tone="counts.out > 0 ? 'red' : 'neutral'" />
     </div>
 

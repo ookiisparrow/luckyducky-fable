@@ -2,6 +2,7 @@
 // 对账日表与勾对差异（approx 诚实透传·wxOnly=最危险标红）/库存冲突 409 人话/webhook 形态前端预检。
 // 上新五步/批次/课程操作者可见错误码 → 中文大白话（UNKNOWN_COURSE 等·编号只作次要信息）。
 import { yuan, dateTime } from './format'
+import type { ErrCode } from '@ldrw/shared'
 
 export interface AgentRow {
   id: string
@@ -67,14 +68,14 @@ export const webhookOk = (w: string): boolean => !w || /^https:\/\/qyapi\.weixin
 
 export interface ReconVM {
   cumulative: Array<{ label: string; value: string }>
-  // 窗内合计（所选区间真值·后端 summary 就绪·换皮误用全时 cumulative 致口径错乱：窗内订单数与全时钱额混排、tfoot 穿帮）
+  // 窗内合计（所选区间真值·别用全时 cumulative：窗内订单数与全时钱额混排会口径错乱、tfoot 穿帮）
   summary: { income: string; refund: string; net: string; orders: number; refunds: number }
   range: { from: string; to: string }
   daily: Array<{ day: string; income: string; refund: string; net: string; orders: number; refunds: number }>
   approxNote: string
   partial: boolean // 累计聚合/异常查询降级：数据不可信（后端 degraded：任一路读失败·前端须警告操作员别当真 0）
-  // 内部异常明细（bug B2 修：后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
-  // 换皮误当数组取 .length 恒 0、明细永不渲染。改按对象结构化·有则渲染带单号、无则空数组不吓人）
+  // 内部异常明细（后端 getTxAlerts 返回 {feeMismatch,refundMismatch,stuckRefunds} 三数组对象·
+  // 当数组取 .length 恒 0、明细永不渲染，故按对象结构化·有则渲染带单号、无则空数组不吓人）
   exceptions: Array<{ label: string; ids: string[] }>
 }
 
@@ -112,7 +113,7 @@ export function mapRecon(r: unknown): ReconVM | null {
   }
 }
 
-// B2：后端 exceptions＝{feeMismatch,refundMismatch,stuckRefunds} 三 id 数组·结构化成带单号明细块（有则渲染·空不吓人）
+// 后端 exceptions＝{feeMismatch,refundMismatch,stuckRefunds} 三 id 数组·结构化成带单号明细块（有则渲染·空不吓人）
 function mapExceptions(ex: unknown): Array<{ label: string; ids: string[] }> {
   const o = (ex && typeof ex === 'object' ? ex : {}) as Record<string, any>
   const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : [])
@@ -155,7 +156,7 @@ export interface StockRow {
   productId: string
   spec: string
   stock: number | null // null=不限量（页面用状态徽章，不当成 0）
-  threshold: number // per-SKU 低库存阈值（0=无·前端退默认·换皮硬编码 10 丢了 per-SKU·后端 saveStock 早支持）
+  threshold: number // per-SKU 低库存阈值（0=无·前端退默认）
   updatedAt: number
 }
 
@@ -182,24 +183,26 @@ export function mapStock(list: unknown, truncated: unknown): { rows: StockRow[];
 export const UNKNOWN_COURSE_HINT =
   '还没有发布课程，不能生成二维码。请先到第 4 步保存并点「发布课程」，再回来生成。'
 
-const LAUNCH_ERR: Record<string, string> = {
+// 按冒号前的主码查：UNKNOWN_COURSE 云端只以 UNKNOWN_COURSE:<课程号> 发出
+const LAUNCH_ERR: Partial<Record<ErrCode | 'UNKNOWN_COURSE', string>> = {
   UNKNOWN_COURSE: UNKNOWN_COURSE_HINT,
   NO_COURSE_ID: '还没有课程编号。请先完成前面步骤，或从商品页进入上新。',
   NO_DRAFT: '还没有可发布的课程草稿。请先到第 4 步保存课程，再点「发布课程」。',
   BAD_COURSE: '课程内容不完整，保存没成功。请检查章节、课时是否填好。',
   BAD_ARGS: '填写的数量或编号不对。数量要是正整数，课程号不能空。',
   NO_BATCH: '找不到这个批次。请刷新后再打开。',
-  GEN_FAIL: '生成二维码没成功。请稍后重试；若反复出现，先确认第 4 步已经发布课程。',
   VOD_NOT_CONFIGURED: '视频点播还没配好。请稍后重试；若反复失败，请找技术看点播配置。',
   VOD_PROCESSING: '还有视频在转码，现在不能发布。请点「同步转码状态」，全部就绪后再发布。',
   META_UNAVAILABLE: '上传通道暂时不可用。请稍后重试。',
-  BAD_FINISH: '视频合并失败。请重新上传。',
   DRAFT_CONFLICT: '草稿在别处被改过（另一个页签或窗口）。本次未保存以免互相覆盖；请点「载入」取最新后再编辑。',
   NO_PRODUCT: '找不到这个商品。请刷新后重试。',
   BAD_CARD: '卡片信息不完整，保存没成功。请检查卡面是否上传。',
   BAD_IMAGE: '图片太大或格式不对。请换一张再传。',
   BAD_PRODUCT: '商品信息不完整，保存没成功。请检查名称、价格和规格。',
   NO_ID: '缺少商品编号。请从商品列表重新进入。',
+  DOC_READ_FAIL: '云端数据暂时读不出来。请稍后重试。',
+  REMOVE_FAIL: '删除没成功。请刷新后再删一次。',
+  GC_DELETE_FAIL: '商品已删掉，只是有几张图片没清理干净（已留记录给技术）。请刷新列表。',
 }
 
 // 传输层/鉴权层码（client.ts 与网关产出，任何 action 都可能回）：各业务映射自己的表查不到时先问这里，文案单源
@@ -230,7 +233,7 @@ export function launchErrorText(e: unknown): string {
   const { head, rest, original } = launchErrHead(e)
   const transport = transportErrorText(original)
   if (transport) return transport
-  const mapped = head ? LAUNCH_ERR[head] : ''
+  const mapped = head ? LAUNCH_ERR[head as keyof typeof LAUNCH_ERR] : ''
   if (mapped) {
     if (rest && /^[\w./-]+$/.test(rest) && rest.length <= 80) return `${mapped}（编号 ${rest}）`
     return mapped
@@ -243,8 +246,9 @@ export function launchErrorText(e: unknown): string {
 /** 库存保存错误人话（409 版本冲突=有人先改过/顾客下单占用——刷新重试而不是覆盖）。 */
 export function stockErrorText(e: unknown, status?: number): string {
   const code = String(e || '')
-  if (code === 'STOCK_CONFLICT' || status === 409) return '这行库存刚被改过（可能是顾客下单占用）——已拒绝覆盖，刷新后再改'
-  if (code === 'BAD_STOCK') return '库存数不合法（须为非负整数，或留空表示不限量）'
+  const is = (c: ErrCode) => code === c
+  if (is('STOCK_CONFLICT') || status === 409) return '这行库存刚被改过（可能是顾客下单占用）——已拒绝覆盖，刷新后再改'
+  if (is('BAD_STOCK')) return '库存数不合法（须为非负整数，或留空表示不限量）'
   return transportErrorText(code) || '保存没成功（' + code + '）' // 超时可能已存上，不能说成没成功
 }
 
@@ -261,7 +265,7 @@ export interface AuditEntryVM {
   summaryText: string
 }
 
-/** 审计日志行归一（批 B6·listAudit）：ok 归一中文徽章（成功绿/失败红）、operator/ip/摘要缺省显 '—'、
+/** 审计日志行归一（listAudit）：ok 归一中文徽章（成功绿/失败红）、operator/ip/摘要缺省显 '—'、
  *  summary 对象拼成 `k: v · k: v` 展示串（同 Anomalies.vue 内联 ctxPairs 的精神，落成可单测的纯函数）。 */
 export function mapAuditEntries(list: unknown): AuditEntryVM[] {
   if (!Array.isArray(list)) return []

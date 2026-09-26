@@ -1,7 +1,7 @@
 import type { CustomerPanelProvider } from '../types'
-import { progressPercent } from '@ldrw/shared'
+import { COLLECTIONS, progressPercent } from '@ldrw/shared'
 
-// 学习位置板块（B2.1·后台360工作站·铁律三 provider 模式）：坐席查某客人每门课学到哪——章/节/段/完成度
+// 学习位置板块（铁律三 provider 模式）：坐席查某客人每门课学到哪——章/节/段/完成度
 // 人话化，精准指导钩织学习求助。数据＝progress（trackEvent 折叠的「每用户每课一条」·last 末位置 + done
 // 段完成集）join courses（取章标题/节名/段名）。
 //
@@ -43,14 +43,14 @@ export const learningProvider: CustomerPanelProvider = {
   async fetch(db: any, openid: string) {
     // 进度或课程目录读失败都抛给编排器——空数组会被当成「没学过 / 完成度 0」
     const pr = await db
-      .collection('progress')
+      .collection(COLLECTIONS.progress)
       .where({ _openid: openid })
       .limit(PROGRESS_LIMIT)
       .get()
     const progress: any[] = (pr && pr.data) || []
     if (!progress.length) return { count: 0, capped: false, positions: [] }
     // join courses（数门·全量 bounded·建 id→course 映射）
-    const cr = await db.collection('courses').limit(COURSE_LIMIT).get()
+    const cr = await db.collection(COLLECTIONS.courses).limit(COURSE_LIMIT).get()
     const courseById: Record<string, any> = {}
     for (const c of (cr && cr.data) || []) courseById[c.id || c._id] = c
     const positions = progress.map((p: any) => {

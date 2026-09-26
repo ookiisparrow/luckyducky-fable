@@ -1,11 +1,11 @@
 // 五页 CMS 内容映射（纯函数·vitest 钉行为）：云端 getPageContent → 视图模型。
-// 内容纪律（同 mapHome 黄金 §九）：整档 null / 逐块缺 / 逐字段空 都回退「设计默认文案」——CMS 拉不到或
+// 内容纪律（同 mapHome）：整档 null / 逐块缺 / 逐字段空 都回退「设计默认文案」——CMS 拉不到或
 // 字段被误清空时页面永不空白、不报错（fail-soft）。默认值 = 各页面重设计原稿，逐字搬入本文件单源。
 // welcome.warning（不可退货告知义务）空则强制回默认，不允许被清空；me 未知 key 忽略、visible===false 才隐藏；
 // about/agreement sections 空数组用默认全文；catalogPlayer.catalog.heroImage 空 → undefined（页面走 bgFor 回退链）。
 import { BRAND_NAME, BRAND_SLOGAN_EN } from './brand'
 
-// ── 小工具（同 mapHome 口径·脏档安全；本文件单源，不跨 lib 复用私有 helper·病根#5 判例：宁可小重复）──
+// ── 小工具（同 mapHome 口径·脏档安全；本文件单源，不跨 lib 复用私有 helper：宁可小重复）──
 type Dict = Record<string, unknown>
 /** 取纯对象；数组/原始值/空 → {}（逐块回退默认的地基）。 */
 const obj = (v: unknown): Dict => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Dict) : {})
@@ -19,7 +19,7 @@ const strOrUndef = (v: unknown): string | undefined => {
   const s = (v == null ? '' : String(v)).trim()
   return s || undefined
 }
-/** 数组块：非空数组 → 逐项净化（脏项剔除）；空/缺/整组全脏 → 默认整组（黄金 §九·防误清空）。 */
+/** 数组块：非空数组 → 逐项净化（脏项剔除）；空/缺/整组全脏 → 默认整组（防误清空）。 */
 function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] {
   if (!Array.isArray(raw) || raw.length === 0) return def
   const out: T[] = []
@@ -140,7 +140,7 @@ interface AboutVM {
 
 const ABOUT_LEAD_DEFAULT = '我们希望每个人都能亲手创造自己的随身幸运物。'
 const ABOUT_SECTIONS_DEFAULT: AboutSectionVM[] = [
-  // 「小棉鸭是一家」不留空格（2026-07-25 体检批 P3）：BRAND_NAME 以中文「小棉鸭」收尾，
+  // 「小棉鸭是一家」不留空格：BRAND_NAME 以中文「小棉鸭」收尾，
   // 后面紧跟中文「是」，中文之间加空格是排版错误（下方协议/隐私 intro 相反——那里中文「使用」
   // 后接拉丁字母开头的品牌名，按中英混排规则须留一个空格）。
   { title: '我们是谁', body: `${BRAND_NAME}是一家专注钩织的初学者钩织学习套装品牌。我们把毛线、配件、工具与配套教学打包成一个个初学者钩织学习套装，让没有基础的人也能从第一针开始，亲手钩出属于自己的小鸭与小物。` },
@@ -165,7 +165,7 @@ export function mapAbout(content: unknown): AboutVM {
 }
 
 // ═══════════════ 用户协议 / 隐私政策 agreement ═══════════════
-// 条款正文逐字承接旧线（2026-06-27 经营者评估拍板上线的已过审文案）：intro（引言）与 title 为固定法律
+// 条款正文是经营者拍板上线的已过审文案：intro（引言）与 title 为固定法律
 // 文本、不经 CMS 覆盖（合规文案勿随意改·契约无 intro/title 字段）；CMS 仅覆盖 effectiveDate（更新日期）
 // 与 sections（条款条目）。sections 空数组 → 回退默认全文（防误清空上线过审文本）。
 export interface AgreementDocVM {

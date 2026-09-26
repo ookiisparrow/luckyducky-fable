@@ -6,7 +6,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Boxes, Wallet, Truck, Handshake, RefreshCw, ArrowRight, ClipboardCheck } from 'lucide-vue-next'
 import { getScmOverview } from '../api/scm'
-import { materialHuman, fenLabel } from '../lib/mapScm'
+import { materialHuman, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import { useLoadStatus } from '../lib/status'
@@ -26,7 +26,7 @@ async function reload() {
   busy.value = true
   const r = await getScmOverview()
   busy.value = false
-  load(!!r.ok, '总览加载失败：' + String((r as any).error || ''))
+  load(!!r.ok, '总览加载失败：' + scmErrorText(r.error))
   vm.value = r.ok ? (r as Record<string, any>) : null
 }
 onMounted(reload)

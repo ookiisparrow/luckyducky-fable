@@ -1,4 +1,4 @@
-// 首页冷启动首屏快照（SWR·丝滑战役批2·根因#15 冷启动首屏必等一次云往返 + #8 弱网只见兜底文案）：
+// 首页冷启动首屏快照（SWR·根因#15 冷启动首屏必等一次云往返 + #8 弱网只见兜底文案）：
 // 上次冷启动成功渲染的首页数据裁白名单存 storage，下次冷启动 onLoad 先读它即刻渲染真实内容（stale），
 // 随后 reload 拉最新覆盖（revalidate）——二次冷启动首帧不再空等云回包。
 //
@@ -14,7 +14,7 @@ import { readStorage } from '../utils/storage'
 
 const KEY = 'ld:home-snap'
 const SNAP_VERSION = 1
-// 超龄阈值 90min（< 批1 服务端 IMAGE_URL_MAX_AGE=7200s=2h·联动：临时址签发有效期 2h，快照存的是当时换好的
+// 超龄阈值 90min（< 服务端 IMAGE_URL_MAX_AGE=7200s=2h·联动：临时址签发有效期 2h，快照存的是当时换好的
 // https 临时址，超 90min 即离过期只剩 30min 余量、判定超龄剥掉临时址回退兜底——防隔夜冷启动首帧一堆裂图）。
 const IMG_TTL_MS = 90 * 60 * 1000
 

@@ -1,4 +1,4 @@
-// 结算页（M2 批5·批6 接收银）：地址 + 条目预览 + 搭配购 + 金额明细 + 提交订单 + 拉起支付。
+// 结算页：地址 + 条目预览 + 搭配购 + 金额明细 + 提交订单 + 拉起支付。
 // 提交经 app 网关 createOrder（云端定价/校验/预留库存·不信前端）；支付参数经 mapPayResult fail-closed。
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
@@ -26,7 +26,7 @@ Page({
   backTimer: null as ReturnType<typeof setTimeout> | null,
   unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值落在
   // armBackTimer 方法内唯一的同步路径（无 await）——守卫按「无 await 同步路径」判，赋值前任意位置的 this.unloaded 检查即满足。
-  ready: false, // onReady 是否已触发（页面转场是否落地的近似信号·2026-07-24 调试日志 S 案）：见 armBackTimer 起表纪律。
+  ready: false, // onReady 是否已触发（页面转场是否落地的近似信号）：见 armBackTimer 起表纪律。
   pendingBackTimer: false, // refresh() 在 onReady 之前检测到空草稿——先记待办，onReady 触发后补起计时（见 onReady）。
   onUnload() {
     this.unloaded = true
@@ -43,7 +43,7 @@ Page({
     // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址
     void this.refresh()
   },
-  // 600ms 空草稿自动返回起表纪律（2026-07-24 调试日志 S 案）：navigateBack 若打在前向转场未落地的窗口内（冷启动
+  // 600ms 空草稿自动返回起表纪律：navigateBack 若打在前向转场未落地的窗口内（冷启动
   // 转场实测可迟至 ~800ms），开发者工具 Nightly≥2.02.2607232 的模拟器导航状态机会死锁（真机同族竞态未必死锁，
   // 但会退化为「返回被吞·空结算页多停留」）。onReady 只在页面自身渲染就绪后触发一次，天然晚于 onShow，用它当
   // 「转场大概率已落地」的近似信号——ready 前检测到空草稿只记 pendingBackTimer，onReady 触发后再起 600ms 计时；
@@ -62,13 +62,13 @@ Page({
       else this.pendingBackTimer = true
       return
     }
-    // 封面时效兜底（P2·bug sweep Round2 item5·同 cart.ts freshCover 已修根因病根#15 兄弟路径）：草稿里的 cover 可能是
+    // 封面时效兜底（同 lib/cart freshCover·病根#15）：草稿里的 cover 可能是
     // 结算前很久（购物车页/详情页）快照下的持久化临时址（约 2h 时效），到本页展示时可能已过期挂图；
     // allRaw 命中会话缓存零云调用（miss 兜底重拉一次，同 cart.ts onLoad 写法）。
     const allRaw = (await getAllProducts()) || []
-    if (this.data.submitting || this.unloaded) return // 恢复点复核（Round3 item2）：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
-    // draft 挪到 await 之后再读（P2·bug sweep Round2 复审补漏）：与 summaryFen() 取同一时刻的快照——
-    // 若挪前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
+    if (this.data.submitting || this.unloaded) return // 恢复点复核：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
+    // draft 在 await 之后读：与 summaryFen() 取同一时刻的快照——
+    // 若在前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
     // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。
     const draft = checkout.getDraft()
     const s = checkout.summaryFen()
@@ -105,14 +105,14 @@ Page({
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
       { name: a.name, phone: a.phone, region: a.region, detail: a.detail },
-      checkout.getIdemKey() // 同一草稿的重试复用同一个键（网络超时重试不重复建单·批E）
+      checkout.getIdemKey() // 同一草稿的重试复用同一个键（网络超时重试不重复建单）
     )
     // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/
     // requestPayment（真实支付授权框）/switchTab——建单失败且已退页直接收尾；建单成功则订单已真实生成，
     // 草稿必须消费、购物车必须扣（不因页面退出而漏账），只留轻提示、不再导航。
     if (this.unloaded) {
       if (!r.ok) return
-      checkout.finishSubmitted() // 已退页不进成功页·金额无消费方不再算（评审 P3：不留丢弃返回值的死调用）
+      checkout.finishSubmitted() // 已退页不进成功页·金额无消费方不再算（不留丢弃返回值的死调用）
       wx.showToast({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
       return
     }
@@ -143,7 +143,7 @@ Page({
     // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消/失败→switchTab 首页），
     // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
     // 成功页金额用回包权威值（order.amount）：前端 summaryFen 是本地估算，缺货重试/搭配购变化等场景可能与云端现算分叉；
-    // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用（bug sweep R1 #1）。
+    // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用。
     const fallbackFen = checkout.summaryFen().amountFen // 捕获前端估算分（finishSubmitted 消费草稿前）·仅作回退兜底
     const amountFen = checkout.resolveOrderAmountFen(r.order, fallbackFen)
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
@@ -176,7 +176,7 @@ Page({
       wx.requestPayment({
         ...outcome.payment,
         success: () => this.toSuccess(orderId, amountFen),
-        // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页已上线，见 me.ts:57 入口）
+        // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页见 me.ts onOrders 入口）
         fail: (res) =>
           failModal(String(res.errMsg || '').includes('cancel') ? '支付已取消' : '支付没成功', '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。'),
       })

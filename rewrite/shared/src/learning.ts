@@ -1,7 +1,7 @@
 /**
  * learning 域状态机声明单源（状态串不可改名）。
  * 范式边界：只管「status 字符串状态机」；「进课确认」是 activations.enteredAt 的 null→时间戳
- * 条件抢占（并发开关闩·设计约束#1），不是 status 机、不在此声明——正确性由原子抢占保证。
+ * 条件抢占（并发开关闩·根因#1），不是 status 机、不在此声明——正确性由原子抢占保证。
  */
 
 /** 激活码状态机声明（qrcodes 集合）。一码一用：生成写 unused、激活原子抢占翻 activated。 */
@@ -23,11 +23,11 @@ export const QRCODE_STATUS_SPEC = {
 export const isVodFileId = (id: string): boolean => /^\d{8,32}$/.test(id)
 
 /**
- * 学习进度百分比单源（2026-07-25 进度条专项·病根#5 三处裸写同式 + 根因#14 界面说假话）。
+ * 学习进度百分比单源（病根#5 三处裸写同式 + 根因#14 界面说假话）。
  *
  * **0% 只表示真没学、100% 只表示真学完**——中间态一律夹到 [1,99]。
- * 病史：mp mapLearning / cloud customer360 / admin Courses 三处各自裸写
- * `Math.round((done/total)*100)`，边界上对用户撒谎：
+ * mp mapLearning（手落副本）/ cloud customer360 / admin Courses 都用它：裸写
+ * `Math.round((done/total)*100)` 在边界上对用户撒谎：
  *   · `1/250` → `round(0.4)=0` → 学了第一段却显示「已学 1/250 段 · 0%」，与「一段没学过」无法区分；
  *   · `199/200` → `round(99.5)=100` → 还差一段没学完却显示 100%，用户以为结课了。
  * 段数越多越容易撞上（长课程正是最需要进度感的那批）。

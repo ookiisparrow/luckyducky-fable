@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 我的与关于页签（批C）：跨两份 content 档——mePage（默认昵称 + 九入口 label 改名/visible 开关·key 只读固定顺序）
+// 我的与关于页签：跨两份 content 档——mePage（默认昵称 + 九入口 label 改名/visible 开关·key 只读固定顺序）
 // 与 about（关于我们 lead + 段落 ≤10）。两档各一条独立保存生命周期（usePageContent），工具条合并展示、保存一并触发。
 import { computed, ref } from 'vue'
 import { Plus, Trash2 } from 'lucide-vue-next'
@@ -15,10 +15,10 @@ const about = usePageContent('about', normalizeAbout, aboutPayload)
 
 const busy = computed(() => me.busy.value || about.busy.value)
 
-// saveBoth 自身的聚合结果（P1 修复·批N）：不能再用 `me.message || about.message` 简单短路——me 先
+// saveBoth 自身的聚合结果：不能用 `me.message || about.message` 简单短路——me 先
 // 完成时总会产出非空 message（成功或失败都非空），把 about 的结果（哪怕是失败）整个遮蔽掉，用户会误以为
 // 两份内容都保存成功。也不能靠事后聚合 me.autoState/about.autoState——save() 无条件把自己的 autoState
-// 复位为 ''，两边都存完后聚合恒为空。改为 saveBoth() 自己维护一份聚合 message/error（纯合并逻辑见
+// 复位为 ''，两边都存完后聚合恒为空。故 saveBoth() 自己维护一份聚合 message/error（纯合并逻辑见
 // combineSaveMessages，可单测），两次 save() 都 await 完成后读一次 message 判断成功与否，失败的
 // 那一个/两个都原样带话术拼进提示，不丢信息。
 const saveBothMessage = ref('')

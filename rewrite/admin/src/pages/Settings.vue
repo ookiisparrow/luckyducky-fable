@@ -3,8 +3,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getSettings, saveSettings } from '../api/system'
-import { webhookOk, transportErrorText } from '../lib/mapSystem'
-import { confirmed } from '../lib/status'
+import { webhookOk } from '../lib/mapSystem'
+import { confirmed, failText, writeFailText } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -13,7 +13,7 @@ import { ChevronRight, Eye, EyeOff } from 'lucide-vue-next'
 
 const router = useRouter()
 
-// 钱链告警事件开关（换皮把 webhook 迁进 Settings 但删了 5+ 事件粒度开关·alertEvents 后端字段悬空·B6 证伪 saveSettings 合并保存不抹）
+// 钱链告警事件开关（alertEvents 后端字段·saveSettings 合并保存不抹）
 const EVENTS = [
   { code: 'UNKNOWN_ORDER', label: '收款无单（款到账却找不到订单）' },
   { code: 'PAID_BUT_OOS', label: '付款售罄（款到但库存已空·待退款）' },
@@ -31,9 +31,9 @@ const events = ref<Record<string, boolean>>({}) // code → false=静音（不�
 const message = ref('')
 const ok = ref(false)
 const busy = ref(false)
-// 密钥不明文常驻（UX 体检批4）：正在填的新地址默认密码态、点眼睛临时显示
+// 密钥不明文常驻：正在填的新地址默认密码态、点眼睛临时显示
 const showWebhook = ref(false)
-let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）·P2·同 HomeContent
+let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）·同 HomeContent
 
 const pushing = computed(() => (!!alertWebhook.value.trim() && webhookOk(alertWebhook.value.trim())) || hookSet.value)
 const enabled = (code: string) => events.value[code] !== false
@@ -44,7 +44,7 @@ function toggleEvent(code: string) {
 onMounted(async () => {
   const r = await getSettings()
   if (!r.ok) {
-    message.value = '加载失败：' + (transportErrorText(r.error) || String(r.error || '')) // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
+    message.value = failText('加载失败', r.error) // 载入失败 loaded 恒 false·save 拒（防空表单覆盖已存配置）
     return
   }
   const s = (r.settings || {}) as Record<string, any> // r.ok 但无 settings = 首次空配置·合法可保存
@@ -81,7 +81,7 @@ async function save() {
       alertWebhook.value = ''
     }
   } else {
-    message.value = String(r.error) === 'BAD_WEBHOOK' ? 'webhook 被云端拒绝（形态不对）' : transportErrorText(r.error) || '保存失败：' + String(r.error || '')
+    message.value = String(r.error) === 'BAD_WEBHOOK' ? 'webhook 被云端拒绝（形态不对）' : writeFailText('保存失败', r.error)
   }
 }
 
@@ -98,7 +98,7 @@ async function clearHook() {
     ok.value = true
     message.value = '已清除 webhook：告警只记日志、不推群'
   } else {
-    message.value = transportErrorText(r.error) || '清除失败：' + String(r.error || '')
+    message.value = writeFailText('清除失败', r.error)
   }
 }
 </script>
@@ -358,7 +358,7 @@ async function clearHook() {
   font-size: 12.5px;
   color: var(--ld-content);
 }
-/* 密钥显隐（批4）：输入行 + 眼睛钮 */
+/* 密钥显隐：输入行 + 眼睛钮 */
 .secret-row {
   display: flex;
   align-items: center;

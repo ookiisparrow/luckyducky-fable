@@ -1,6 +1,6 @@
-// 播放器纯逻辑（黄金 learning-content §六：分段导航跨课时/跳过不可播课时/端点置灰 +
+// 播放器纯逻辑（分段导航跨课时/跳过不可播课时/端点置灰 +
 // 播放地址缓存 TTL/空不缓存/跨课隔离/在途去重/定向失效）。
-// 工厂式依赖注入（fetcher/now）——缓存命中/过期/去重最易在边界出错，纯函数化单测钉死（承接旧线范式）。
+// 工厂式依赖注入（fetcher/now）——缓存命中/过期/去重最易在边界出错，纯函数化单测钉死。
 import { createInflight } from './inflight'
 
 export interface SegmentPub {
@@ -8,7 +8,7 @@ export interface SegmentPub {
   name?: string
   dur?: number
   hasVideo: boolean
-  marks?: { at: number; name?: string }[] // 关键动作节点（后台 admin 标注，尚未投产·设计拍板⑤·前端宽松读）
+  marks?: { at: number; name?: string }[] // 关键动作节点（后台 admin 标注，尚未投产·设计拍板·前端宽松读）
 }
 export interface LessonPub {
   id: string
@@ -76,7 +76,7 @@ export function flattenSegments(course: unknown): FlatSegment[] {
   return out
 }
 
-/** 分段导航（黄金 §六）：±1 跨课时连续；跳过无视频段（半上线课时不困死控件）；
+/** 分段导航：±1 跨课时连续；跳过无视频段（半上线课时不困死控件）；
  *  全课端点/找不到当前段/步长 0 → null（按钮置灰·不乱跳）。 */
 export function navSegment(course: unknown, currentSegId: string, step: number): FlatSegment | null {
   if (!currentSegId || !Number.isInteger(step) || step === 0) return null
@@ -101,7 +101,7 @@ export function formatClock(totalSec: number): string {
 /** seek 目标秒数夹取到 [0, durSec]（拖动条松手/边界脏值不越界跳出可播范围）。 */
 export function clampSeek(value: number, durSec: number): number {
   // 不写 Number(...)：本函数与 seek.wxs 同源同式，而 WXS 的 Number 是常量对象、调用即编译失败
-  // （2026-07-20 真机 seek.wxs:14 炸过·守卫 rw-mp-wxs-runtime-subset）；入参已是 number，`|| 0` 收 NaN 足够。
+  // （真机会炸·守卫 rw-mp-wxs-runtime-subset）；入参已是 number，`|| 0` 收 NaN 足够。
   const v = Math.floor(value || 0)
   const max = Math.max(0, Math.floor(durSec || 0))
   if (v < 0) return 0
@@ -111,7 +111,7 @@ export function clampSeek(value: number, durSec: number): number {
 
 type UrlFetcher = (courseId: string, segmentId: string) => Promise<string>
 
-/** 播放地址缓存（黄金 §六）：TTL 内命中不重取（默认 25min·远小于服务端临时 URL 过期）；
+/** 播放地址缓存：TTL 内命中不重取（默认 25min·远小于服务端临时 URL 过期）；
  *  空结果不缓存（素材未剪/未授权下次仍重试）；键含课程标识跨课隔离；在途去重；可定向失效。 */
 export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number; ttlMs?: number }) {
   const now = o.now || (() => Date.now())
@@ -139,7 +139,7 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
 
   return {
     get,
-    /** 同步窥探（批3·消初见切段 loading 闪烁）：新鲜缓存命中回 url，否则回 ''——绝不触发取址（纯读，
+    /** 同步窥探（消初见切段 loading 闪烁）：新鲜缓存命中回 url，否则回 ''——绝不触发取址（纯读，
      *  无 await、无 inflight 参与）；空段回 ''。播放页据此在命中时跳过 state:'loading' 中间态、一次 setData 直落播放。 */
     peek(courseId: string, segmentId: string): string {
       return courseId && segmentId ? fresh(keyOf(courseId, segmentId)) : ''
@@ -164,13 +164,11 @@ export interface LessonStrip {
   cells: ('done' | 'cur' | 'todo')[] // 长度 = segTotal
 }
 
-/** 课时内分段条映射（P1/P4 segstrip 数据源）：在 course 中定位 currentSegId 所在课时，
+/** 课时内分段条映射（segstrip 数据源）：在 course 中定位 currentSegId 所在课时，
  *  按位置序给出播放中/播完两态的分段格状态（播放页无 progress 数据，这是诚实近似）。
  *  播放中（completed 缺省/false）：当前段之前 done、当前段 cur、之后 todo。
  *  播完态（completed===true）：当前段也转 done、紧随其后一段（若有）转 cur，其余不变（承播放中基线）——
- *  规格原文「其余 'todo'」字面有两种读法（之前段维持 done vs 全部非当前/非下一段强制 todo）；
- *  已按设计靶 播放器重设计.html 核实消歧（P1 board「done done cur . . . . .」→ P4 board 同一课时
- *  「done done done cur . . . .」，之前已完成段在播完态后仍是 done、未被打回 todo），确认取「之前段维持 done」读法。
+ *  之前已完成段在播完态后仍是 done、不打回 todo（对齐设计稿：「done done cur …」→「done done done cur …」）。
  *  找不到当前段所在课时 → null；脏结构安全（缺层归空、字段 String 化）。 */
 export function lessonStrip(course: unknown, currentSegId: string, completed?: boolean): LessonStrip | null {
   const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
@@ -202,7 +200,7 @@ export function lessonStrip(course: unknown, currentSegId: string, completed?: b
   return null
 }
 
-/** 磁吸判定（P2 拖动·纯函数）：窗口内取距离最近的关键动作节点，等距取 at 较小者；
+/** 磁吸判定（拖动·纯函数）：窗口内取距离最近的关键动作节点，等距取 at 较小者；
  *  marks 非数组/空、窗口内无候选、windowSec 非正数 → null。 */
 export function nearestMark(
   sec: number,

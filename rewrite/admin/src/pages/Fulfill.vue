@@ -7,6 +7,7 @@ import { RefreshCw, ScanLine, Printer, Package } from 'lucide-vue-next'
 import { listOrders, shipOrder } from '../api/money'
 import { mapOrderRows, orderErrorText, type OrderRowVM } from '../lib/mapMoney'
 import { dateTime } from '../lib/format'
+import type { ErrCode } from '@ldrw/shared'
 import {
   FULFILL_STEP_NAMES,
   COMPANIES,
@@ -32,7 +33,7 @@ const step = ref(1)
 const orders = ref<FulfillOrder[]>([])
 const loading = ref(true)
 const loadErr = ref('')
-const truncNote = ref('') // 25 页保险丝触顶提示（P2·bug sweep Round2 item11·同 getInventory truncated 惯例：触顶不静默）
+const truncNote = ref('') // 25 页保险丝触顶提示（同 getInventory truncated 惯例：触顶不静默）
 // 本次发货流水（会话态·跳步不丢·刷新页面即清）
 interface LogEntry {
   id: string
@@ -81,12 +82,14 @@ async function reload() {
       hasMore = !!(r as any).hasMore && cursor != null
       pages++
     }
-    // 触顶（25 页仍有下一页）不静默（P2·bug sweep Round2 item11·同 getInventory truncated 惯例）：
+    // 触顶（25 页仍有下一页）不静默（同 getInventory truncated 惯例）：
     // 备货汇总/标签清单/扫码核对都基于 orders.value，触顶后本队列不完整却不吭声，操作员会漏单不自知。
     if (hasMore && pages >= 25) truncNote.value = '订单量超出一次装载上限，列表不完整——请分批处理或联系技术缩小范围'
     orders.value = acc
   } catch (e) {
-    loadErr.value = '加载失败：' + (e instanceof Error ? e.message : String(e))
+    // 这里是页面自己的代码抛了异常（回包畸形之类），英文原文操作员看不懂；原文留控制台给技术排查
+    console.error(e)
+    loadErr.value = '加载失败：页面处理订单数据时出错，请刷新；反复出现请找技术'
   } finally {
     loading.value = false
   }
@@ -259,12 +262,12 @@ function onScan() {
 }
 function mapShipErr(code: unknown): string {
   if (code === 'BAD_STATUS:' + 'shipped') return '这单已发过货；要改运单号请去「订单发货」页'
-  if (code === 'REFUND_LINES_CHANGED') return '这单打完标签后又有商品退款，箱里的货可能多了——点「刷新队列」重打标签，按新标签重新装箱'
+  if (code === ('REFUND_LINES_CHANGED' satisfies ErrCode)) return '这单打完标签后又有商品退款，箱里的货可能多了——点「刷新队列」重打标签，按新标签重新装箱'
   return orderErrorText(code)
 }
 async function doShip(order: FulfillOrder, trackingNo: string) {
   if (shipping.value) {
-    // 在途期第二枪静默丢弃（P1·bug 清除战役 II C1）：扫码枪连扫两箱时不吭声会让操作员误以为已处理、漏发货
+    // 在途期第二枪不静默丢弃：扫码枪连扫两箱时不吭声会让操作员误以为已处理、漏发货
     say('上一单发货还在处理中——这一枪没有生效，等出结果再重扫这张面单', true)
     return
   }
@@ -278,7 +281,7 @@ async function doShip(order: FulfillOrder, trackingNo: string) {
     orders.value = orders.value.filter((o) => o.id !== order.id)
     sessionLog.value.unshift({ ...entry, ok: true })
     // 只在仍选中刚发的这单时清选择——发货往返期间操作员可能已扫下一箱内码选中别单（selected=B），
-    // 无条件置空会把 B 的选择抹掉、逼其重扫箱码（P3·根因#8·扫码枪快速连扫才触发）
+    // 无条件置空会把 B 的选择抹掉、逼其重扫箱码（根因#8·扫码枪快速连扫才触发）
     if (selected.value?.id === order.id) selected.value = null
     say(`已发货 ${entry.code} · ${entry.company} ${trackingNo}`)
   } else {

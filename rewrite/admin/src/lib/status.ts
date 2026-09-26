@@ -34,11 +34,23 @@ export function useLoadStatus() {
   return { message, ok, note, load }
 }
 
+/** 读失败提示：点名哪块没出来（多处同文案分不清是谁挂了）；没有中文映射的业务码挂括号保留，给排查留线索。 */
+export function failText(what: string, code: unknown): string {
+  const c = String(code || '')
+  const t = transportErrorText(c)
+  return t ? `${what}：${t}` : c ? `${what}（${c}）` : `${what}，请重试`
+}
+
+/** 写失败提示：传输层码不冠「X失败」——写操作超时可能已生效，说失败会诱人重复提交。 */
+export function writeFailText(what: string, code: unknown): string {
+  return transportErrorText(code) || failText(what, code)
+}
+
 // 多路并行加载的分路报错：每路失败点名「X加载失败：原因」，按传入顺序用「；」连；全成功回 ''。
 export const loadErrors = (parts: Array<[{ ok: boolean; error?: unknown }, string]>): string =>
   parts
     .filter(([r]) => !r.ok)
-    .map(([r, name]) => `${name}加载失败：${transportErrorText(r.error) || String(r.error || '')}`)
+    .map(([r, name]) => `${name}加载失败：${transportErrorText(r.error) || failText('操作没成功', r.error)}`)
     .join('；')
 
 // 危险动作两步确认：第一次点只武装（armed 记下 key·按钮变确认态），同一 key 再点才放行并解除武装。
