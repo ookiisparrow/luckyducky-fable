@@ -21,27 +21,26 @@ def parse_tcb_output(out):
 def tcb_step_ok(parsed, returncode):
     """这一步能不能接着干下一步。
 
-    tcb --json 成功时打印 {"data": {"RequestId": "..."}}。
-    CreateHTTPServiceRoute / DeleteHTTPServiceRoute 的成功体就是这个 RequestId，
-    CLI 再用 data 包一层。失败打印 {"error": {"code", "message", "exit_code"}}，
-    正文里常有 message，不能拿这个词当成功。
-    认不出这个形状、进程不是 0、或 data 里还带着 Error，都当失败。
+    成功回包的内容随 CLI 版本变：3.7.3 是 {"data": {..., "message": "成功删除 1 个路由"}}，
+    3.8.x 是 {"data": {"RequestId": "..."}}。只认不随版本变的部分，
+    否则换个 CLI 版本，第 1 步云端已删路由、脚本却判失败退出，线上域名就断在半路。
+    失败时 CLI 打 {"error": {...}} 且退出码非 0；data 里的 message 可能是成功文案，不能当失败信号。
     """
     if returncode != 0 or not isinstance(parsed, dict):
         return False
     if "error" in parsed or "Error" in parsed:
         return False
     data = parsed.get("data")
-    if not isinstance(data, dict):
+    # 各版本成功时 data 都有内容，空的说明没拿到真回包
+    if not isinstance(data, dict) or not data:
         return False
     if "error" in data or "Error" in data:
         return False
-    # 归属权没过时接口仍会给 RequestId，域名其实没绑上
+    # 归属权没过时接口照样成功返回，域名其实没绑上；判法与 CLI 3.8.4 一致
     ownership = data.get("OwnershipVerification")
-    if isinstance(ownership, dict) and ownership:
+    if isinstance(ownership, dict) and ownership.get("DnsVerification"):
         return False
-    request_id = data.get("RequestId")
-    return isinstance(request_id, str) and bool(request_id.strip())
+    return True
 
 def _step_detail(parsed, out):
     if isinstance(parsed, dict):
@@ -54,9 +53,9 @@ def _step_detail(parsed, out):
                 return str(msg)
         data = parsed.get("data")
         if isinstance(data, dict):
-            rid = data.get("RequestId")
-            if isinstance(rid, str) and rid.strip():
-                return rid.strip()
+            detail = data.get("RequestId") or data.get("message")
+            if isinstance(detail, str) and detail.strip():
+                return detail.strip()
     return (out or "")[-200:]
 
 def run(*args):

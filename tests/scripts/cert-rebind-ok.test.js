@@ -44,14 +44,36 @@ print("yes" if mod.tcb_step_ok(mod.parse_tcb_output(text), code) else "no")
   return r.stdout.trim() === 'yes'
 }
 
+const RID = 'e9f7150d-e942-4c5b-a2df-b45b3db55e2a'
+
 describe('证书换绑成功判断', () => {
-  it('成功回包判成功：退出码 0，且 data 里有 RequestId，没有 error', () => {
+  // 文案取自 @cloudbase/cli 3.7.3 源码里四个命令 --json 成功分支的 outputJson 原文
+  it('tcb 3.7.3 四步真实成功回包判成功（data 里只有 message，没有 RequestId）', () => {
     expect(judge({
-      data: { RequestId: 'e9f7150d-e942-4c5b-a2df-b45b3db55e2a' },
+      data: { domain: 'www.luckyducky.cn', paths: ['/'], message: '成功删除 1 个路由' },
+    }, 0)).toBe(true)
+    expect(judge({
+      data: { domain: 'www.luckyducky.cn', message: '解绑自定义域名成功' },
+    }, 0)).toBe(true)
+    expect(judge({
+      data: {
+        domain: 'www.luckyducky.cn',
+        certId: 'cert-id-placeholder',
+        accessType: 'DIRECT',
+        enable: true,
+        message: '绑定自定义域名成功',
+      },
+    }, 0)).toBe(true)
+    expect(judge({
+      data: { domain: 'www.luckyducky.cn', routeCount: 1, message: '成功创建 HTTP 服务路由' },
     }, 0)).toBe(true)
   })
 
-  it('带 message 的失败回包判失败，不能接着拆域名', () => {
+  it('tcb 3.8.x 成功回包判成功（data 里有 RequestId）', () => {
+    expect(judge({ data: { RequestId: RID } }, 0)).toBe(true)
+  })
+
+  it('带 error 键或退出码非 0 判失败，不能接着拆域名', () => {
     expect(judge({
       error: {
         code: 'API_ERROR',
@@ -68,37 +90,40 @@ describe('证书换绑成功判断', () => {
         requestId: 'still-a-failure',
       },
     }, 0)).toBe(false)
-    // 旧判断只看字符串里有没有 message，这种也会被当成成功
-    expect(judge({
-      data: { message: '操作失败', code: 'API_ERROR' },
-    }, 0)).toBe(false)
   })
 
-  it('空回包和解析失败判失败', () => {
+  it('空回包、不是 dict、解析失败判失败', () => {
     expect(judge(null, 0)).toBe(false)
     expect(judge(null, 1)).toBe(false)
     expect(judge({}, 0)).toBe(false)
     expect(judge({ data: {} }, 0)).toBe(false)
+    expect(judge([{ data: { RequestId: RID } }], 0)).toBe(false)
+    expect(judge({ data: 'ok' }, 0)).toBe(false)
     expect(parsedOk('', 0)).toBe(false)
     expect(parsedOk('不是 JSON，但是正文里有 message', 0)).toBe(false)
     expect(parsedOk('{这不是合法 JSON，message', 0)).toBe(false)
   })
 
-  it('有 RequestId 但仍带着 Error，或进程没成功，都判失败', () => {
+  it('成功形状但带着 Error，或进程没成功，都判失败', () => {
     expect(judge({
-      data: {
-        RequestId: 'e9f7150d-e942-4c5b-a2df-b45b3db55e2a',
-        Error: { Code: 'FailedOperation', Message: '绑定失败' },
-      },
+      data: { RequestId: RID, Error: { Code: 'FailedOperation', Message: '绑定失败' } },
     }, 0)).toBe(false)
-    expect(judge({
-      data: { RequestId: 'e9f7150d-e942-4c5b-a2df-b45b3db55e2a' },
-    }, 1)).toBe(false)
+    expect(judge({ data: { RequestId: RID } }, 1)).toBe(false)
+    expect(judge({ data: { domain: 'www.luckyducky.cn', message: '解绑自定义域名成功' } }, 1)).toBe(false)
+  })
+
+  it('归属权：DnsVerification 非空才判失败，和 CLI 3.8.4 一致', () => {
     expect(judge({
       data: {
-        RequestId: 'e9f7150d-e942-4c5b-a2df-b45b3db55e2a',
+        RequestId: RID,
         OwnershipVerification: { DnsVerification: [{ Subdomain: '_dnsauth' }] },
       },
     }, 0)).toBe(false)
+    expect(judge({
+      data: { RequestId: RID, OwnershipVerification: { DnsVerification: [] } },
+    }, 0)).toBe(true)
+    expect(judge({
+      data: { RequestId: RID, OwnershipVerification: {} },
+    }, 0)).toBe(true)
   })
 })
