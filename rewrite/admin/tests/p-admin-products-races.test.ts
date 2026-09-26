@@ -19,6 +19,7 @@ vi.mock('../src/lib/compressImage', () => ({ compressImage: vi.fn().mockResolved
 
 import Products from '../src/pages/Products.vue'
 import { compressImage } from '../src/lib/compressImage'
+import { transportErrorText } from '../src/lib/mapSystem'
 
 const draft = (id: string, name: string) => ({ id, name, price: '99', skus: [], images: [], params: [], detailSections: [], kit: [] })
 let w: VueWrapper<any>
@@ -94,7 +95,18 @@ describe('Products.vue 关闭编辑器时补存', () => {
     await flushPromises()
     expect(api.saveDraft).toHaveBeenCalledTimes(1)
     expect(api.saveDraft.mock.calls[0][0]).toMatchObject({ id: 'p1', name: '小熊改名' })
-    expect(status()).toBe('关闭前有编辑未保存成功，请重新打开该商品检查：商品信息不完整，保存没成功。请检查名称、价格和规格。')
+    expect(status()).toBe('关闭前的编辑可能没存上，请重新打开该商品检查：商品信息不完整，保存没成功。请检查名称、价格和规格。')
+    expect(w.emitted('saved')).toBeUndefined()
+  })
+
+  // 编辑器已关、快照已丢：公共表的码（没权限等）也得留「关闭前的编辑」这句上下文，否则操作者不知道最后的改动丢了
+  it('大白话：补存没权限——仍点明关闭前的编辑可能没存上，并说清是权限', async () => {
+    await open(0)
+    await typeName('小熊改名')
+    api.saveDraft.mockResolvedValueOnce({ ok: false, status: 403, error: 'FORBIDDEN' })
+    await btn('关闭').trigger('click')
+    await flushPromises()
+    expect(status()).toBe('关闭前的编辑可能没存上，请重新打开该商品检查：' + transportErrorText('FORBIDDEN'))
     expect(w.emitted('saved')).toBeUndefined()
   })
 
@@ -117,7 +129,7 @@ describe('Products.vue 关闭编辑器时补存', () => {
     save.release({ ok: false, status: 500, error: 'X' })
     await flushPromises()
     expect(editorId()).toBe('p2')
-    expect(status()).not.toContain('关闭前有编辑未保存成功')
+    expect(status()).not.toContain('重新打开该商品检查')
   })
 })
 
@@ -233,10 +245,10 @@ describe('Products.vue 失败提示说人话，不甩英文码', () => {
     w2.unmount()
   })
 
-  it('大白话：列表读失败（云端出错）只说加载失败、编号挂括号，不扯「前面步骤」', async () => {
+  it('大白话：列表读失败（云端出错）说加载失败并给人话，不扯「前面步骤」', async () => {
     api.listDrafts.mockResolvedValueOnce({ ok: false, status: 500, error: 'SERVER_ERROR' })
     const w2 = await mountFresh()
-    expect(w2.find('.ld-status').text()).toBe('加载失败（SERVER_ERROR）')
+    expect(w2.find('.ld-status').text()).toBe('加载失败：' + transportErrorText('SERVER_ERROR'))
     w2.unmount()
   })
 
@@ -263,12 +275,13 @@ describe('Products.vue 失败提示说人话，不甩英文码', () => {
     expect(status()).toBe(TIMEOUT_TEXT)
   })
 
-  it('大白话：关闭时补存超时不说「未保存成功」——可能已经存上了', async () => {
+  it('大白话：关闭时补存超时不说「未保存成功」——可能已经存上了，但仍点明是关闭前的编辑', async () => {
     await open(0)
     await typeName('小熊改名')
     api.saveDraft.mockResolvedValueOnce({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     await btn('关闭').trigger('click')
     await flushPromises()
-    expect(status()).toBe(TIMEOUT_TEXT)
+    expect(status()).toBe('关闭前的编辑可能没存上，请重新打开该商品检查：' + TIMEOUT_TEXT)
+    expect(status()).not.toContain('未保存成功')
   })
 })

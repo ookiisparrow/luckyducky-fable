@@ -27,7 +27,7 @@ import {
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { confirmed, failText } from '../lib/status'
-import { launchErrorText, transportErrorText } from '../lib/mapSystem'
+import { launchErrorText } from '../lib/mapSystem'
 import type { ClientResult } from '../api/client'
 import { compressImage } from '../lib/compressImage'
 import { useRouter } from 'vue-router'
@@ -229,8 +229,8 @@ function closeEditor() {
           emit('saved') // 只在真保存成功时才通知父级
         } else {
           // 代际锚：只在仍是本次关闭发起的这一代时才写失败提示——期间若已 openEdit(B)，A 的失败文案不得标到 B 屏上。
-          // 传输层码（超时等）可能已存上，不能冠「未保存成功」
-          if (openEditGen === myGen) message.value = transportErrorText(r.error) || '关闭前有编辑未保存成功，请重新打开该商品检查：' + launchErrorText(r.error)
+          // 编辑器已关、快照已丢，任何码都要留这句上下文；说「可能」是因超时/SERVER_ERROR 时其实可能已存上
+          if (openEditGen === myGen) message.value = '关闭前的编辑可能没存上，请重新打开该商品检查：' + launchErrorText(r.error)
         }
       })
       .catch(() => {})

@@ -205,14 +205,21 @@ const LAUNCH_ERR: Partial<Record<ErrCode | 'UNKNOWN_COURSE', string>> = {
   GC_DELETE_FAIL: '商品已删掉，只是有几张图片没清理干净（已留记录给技术）。请刷新列表。',
 }
 
-// 传输层/鉴权层码（client.ts 与网关产出，任何 action 都可能回）：各业务映射自己的表查不到时先问这里，文案单源
+// 任何 action 都可能回的码（client.ts 传输层与 adminApi/index.ts 网关产出）：各业务映射自己的表查不到时先问这里，文案单源。
+// 读写共用：failText 前面冠「X失败：」、writeFailText 原样用，所以每句都要自成一句。
+// 进这张表不代表「可能已生效」：只有 CALL_TIMEOUT / SERVER_ERROR 可能已写，句子里自己讲明；FORBIDDEN 等在 action 执行前就拒了。
 const TRANSPORT_ERR: Record<string, string> = {
   NO_ENDPOINT: '后台还没接上服务器地址。请找技术看配置。',
   BAD_JSON_RESPONSE: '服务器回包读不懂。请刷新后再试。',
   NETWORK: '网络不通，请检查网络后重试。',
-  CALL_TIMEOUT: '服务器太久没回话。如果刚才是提交操作，可能已经生效——先刷新看看，再决定要不要重试。', // 读写共用
+  CALL_TIMEOUT: '服务器太久没回话。如果刚才是提交操作，可能已经生效——先刷新看看，再决定要不要重试。',
   AUTH_UNAVAILABLE: '登录校验服务暂时不可用。请稍后再试。',
   SESSION_LOST: '登录已过期。请重新登录后再试。',
+  FORBIDDEN: '当前账号没有这项操作的权限。需要的话请找管理员开通。',
+  TOO_MANY_ATTEMPTS: '这个网络下口令试错太多次，已被暂时锁定。请过几分钟再试。',
+  // action 执行中抛异常：抛之前可能已写了一部分，不能说成没成功
+  SERVER_ERROR: '服务器处理时出错了。如果刚才是提交操作，可能已部分生效——先刷新看看，再决定要不要重试；反复出现请找技术。',
+  UNKNOWN_ACTION: '云端还不认识这个操作，多半是云端版本没跟上后台。请找技术更新云端。',
 }
 export function transportErrorText(code: unknown): string | undefined {
   const s = String(code || '')
@@ -240,7 +247,8 @@ export function launchErrorText(e: unknown): string {
   }
   if (!original) return '操作没成功。请稍后重试。'
   if (/[\u4e00-\u9fff]/.test(original)) return original
-  return `操作没成功。请先检查前面步骤是否都做完，再重试。（技术编号 ${original}）`
+  // 卡片/帮助视频/首页内容页也走这里，兜底不提「前面步骤」；步骤指引只写在向导步骤自己的码上（NO_COURSE_ID 等）
+  return `操作没成功。请稍后重试，反复失败请找技术。（技术编号 ${original}）`
 }
 
 /** 库存保存错误人话（409 版本冲突=有人先改过/顾客下单占用——刷新重试而不是覆盖）。 */
