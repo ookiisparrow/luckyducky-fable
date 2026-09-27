@@ -185,7 +185,22 @@ export function stepConfetti(L: Bit[], dt: number, h: number, rnd: () => number 
 
 // ---------- 页面调用口（页面根下放 <px-fx id="fx" />） ----------
 type Host = { createSelectorQuery(): WechatMiniprogram.SelectorQuery; selectComponent(sel: string): unknown }
-type Layer = { party(k: Rect, big?: boolean, n?: number): void; transit(kind: 'rainbow' | 'dither', k: Rect, go: () => void): void }
+type Layer = {
+  party(k: Rect, big?: boolean, n?: number): void
+  transit(kind: 'rainbow' | 'dither', k: Rect, go: () => void): void
+  toast(text: string, ok?: boolean): void
+}
+
+const layer = (page: Host): Layer | null =>
+  typeof page.selectComponent === 'function' ? ((page.selectComponent('#fx') as Layer | null) ?? null) : null
+
+/** 成功轻提示：页面挂了 px-fx 走设计稿样式（像素 ✓），没挂就退回原生 wx.showToast（参数同旧写法）。
+ *  提示完马上退回上一页的别用这个——自绘提示随本页一起消失，那种场景留原生（跨页不断）。 */
+export function fxToast(page: Host, text: string): void {
+  const fx = layer(page)
+  if (fx) return fx.toast(text, true)
+  wx.showToast({ title: text, icon: 'success' })
+}
 
 function keyRect(page: Host, sel: string): Promise<Rect | null> {
   return new Promise((resolve) => {
@@ -199,14 +214,14 @@ function keyRect(page: Host, sel: string): Promise<Rect | null> {
 
 /** 从 sel 那颗键撒花（找不到特效层/键就什么都不做）。 */
 export async function fxParty(page: Host, sel: string, big = false, n?: number): Promise<void> {
-  const fx = page.selectComponent('#fx') as Layer | null
+  const fx = layer(page)
   const k = fx && (await keyRect(page, sel))
   if (fx && k) fx.party(k, big, n)
 }
 
 /** 从 sel 那颗键起转场，铺满后 go()；特效层/键缺失就直接 go()——转场是加分项，不能挡跳转。 */
 export async function fxTransit(page: Host, kind: 'rainbow' | 'dither', sel: string, go: () => void): Promise<void> {
-  const fx = page.selectComponent('#fx') as Layer | null
+  const fx = layer(page)
   const k = fx && (await keyRect(page, sel))
   if (fx && k) fx.transit(kind, k, go)
   else go()

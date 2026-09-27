@@ -120,7 +120,7 @@ Page({
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交（撞主键回 REVIEWED 的矛盾 toast）；toast 加 mask·定时器存实例待清
-      wx.showToast({ title: '感谢你的评价', icon: 'success', mask: true })
+      wx.showToast({ title: '感谢你的评价', icon: 'success', mask: true }) // 随后退回上一页：原生提示跨页不断，自绘的会随本页消失
       this.backTimer = setTimeout(() => wx.navigateBack(), 800)
       return
     }

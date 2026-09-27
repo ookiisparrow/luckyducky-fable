@@ -94,3 +94,6 @@
   <text class="pd-state-title">商品不存在或已下架</text>
   <text class="pd-state-hint">回首页看看别的吧</text>
 </view>
+
+<!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

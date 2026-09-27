@@ -30,8 +30,10 @@ function paint(x: Ctx, runs: Runs) {
   }
 }
 
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
 Component({
-  data: { busy: false },
+  data: { busy: false, toastShow: false, toastOk: false, toastText: '' },
   lifetimes: {
     attached() {
       const wi = wx.getWindowInfo()
@@ -55,6 +57,15 @@ Component({
   },
   methods: {
     noop() {},
+    /** 系统层轻提示（设计稿 toast：深色半透明框，成功带像素 ✓，1.5 秒后 180ms 淡出）。 */
+    toast(text: string, ok = false) {
+      if (toastTimer) clearTimeout(toastTimer)
+      this.setData({ toastText: text, toastOk: ok, toastShow: true })
+      toastTimer = setTimeout(() => {
+        toastTimer = null
+        this.setData({ toastShow: false })
+      }, 1500)
+    },
     canvas(): Promise<St | null> {
       const s = S.get(this)
       if (!s) return Promise.resolve(null)

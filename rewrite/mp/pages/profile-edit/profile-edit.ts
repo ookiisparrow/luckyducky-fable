@@ -205,7 +205,7 @@ Page({
     if (r.ok && !avatarFailed) {
       // 成功且无需停留：清临时头像（防二次上传孤儿文件）+ 保持 busy 锁定到返回·toast 加 mask 挡点·定时器存实例待清
       this.setData({ avatarTemp: '' })
-      wx.showToast({ title: '已保存', icon: 'success', mask: true })
+      wx.showToast({ title: '已保存', icon: 'success', mask: true }) // 随后退回上一页：原生提示跨页不断，自绘的会随本页消失
       this.backTimer = setTimeout(() => wx.navigateBack(), 600)
       return
     }

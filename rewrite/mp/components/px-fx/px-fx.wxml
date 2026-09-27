@@ -1,2 +1,6 @@
 <canvas type="2d" id="fx" class="fx"></canvas>
+<view class="ld-toast fx-toast {{toastShow ? 'show' : ''}}">
+  <px-i wx:if="{{toastOk}}" name="check" size="3" tone="#F7F7F4" />
+  <text>{{toastText}}</text>
+</view>
 <view wx:if="{{busy}}" class="fx-block" catch:touchstart="noop" catch:tap="noop"></view>

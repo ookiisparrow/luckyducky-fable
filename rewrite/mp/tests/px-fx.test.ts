@@ -1,6 +1,6 @@
 // v5 像素撒花/转场（lib/pxFx·设计稿 party / fxEnter / fxRainbow 原参数移植）。
 import { describe, it, expect, vi } from 'vitest'
-import { distField, ditherRuns, rainbowRuns, party, stepConfetti, fxTransit, PX, PAPER, RAINBOW_DUR, type Bit, type Runs } from '../lib/pxFx'
+import { distField, ditherRuns, rainbowRuns, party, stepConfetti, fxTransit, fxToast, PX, PAPER, RAINBOW_DUR, type Bit, type Runs } from '../lib/pxFx'
 
 const W = 80
 const H = 60
@@ -34,6 +34,18 @@ describe('像素转场', () => {
     const go = vi.fn()
     await fxTransit({ selectComponent: () => null, createSelectorQuery: () => ({}) as never }, 'rainbow', '.x', go)
     expect(go).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('成功轻提示', () => {
+  it('大白话：页面挂了特效层就用设计稿的像素 ✓ 提示；没挂（或测试里的假页面）退回原生成功提示，文案不变', () => {
+    const toast = vi.fn()
+    fxToast({ selectComponent: () => ({ toast }), createSelectorQuery: () => ({}) as never }, '已支付')
+    expect(toast).toHaveBeenCalledWith('已支付', true)
+    const showToast = vi.fn()
+    ;(globalThis as Record<string, unknown>).wx = { showToast }
+    fxToast({} as never, '支付成功')
+    expect(showToast).toHaveBeenCalledWith({ title: '支付成功', icon: 'success' })
   })
 })
 
