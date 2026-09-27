@@ -3,8 +3,8 @@
 import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
 
-let delTimer: ReturnType<typeof setTimeout> | null = null
-let delAt = 0
+import { createHold, type Hold } from '../../lib/hold'
+
 const DEL_HOLD_MS = 700 // 设计稿 data-ms=700
 
 Page({
@@ -75,33 +75,37 @@ Page({
     addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone: phone.trim(), region: region.trim(), detail: detail.trim(), isDefault })
     wx.navigateBack()
   },
-  // 删除既有地址（仅编辑态·复用簿逻辑 removeAddress）：按住 0.7s 才删，松手太快提示按住——替代原二次确认弹窗
+  // 删除既有地址（仅编辑态·复用簿逻辑 removeAddress）：按住 0.7s 才删，松手太快提示按住——替代原二次确认弹窗（lib/hold）
+  _delHold: null as Hold | null,
+  delHold(): Hold {
+    if (!this._delHold)
+      this._delHold = createHold(
+        DEL_HOLD_MS,
+        () => {
+          const { id } = this.data
+          if (id == null) return
+          tapHaptic()
+          addr.removeAddress(id)
+          wx.navigateBack()
+        },
+        {
+          onQuick: () => wx.showToast({ title: '按住删除这个地址', icon: 'none' }),
+          onChange: (v) => this.setData({ deleting: v }),
+        }
+      )
+    return this._delHold
+  },
   onDelHoldStart() {
     if (this.data.id == null) return
-    this.onDelHoldCancel()
-    delAt = Date.now()
-    this.setData({ deleting: true })
-    delTimer = setTimeout(() => {
-      delTimer = null
-      const { id } = this.data
-      if (id == null) return
-      tapHaptic()
-      addr.removeAddress(id)
-      wx.navigateBack()
-    }, DEL_HOLD_MS)
+    this.delHold().start()
   },
   onDelHoldEnd() {
-    if (!delTimer) return
-    const quick = Date.now() - delAt < 400
-    this.onDelHoldCancel()
-    if (quick) wx.showToast({ title: '按住删除这个地址', icon: 'none' })
+    this.delHold().end()
   },
   onDelHoldCancel() {
-    if (delTimer) clearTimeout(delTimer)
-    delTimer = null
-    if (this.data.deleting) this.setData({ deleting: false })
+    this.delHold().cancel()
   },
   onUnload() {
-    this.onDelHoldCancel()
+    this._delHold?.cancel()
   },
 })

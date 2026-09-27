@@ -60,9 +60,4 @@
     <text class="mc-state-h">扫包装盒内的二维码，就能开始学</text>
   </view>
 
-  <view class="mc-dock-space"></view>
-</view>
-
-<view class="mc-dock">
-  <view class="k k-light k-48" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">输入激活码</view>
 </view>

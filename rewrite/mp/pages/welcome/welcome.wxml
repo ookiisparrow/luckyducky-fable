@@ -1,28 +1,30 @@
-<!-- 激活页（v5「字重」稿 C1 激活课程 / C2 激活码无效 / C3 激活成功·开课须知）。
-     phase 'input' → C1；'result' 且 kind mine/taken/invalid/error → C2 各变体；
-     'result' 且 kind==='activated' → W1（C3 上半：主图 + 已激活 + 课程名）；'w2' → W2（C3 下半：三件事 + 不可退货 + 进课）。
-     C1 的 6 格 + 数字键盘没照搬：激活码是字母数字混排（LD 开头）、位数不定，数字键盘打不出——保留原生输入框。
-     handler：onBack/onInput/onActivate/onRetry/onEnter/onContact/onNextWelcome/onGoHome。 -->
+<!-- 激活页（v5「字重」稿 C2 激活码无效 / C3 激活成功·开课须知）。只从「微信扫实体激活卡二维码」带 ?code= 进来——
+     老板拍板不做应用内手动输码（设计稿 C1）与扫码按钮：
+     phase 'nocode'（没带码直接进来）→ 提示用微信扫卡；'result' 且 kind mine/taken/invalid/error → C2 各变体（无「重新输入」）；
+     'result' 且 kind==='activated' → W1（C3 上半）；'w2' → W2（C3 下半：三件事 + 不可退货 + 进课）。
+     handler：onBack/onRetryCode/onEnter/onContact/onNextWelcome/onGoHome。 -->
 <view class="wl">
   <!-- 自绘返回：custom 导航无原生返回箭头；带 tapHaptic 故不用 v5-nav（onBack 走 goBackOrHome） -->
   <view class="wl-nav" style="padding-top:{{statusBarHeight}}px">
     <view class="wl-hit" bind:tap="onBack">
       <view class="k k-sm k-light wl-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"><px-i name="back" /></view>
     </view>
-    <text wx:if="{{phase === 'input' || (phase === 'result' && kind !== 'activated')}}" class="wl-nav-t">激活课程</text>
+    <text wx:if="{{phase === 'nocode' || (phase === 'result' && kind !== 'activated')}}" class="wl-nav-t">激活课程</text>
   </view>
 
-  <!-- C1 输入激活码 -->
-  <block wx:if="{{phase === 'input'}}">
+  <!-- 没带码进来：只能用微信扫激活卡（不给输入框） -->
+  <block wx:if="{{phase === 'nocode'}}">
     <view class="wl-body">
-      <view class="wl-head">
-        <text class="wl-h1">输入激活码</text>
-        <text class="wl-sub">激活码在初学者钩织学习套装的激活卡上，字母不分大小写</text>
+      <view class="wl-head wl-head-tight">
+        <text class="wl-h1">扫码激活课程</text>
       </view>
-      <input class="well mono wl-code" value="{{code}}" bind:input="onInput" placeholder="LD 开头的激活码" placeholder-class="wl-ph" confirm-type="done" bind:confirm="onActivate" />
+      <view class="wl-msg">
+        <view class="wl-msg-led"><px-i name="dot" tone="rgba(17,17,17,.28)" /></view>
+        <text class="t-sys wl-msg-t">激活卡在初学者钩织学习套装里。用微信「扫一扫」扫卡上的二维码，就会回到这里开课。</text>
+      </view>
     </view>
     <view class="wl-dock">
-      <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onActivate">激活课程</view>
+      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBack">返回</view>
     </view>
   </block>
 
@@ -42,22 +44,21 @@
         <text wx:if="{{kind === 'mine'}}" class="t-sys wl-msg-t wl-msg-mine">这个码已经是你的了，接着上次继续钩就好，慢慢来。</text>
         <text wx:elif="{{kind === 'taken'}}" class="t-sys wl-msg-t wl-msg-bad">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过初学者钩织学习套装想自己学，用套装里你自己的码。</text>
         <text wx:elif="{{kind === 'error'}}" class="t-sys wl-msg-t wl-msg-error">{{errCopy.lead}}</text>
-        <text wx:else class="t-sys wl-msg-t wl-msg-bad">检查一下大小写和有没有抄漏——找不到码可以联系客服帮你确认。</text>
+        <text wx:else class="t-sys wl-msg-t wl-msg-bad">这张激活卡没认出来，可以联系客服帮你确认。</text>
       </view>
     </view>
     <view class="wl-dock">
       <view class="wl-row" wx:if="{{kind === 'mine'}}">
-        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetry">重新输入</view>
         <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onEnter">继续学习</view>
       </view>
       <!-- 没兑成但码可能是好的：「再试一次」用原码重发，不清码不误导 -->
       <view class="wl-row" wx:elif="{{kind === 'error'}}">
-        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetry">重新输入</view>
-        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onActivate">再试一次</view>
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact">联系客服</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onRetryCode">再试一次</view>
       </view>
       <view class="wl-row" wx:else>
         <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact">联系客服</view>
-        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onRetry">{{kind === 'taken' ? '换一个码' : '重新输入'}}</view>
+        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onGoHome">回首页</view>
       </view>
     </view>
   </block>

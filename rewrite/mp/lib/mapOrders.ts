@@ -134,6 +134,13 @@ export function mapOrders(list: unknown): OrderVM[] {
   return list.map(mapOrder).filter((x): x is OrderVM => !!x)
 }
 
+/** 「我」页订单格数字（v5 D1）：按状态拉一页算条数——一页内给实数，满页还有下一页给「N+」，取数失败给 ''（不显示，不瞎报 0）。
+ *  ponytail: 没有顾客侧计数接口（订单 action 在红区），先用一页列表数；要精确大数就在云端加计数 action。 */
+export function countBadge(r: { ok?: boolean; list?: unknown; hasMore?: unknown }, limit: number): string {
+  if (!r || !r.ok || !Array.isArray(r.list)) return ''
+  return r.hasMore && r.list.length >= limit ? `${limit}+` : String(r.list.length)
+}
+
 export type StepState = 'done' | 'cur' | 'todo'
 const STEP_LABELS = ['下单', '付款', '发货', '收货']
 // 各状态走到第几步（0 起）以及当前步是否已完成：done 状态四步全亮；关闭/未知只亮「下单」

@@ -7,7 +7,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { loginGate } from '../lib/loginGate'
 import { mapMe } from '../lib/mapMe'
 
-const { loginMock, getMyProgressMock, getMyCoursesMock, getCoursesByIdsMock, getPageContentMock } = vi.hoisted(() => ({
+const { loginMock, getMyProgressMock, getMyCoursesMock, getCoursesByIdsMock, getPageContentMock, getMyOrdersMock } = vi.hoisted(() => ({
+  getMyOrdersMock: vi.fn(),
   loginMock: vi.fn(),
   getMyProgressMock: vi.fn(),
   getMyCoursesMock: vi.fn(),
@@ -16,6 +17,7 @@ const { loginMock, getMyProgressMock, getMyCoursesMock, getCoursesByIdsMock, get
 }))
 vi.mock('../api/user', () => ({ login: loginMock, getMyProgress: getMyProgressMock, deleteAccount: vi.fn() }))
 vi.mock('../api/learning', () => ({ getMyCourses: getMyCoursesMock }))
+vi.mock('../api/orders', () => ({ getMyOrders: getMyOrdersMock }))
 vi.mock('../lib/courses', () => ({ getCoursesByIds: getCoursesByIdsMock, getAllCourses: vi.fn() }))
 // 合流补桩（页面内容 CMS 战役后 me.ts 并入 getPageContent('mePage')·本测试只钉 cont 分治，CMS 内容走默认 null）
 vi.mock('../lib/pageContent', () => ({ getPageContent: getPageContentMock, __resetForTest: () => {} }))
@@ -66,6 +68,7 @@ beforeEach(() => {
   getMyCoursesMock.mockReset().mockResolvedValue({ ok: true, list: [] })
   getCoursesByIdsMock.mockReset().mockResolvedValue(COURSES)
   getPageContentMock.mockReset().mockResolvedValue(null)
+  getMyOrdersMock.mockReset().mockResolvedValue({ ok: true, list: [], hasMore: false })
 })
 
 describe('继续学习区失败分治（失败≠没进度·同 aftersales/order-list loadFailed 范式）', () => {
@@ -244,5 +247,18 @@ describe('「我」页小鸭蛋孵化判定（v5 D1·有一门课全部段看完
     expect(await hatchKeyWith([{ courseId: 'c1', done: { s1: true, stale: true } }])).toBe('')
     getCoursesByIdsMock.mockResolvedValue(COURSES) // 课时无段：分母 0 不算学完
     expect(await hatchKeyWith([{ courseId: 'c1', done: {} }])).toBe('')
+  })
+})
+
+describe('订单格数字（v5 D1）', () => {
+  it('大白话：各状态按一页数条数；某一路云调用直接抛错——只那一格不显示数字，其它格照常，不冒未处理异常', async () => {
+    getMyOrdersMock.mockImplementation(async (_c: unknown, _l: number, status: string) => {
+      if (status === 'paid') throw new Error('boom')
+      return { ok: true, list: status === 'pending' ? [1, 2] : [], hasMore: false }
+    })
+    const page = await mountMe()
+    await page.refresh()
+    await vi.waitFor(() => expect(page.data.counts).toEqual({ pending: '2', paid: '', shipped: '0' }))
+    expect(getMyOrdersMock.mock.calls.map((c: unknown[]) => c[2])).toEqual(['pending', 'paid', 'shipped'])
   })
 })

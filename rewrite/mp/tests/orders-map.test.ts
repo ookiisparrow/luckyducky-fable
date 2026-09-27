@@ -1,7 +1,7 @@
 // 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御）+ §四（金额两位小数/
 // 时间格式化非法回空）。
 import { describe, it, expect } from 'vitest'
-import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets, orderSteps } from '../lib/mapOrders'
+import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets, orderSteps, countBadge } from '../lib/mapOrders'
 import { ORDER_STATUS } from '../../shared/src/order'
 
 const GOOD = {
@@ -129,6 +129,16 @@ describe('金额行标题·顾客视角「付过没有」（体检批 P1·钱链
     expect(PAID_LOOK.filter((s) => UNPAID_LOOK.includes(s))).toEqual([]) // 两类互斥
     for (const s of PAID_LOOK) expect(amountTitle(s)).toBe('实付款')
     for (const s of UNPAID_LOOK) expect(amountTitle(s)).toBe('订单金额')
+  })
+})
+
+describe('「我」页订单格数字 countBadge（v5 D1）', () => {
+  it('大白话：一页内给实数；满一页还有下一页给「20+」；取数失败给空串（不显示数字，不瞎报 0）', () => {
+    expect(countBadge({ ok: true, list: [1, 2, 3], hasMore: false }, 20)).toBe('3')
+    expect(countBadge({ ok: true, list: [], hasMore: false }, 20)).toBe('0')
+    expect(countBadge({ ok: true, list: new Array(20).fill(0), hasMore: true }, 20)).toBe('20+')
+    expect(countBadge({ ok: false }, 20)).toBe('')
+    expect(countBadge({ ok: true, list: 'x' }, 20)).toBe('')
   })
 })
 

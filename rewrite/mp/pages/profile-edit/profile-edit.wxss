@@ -220,3 +220,45 @@ page {
     transform: translateY(100%);
   }
 }
+
+/* 账号操作：按住确认，填充从左往右走满 */
+.pe-acct {
+  padding: 28px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pe-acct-k {
+  position: relative;
+  overflow: hidden;
+}
+.pe-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.pe-fill-out {
+  background: rgba(17, 17, 17, 0.08);
+}
+.pe-fill-del {
+  background: rgba(217, 72, 59, 0.14);
+}
+.pe-hold-on .pe-fill-out {
+  transform: scaleX(1);
+  transition: transform 600ms linear;
+}
+.pe-hold-on .pe-fill-del {
+  transform: scaleX(1);
+  transition: transform 900ms linear;
+}
+.pe-acct-t {
+  position: relative;
+}
+.pe-danger {
+  color: var(--v5-err-text);
+}

@@ -160,9 +160,31 @@ page {
   min-width: 0;
   height: 56px;
   padding: 0 4px;
+  flex-direction: column;
   gap: 4px;
-  font-size: 15px;
+}
+.me-cell-top {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.me-cell-n {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--v5-ink);
+}
+.me-cell-zero {
+  color: var(--v5-ink-4);
+}
+.me-cell-arrow {
+  color: var(--v5-ink-2);
+}
+.me-cell-l {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 
 /* 入口行 */
@@ -208,36 +230,7 @@ page {
 }
 
 /* 账号操作：危险操作＝浅色键 + 红字 */
-.me-acct {
-  padding: 24px 16px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-.me-acct-k {
-  min-width: 128px;
-}
-.me-danger {
-  color: var(--v5-err-text);
-}
-.me-note {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 /* 版本号：数字/日期用系统字（品牌字体子集只收首屏上屏字） */
-.me-ver {
-  padding: 24px 16px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  font-family: 'PingFang SC', -apple-system, system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--v5-ink-3);
-}
 /* 给 TabBar 留位：8 + 44 + max(24px, 安全区)，再多留 12 呼吸 */
 .me-tab-space {
   height: calc(64px + max(24px, env(safe-area-inset-bottom)));

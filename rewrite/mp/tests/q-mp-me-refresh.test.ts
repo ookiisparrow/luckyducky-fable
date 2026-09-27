@@ -89,11 +89,11 @@ describe('「我」tab onShow 短时去重', () => {
     expect(loginMock).toHaveBeenCalledTimes(2)
   })
 
-  it('大白话：去改资料 / 激活 / 看课回来——切回强制重拉（昵称、继续学习卡可能变了）', async () => {
+  it('大白话：去改资料 / 看课回来——切回强制重拉（昵称、继续学习卡可能变了）', async () => {
     const page = await mountMe()
     await show(page)
     let n = 1
-    for (const go of ['onEditProfile', 'onActivate', 'onCourses', 'onContinue']) {
+    for (const go of ['onEditProfile', 'onCourses', 'onContinue']) {
       page[go]()
       await show(page)
       expect(loginMock, go).toHaveBeenCalledTimes(++n)
@@ -101,7 +101,7 @@ describe('「我」tab onShow 短时去重', () => {
   })
 
   it('大白话：刚进「我」页还在加载就点去改资料——那趟加载晚到也不能把「回来要重拉」抵消掉', async () => {
-    for (const go of ['onEditProfile', 'onActivate', 'onCourses', 'onContinue']) {
+    for (const go of ['onEditProfile', 'onCourses', 'onContinue']) {
       loginMock.mockReset()
       let resolveLogin: (v: unknown) => void = () => {}
       loginMock.mockImplementationOnce(() => new Promise((r) => (resolveLogin = r))).mockResolvedValue({ ok: true, user: { nickname: '鸭' } })

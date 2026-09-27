@@ -1,8 +1,12 @@
 // 编辑资料：微信头像昵称填写能力（button open-type=chooseAvatar——能力按钮属 button 例外）。
 // 头像临时路径先传云存储换 cloud:// 再同步（云端只收 cloud:// 或空）；上传失败昵称照常同步不带头像字段。
 import { tapHaptic } from '../../lib/haptics'
-import { login, updateProfile } from '../../api/user'
+import { login, updateProfile, deleteAccount } from '../../api/user'
 import { goBackOrHome } from '../../lib/nav'
+import { clearAll as clearAddresses } from '../../lib/address'
+import { loginGate } from '../../lib/loginGate'
+import { writeStoredCont } from '../../lib/meCont'
+import { createHold, type Hold } from '../../lib/hold'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
 // 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
@@ -21,16 +25,32 @@ Page({
     busy: false,
     loading: true, // login 在途：不画空白可编辑档（根因#14·失败≠空档案）
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
+    holdOut: false, // 正在按住「退出登录」（驱动灰色填充）
+    holdDel: false, // 正在按住「删除资料」（驱动红色填充）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   orig: { nickname: '', phone: '' }, // 载入时的原值：判断有没有改动（放弃确认）
   unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
+  // 账号操作（v5 D3·老板拍板从「我」页挪来）：退出＝按住 0.6s；删除＝按住 0.9s 再弹一次后果确认（删除不可恢复·隐私政策第六条）
+  _holdOut: null as Hold | null,
+  _holdDel: null as Hold | null,
+  _deleting: false,
   onUnload() {
     this.unloaded = true
+    this._holdOut?.cancel()
+    this._holdDel?.cancel()
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   async onLoad() {
     this.setData({ sb: wx.getWindowInfo().statusBarHeight || 20 })
+    this._holdOut = createHold(600, () => this.doLogout(), {
+      onQuick: () => wx.showToast({ title: '按住退出登录', icon: 'none' }),
+      onChange: (v) => this.setData({ holdOut: v }),
+    })
+    this._holdDel = createHold(900, () => this.confirmDelete(), {
+      onQuick: () => wx.showToast({ title: '按住删除资料', icon: 'none' }),
+      onChange: (v) => this.setData({ holdDel: v }),
+    })
     let user: Record<string, any> | null = null
     try {
       const u = await login()
@@ -67,6 +87,58 @@ Page({
   },
   onPhone(e: WechatMiniprogram.Input) {
     this.setData({ phone: e.detail.value })
+  },
+  onLogoutStart() {
+    this._holdOut?.start()
+  },
+  onLogoutEnd() {
+    this._holdOut?.end()
+  },
+  onLogoutCancel() {
+    this._holdOut?.cancel()
+  },
+  onDeleteStart() {
+    if (this._deleting) return
+    this._holdDel?.start()
+  },
+  onDeleteEnd() {
+    this._holdDel?.end()
+  },
+  onDeleteCancel() {
+    this._holdDel?.cancel()
+  },
+  // 退出登录：清本地登录 hint，回「我」页（它 onShow 见登录态变了会整页重拉·转登出态）。openid 身份与服务端订单/学习仍在，再登即回。
+  doLogout() {
+    tapHaptic()
+    loginGate.logout()
+    wx.showToast({ title: '已退出登录', icon: 'none' })
+    goBackOrHome()
+  },
+  confirmDelete() {
+    tapHaptic()
+    wx.showModal({
+      title: '删除资料',
+      content: '删除后这个微信不能再回到你的个人资料。学习记录和地址都会没有。订单还在。',
+      confirmText: '删除',
+      success: (r) => {
+        if (r.confirm) void this.runDeleteAccount()
+      },
+    })
+  },
+  async runDeleteAccount() {
+    if (this._deleting) return
+    this._deleting = true
+    const r = await deleteAccount()
+    this._deleting = false
+    if (!r.ok) {
+      wx.showToast({ title: '没删成请稍后再试', icon: 'none' })
+      return
+    }
+    clearAddresses()
+    loginGate.logout()
+    writeStoredCont(null) // 「我」页继续学习旧卡一并清掉（回去不再先画已删的课）
+    wx.showToast({ title: '已删除', icon: 'none' })
+    if (!this.unloaded) goBackOrHome()
   },
   // 返回：资料载入后有改动（昵称/手机号/新选头像）先弹「放弃编辑确认」；保存在途不拦（成功会自己返回）
   // ponytail: 只拦自绘返回键；侧滑/安卓返回键不拦（要拦得挂 page-container，会冻页面级滚动）

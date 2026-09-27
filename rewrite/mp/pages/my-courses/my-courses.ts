@@ -48,8 +48,4 @@ Page({
   onTapCourse(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/catalog/catalog?courseId=' + String(e.currentTarget.dataset.id) })
   },
-  onActivate() {
-    tapHaptic()
-    wx.navigateTo({ url: '/pages/welcome/welcome' })
-  },
 })

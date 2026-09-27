@@ -41,9 +41,9 @@
     <text class="me-card-main me-card-grow">没连上网络</text>
     <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryCont">重试</view>
   </view>
+  <!-- 无学习记录：设计稿此处有「扫码激活」键——老板拍板不做应用内扫码/输码（用微信扫实体激活卡进入），只留文字 -->
   <view wx:elif="{{contLoaded}}" class="me-card">
     <text class="me-card-main me-card-grow">还没有学习记录</text>
-    <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">扫码激活</view>
   </view>
   <view wx:else class="me-card">
     <view class="me-thumb skel"></view>
@@ -53,13 +53,26 @@
     </view>
   </view>
 
-  <!-- 订单四格：三格带 data-tab 直落分栏；「全部订单」不带 tab（order-list.ts query.tab 契约）。订单数没有现成数据，只放字 -->
+  <!-- 订单四格（v5 D1）：数字 + 标签；待支付有单亮紫灯；「全部」格换箭头。三格带 data-tab 直落分栏（order-list.ts query.tab 契约） -->
   <view class="me-grid">
-    <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">待支付</view>
-    <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">待发货</view>
-    <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">待收货</view>
+    <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">
+      <view class="me-cell-top">
+        <text class="me-cell-n {{counts.pending && counts.pending !== '0' ? '' : 'me-cell-zero'}}">{{counts.pending || '-'}}</text>
+        <px-i wx:if="{{counts.pending && counts.pending !== '0'}}" name="led" tone="#8a5ae0" />
+      </view>
+      <text class="me-cell-l">待支付</text>
+    </view>
+    <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">
+      <view class="me-cell-top"><text class="me-cell-n {{counts.paid && counts.paid !== '0' ? '' : 'me-cell-zero'}}">{{counts.paid || '-'}}</text></view>
+      <text class="me-cell-l">待发货</text>
+    </view>
+    <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">
+      <view class="me-cell-top"><text class="me-cell-n {{counts.shipped && counts.shipped !== '0' ? '' : 'me-cell-zero'}}">{{counts.shipped || '-'}}</text></view>
+      <text class="me-cell-l">待收货</text>
+    </view>
     <view wx:if="{{entries.orders.visible}}" class="k k-flat me-cell" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">
-      <text>{{entries.orders.label}}</text><px-i name="arrow" />
+      <view class="me-cell-top me-cell-arrow"><px-i name="arrow" /></view>
+      <text class="me-cell-l">{{entries.orders.label}}</text>
     </view>
   </view>
 
@@ -68,16 +81,13 @@
     <view wx:if="{{entries.courses.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onCourses">
       <text class="me-row-t">{{entries.courses.label}}</text><px-i name="arrow" />
     </view>
-    <view wx:if="{{entries.activate.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onActivate">
-      <text class="me-row-t">{{entries.activate.label}}</text><px-i name="arrow" />
-    </view>
     <view wx:if="{{entries.aftersales.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAfterSales">
       <text class="me-row-t">{{entries.aftersales.label}}</text><px-i name="arrow" />
     </view>
     <view wx:if="{{entries.address.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAddress">
       <text class="me-row-t">{{entries.address.label}}</text><px-i name="arrow" />
     </view>
-    <!-- 数据共享授权（隐私政策承诺可撤回·合规入口·设计稿未画，放入口行末） -->
+    <!-- 数据共享授权：设计稿未画，但合规守卫要求「我」页可直达（隐私政策承诺随时可撤回·M5 前置闸1），放入口行末 -->
     <view wx:if="{{entries.consent.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onConsent">
       <text class="me-row-t">{{entries.consent.label}}</text><px-i name="arrow" />
     </view>
@@ -91,18 +101,6 @@
     <view wx:if="{{entries.about.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onAbout">{{entries.about.label}}</view>
   </view>
 
-  <!-- 账号操作（仅已登录）：退出登录（清本地登录 hint·openid 身份与服务端订单/学习不受影响）；
-       删除资料（隐私政策第六条·两次确认在 ts·危险操作＝浅色键 + 红字）。文案不用「注销账户」——那三字不在「我」页首屏字体。 -->
-  <view wx:if="{{loggedIn}}" class="me-acct">
-    <view wx:if="{{loggedIn}}" class="k k-light me-acct-k" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLogout">退出登录</view>
-    <view wx:if="{{loggedIn}}" class="k k-light me-acct-k me-danger" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeleteAccount">删除资料</view>
-    <text class="me-note">删除后学习记录和地址都会没有，订单还在</text>
-  </view>
-
-  <view class="me-ver">
-    <text>{{versionLine}}</text>
-    <text wx:if="{{versionDetail}}">{{versionDetail}}</text>
-  </view>
   <view class="me-tab-space"></view>
 </view>
 </scroll-view>

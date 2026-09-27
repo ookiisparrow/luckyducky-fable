@@ -1,55 +1,26 @@
 // 「我」页：静默登录回灌资料 + 继续学习卡 + 入口列。
 // 登录零资料采集；继续学习定位纯函数（不假装有课·无课卡片走「去逛逛」兜底）。
 import { tapHaptic } from '../../lib/haptics'
-import { login, getMyProgress, deleteAccount } from '../../api/user'
-import { clearAll as clearAddresses } from '../../lib/address'
+import { login, getMyProgress } from '../../api/user'
+import { getMyOrders } from '../../api/orders'
+import { countBadge } from '../../lib/mapOrders'
 import { getMyCourses } from '../../api/learning'
 import { getCoursesByIds } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（我页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getPageContent } from '../../lib/pageContent'
-import { continueResolve, type ContinueTarget } from '../../lib/continueResolve'
+import { continueResolve } from '../../lib/continueResolve'
+import { readStoredCont, writeStoredCont } from '../../lib/meCont'
 import { mapMe, type MeVM } from '../../lib/mapMe' // 直引拆分模块（tab 闭包不拖 mapPages 法务长文）
 import { openCustomerService } from '../../utils/customerService'
-import { readStorage } from '../../utils/storage'
 import { goHomeTab } from '../../lib/homeIntent'
 // consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
-import { currentAppVersionLine, currentAppVersionDetail } from '../../lib/appVersion'
 
-const CONT_KEY = 'ld:me-cont'
 // 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
 // ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
 const ME_FRESH_MS = 30_000
-
-function sanitizeCont(raw: unknown): ContinueTarget | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const o = raw as Record<string, unknown>
-  const courseId = String(o.courseId || '')
-  const lessonId = String(o.lessonId || '')
-  if (!courseId || !lessonId) return null
-  return {
-    courseId,
-    courseTitle: String(o.courseTitle || ''),
-    lessonId,
-    lessonName: String(o.lessonName || ''),
-    segmentId: String(o.segmentId || ''),
-    resumeAt: Math.floor(Number(o.resumeAt) || 0),
-  }
-}
-
-function readStoredCont(): ContinueTarget | null {
-  return sanitizeCont(readStorage(CONT_KEY))
-}
-
-function writeStoredCont(cont: ContinueTarget | null): void {
-  try {
-    if (cont) wx.setStorageSync(CONT_KEY, cont)
-    else wx.removeStorageSync(CONT_KEY)
-  } catch {
-    /* 旧卡是加分项·存不上不影响本趟刷新 */
-  }
-}
+const COUNT_PAGE = 20 // 订单格数字按一页数（满页显示 20+）
 
 function continueCourseIds(progress: unknown, mine: unknown): string[] {
   const ids: string[] = []
@@ -102,8 +73,7 @@ Page({
     // 置 true 前空态不显、改显骨架；首次 refresh 落地后恒 true（成功/失败任一路都置）。
     loggedIn: seededLoggedIn, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
-    versionLine: currentAppVersionLine(), // 页底：版本线 + 数字（开发/测试/发布候选/实验）
-    versionDetail: currentAppVersionDetail(), // 页底：更新 YYYY-MM-DD（自动戳）
+    counts: { pending: '', paid: '', shipped: '' }, // 订单格数字（v5 D1·'' 不显示：加载中或取数失败）
   },
   onLoad() {
     this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight }) // 沉浸式：读状态栏高度让开自绘导航（onLoad 一次即可·不随 onShow 变）
@@ -143,6 +113,7 @@ Page({
     const seq = ++this._seq
     this._freshAt = 0
     const contP = this.refreshCont(seq) // 继续学习卡不等人资料/CMS（那两路只喂头像昵称/入口）
+    void this.refreshCounts(seq) // 订单格数字：独立一路，失败只是不显示数字
     const [u, meContent] = await Promise.all([login(), getPageContent('mePage')])
     if (seq !== this._seq) return
     const user = (u.ok ? u.user : null) as Record<string, any> | null
@@ -159,6 +130,14 @@ Page({
       this._freshAt = Date.now()
       this._freshAgreed = agreed
     }
+  },
+  /** 订单格数字：待支付/待发货/待收货各拉一页数条数（countBadge）；失败的格不显示数字。 */
+  async refreshCounts(seq: number) {
+    const keys = ['pending', 'paid', 'shipped'] as const
+    // 单路失败（含云调用直接抛错）只让那一格不显示数字，不冒成未处理异常
+    const rs = await Promise.all(keys.map((k) => getMyOrders(undefined, COUNT_PAGE, k).catch(() => ({ ok: false }))))
+    if (seq !== this._seq) return
+    this.setData({ counts: { pending: countBadge(rs[0], COUNT_PAGE), paid: countBadge(rs[1], COUNT_PAGE), shipped: countBadge(rs[2], COUNT_PAGE) } })
   },
   /** 返回是否拉全（供 refresh 判断能否进去重窗）。 */
   async refreshCont(seq: number): Promise<boolean> {
@@ -208,67 +187,13 @@ Page({
   onLoginTap() {
     loginGate.open()
   },
-  // 退出登录：确认后清本地登录 hint → 我的页转登出态（默认身份）。openid 固定身份不变、
-  // 服务端订单/学习/资料仍在（再登即回）；刚主动退出本次不再自动弹登录（下次进 App 才软门槛）。
-  onLogout() {
-    wx.showModal({
-      title: '退出登录',
-      content: '退出后需重新登录才能同步资料，你的订单和学习记录仍在。',
-      confirmText: '退出',
-      success: (r) => {
-        if (!r.confirm) return
-        loginGate.logout() // 清本地登录 hint（会话已弹过·不会立即再自动弹·下次进 App 才软门槛）
-        void this.refresh()
-        wx.showToast({ title: '已退出登录', icon: 'none' })
-      },
-    })
-  },
-  // 删除资料（隐私政策第六条）：两次确认后清云端个人资料/课程权限 + 本地登录与地址簿。
-  // 上屏文案只用「我」页首屏字体已有的字（「注销账」不在 tier1·写上去会掉系统字体）。
-  _deleting: false,
-  onDeleteAccount() {
-    if (this._deleting) return
-    wx.showModal({
-      title: '删除资料',
-      content: '删除后这个微信不能再回到你的个人资料。学习记录和地址都会没有。订单还在。点继续才会删除。',
-      confirmText: '继续',
-      success: (r) => {
-        if (!r.confirm) return
-        wx.showModal({
-          title: '删除资料',
-          content: '删除后不能再看学习记录。',
-          confirmText: '删除',
-          success: (r2) => {
-            if (!r2.confirm) return
-            void this.runDeleteAccount()
-          },
-        })
-      },
-    })
-  },
-  async runDeleteAccount() {
-    if (this._deleting) return
-    this._deleting = true
-    const r = await deleteAccount()
-    this._deleting = false
-    if (!r.ok) {
-      wx.showToast({ title: '没删成请稍后再试', icon: 'none' })
-      return
-    }
-    clearAddresses()
-    loginGate.logout()
-    writeStoredCont(null)
-    this.setData({ cont: null, contFailed: false, contLoaded: true, hatchKey: '' })
-    void this.refresh()
-    wx.showToast({ title: '已删除', icon: 'none' })
+  // 数据共享授权（合规入口·隐私政策承诺随时可撤回）
+  onConsent() {
+    wx.navigateTo({ url: '/pages/consent/consent' })
   },
   onCourses() {
     this._expireFresh() // 从课程列表进播放器，回来进度变了
     wx.navigateTo({ url: '/pages/my-courses/my-courses' })
-  },
-  onActivate() {
-    this._expireFresh() // 激活了新课，继续学习卡要换
-    wx.navigateTo({ url: '/pages/welcome/welcome' })
   },
   // 三格（待付款/待发货/待收货）带 data-tab 直落对应分栏；「全部订单」无 dataset 不带 tab（order-list.ts query.tab 契约）。
   onOrders(e?: WechatMiniprogram.TouchEvent) {
@@ -289,8 +214,5 @@ Page({
   },
   onAbout() {
     wx.navigateTo({ url: '/pages/about/about' })
-  },
-  onConsent() {
-    wx.navigateTo({ url: '/pages/consent/consent' })
   },
 })
