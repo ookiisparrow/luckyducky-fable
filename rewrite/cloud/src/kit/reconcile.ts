@@ -1,8 +1,9 @@
-import { COLLECTIONS, toFen } from '@ldrw/shared'
+import { COLLECTIONS, toFen, type CollectionName } from '@ldrw/shared'
 import { fetchTradeBill, normalizePem, type BillRow, type WxFetch } from './wxpay'
 import { getSecureConfigFields } from './secureConfig'
 import { getDocOrNull } from './db'
 import { err } from './reply'
+import { pageQuery } from './paging'
 
 /** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
 export function toYuanAmount(v: unknown): number {
@@ -24,6 +25,40 @@ export function toFenAmount(v: unknown): number {
 // （downloadBill/getBillMatch）+ timers/billReconcile 每日自动对账——同一套原语，行为单源不双轨。
 
 export const DAY_MS = 86400_000
+
+// 一窗最多读这么多行。每页 200 行、一页最多两次查询，5000 行约 25 页，离 adminApi/billReconcile 的 30s 超时和
+// 256MB 内存都远；日均 ~160 单的 30 天窗、日均 ~1600 单的每日对账宽窗才会触顶，触顶由调用方标近似。
+export const RECON_WINDOW_MAX = 5000
+
+/**
+ * 读 field ∈ [lo, hiExclusive) 的整个窗口（#400-30）：上界写进 where、按 field 倒序游标翻页，翻过下界就停，
+ * 窗外更新的行不占名额。窗内多于 max 行时停在 max 行、capped=true，丢的是窗内最早的那段。
+ * 行按先早后晚返回（同一时刻按 _id），差异清单才和日表同向、同刻多单的出参顺序才稳定。
+ * 读失败照抛：对账页要降级标注、逐笔比对要整体报错，由调用方分诊。
+ */
+export async function readWindow(
+  db: any,
+  coll: CollectionName,
+  filter: Record<string, unknown>,
+  field: string,
+  lo: number | string,
+  hiExclusive: number | string,
+  max = RECON_WINDOW_MAX
+): Promise<{ rows: any[]; capped: boolean }> {
+  const rows: any[] = []
+  const done = (capped: boolean) => ({ rows: rows.reverse(), capped })
+  let cursor: unknown = null
+  for (;;) {
+    const page = await pageQuery(db, coll, { ...filter, [field]: db.command.lt(hiExclusive) }, field, { cursor, limit: 200 }, 200)
+    for (const r of page.list) {
+      if (r[field] < lo) return done(false)
+      if (rows.length >= max) return done(true)
+      rows.push(r)
+    }
+    if (!page.hasMore) return done(false)
+    cursor = page.nextCursor
+  }
+}
 
 /** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。非 SUCCESS 行加 `:<tradeState>` 后缀：
  *  ALL 账单的退款行沿用原单微信订单号，同日先付后退会用 REFUND 行盖掉 SUCCESS 行，getBillMatch 就误报「我方有微信无」。
