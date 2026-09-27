@@ -8,7 +8,7 @@
   <view class="well fb-cats">
     <view wx:for="{{cats}}" wx:key="key" data-key="{{item.key}}" bind:tap="onCat"
       class="k fb-cat {{cat === item.key ? 'k-light' : 'fb-cat-off'}}"
-      hover-class="{{cat === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100">
+      hover-start-time="20" hover-class="{{cat === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100">
       <px-i wx:if="{{cat === item.key}}" name="led" tone="#8a5ae0" />
       <text>{{item.label}}</text>
     </view>
@@ -30,6 +30,6 @@
 
 <view class="fb-dock-space"></view>
 <view class="fb-dock">
-  <view wx:if="{{content && !busy}}" class="k k-ink k-48 fb-submit" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit">提交</view>
-  <view wx:else class="k k-flat k-48 fb-submit" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit">提交</view>
+  <view wx:if="{{content && !busy}}" class="k k-ink k-48 fb-submit" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit">提交</view>
+  <view wx:else class="k k-flat k-48 fb-submit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit">提交</view>
 </view>

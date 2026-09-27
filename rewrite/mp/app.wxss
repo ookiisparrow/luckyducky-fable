@@ -11,9 +11,10 @@ page {
 }
 
 /* ── v5 按键（键帽）三档 + 暗色两档 ──
-   用法：<view class="k k-ink" hover-class="k-ink-down" hover-stay-time="100">。高 44（.k）/ 48（.k.k-48）。
-   墨黑键每屏最多一颗（主要/重要节点）；浅色键＝默认与次操作；平面键＝弱/未选；dk/inv 只在播放页暗底。
-   按下＝下沉 2px + 键座变薄（设计稿 PRESS 表）。 */
+   用法：<view class="k k-ink" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100">。高 44（.k）/ 48（.k.k-48）；
+   高度 <34 的小键再加 .k-sm。墨黑键每屏最多一颗（主要/重要节点）；浅色键＝默认与次操作；平面键＝弱/未选；dk/inv 只在播放页暗底。
+   动效（设计稿「下沉 · 回弹」PRESS 表）：按下 60ms 下沉（大键 2px、小键 1px）+ 键座变薄；
+   松手 260ms 弹回并略冲过头（约 1px）再落稳——CSS 取「目标态」的 transition，所以按下曲线写在 *-down 上、回弹曲线写在 .k 上。 */
 .k {
   box-sizing: border-box;
   height: 44px;
@@ -26,6 +27,15 @@ page {
   font-size: 17px;
   font-weight: 500;
   white-space: nowrap;
+  transition: transform 260ms cubic-bezier(0.2, 2.6, 0.5, 1), box-shadow 260ms cubic-bezier(0.25, 0.8, 0.35, 1),
+    background-color 180ms ease-out;
+}
+.k-ink-down,
+.k-light-down,
+.k-flat-down,
+.k-dk-down,
+.k-inv-down,
+.k-card.k-card-down {
   transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
 }
 .k-48 {
@@ -80,9 +90,25 @@ page {
   transform: translateY(2px);
   box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 var(--v5-ink-4), 0 0 0 #000, 0 1px 2px -1px rgba(0, 0, 0, 0.6);
 }
-/* 列表行 / 卡片按下：不下沉，只压暗底色 */
+/* 小键（<34px）只沉 1px（设计稿：offsetHeight<34 → d=1） */
+.k-sm.k-ink-down,
+.k-sm.k-light-down,
+.k-sm.k-flat-down,
+.k-sm.k-dk-down,
+.k-sm.k-inv-down {
+  transform: translateY(1px);
+}
+/* 列表行按下：不下沉，只压暗底色 */
 .k-row-down {
   background: rgba(17, 17, 17, 0.05);
+}
+/* 白卡按下：沉 1px + 压暗（设计稿 card d=1）；卡片加 .k-card 才有回弹。双类选择器压过页面卡片自身的白底 */
+.k-card {
+  transition: transform 260ms cubic-bezier(0.2, 2.6, 0.5, 1), background-color 180ms ease-out;
+}
+.k-card.k-card-down {
+  transform: translateY(1px);
+  background: #f3f3f0;
 }
 /* 凹槽：输入框、分段选择器底槽 */
 .well {

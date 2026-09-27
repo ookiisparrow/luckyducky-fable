@@ -22,7 +22,7 @@
 <block wx:if="{{isPrivacy}}">
   <view class="ag-dock-space"></view>
   <view class="ag-dock">
-    <view class="ag-row" hover-class="k-row-down" bind:tap="onConsent">
+    <view class="ag-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onConsent">
       <text class="ag-row-t">管理数据共享授权</text>
       <px-i name="arrow" tone="#62625c" />
     </view>

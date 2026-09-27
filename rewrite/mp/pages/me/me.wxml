@@ -23,12 +23,12 @@
       <text class="me-nick">{{nickname}}</text>
       <text wx:if="{{!loggedIn}}" class="me-id-sub">登录后同步订单与学习进度</text>
     </view>
-    <view wx:if="{{loggedIn}}" class="k k-flat me-mini me-mini-weak" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onEditProfile">编辑</view>
-    <view wx:else class="k k-light me-mini" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLoginTap">登录</view>
+    <view wx:if="{{loggedIn}}" class="k k-sm k-flat me-mini me-mini-weak" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onEditProfile">编辑</view>
+    <view wx:else class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLoginTap">登录</view>
   </view>
 
   <!-- 继续学习：有卡 / 取数失败（失败≠没进度，不显假空态）/ 真无课（contLoaded 后）/ 加载中骨架 -->
-  <view wx:if="{{cont}}" class="me-card" hover-class="k-row-down" bind:tap="onContinue">
+  <view wx:if="{{cont}}" class="me-card" hover-start-time="20" hover-class="k-row-down" bind:tap="onContinue">
     <view class="me-thumb"></view>
     <view class="me-card-t">
       <text class="me-card-sub">{{cont.courseTitle}}</text>
@@ -39,11 +39,11 @@
   <view wx:elif="{{contFailed}}" class="me-card">
     <px-anim name="signal" size="2" />
     <text class="me-card-main me-card-grow">没连上网络</text>
-    <view class="k k-light me-mini" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryCont">重试</view>
+    <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryCont">重试</view>
   </view>
   <view wx:elif="{{contLoaded}}" class="me-card">
     <text class="me-card-main me-card-grow">还没有学习记录</text>
-    <view class="k k-light me-mini" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">扫码激活</view>
+    <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">扫码激活</view>
   </view>
   <view wx:else class="me-card">
     <view class="me-thumb skel"></view>
@@ -55,47 +55,47 @@
 
   <!-- 订单四格：三格带 data-tab 直落分栏；「全部订单」不带 tab（order-list.ts query.tab 契约）。订单数没有现成数据，只放字 -->
   <view class="me-grid">
-    <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-class="k-flat-down" hover-stay-time="100">待支付</view>
-    <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-class="k-flat-down" hover-stay-time="100">待发货</view>
-    <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-class="k-flat-down" hover-stay-time="100">待收货</view>
-    <view wx:if="{{entries.orders.visible}}" class="k k-flat me-cell" bind:tap="onOrders" hover-class="k-flat-down" hover-stay-time="100">
+    <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">待支付</view>
+    <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">待发货</view>
+    <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">待收货</view>
+    <view wx:if="{{entries.orders.visible}}" class="k k-flat me-cell" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100">
       <text>{{entries.orders.label}}</text><px-i name="arrow" />
     </view>
   </view>
 
   <!-- 入口行（标题/可见性走 CMS entries） -->
   <view class="me-rows">
-    <view wx:if="{{entries.courses.visible}}" class="me-row" hover-class="k-row-down" bind:tap="onCourses">
+    <view wx:if="{{entries.courses.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onCourses">
       <text class="me-row-t">{{entries.courses.label}}</text><px-i name="arrow" />
     </view>
-    <view wx:if="{{entries.activate.visible}}" class="me-row" hover-class="k-row-down" bind:tap="onActivate">
+    <view wx:if="{{entries.activate.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onActivate">
       <text class="me-row-t">{{entries.activate.label}}</text><px-i name="arrow" />
     </view>
-    <view wx:if="{{entries.aftersales.visible}}" class="me-row" hover-class="k-row-down" bind:tap="onAfterSales">
+    <view wx:if="{{entries.aftersales.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAfterSales">
       <text class="me-row-t">{{entries.aftersales.label}}</text><px-i name="arrow" />
     </view>
-    <view wx:if="{{entries.address.visible}}" class="me-row" hover-class="k-row-down" bind:tap="onAddress">
+    <view wx:if="{{entries.address.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAddress">
       <text class="me-row-t">{{entries.address.label}}</text><px-i name="arrow" />
     </view>
     <!-- 数据共享授权（隐私政策承诺可撤回·合规入口·设计稿未画，放入口行末） -->
-    <view wx:if="{{entries.consent.visible}}" class="me-row" hover-class="k-row-down" bind:tap="onConsent">
+    <view wx:if="{{entries.consent.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onConsent">
       <text class="me-row-t">{{entries.consent.label}}</text><px-i name="arrow" />
     </view>
   </view>
 
   <view class="me-links">
-    <view wx:if="{{entries.kefu.visible}}" class="me-link" hover-class="k-row-down" bind:tap="onKefu">{{entries.kefu.label}}</view>
+    <view wx:if="{{entries.kefu.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">{{entries.kefu.label}}</view>
     <view wx:if="{{entries.kefu.visible && entries.feedback.visible}}" class="me-sep"></view>
-    <view wx:if="{{entries.feedback.visible}}" class="me-link" hover-class="k-row-down" bind:tap="onFeedback">{{entries.feedback.label}}</view>
+    <view wx:if="{{entries.feedback.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onFeedback">{{entries.feedback.label}}</view>
     <view wx:if="{{(entries.kefu.visible || entries.feedback.visible) && entries.about.visible}}" class="me-sep"></view>
-    <view wx:if="{{entries.about.visible}}" class="me-link" hover-class="k-row-down" bind:tap="onAbout">{{entries.about.label}}</view>
+    <view wx:if="{{entries.about.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onAbout">{{entries.about.label}}</view>
   </view>
 
   <!-- 账号操作（仅已登录）：退出登录（清本地登录 hint·openid 身份与服务端订单/学习不受影响）；
        删除资料（隐私政策第六条·两次确认在 ts·危险操作＝浅色键 + 红字）。文案不用「注销账户」——那三字不在「我」页首屏字体。 -->
   <view wx:if="{{loggedIn}}" class="me-acct">
-    <view wx:if="{{loggedIn}}" class="k k-light me-acct-k" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLogout">退出登录</view>
-    <view wx:if="{{loggedIn}}" class="k k-light me-acct-k me-danger" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeleteAccount">删除资料</view>
+    <view wx:if="{{loggedIn}}" class="k k-light me-acct-k" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLogout">退出登录</view>
+    <view wx:if="{{loggedIn}}" class="k k-light me-acct-k me-danger" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeleteAccount">删除资料</view>
     <text class="me-note">删除后学习记录和地址都会没有，订单还在</text>
   </view>
 

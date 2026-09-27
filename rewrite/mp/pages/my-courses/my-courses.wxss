@@ -28,10 +28,6 @@ page {
   padding: 16px;
 }
 /* 卡片按下（设计稿 PRESS.card：底 #f3f3f0·下沉 1px） */
-.mc-card-down {
-  background: #f3f3f0;
-  transform: translateY(1px);
-}
 .mc-row {
   display: flex;
   align-items: center;

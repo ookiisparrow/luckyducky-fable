@@ -9,7 +9,7 @@
     <px-anim name="signal" size="4" />
     <text class="mc-state-t">网络开小差</text>
     <text class="mc-state-h">课程没加载出来，请重试</text>
-    <view class="k k-light mc-retry" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+    <view class="k k-light mc-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
   </view>
 
   <!-- 骨架占位（加载中，不写死假进度） -->
@@ -29,14 +29,14 @@
 
   <!-- 课卡列表 -->
   <view class="mc-list" wx:elif="{{list.length}}">
-    <view class="mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="mc-card-down" hover-stay-time="100">
+    <view class="k-card mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-start-time="20" hover-class="k-card-down" hover-stay-time="100">
       <view class="mc-row">
         <view class="mc-thumb"></view>
         <view class="mc-body">
           <text class="mc-name">{{item.title}}</text>
           <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。
                本页没有下拉刷新，点这一行走已有 onRetryLoad；catch 住，避免连课卡一起点进目录。 -->
-          <view class="mc-meta" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-class="k-row-down" hover-stay-time="100">
+          <view class="mc-meta" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100">
             <text class="mc-left">学习进度暂时读不到，<text class="mc-retry-t">点此重试</text></text>
           </view>
           <block wx:elif="{{item.totalSegments}}">
@@ -64,5 +64,5 @@
 </view>
 
 <view class="mc-dock">
-  <view class="k k-light k-48" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">输入激活码</view>
+  <view class="k k-light k-48" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">输入激活码</view>
 </view>

@@ -467,16 +467,38 @@ page {
 .hm-closing-cta {
   position: relative;
 }
-/* 墨黑键上定时扫过的一道高光（设计稿 ldSheen） */
+/* 墨黑键上的紫光（设计定稿「按键闪光样稿 1a·三道斜像素光」）：深紫·紫·浅紫三条斜杠，
+   每 3.6s 逐格（steps 28）跳着扫过一次，首轮延迟 1.2s；底部让出 3px 键座不压。 */
 .hm-sheen {
   position: absolute;
   top: 0;
-  bottom: 0;
+  bottom: 3px;
   left: 0;
-  width: 60px;
-  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
-  animation: hm-sheen 3.2s ease-in-out infinite;
+  display: flex;
+  gap: 4px;
+  transform: translateX(-120px);
+  animation: hm-sheen 3.6s steps(28) 1.2s infinite;
   pointer-events: none;
+}
+.hm-sheen-a,
+.hm-sheen-b,
+.hm-sheen-c {
+  transform: skewX(-18deg);
+}
+.hm-sheen-a {
+  width: 8px;
+  background: #6b3fc4;
+  opacity: 0.55;
+}
+.hm-sheen-b {
+  width: 16px;
+  background: #8a5ae0;
+  opacity: 0.85;
+}
+.hm-sheen-c {
+  width: 8px;
+  background: #b79cf0;
+  opacity: 0.7;
 }
 @keyframes hm-sheen {
   0% {

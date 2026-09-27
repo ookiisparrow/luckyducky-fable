@@ -6,8 +6,8 @@
 <view class="ad">
   <text class="ad-title">收货地址</text>
   <view class="ad-list">
-    <view class="ad-row" wx:for="{{list}}" wx:key="id" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onTapRow">
-      <view wx:if="{{picking}}" class="k k-light ad-radio">
+    <view class="ad-row" wx:for="{{list}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onTapRow">
+      <view wx:if="{{picking}}" class="k k-sm k-light ad-radio">
         <px-i wx:if="{{item.isDefault}}" name="node" tone="#8a5ae0" />
       </view>
       <view class="ad-text">
@@ -18,7 +18,7 @@
         </view>
         <text class="t-sys ad-where">{{item.region}} {{item.detail}}</text>
       </view>
-      <view class="k k-flat ad-edit" hover-class="k-flat-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onEdit">编辑</view>
+      <view class="k k-sm k-flat ad-edit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onEdit">编辑</view>
     </view>
     <view wx:if="{{!list.length}}" class="ad-empty">
       <px-ground kind="pin" />
@@ -29,5 +29,5 @@
 </view>
 
 <view class="ad-dock">
-  <view class="k k-ink k-48 ad-add" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAdd">新增收货地址</view>
+  <view class="k k-ink k-48 ad-add" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAdd">新增收货地址</view>
 </view>

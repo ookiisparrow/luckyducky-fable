@@ -13,11 +13,11 @@
 
 <view class="ab-dock-space"></view>
 <view class="ab-dock">
-  <view class="ab-row" hover-class="k-row-down" bind:tap="onUserAgreement">
+  <view class="ab-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onUserAgreement">
     <text class="ab-row-t">用户协议</text>
     <px-i name="arrow" tone="#62625c" />
   </view>
-  <view class="ab-row" hover-class="k-row-down" bind:tap="onPrivacy">
+  <view class="ab-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onPrivacy">
     <text class="ab-row-t">隐私政策</text>
     <px-i name="arrow" tone="#62625c" />
   </view>

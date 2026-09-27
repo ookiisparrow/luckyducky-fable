@@ -15,7 +15,7 @@
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
     <view class="lp-bar">
       <view class="lp-back" bind:tap="onBack">
-        <view class="k k-dk lp-back-key" hover-class="k-dk-down" hover-stay-time="100"><px-i name="back" /></view>
+        <view class="k k-sm k-dk lp-back-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100"><px-i name="back" /></view>
       </view>
       <text class="lp-nav-cap">{{strip ? strip.lessonNo + ' · ' + strip.lessonName : (title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习')))}}</text>
     </view>
@@ -62,8 +62,8 @@
       <view wx:if="{{segDone && !(strip && strip.segIndex === strip.segTotal)}}" class="lp-segend">
         <text class="lp-segend-cap">{{capText}}</text>
         <view class="lp-segend-keys">
-          <view class="k k-dk" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplay">重播本段</view>
-          <view wx:if="{{canNext}}" class="k k-dk" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext">继续下一段<px-i name="arrow" /></view>
+          <view class="k k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplay">重播本段</view>
+          <view wx:if="{{canNext}}" class="k k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext">继续下一段<px-i name="arrow" /></view>
         </view>
       </view>
     </view>
@@ -72,25 +72,25 @@
   <view class="lp-stage lp-state" wx:elif="{{state === 'empty'}}">
     <text class="lp-state-title">这段视频还在整理中</text>
     <text class="lp-state-hint t-sys">先看看别的段落吧</text>
-    <view wx:if="{{canNext}}" class="k k-dk lp-state-key" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext">跳到下一段</view>
+    <view wx:if="{{canNext}}" class="k k-dk lp-state-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext">跳到下一段</view>
   </view>
   <view class="lp-stage lp-state" wx:elif="{{state === 'denied'}}">
     <text class="lp-state-title">先激活课程才能观看</text>
-    <view class="k k-inv lp-state-key" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onGoActivate">去输入激活码</view>
+    <view class="k k-inv lp-state-key" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onGoActivate">去输入激活码</view>
   </view>
   <!-- missing 态补出路：别只有「没找到」一句、一个可点的都没有（同页 error 态有重试按钮）。 -->
   <view class="lp-stage lp-state" wx:elif="{{state === 'missing'}}">
     <text class="lp-state-title">没找到这门课</text>
     <text class="lp-state-hint t-sys">可能课程已下架，或者这个链接不对</text>
-    <view class="k k-inv lp-state-key" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onGoCourses">去我的课程看看</view>
+    <view class="k k-inv lp-state-key" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onGoCourses">去我的课程看看</view>
   </view>
   <!-- error 态双语义：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到，重试都走 onRetryError（内部自分流）。 -->
   <view class="lp-stage lp-state" wx:elif="{{state === 'error'}}">
     <text class="lp-state-title">{{current ? '这段视频暂时播放不了' : '课程内容没加载出来'}}</text>
     <text class="lp-state-hint t-sys">{{current ? '可能是网络或格式问题，换一段或稍后再试' : '网络开小差了，稍后再试'}}</text>
     <view class="lp-state-keys">
-      <view class="k k-inv lp-state-key" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onRetryError">{{current ? '重试本段' : '重新加载'}}</view>
-      <view wx:if="{{canNext}}" class="k k-dk lp-state-key" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext">跳到下一段</view>
+      <view class="k k-inv lp-state-key" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onRetryError">{{current ? '重试本段' : '重新加载'}}</view>
+      <view wx:if="{{canNext}}" class="k k-dk lp-state-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext">跳到下一段</view>
     </view>
   </view>
 
@@ -130,10 +130,10 @@
     </view>
 
     <view class="lp-controls">
-      <view class="k k-48 lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev">上一段</view>
-      <view class="k k-48 k-inv lp-ctl-main" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onTapVideo"><px-i name="{{paused ? 'play' : 'pause'}}" tone="#111" /></view>
-      <view class="k k-48 lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext">下一段</view>
-      <view class="k k-48 k-dk" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp">求助</view>
+      <view class="k k-48 lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev">上一段</view>
+      <view class="k k-48 k-inv lp-ctl-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onTapVideo"><px-i name="{{paused ? 'play' : 'pause'}}" tone="#111" /></view>
+      <view class="k k-48 lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext">下一段</view>
+      <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp">求助</view>
     </view>
   </view>
 
@@ -148,9 +148,9 @@
       <text class="lp-done-title">这一节学完了</text>
     </view>
     <view class="lp-done-keys">
-      <view class="k k-48 k-dk" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson">重看本节</view>
-      <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext">继续下一节<px-i name="arrow" /></view>
-      <view wx:else class="k k-48 k-inv lp-done-main" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onFinishCourse">完成课程</view>
+      <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson">重看本节</view>
+      <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext">继续下一节<px-i name="arrow" /></view>
+      <view wx:else class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onFinishCourse">完成课程</view>
     </view>
   </view>
 
@@ -160,31 +160,31 @@
     <view class="lp-help-sheet" style="top: {{statusBarHeight + 44}}px" catch:tap="noop" catch:touchmove="noop">
       <view class="lp-help-grab" bind:tap="onHelpClose"></view>
       <view class="lp-help-nav">
-        <view wx:if="{{helpPanel === 'videos' && helpSrc}}" class="k k-light lp-help-sq" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideoBack"><px-i name="back" /></view>
-        <view wx:elif="{{helpPanel !== 'menu'}}" class="k k-light lp-help-sq" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpBackMenu"><px-i name="back" /></view>
+        <view wx:if="{{helpPanel === 'videos' && helpSrc}}" class="k k-sm k-light lp-help-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideoBack"><px-i name="back" /></view>
+        <view wx:elif="{{helpPanel !== 'menu'}}" class="k k-sm k-light lp-help-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpBackMenu"><px-i name="back" /></view>
         <text class="lp-help-title">{{helpPanel === 'menu' ? '需要帮忙吗？' : (helpPanel === 'faq' ? help.faqTitle : (helpSrc ? (helpSegName || '正在播放') : help.videosTitle))}}</text>
         <view class="lp-help-close" bind:tap="onHelpClose">
-          <view class="k k-light lp-help-sq" hover-class="k-light-down" hover-stay-time="100"><px-i name="times" /></view>
+          <view class="k k-sm k-light lp-help-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"><px-i name="times" /></view>
         </view>
       </view>
 
       <!-- menu 层 -->
       <block wx:if="{{helpPanel === 'menu'}}">
-        <view class="k k-light lp-help-card" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideos">
+        <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideos">
           <view class="lp-help-card-tx">
             <text class="lp-help-card-title">{{help.videosTitle}}</text>
             <text class="lp-help-card-sub">小段讲解都在这里</text>
           </view>
           <px-i name="chev" tone="#62625c" />
         </view>
-        <view class="k k-light lp-help-card" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpFaq">
+        <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpFaq">
           <view class="lp-help-card-tx">
             <text class="lp-help-card-title">{{help.faqTitle}}</text>
             <text class="lp-help-card-sub">高频问题都在这里</text>
           </view>
           <px-i name="chev" tone="#62625c" />
         </view>
-        <view class="k k-48 k-light" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">{{help.contactTitle}}</view>
+        <view class="k k-48 k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">{{help.contactTitle}}</view>
       </block>
 
       <!-- videos 子层：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
@@ -200,7 +200,7 @@
               <view class="lp-help-topic-sub t-sys" wx:if="{{item.sub}}">{{item.sub}}</view>
               <view
                 class="k lp-help-seg {{seg.url ? 'k-light' : 'k-flat'}}"
-                hover-class="{{seg.url ? 'k-light-down' : 'none'}}"
+                hover-start-time="20" hover-class="{{seg.url ? 'k-light-down' : 'none'}}"
                 hover-stay-time="100"
                 wx:for="{{item.segments}}"
                 wx:for-item="seg"
@@ -223,7 +223,7 @@
           </view>
           <view class="lp-help-empty" wx:else>
             <text>帮助视频整理中，先问客服吧</text>
-            <view class="k k-48 k-light lp-help-empty-key" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">联系客服</view>
+            <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">联系客服</view>
           </view>
         </scroll-view>
       </block>
@@ -250,11 +250,11 @@
           </view>
           <view class="lp-help-empty" wx:elif="{{helpFaqState === 'fail'}}">
             <text>常见问题暂时查不到，请稍后再试</text>
-            <view class="k k-48 k-light lp-help-empty-key" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">联系客服</view>
+            <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">联系客服</view>
           </view>
           <view class="lp-help-empty" wx:else>
             <text>常见问题还在整理中，先问客服吧</text>
-            <view class="k k-48 k-light lp-help-empty-key" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">联系客服</view>
+            <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact">联系客服</view>
           </view>
         </scroll-view>
       </block>
@@ -269,8 +269,8 @@
         <text class="lp-dg-title">放书签在桌面，下次点开就继续。</text>
         <text class="lp-dg-text t-sys">{{deskGuideIOS ? '点右上角 ··· 菜单，选『添加到我的小程序』' : '点右上角 ··· 菜单，选『添加到桌面』'}}</text>
       </view>
-      <view class="k k-48 k-light" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeskGuideExit">先退出，下次继续</view>
-      <view class="k k-48 k-ink" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onDeskGuideStay">继续学习</view>
+      <view class="k k-48 k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeskGuideExit">先退出，下次继续</view>
+      <view class="k k-48 k-ink" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onDeskGuideStay">继续学习</view>
     </view>
   </view>
 </view>

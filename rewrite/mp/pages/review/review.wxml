@@ -12,7 +12,7 @@
     <text class="rv-q">这次体验怎么样？</text>
 
     <view class="rv-stars">
-      <view wx:for="{{starIdx}}" wx:key="*this" class="k k-light rv-star" hover-class="k-light-down" hover-stay-time="100"
+      <view wx:for="{{starIdx}}" wx:key="*this" class="k k-light rv-star" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
         data-n="{{item}}" bind:tap="onStar">
         <px-i name="star9" size="4" tone="{{rating >= item ? '#F4BD3F' : '#C9C9C2'}}" halo="none" />
       </view>
@@ -22,8 +22,8 @@
     <view class="rv-more">
       <text class="rv-cap">补充一下 · 选填</text>
       <view class="rv-tags">
-        <view wx:for="{{tags}}" wx:key="t" class="k rv-tag {{item.on ? 'k-light' : 'k-flat'}}"
-          hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag">{{item.t}}</view>
+        <view wx:for="{{tags}}" wx:key="t" class="k k-sm rv-tag {{item.on ? 'k-light' : 'k-flat'}}"
+          hover-start-time="20" hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag">{{item.t}}</view>
       </view>
 
       <textarea class="well rv-text t-sys" value="{{text}}" bind:input="onText" maxlength="500" auto-height
@@ -35,14 +35,14 @@
           <image class="rv-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
           <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><px-i name="times" tone="#ffffff" /></view>
         </view>
-        <view wx:if="{{photos.length < maxPhotos}}" class="k k-flat rv-add" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onAddPhotos">
+        <view wx:if="{{photos.length < maxPhotos}}" class="k k-flat rv-add" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onAddPhotos">
           <px-anim wx:if="{{uploading}}" name="loader" size="2" />
           <px-i wx:else name="plus" />
         </view>
       </view>
 
       <view class="rv-anon" bind:tap="onAnon">
-        <view class="k k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="#8A5AE0" /></view>
+        <view class="k k-sm k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="#8A5AE0" /></view>
         <text class="rv-anon-t">匿名评价</text>
         <text class="rv-anon-sub">隐藏你的昵称与头像</text>
       </view>
@@ -52,8 +52,8 @@
 
 <view class="rv-dock-space"></view>
 <view class="rv-dock">
-  <view wx:if="{{rating && !busy}}" class="k k-ink k-48 rv-pub" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit">发布评价</view>
-  <view wx:else class="k k-flat k-48 rv-pub" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit">发布评价</view>
+  <view wx:if="{{rating && !busy}}" class="k k-ink k-48 rv-pub" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit">发布评价</view>
+  <view wx:else class="k k-flat k-48 rv-pub" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit">发布评价</view>
 </view>
 
 <!-- 隐私授权弹窗（晒图走 wx.chooseMedia 属隐私接口·守卫 rw-mp-privacy-gated） -->

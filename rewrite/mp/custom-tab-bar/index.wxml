@@ -3,7 +3,7 @@
     wx:for="{{tabs}}"
     wx:key="id"
     class="k ld-tab {{active === item.id ? 'k-light ld-tab-on' : 'k-flat'}}"
-    hover-class="{{active === item.id ? 'k-light-down' : 'k-flat-down'}}"
+    hover-start-time="20" hover-class="{{active === item.id ? 'k-light-down' : 'k-flat-down'}}"
     hover-stay-time="100"
     data-id="{{item.id}}"
     data-path="{{item.path}}"

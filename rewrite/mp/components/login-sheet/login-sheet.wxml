@@ -18,8 +18,8 @@
     </view>
 
     <view class="ls-row">
-      <view class="k k-flat k-48 ls-later" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose">暂不登录</view>
-      <view class="k k-ink k-48 ls-go" hover-class="k-ink-down" hover-stay-time="100" catch:tap="onLogin">{{submitting ? '登录中…' : '微信一键登录'}}</view>
+      <view class="k k-flat k-48 ls-later" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose">暂不登录</view>
+      <view class="k k-ink k-48 ls-go" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" catch:tap="onLogin">{{submitting ? '登录中…' : '微信一键登录'}}</view>
     </view>
   </view>
 </view>
