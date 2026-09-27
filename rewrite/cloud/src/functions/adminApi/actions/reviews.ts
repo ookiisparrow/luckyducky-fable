@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { pageQuery, getTempUrls, IMAGE_URL_MAX_AGE, str, err } from '../../../kit'
+import { readDoc, type Ctx } from '../lib'
+import { pageQuery, getTempUrls, IMAGE_URL_MAX_AGE, str, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 评价挑选（先审后发）：admin 看待挑选 + 已上架，勾上墙 / 撤下。公开读只认 picked===true。
@@ -37,18 +37,24 @@ export async function listReviews({ db, data }: Ctx) {
     photos: (Array.isArray(r.photos) ? r.photos : []).map((id: string) => urlMap[String(id)]).filter(Boolean),
     picked: r.picked === true,
   }))
-  return reply(200, { ok: true, list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
+  return ok({ list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
 export async function setReviewPicked({ db, data }: Ctx) {
   const id = str(data && data.id, 200)
-  if (!id) return reply(400, err('NO_ID'))
+  if (!id) return err('NO_ID')
   const picked = data.picked === true
   const upd = await db
     .collection(COLLECTIONS.reviews)
     .doc(id)
     .update({ data: { picked } })
     .catch(() => null)
-  if (!upd || !upd.stats || upd.stats.updated !== 1) return reply(400, err('NOT_FOUND'))
-  return reply(200, { ok: true, picked })
+  if (!upd || !upd.stats) return err('NOT_FOUND')
+  // 真云内容没变回 updated:0（连点/别的窗口先点了同一状态），读回有这条就算成功
+  if (upd.stats.updated !== 1) {
+    const back = await readDoc(db.collection(COLLECTIONS.reviews).doc(id).get())
+    if (!back.ok) return err('DOC_READ_FAIL')
+    if (!back.data) return err('NOT_FOUND')
+  }
+  return ok({ picked })
 }

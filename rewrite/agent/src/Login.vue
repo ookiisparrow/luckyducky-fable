@@ -4,9 +4,11 @@ import { ref } from 'vue'
 import { login } from './api/client'
 
 const emit = defineEmits<{ authed: [] }>()
+// notice：企微免登没成功的原因（App 换令牌失败后落到这页），开页就显示
+const props = defineProps<{ notice?: string }>()
 const password = ref('')
 const busy = ref(false)
-const message = ref('')
+const message = ref(props.notice || '')
 
 async function submit() {
   if (busy.value || !password.value) return
@@ -33,7 +35,15 @@ async function submit() {
               ? '服务器太久没回话，请稍后再试'
               : e === 'BAD_JSON_RESPONSE' || r.status >= 500 // 错口令只会是 4xx；回包读不懂或 5xx 说成口令错会诱人换口令试到被锁
                 ? '服务器出错了，请稍后再试（不是口令的问题）'
-                : '登录被拒（' + e + '）'
+                : e === 'BAD_KEY'
+                  ? '口令不对'
+                  : e === 'KEY_TOO_SHORT'
+                    ? '口令至少 6 位'
+                    : e === 'ACCOUNT_DISABLED' // 停号后口令照样比对得上，说「口令不对」会让人换口令试到被锁
+                      ? '这个账号已被停用，换口令也登不进——请找管理员恢复'
+                      : e === 'NO_SESSION_TOKEN'
+                        ? '口令对了，但云端没发下登录凭证，请稍后再试（不是口令的问题）'
+                        : '登录被拒（' + e + '）'
 }
 </script>
 

@@ -31,4 +31,20 @@ describe('LD-005：adminApi 异常模块归因', () => {
       registries.ACTIONS.saveSettings = original
     }
   })
+
+  // 回包序列化在网关做：结果带 BigInt/环引用时 stringify 会抛，也得落回 500 + CORS 头 + 失败审计，不能冒成云函数裸异常
+  it('handler 结果序列化不了时，同样回 500 并记失败审计', async () => {
+    const original = registries.ACTIONS.saveSettings
+    registries.ACTIONS.saveSettings = async () => ({ ok: true, n: BigInt(1) })
+    try {
+      const response = await post({ action: 'saveSettings', key: 'super-secret-key' })
+      expect(response.statusCode).toBe(500)
+      expect(response.headers['Access-Control-Allow-Origin']).toBe('*')
+      expect(JSON.parse(response.body)).toEqual({ ok: false, error: 'SERVER_ERROR' })
+      const log = control.dump('auditLog').find((entry: any) => entry.action === 'saveSettings')
+      expect(log).toMatchObject({ ok: false, error: 'SERVER_ERROR', module: 'shop' })
+    } finally {
+      registries.ACTIONS.saveSettings = original
+    }
+  })
 })

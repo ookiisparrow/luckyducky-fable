@@ -24,7 +24,7 @@ function msgEuid(msg: any): string {
 }
 
 // 身份桥接（external_userid→openid·kfBind 建的映射·不信前端·根因#3）。best-effort：未绑定/读失败返 ''
-// （仍按 externalUserId 可检索）。内联 1 行读·不依赖 dispatch.resolveOpenid（解耦·铁律二）。
+// （仍按 externalUserId 可检索）。内联 1 行读·不依赖 customer.resolveOpenid（解耦·铁律二）。
 async function resolveOpenidBestEffort(db: any, euid: string): Promise<string> {
   if (!euid) return ''
   const got = await db.collection(COLLECTIONS.kfIdentity).doc('ext:' + euid).get().catch(() => null)

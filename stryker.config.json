@@ -1,17 +1,20 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_doc": "StrykerJS 变异测试：往生产代码注入 bug，看测试能否咬住，专治「运动员兼裁判」盲区。范围=钱链核心（shared 契约、cloud/kit 闸、下单/支付回调/退款/超时关单云函数）；.spec/seed 是数据面、变异无杀手信号故排除。度量工具，不进 npm run check，按需 npm run mutation 看报告。",
+  "_doc": "StrykerJS 变异测试：往生产代码注入 bug，看测试能否咬住，专治「运动员兼裁判」盲区。范围=钱链核心（shared 契约、cloud/kit 闸、下单/支付回调/退款/退款回调/超时关单云函数）；.spec/seed 是数据面、变异无杀手信号故排除；statusLabels 是纯数据表，变异体全是静态的（模块加载时就求值），每个都得整套测试重跑，全量跑时大多超时、超时又按已检出计，分数虚高，故整文件排除，靠 Record<状态,标签> 类型与 statusLabels.test.ts 锁住；kit/csTrialRefresh 是客服测版刷新、不碰钱，放 kit 只为两个云函数共用，排除以免稀释钱链分数。度量工具，不进 npm run check，按需 npm run mutation 看报告。",
   "testRunner": "vitest",
   "vitest": { "configFile": "vitest.stryker.mjs" },
   "mutate": [
     "rewrite/shared/src/**/*.ts",
     "!rewrite/shared/src/cs.spec.ts",
     "!rewrite/shared/src/seed/**",
+    "!rewrite/shared/src/statusLabels.ts",
     "rewrite/cloud/src/kit/**/*.ts",
+    "!rewrite/cloud/src/kit/csTrialRefresh.ts",
     "rewrite/cloud/src/functions/app/actions/orders.ts",
     "rewrite/cloud/src/functions/adminApi/actions/orders.ts",
     "rewrite/cloud/src/functions/adminApi/actions/refunds.ts",
     "rewrite/cloud/src/functions/callbacks/payCallback.ts",
+    "rewrite/cloud/src/functions/callbacks/refundCallback.ts",
     "rewrite/cloud/src/functions/timers/closeExpiredOrders.ts"
   ],
   "tempDirName": ".stryker-tmp",

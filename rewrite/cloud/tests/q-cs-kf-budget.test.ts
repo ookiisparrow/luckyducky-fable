@@ -5,7 +5,7 @@ import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import { COLLECTIONS } from '@ldrw/shared'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
-import { processKfBatch } from '../src/functions/cs/kfCallback/dispatch'
+import { processKfBatch } from '../src/functions/cs/kfCallback/batch'
 import { kfSignature, getDb } from '../src/kit'
 
 const AES = 'b'.repeat(43)

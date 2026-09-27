@@ -8,6 +8,8 @@ import {
   notifyAlert,
   pullBillDay,
   matchBillRows,
+  readWindow,
+  RECON_WINDOW_MAX,
   DAY_MS,
   type WxFetch,
 } from '../../kit'
@@ -51,30 +53,28 @@ export async function runBillReconcile(
   }
 
   // 我方已收款单·宽窗 [date-1d, date+2d)：微信账单归日 vs 我方 paidAt 落库时刻可跨日，窄窗会把
-  // 边界真单误判 wxOnly。桩与真云均验的查询形状：多字段隐式 AND + _.gt 单算子 + orderBy/limit，
-  // 上界 JS 过滤（桩无 _.and/_.gte·仓内 paging 先例刻意回避）。极端残余（时差>1 日）按 transactionId
-  // 全窗匹配已压到「我方单真不存在」一类＝真差异——勿再加宽。
+  // 边界真单误判 wxOnly。整窗读全（kit readWindow，同后台对账），窗内超过 cap 才算截断。极端残余（时差>1 日）
+  // 按 transactionId 全窗匹配已压到「我方单真不存在」一类＝真差异——勿再加宽。
   const _ = db.command
   const dayStart = dayStartMsCST(date)
-  const cap = opts.cap ?? 1000 // 云函数端 .limit() 最多给 1000 条，设大了 truncated 永远报不出截断
-  const raw: any[] | null = await db
-    .collection(COLLECTIONS.orders)
-    .where({ status: _.in([...MONEY_RECEIVED_STATUSES]), paidAt: _.gt(dayStart - DAY_MS - 1) })
-    .orderBy('paidAt', 'desc')
-    .limit(cap)
-    .get()
-    .then(
-      (r: any) => r.data,
-      () => null
-    )
+  const cap = opts.cap ?? RECON_WINDOW_MAX
+  const read = await readWindow(
+    db,
+    COLLECTIONS.orders,
+    { status: _.in([...MONEY_RECEIVED_STATUSES]) },
+    'paidAt',
+    dayStart - DAY_MS,
+    dayStart + 2 * DAY_MS,
+    cap
+  ).catch(() => null)
   // 读失败≠我方无单：当空会把当天每笔微信流水写成 BILL_WX_ONLY 高危假异常，且指纹去重让同日重跑不再推送、
   // 假异常一直挂在账本里。只发一条告警，不比对不落账。
-  if (!raw) {
+  if (!read) {
     await notifyAlert('money', 'billReconcile', 'BILL_RECON_ORDERS_READ_FAIL', { date, fp: date })
     return ok({ date, error: 'ORDERS_READ_FAIL' })
   }
-  const truncated = raw.length >= cap
-  const ourOrders = raw.filter((o: any) => typeof o.paidAt === 'number' && o.paidAt < dayStart + 2 * DAY_MS)
+  const truncated = read.capped
+  const ourOrders = read.rows
 
   const { wxOnly, amountMismatch } = matchBillRows(ourOrders, pull.rows)
   if (truncated)

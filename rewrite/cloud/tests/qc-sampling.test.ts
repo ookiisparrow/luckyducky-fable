@@ -6,7 +6,7 @@ import { control } from 'wx-server-sdk'
 import { getDb } from '../src/kit/db'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
-import { enqueueSession } from '../src/functions/cs/kfCallback/dispatch'
+import { enqueueSession } from '../src/functions/cs/kfCallback/session'
 
 const SUPER = 'super-secret-key'
 const A1 = 'outsourced-key-1'

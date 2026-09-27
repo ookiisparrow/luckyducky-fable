@@ -1,4 +1,5 @@
 import cloud from 'wx-server-sdk'
+import { ERR } from '@ldrw/shared'
 import { alert } from './observe'
 import { err } from './reply'
 
@@ -67,9 +68,10 @@ function onInfraFail(infra: MsgSecInfra, scene: number): SecResult {
  * 校验一段用户文本的内容安全。走 cloud.openapi.security.msgSecCheck v2
  * （openid + content + version:2 + scene）。空串/纯空白直接通过（不外呼）。绝不抛错。
  *
- * **违规**（errCode 87014 或 result.suggest==='risky'）一律拒——两条路径相同。
+ * **违规**（errCode 87014 或 result.suggest==='risky'）一律拒，回 TEXT_RISKY——两条路径相同。
  * **接口抖动/能力未开**（其它非 0 码 / 抛错）：
- *   - `infra:'closed'`（默认·评价/昵称/签名）：拒。UGC 公开展示面，「证明安全」才放行。
+ *   - `infra:'closed'`（默认·评价/昵称/签名）：拒，回 SEC_CHECK_FAIL。UGC 公开展示面，「证明安全」才放行。
+ *     与违规分开回码：抖动时让用户「改文字」，正常文字怎么改都过不了。
  *   - `infra:'open'`（客服打字 / 意见反馈）：放行并 `alert(SEC_CHECK_INFRA)`。
  *     安检抖动不得卡死顾客消息（拍板）。
  * 守卫 ugc-imgsecchecked 焊评价/资料写面；客服/反馈由测试锁 fail-open。
@@ -91,12 +93,12 @@ export async function msgSecCheck(
     })
     const code = r && (r.errCode ?? r.errcode)
     const suggest = r && r.result && r.result.suggest
-    if (isRisky(code, suggest)) return err('SEC_CHECK_FAIL')
+    if (isRisky(code, suggest)) return err(ERR.TEXT_RISKY)
     if (code != null && code !== 0) return onInfraFail(infra, scene)
     return { ok: true } // errCode:0 且非 risky（含 pass/review/无 suggest）→ 放行
   } catch (e: any) {
     const code = e && (e.errCode ?? e.errcode)
-    if (code === RISKY) return err('SEC_CHECK_FAIL') // 抛错壳里的违规码仍拒
+    if (code === RISKY) return err(ERR.TEXT_RISKY) // 抛错壳里的违规码仍拒
     return onInfraFail(infra, scene)
   }
 }

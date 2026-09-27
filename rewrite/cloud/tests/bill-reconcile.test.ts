@@ -218,9 +218,10 @@ describe('billReconcile timer（每日自动对账·钱链·病根#14）', () =>
     control.seed('orders', [
       { _id: 'a1', id: 'a1', _openid: 'x', status: 'paid', amount: 1, transactionId: 'tx-a1', paidAt: NOW - 86400_000, items: [] },
       { _id: 'a2', id: 'a2', _openid: 'x', status: 'paid', amount: 1, transactionId: 'tx-a2', paidAt: NOW - 86400_000 + 1, items: [] },
+      { _id: 'a3', id: 'a3', _openid: 'x', status: 'paid', amount: 1, transactionId: 'tx-a3', paidAt: NOW - 86400_000 + 2, items: [] },
     ])
     const { result, alerts } = await withAlerts(() =>
-      runBillReconcile(db, { now: NOW, fetchImpl: billFetch(CSV_GHOST), cap: 2 }) // 拉满 cap=2 → 截断
+      runBillReconcile(db, { now: NOW, fetchImpl: billFetch(CSV_GHOST), cap: 2 }) // 宽窗 3 单 > cap=2 → 截断
     )
     expect((result as any).truncated).toBe(true)
     expect((result as any).wxOnly).toBe(0) // 比对面不全·wxOnly 不判（防误报）

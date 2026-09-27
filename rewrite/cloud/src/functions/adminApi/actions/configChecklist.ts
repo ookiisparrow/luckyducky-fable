@@ -1,5 +1,5 @@
-import { reply, readDoc, type Ctx } from '../lib'
-import { hasAdjustLedgerEntry, hasThresholdMaterial, err } from '../../../kit'
+import { readDoc, type Ctx } from '../lib'
+import { hasAdjustLedgerEntry, hasThresholdMaterial, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（「配了没」总览·部分项可在本页填写）：
@@ -13,8 +13,9 @@ import { COLLECTIONS } from '@ldrw/shared'
 //    字段全部收口进库（kit/secureConfig.ts 单源读取），本页可直接填写（fill 字段非空的 item）；DB 无值时
 //    云函数运行时会回退同名环境变量（迁移期兼容），但本页状态只看库（鼓励迁移，不谎报「未配」实为「仍在
 //    旧环境变量层」的暧昧态——note 里说明）。
-// ② adminApi 进程 env 布尔 `!!process.env.X`兜底：WXPAY_MCH_* 是 adminApi 自身环境变量（wxbill.ts 同进程读取，
-//    可信探测），DB 未填但环境变量仍生效时不误报 missing。
+// ② adminApi 进程 env 布尔 `!!process.env.X`：WXPAY_MCH_SERIAL 是 adminApi 自身环境变量（wxbill.ts 同进程读取，
+//    可信探测），DB 未填但环境变量仍生效时不误报 missing。商户私钥与 ADMIN_BOOTSTRAP_KEY 反过来：还在环境变量里
+//    就标 check 提示迁走/删掉——函数详情会明文回显环境变量（6 月私钥泄露即由此）。
 // ③ DB 配置字段（非本页填写的既有 admin 页内配置）→ 只读查一条判存在（doc().get() 天然有界·单文档）。
 // ④ 业务初始化态 → 有界只读查询（`.limit(1)`·只判「有没有」不取值）。
 // ⑤ 纯人工外部后台项（企业微信/微信客服/小程序后台配置项，代码侧无法探测）→ 恒 'check'。
@@ -49,6 +50,13 @@ interface ChecklistGroup {
 }
 
 const MIGRATE_NOTE = '若此前配置在云函数环境变量层（迁移前遗留）、功能仍照常运行，只是本页检测不到——建议在此重新填一遍，统一到库管理、云函数优先读库'
+// 库里有没有决定能不能马上删：库里空着就删环境变量，对账（kit/reconcile.ts 读库后回退环境变量）会拿不到私钥
+const PRIVKEY_ENV_ONLY_NOTE =
+  '已配置，但应迁到安全配置：私钥还在 adminApi 云函数环境变量 WXPAY_MCH_PRIVATE_KEY 里，函数详情会明文显示。安全配置里还没有，先在右侧粘贴保存，再到云开发控制台删掉这个环境变量（先删的话对账就拿不到私钥）。'
+const PRIVKEY_ENV_LEFT_NOTE =
+  '安全配置里已有私钥，可以现在到云开发控制台删掉 adminApi 的环境变量 WXPAY_MCH_PRIVATE_KEY（留着会在函数详情里明文显示）。'
+// 本函数只能看自己的 process.env，别的函数上的副本这里看不见
+const PRIVKEY_SCOPE_NOTE = '本页只查得到 adminApi 自己的环境变量；billReconcile 等其他云函数若也配了它，要到控制台逐个看、一起删'
 
 export async function getConfigChecklist({ db }: Ctx) {
   const probe = (coll: string, id: string) => readDoc(db.collection(coll).doc(id).get())
@@ -65,12 +73,14 @@ export async function getConfigChecklist({ db }: Ctx) {
   ])
   const docs = [rWxkf, rWxpay, rPay, rVod, rSettings, rBom]
   // 读失败≠未配置：显示成 missing 会诱导管理员重填密钥
-  if (docs.some((r) => !r.ok)) return reply(200, err('DOC_READ_FAIL'))
+  if (docs.some((r) => !r.ok)) return err('DOC_READ_FAIL')
   const [wxkf, wxpay, pay, vod, settings, bom] = docs.map((r) => (r.ok && r.data) || null)
   const has = (o: Record<string, unknown> | null, f: string) => !!(o && o[f])
   // wxpay 另认 adminApi 自身环境变量（规则②·同进程 wxbill.ts 读取，可信兜底）
-  const privKeyOk = has(wxpay, 'mchPrivateKey') || !!process.env.WXPAY_MCH_PRIVATE_KEY
+  const privKeyInEnv = !!process.env.WXPAY_MCH_PRIVATE_KEY
   const serialOk = has(wxpay, 'mchSerial') || !!process.env.WXPAY_MCH_SERIAL
+  // 首登口令就是超管口令（lib.ts bootstrap 用它建号）；能打开本页说明超管已在，留着＝超管口令明文躺在函数配置里
+  const bootstrapKeyLeft = !!process.env.ADMIN_BOOTSTRAP_KEY
   // 可填项的位置 / 状态 / 填写目标全由 (docId, field) 推出：三处各抄一遍字段名，抄错一处就静默显示成别的字段的状态
   const sec = { wxkf, wxpay, vod }
   const secureItem = (
@@ -165,13 +175,19 @@ export async function getConfigChecklist({ db }: Ctx) {
     {
       group: '微信支付对账凭证（本页填写 → 云函数读库自动生效）',
       items: [
-        secureItem('wxpay', 'mchPrivateKey', 'textarea', {
-          key: 'WXPAY_MCH_PRIVATE_KEY',
-          name: '商户 API 私钥',
-          purpose: '拉取微信交易账单（对账）用 APIv3 商户私钥签名',
-          howTo: '微信支付商户平台→账户中心→API 安全→申请 API 证书（下载的 apiclient_key.pem 全文粘贴）',
-          url: 'https://pay.weixin.qq.com',
-        }, privKeyOk),
+        {
+          ...secureItem('wxpay', 'mchPrivateKey', 'textarea', {
+            key: 'WXPAY_MCH_PRIVATE_KEY',
+            name: '商户 API 私钥',
+            purpose: '拉取微信交易账单（对账）用 APIv3 商户私钥签名',
+            howTo: '微信支付商户平台→账户中心→API 安全→申请 API 证书（下载的 apiclient_key.pem 全文粘贴）',
+            url: 'https://pay.weixin.qq.com',
+          }),
+          ...(privKeyInEnv && {
+            status: 'check' as const,
+            noteExtra: (has(wxpay, 'mchPrivateKey') ? PRIVKEY_ENV_LEFT_NOTE : PRIVKEY_ENV_ONLY_NOTE) + PRIVKEY_SCOPE_NOTE,
+          }),
+        },
         secureItem('wxpay', 'mchSerial', 'text', {
           key: 'WXPAY_MCH_SERIAL',
           name: '商户证书序列号',
@@ -364,5 +380,21 @@ export async function getConfigChecklist({ db }: Ctx) {
     },
   ]
 
-  return reply(200, { ok: true, groups })
+  if (bootstrapKeyLeft)
+    groups.push({
+      group: '该删的云函数环境变量',
+      items: [
+        {
+          key: 'ADMIN_BOOTSTRAP_KEY',
+          name: '首登引导口令（仍在·应删除）',
+          location: 'adminApi 云函数环境变量 ADMIN_BOOTSTRAP_KEY',
+          purpose: '只在建首个超管那一次有用；它就是超管口令，留着会在函数详情里明文显示',
+          status: 'check',
+          howTo: '云开发控制台→云函数→adminApi→函数配置→环境变量，删掉 ADMIN_BOOTSTRAP_KEY 并保存',
+          url: 'https://tcb.cloud.tencent.com',
+        },
+      ],
+    })
+
+  return ok({ groups })
 }

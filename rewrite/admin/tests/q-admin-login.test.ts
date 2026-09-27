@@ -47,11 +47,11 @@ describe('后台登录页提交', () => {
     expect(w.find('.error').exists()).toBe(false)
   })
 
-  it('大白话：口令真错（4xx）才说口令不对，并带上原因码', async () => {
+  it('大白话：口令真错（4xx）才说口令不对', async () => {
     loginMock.mockReset().mockResolvedValue({ ok: false, status: 401, error: 'BAD_KEY' })
     pushMock.mockReset()
     const w = await submit('wrong')
-    expect(w.find('.error').text()).toBe('口令不对或登录被拒（BAD_KEY）')
+    expect(w.find('.error').text()).toBe('口令不对')
     expect(pushMock).not.toHaveBeenCalled()
   })
 

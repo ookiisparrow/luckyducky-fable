@@ -1,6 +1,7 @@
-import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
+import { getTxAlerts, type Ctx } from '../lib'
+import { ok } from '../../../kit'
 import { listOrders } from './orders'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, PAID_ORDER_STATUSES } from '@ldrw/shared'
 
 // —— 数据看板（不做「≤1000 条/表内存聚合」，那样会静默少算）——
 // 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶）；
@@ -12,17 +13,22 @@ const SAMPLE = 1000
 // 待发货＝shipOne 会放行的首发单：paid、无 feeMismatch、不被退款拦。退款从不改订单状态，全额退款的单
 // 永远停在 paid，只数 status=paid 会越积越多。refundHold 借 listOrders 算（与 shipOne 同一判据，不另抄一份）；
 // 调用方 caps 原样传：getDashboard 未登记 ACTION_CAPS、默认要 admin:write，listOrders 对它放行全店浏览。
-// ponytail: 逐页翻全部 paid 单（每页一次售后联查）。全额退款的单永不离开 paid，扫描量随历史全额退款单调增长、
-// 发货不会让它回落；翻到超 adminApi 30s 超时，整个看板连同 txAlerts 钱链告警一起 500。
+// 订单上没有能直接筛掉「全额退款」的字段（refunded 是逐行金额表），查询条件排不掉它们：全额退款的单永不离开 paid，
+// 全量翻会随历史线性变长、撞 adminApi 30s 超时，把整个看板连同 txAlerts 钱链告警一起拖成 500。
+// ponytail: 只从最新往回翻 TO_SHIP_SCAN 张 paid 单，触顶在 approx.toShip 标出来（数是下限），更老的可发单会漏数。
 // 升级：写侧维护待发货计数（付款/发货/退款落账处增减）。
-async function countToShip(ctx: Ctx): Promise<number> {
+const TO_SHIP_SCAN = 2000 // 10 页 × 每页约 3 次读，约 1~2 秒
+async function countToShip(ctx: Ctx): Promise<{ n: number; capped: boolean }> {
   let n = 0
+  let seen = 0
   let cursor: unknown = null
   for (;;) {
-    const r = JSON.parse((await listOrders({ ...ctx, data: { status: 'paid', cursor, limit: 200 } })).body)
+    const r = await listOrders({ ...ctx, data: { status: 'paid', cursor, limit: 200 } })
     if (!r.ok) throw new Error('TO_SHIP_READ_FAIL:' + r.error) // 查不到退款态≠都能发：同看板其余读失败，整体报错
     n += r.list.filter((o: any) => !o.feeMismatch && !o.refundHold).length
-    if (!r.hasMore) return n
+    seen += r.list.length
+    if (!r.hasMore) return { n, capped: false }
+    if (seen >= TO_SHIP_SCAN) return { n, capped: true }
     cursor = r.nextCursor
   }
 }
@@ -59,7 +65,7 @@ export async function getDashboard(ctx: Ctx) {
     db
       .collection(COLLECTIONS.orders)
       .aggregate()
-      .match({ status: _.in(PAID_STATUSES) })
+      .match({ status: _.in(PAID_ORDER_STATUSES) })
       .group({ _id: null, gmv: $.sum('$amount') })
       .end()
       .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0)),
@@ -74,8 +80,8 @@ export async function getDashboard(ctx: Ctx) {
         .orderBy('createdAt', 'desc')
         .limit(5)
     ),
-    // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
-    cnt(db.collection(COLLECTIONS.orders).where({ status: _.in(PAID_STATUSES) })),
+    // 转化速览：已支付订单数（口径同 GMV·PAID_ORDER_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
+    cnt(db.collection(COLLECTIONS.orders).where({ status: _.in(PAID_ORDER_STATUSES) })),
     // 最近动态混合流：近期激活/进课 + 退款申请，与最近订单合并成一条时间轴（各 orderBy+limit 有界）
     rows(
       db
@@ -129,8 +135,7 @@ export async function getDashboard(ctx: Ctx) {
   }))
   const recentActivity = [...ords, ...acts, ...refs].sort((a, b) => b.at - a.at).slice(0, 8)
 
-  return reply(200, {
-    ok: true,
+  return ok({
     stats: {
       users: usersN,
       orders: ordersN,
@@ -139,12 +144,19 @@ export async function getDashboard(ctx: Ctx) {
       codesActivated: codesActN,
       learners: learnersN,
     },
-    // 精确：计数/GMV(aggregate)/异常/最近单；近似：仅 热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」）
-    approx: { gmv: false, hot: learnersN > SAMPLE, stuck: learnersN > SAMPLE, sampleSize: SAMPLE },
+    // 精确：计数/GMV(aggregate)/异常/最近单；近似：热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」），
+    // 待发货扫描触顶时 toShip:true（数是下限，前端显「N+」）
+    approx: {
+      gmv: false,
+      hot: learnersN > SAMPLE,
+      stuck: learnersN > SAMPLE,
+      sampleSize: SAMPLE,
+      toShip: toShip.capped,
+    },
     // 转化速览（指示性量级·非同批 cohort 追踪）：下单→支付→激活。访问/加购未采（前端无 page_view/add_cart
     // 埋点）、完课需逐课判定——均后续。各环节走 .count() 精确不封顶。
     funnel: { ordered: ordersN, paid: paidOrdersN, activated: codesActN },
-    toShip,
+    toShip: toShip.n,
     txAlerts,
     hot: top(doneCount),
     stuck: top(stuckCount),

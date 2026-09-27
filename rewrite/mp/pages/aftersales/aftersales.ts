@@ -13,6 +13,7 @@ Page({
     cursor: null as unknown,
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onShow 多次触发（如售后详情返回）并发时丢弃过期回包
+  _pagingSeq: -1, // 翻页在途锁：记发起时的列表代次，上一页没回来再触底不重发同一游标；reload 换了代次就不再拦
   onShow() {
     void this.reload()
   },
@@ -33,9 +34,11 @@ Page({
     void this.reload()
   },
   async onReachBottom() {
-    if (!this.data.hasMore || this.data.cursor == null) return
+    if (!this.data.hasMore || this.data.cursor == null || this._pagingSeq === this._seq) return
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废
+    this._pagingSeq = seq
     const r = await getMyAfterSales(this.data.cursor)
+    if (this._pagingSeq === seq) this._pagingSeq = -1 // 成败都解锁（失败要能上拉重试）
     if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标（失败的过期回包也静默丢弃，不误弹 toast）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）

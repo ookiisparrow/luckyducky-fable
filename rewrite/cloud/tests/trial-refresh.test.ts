@@ -1,20 +1,21 @@
 // 测版刷新 T1：口令命中清进度；正式/预发硬拒；人工接待中默认拒。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { handleMessage, type DispatchCtx, welcomeMenu } from '../src/functions/cs/kfCallback/dispatch'
+import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
+import { welcomeMenu } from '../src/functions/cs/kfCallback/menus'
+import { matchRefreshPassphrase } from '../src/functions/cs/kfCallback/trialRefresh'
+import { CS_REFRESH_COPY, CS_SESSION_STATUS_SPEC, formatRefreshDone } from '@ldrw/shared'
+import { main as adminApi } from '../src/functions/adminApi/index'
+import { sha } from '../src/functions/adminApi/lib'
 import {
   DEFAULT_REFRESH_WORDS,
   applyTrialRefresh,
   flowStateId,
+  getDb,
   loadTrialRefreshGate,
-  matchRefreshPassphrase,
   sessionEpochId,
   trialRefreshDenyStatus,
-} from '../src/functions/cs/kfCallback/trialRefresh'
-import { CS_REFRESH_COPY, formatRefreshDone } from '@ldrw/shared'
-import { main as adminApi } from '../src/functions/adminApi/index'
-import { sha } from '../src/functions/adminApi/lib'
-import { getDb } from '../src/kit'
+} from '../src/kit'
 
 const db = () => getDb()
 const SUPER = 'super-secret-key'
@@ -198,6 +199,23 @@ describe('人工接待中默认拒', () => {
     const log = control.dump('auditLog').find((x: any) => x.summary && x.summary.force === '1')
     expect(log.summary.reason).toBe('复测强制')
     expect(log.summary.epochFrom).toBe('0')
+  })
+
+  // 强制关会话的 transition 在 kit 里，守卫 rw-status-transitions-declared 只扫 functions/，由这条对着声明表锁边
+  it('大白话：强制刷新把排队/接待/升级中的会话都关掉，每条边都在 csSession 声明流转表里', async () => {
+    process.env.CS_TRIAL_REFRESH = '1'
+    const held = ['pending', 'active', 'escalated']
+    control.seed(
+      'csSession',
+      held.map((status, i) => ({ _id: `wxkf:kf${i}:eu1`, status, externalUserId: 'eu1', openKfId: `kf${i}` }))
+    )
+    const r = await applyTrialRefresh(db(), { externalUserId: 'eu1', via: 'admin', reason: '锁边', force: true })
+    expect(r.ok && r.forced).toBe(true)
+    held.forEach((from, i) => {
+      const to = control.dump('csSession').find((x: any) => x._id === `wxkf:kf${i}:eu1`).status
+      expect(to).toBe('closed')
+      expect(CS_SESSION_STATUS_SPEC.transitions.some((t) => (t.from as readonly string[]).includes(from) && t.to === to)).toBe(true)
+    })
   })
 })
 

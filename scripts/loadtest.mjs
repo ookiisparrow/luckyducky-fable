@@ -163,7 +163,7 @@ async function runThrottle(db, n, max) {
         const count = (within ? rec[COUNT] || 0 : 0) + 1
         const patch = within ? { [COUNT]: count } : { [COUNT]: count, [WINDOW]: now }
         if (!rec) {
-          // 首写：add({_id}) 撞号即失败 → 恰一胜，败者转 update 路径（throttle.ts:56-63 同范式）
+          // 首写：add({_id}) 撞号即失败 → 恰一胜，败者转 update 路径（kit/throttle.ts bumpWindowed 同范式）
           const r = await db.collection(COL).add({ _id: id, createdAt: now, ...patch }).catch(() => null)
           if (r && !r.code) {
             count > max ? denied++ : allowed++

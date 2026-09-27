@@ -11,6 +11,9 @@ import pluginVue from 'eslint-plugin-vue'
 import globals from 'globals'
 import tsParser from '@typescript-eslint/parser'
 
+// 订单/售后状态里只有钱链用的那些（pending/closed 另算，见下方规则）
+const MONEY_ONLY = 'paid|shipped|done|refund_required|payment_exception|applied|approved|refunded|rejected'
+
 export default [
   // 不检查的目录/文件
   {
@@ -109,6 +112,12 @@ export default [
           selector:
             "CallExpression[callee.name='String']:has(:matches(MemberExpression[object.name=/^(data|event)$/], TSAsExpression[expression.name=/^(data|event)$/]))",
           message: '入参改用 kit 的 str(data.x, 上限)：String() 会把对象/true/undefined 变成 "[object Object]"/"true"/"undefined" 当真值去查库写库，也没有长度上限',
+        },
+        {
+          // 数组里有两个以上订单/售后状态、且至少一个是钱链独有的（pending/closed 客服会话也在用，单凭它们不算）。
+          // 只认字面量元素；拼接/变量组出来的集合拦不住，靠评审
+          selector: `ArrayExpression:has(> Literal[value=/^(${MONEY_ONLY})$/]):has(> Literal[value=/^(pending|closed|${MONEY_ONLY})$/] ~ Literal[value=/^(pending|closed|${MONEY_ONLY})$/])`,
+          message: '钱链状态集改用 @ldrw/shared order.ts 的常量（PAID_ORDER_STATUSES / MONEY_RECEIVED_STATUSES / SHIPPABLE_ORDER_STATUSES / AFTERSALE_*_STATUSES）：手抄的集合改状态机时会漏改；没有合适的就在 order.ts 加一个',
         },
       ],
     },

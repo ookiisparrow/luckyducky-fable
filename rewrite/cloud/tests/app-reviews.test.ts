@@ -247,15 +247,15 @@ describe('submitReview（多重闸门·一单一行一评·黄金 §七）', () 
   it('大白话：买家秀晒图入库前逐张过内容安全——过则存 fileID；任一张违规/校不了→整条拒不落库（fail-closed·根因#3）', async () => {
     seedOrder()
     // 两张图过内容安全 → 落库存 fileID（≤9·去空）
-    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__红', rating: 5, photos: ['cloud://a.jpg', '', 'cloud://b.jpg'] })).ok).toBe(true)
-    expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__红').photos).toEqual(['cloud://a.jpg', 'cloud://b.jpg'])
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__红', rating: 5, photos: ['cloud://env.x/reviews/o1/a.jpg', '', 'cloud://env.x/reviews/o1/b.jpg'] })).ok).toBe(true)
+    expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__红').photos).toEqual(['cloud://env.x/reviews/o1/a.jpg', 'cloud://env.x/reviews/o1/b.jpg'])
     // 违规图（平台判 87014）→ 整条拒、一条不落（换一行避开一单一行一评撞主键）
     control.setOpenapiFail(true, 87014)
-    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 5, photos: ['cloud://ok.jpg', 'cloud://bad.jpg'] })).error).toBe('IMG_RISKY')
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 5, photos: ['cloud://env.x/reviews/o1/ok.jpg', 'cloud://env.x/reviews/o1/bad.jpg'] })).error).toBe('IMG_RISKY')
     expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__蓝')).toBeUndefined()
     // 校不了（能力未开/网络·非违规码）→ 同样拒（证明安全才放行）
     control.setOpenapiFail(true)
-    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 5, photos: ['cloud://x.jpg'] })).error).toBe('SEC_CHECK_FAIL')
+    expect((await call('submitReview', { orderId: 'o1', lineId: 'p1__蓝', rating: 5, photos: ['cloud://env.x/reviews/o1/x.jpg'] })).error).toBe('SEC_CHECK_FAIL')
     expect(control.dump('reviews').find((r: any) => r.lineId === 'p1__蓝')).toBeUndefined()
   })
 
@@ -370,6 +370,20 @@ describe('admin 评价挑选（listReviews / setReviewPicked）', () => {
     expect((await adminPost('setReviewPicked', SUPER, { id, picked: false })).ok).toBe(true)
     expect((await call('getReviews', { productId: 'p1' })).list).toEqual([])
     expect((await call('getRatingSummary', { productId: 'p1' })).count).toBe(0)
+  })
+
+  it('大白话：同一状态再点一次（连点/别的窗口先点了）照样成功；没这条评价才报不存在', async () => {
+    control.seed('reviews', [{ _id: 'r1', productId: 'p1', picked: true, rating: 5, text: '好', createdAt: 1 }])
+    expect((await adminPost('setReviewPicked', SUPER, { id: 'r1', picked: true })).ok).toBe(true)
+    expect(await adminPost('setReviewPicked', SUPER, { id: 'ghost', picked: true })).toMatchObject({ status: 404, error: 'NOT_FOUND' })
+  })
+
+  it('大白话：同一状态再点、读回那一下库挂了——报读库失败，不说成评价不存在', async () => {
+    control.seed('reviews', [{ _id: 'r1', productId: 'p1', picked: true, rating: 5, text: '好', createdAt: 1 }])
+    control.setBeforeGet((a: any) => {
+      if (a.coll === 'reviews' && a.id === 'r1') throw new Error('MOCK_DB_FAIL')
+    })
+    expect(await adminPost('setReviewPicked', SUPER, { id: 'r1', picked: true })).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
   })
 })
 

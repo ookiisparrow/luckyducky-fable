@@ -3,7 +3,7 @@
 // orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
 import { stockAlertOf } from './thresholds'
-import { transportErrorText } from './mapSystem'
+import { transportErrorText, launchErrorText } from './mapSystem'
 import { asFen, fenToYuan, type ErrCode } from '@ldrw/shared'
 
 // NO_RESULT 不是云端码：Orders.vue 批量发货回包里缺这一单时本地补的
@@ -34,6 +34,11 @@ const ORDER_ERR: Partial<Record<ErrCode | 'NO_RESULT', string>> = {
   CONFIG_READ_FAIL: '读不到商户号配置（库暂时故障），请稍后重试',
   NO_WXPAY_CREDS: '微信支付凭证还没配置，请先去系统设置检查',
   NO_MCHID: '商户号还没配置，请先去系统设置检查',
+  // 退款里售后单、支付配置读失败也回这个码，不能说成「订单数据」；跟全后台同一句
+  DOC_READ_FAIL: launchErrorText('DOC_READ_FAIL'),
+  BAD_DATE: '账单日期不对，要写成 YYYY-MM-DD',
+  NO_DOWNLOAD_URL: '微信没给这天账单的下载地址，请稍后重试',
+  BILL_FETCH_FAIL: '从微信拉账单没成功，请稍后重试；反复失败请找技术',
 }
 export function orderErrorText(e: unknown): string {
   const s = String(e || '')
@@ -44,6 +49,11 @@ export function orderErrorText(e: unknown): string {
     if (orderLabel !== raw) return `订单状态「${orderLabel}」不允许此操作`
     const refundLabel = refundStatusLabel(raw)
     return `${refundLabel !== raw ? '售后' : '当前'}状态「${refundLabel}」不允许此操作`
+  }
+  // 拉账单的 HTTP 失败/出站异常：码后面拼着微信原文，整串挂括号给技术排查
+  if (/^(BILL_QUERY_|BILL_DOWNLOAD_|WXPAY_FETCH_FAIL)/.test(s)) {
+    if (s.includes('NO_STATEMENT_EXIST')) return '微信这天还没有账单（当天的账单次日才出，或这天没有交易）'
+    return `${ORDER_ERR.BILL_FETCH_FAIL}（${s}）`
   }
   return ORDER_ERR[s as keyof typeof ORDER_ERR] || transportErrorText(s) || `操作失败（${s}）`
 }
@@ -83,7 +93,7 @@ export interface DashboardVM {
 // mapDraftRows（避免本层反向依赖 mapProducts）。
 export interface TodoInputs {
   // 待发货取 toShip 不取 orderCounts 的 paid：paid 里还有全额退款没翻状态、售后待审被拦的单，发不了
-  dashboard: { ok?: boolean; toShip?: unknown }
+  dashboard: { ok?: boolean; toShip?: unknown; approx?: { toShip?: unknown } }
   // partial：服务端 refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
   // partial:true（该路数字不可信但不拖累整包报错）——即便各路 .ok 全过，带 partial 也要整体 partial。
   refundCounts: { ok?: boolean; counts?: Record<string, unknown>; partial?: boolean }
@@ -93,6 +103,7 @@ export interface TodoInputs {
 }
 export interface TodoCounts {
   ship: number
+  shipApprox: boolean // 云端待发货扫描触顶：ship 只是下限，页面显「N+」
   refund: number
   lowStock: number
   prep: number
@@ -106,6 +117,7 @@ export function deriveDashboardTodos(i: TodoInputs): TodoCounts {
   const rows = Array.isArray(i.drafts?.rows) ? i.drafts.rows : []
   return {
     ship: typeof toShip === 'number' ? toShip : 0,
+    shipApprox: !!i.dashboard?.ok && i.dashboard.approx?.toShip === true,
     refund: Number(rcC.applied) || 0,
     // 与库存页同一把尺子：per-SKU 阈值优先，未设退 i.low；库存 0 算售罄，不限量不计。
     lowStock: invList.filter((r) => {

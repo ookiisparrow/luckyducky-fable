@@ -116,8 +116,8 @@
           <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
         </view>
       </view>
-      <view class="co-cancel" wx:if="{{vm.status === 'pending'}}" bind:tap="onCancel">取消订单</view>
-      <view class="co-submit {{paying ? 'dim' : ''}}" wx:if="{{vm.status === 'pending'}}" bind:tap="onPay">继续支付</view>
+      <view class="co-cancel" wx:if="{{vm.status === 'pending' && !confirming}}" bind:tap="onCancel">取消订单</view>
+      <view class="co-submit {{paying ? 'dim' : ''}}" wx:if="{{vm.status === 'pending' && !confirming}}" bind:tap="onPay">继续支付</view>
       <view class="co-submit" wx:if="{{vm.status === 'shipped'}}" bind:tap="onConfirm">确认收货</view>
     </view>
   </view>

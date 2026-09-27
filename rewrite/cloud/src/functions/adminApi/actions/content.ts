@@ -1,13 +1,13 @@
-import { reply, ensure, readDoc, type Ctx } from '../lib'
+import { ensure, readDoc, type Ctx } from '../lib'
 import { arrOf } from '../catalog'
-import { notifyAlert, setOrAdd, deleteFiles, str, err } from '../../../kit'
+import { notifyAlert, setOrAdd, deleteFiles, str, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // —— 首页内容（hero 文案 / 信任条 / FAQ）——
 export async function getHomeContent({ db }: Ctx) {
   const got = await readDoc(db.collection(COLLECTIONS.content).doc('home').get())
-  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
-  return reply(200, { ok: true, home: got.data })
+  if (!got.ok) return err('DOC_READ_FAIL')
+  return ok({ home: got.data })
 }
 
 export async function saveHomeContent({ db, data }: Ctx) {
@@ -66,7 +66,7 @@ export async function saveHomeContent({ db, data }: Ctx) {
   await ensure(db, COLLECTIONS.content)
   const coll = db.collection(COLLECTIONS.content)
   await setOrAdd(coll, 'home', doc)
-  return reply(200, { ok: true })
+  return ok()
 }
 
 // —— 页面内容 CMS（5 页可编辑：欢迎流/目录+播放页求助/我的/关于/协议）——
@@ -145,7 +145,7 @@ const HISTORY_CAS_RETRY = 5
 
 export async function savePageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
-  if (!PAGES.includes(page as any)) return reply(400, err('UNKNOWN_PAGE')) // 未知 page fail-closed（根因#3）
+  if (!PAGES.includes(page as any)) return err('UNKNOWN_PAGE') // 未知 page fail-closed（根因#3）
   const clean: any = PAGE_SANITIZERS[page](data.data || {})
   await ensure(db, COLLECTIONS.content)
   const coll = db.collection(COLLECTIONS.content)
@@ -162,7 +162,7 @@ export async function savePageContent({ db, data }: Ctx) {
     // 首次建档走 add() 撞 DUPLICATE_ID 即并发方已建，同样重读重试。非钱链路径，用不到分布式锁。
     for (let i = 0; i < HISTORY_CAS_RETRY; i++) {
       const prev = await readDoc(coll.doc('agreement').get())
-      if (!prev.ok) return reply(200, err('DOC_READ_FAIL'))
+      if (!prev.ok) return err('DOC_READ_FAIL')
       const prevData: any = prev.data || {}
       const prevHist = Array.isArray(prevData.history) ? prevData.history : []
       const hasV = typeof prevData._v === 'number'
@@ -178,7 +178,7 @@ export async function savePageContent({ db, data }: Ctx) {
           .add({ data: { ...doc, _id: 'agreement' } })
           .then(() => true)
           .catch(() => false)
-        if (created) return reply(200, { ok: true })
+        if (created) return ok()
         continue // DUPLICATE_ID：并发方已建档，重读重试
       }
       // _v 字段可能缺失（本 CAS 改造前就存在的旧文档，从未写过 _v）——用字面量 0 精确匹配会因「字段真缺失
@@ -189,22 +189,22 @@ export async function savePageContent({ db, data }: Ctx) {
         .where({ _id: 'agreement', _v: hasV ? prevV : _.exists(false) })
         .update({ data: doc })
         .catch(() => ({ stats: { updated: 0 } }))
-      if (r.stats && r.stats.updated === 1) return reply(200, { ok: true })
+      if (r.stats && r.stats.updated === 1) return ok()
       // updated:0＝写前被并发改动抢先，重读重试
     }
-    return reply(409, err('CONTENTION')) // 争用耗尽（管理端低频操作·几乎不至）
+    return err('CONTENTION') // 争用耗尽（管理端低频操作·几乎不至）
   }
   const doc = { ...clean, updatedAt: Date.now() }
   await setOrAdd(coll, page, doc)
-  return reply(200, { ok: true })
+  return ok()
 }
 
 export async function getPageContent({ db, data }: Ctx) {
   const page = str(data.page, 40)
-  if (!PAGES.includes(page as any)) return reply(400, err('UNKNOWN_PAGE')) // 未知 page fail-closed（根因#3）
+  if (!PAGES.includes(page as any)) return err('UNKNOWN_PAGE') // 未知 page fail-closed（根因#3）
   const got = await readDoc(db.collection(COLLECTIONS.content).doc(page).get())
-  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
-  return reply(200, { ok: true, page, content: got.data })
+  if (!got.ok) return err('DOC_READ_FAIL')
+  return ok({ page, content: got.data })
 }
 
 // —— 求助面板「辅助视频」（全局共用·所有课程同一份；存 content 集合 doc 'helpVideos'）——
@@ -212,10 +212,10 @@ export async function getPageContent({ db, data }: Ctx) {
 // 管理端读回原始 videoFileId（已过口令闸）便于显「已传」/保存；小程序公开读经 catalog/getHelpVideos 换临时 URL（fileID 不出口）。
 export async function listHelpVideos({ db }: Ctx) {
   const got = await readDoc(db.collection(COLLECTIONS.content).doc('helpVideos').get())
-  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
+  if (!got.ok) return err('DOC_READ_FAIL')
   const d = got.data || {}
   // rev 供前端做 baseRev（乐观并发基线·同 saveCourseDraft 口径）：缺档=0
-  return reply(200, { ok: true, items: d.items || [], rev: Number(d.rev) || 0 })
+  return ok({ items: d.items || [], rev: Number(d.rev) || 0 })
 }
 
 export async function saveHelpVideos({ db, data }: Ctx) {
@@ -246,7 +246,7 @@ export async function saveHelpVideos({ db, data }: Ctx) {
   await ensure(db, COLLECTIONS.content)
   const coll = db.collection(COLLECTIONS.content)
   const prev = await readDoc(coll.doc('helpVideos').get()) // GC 基线 + 乐观并发基线：读旧份
-  if (!prev.ok) return reply(200, err('DOC_READ_FAIL')) // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
+  if (!prev.ok) return err('DOC_READ_FAIL') // 读失败≠空档：停写停 GC，不当 rev=0 覆盖
   // 乐观并发（根因#1·同 saveCourseDraft rev/baseRev/DRAFT_CONFLICT 口径）：整档覆盖。
   // 诚实边界：同 courses.ts 一样是「文档级 get→比对→set」，get 与 set 之间仍有毫秒级 TOCTOU 窗（非
   // checkpoints.ts defmeta 那种条件 update 真 CAS）——帮助视频保存低频、真实冲突是人差几分钟的编辑，可接受。
@@ -255,7 +255,7 @@ export async function saveHelpVideos({ db, data }: Ctx) {
   const curRev = prev.data ? Number(prev.data.rev) || 0 : 0
   const baseRev = Number(data.baseRev)
   // 冲突分支：既不覆盖内容也绝不 GC 删文件——否则先保存者的编辑丢了、其视频还被误删（不可逆）。
-  if (Number.isFinite(baseRev) && curRev !== baseRev) return reply(200, err('DRAFT_CONFLICT', { rev: curRev }))
+  if (Number.isFinite(baseRev) && curRev !== baseRev) return err('DRAFT_CONFLICT', { rev: curRev })
   const doc = { items, updatedAt: Date.now(), rev: curRev + 1 }
   await setOrAdd(coll, 'helpVideos', doc)
   // 孤儿视频 GC（同 publishCourse 思路）：删「旧份有、新份没有」的 videoFileId。**写成功后才 GC**
@@ -274,8 +274,8 @@ export async function saveHelpVideos({ db, data }: Ctx) {
       .catch(() => orphans)
     if (failed.length) {
       await notifyAlert('anomaly', 'saveHelpVideos', 'GC_DELETE_FAIL', { orphans: failed })
-      return reply(200, err('GC_DELETE_FAIL', { rev: doc.rev }))
+      return err('GC_DELETE_FAIL', { rev: doc.rev })
     }
   }
-  return reply(200, { ok: true, rev: doc.rev })
+  return ok({ rev: doc.rev })
 }

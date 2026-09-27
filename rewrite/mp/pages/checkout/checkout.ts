@@ -11,6 +11,10 @@ import { getAllProducts } from '../../lib/catalog'
 import { goHomeTab } from '../../lib/homeIntent'
 import { SHOP_FULL_NAME } from '../../lib/shop'
 
+// 云端 PRICE_CHANGED 与进页发现改价共用这句；不放进 lib/checkout 的拒单文案表——那里在购物车 tab 首屏字体
+// 子集里，「价格变确」几个字不在子集内（守卫 rw-mp-font-tier-subset-covers）。
+const PRICE_CHANGED_TITLE = '价格有变，请确认后再付款'
+
 Page({
   data: {
     address: null as ReturnType<typeof addr.defaultAddress>,
@@ -18,7 +22,7 @@ Page({
     addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
     shipLabel: '',
-    amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
+    amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；取 payableFen：本地现价合计或云端报回的现价应付）
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
     shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
@@ -43,6 +47,15 @@ Page({
     // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址
     void this.refresh()
   },
+  // 页面标的是「实付款」：单价按现价变了必须让用户看见，不能等到微信收银台才发现扣的不一样
+  notePriceChanged() {
+    if (this.unloaded) return
+    wx.showModal({
+      title: PRICE_CHANGED_TITLE,
+      content: '应付金额已按现价更新为 ' + checkout.fenLabel(checkout.payableFen()),
+      showCancel: false,
+    })
+  },
   // 600ms 空草稿自动返回起表纪律：navigateBack 若打在前向转场未落地的窗口内（冷启动
   // 转场实测可迟至 ~800ms），开发者工具 Nightly≥2.02.2607232 的模拟器导航状态机会死锁（真机同族竞态未必死锁，
   // 但会退化为「返回被吞·空结算页多停留」）。onReady 只在页面自身渲染就绪后触发一次，天然晚于 onShow，用它当
@@ -53,7 +66,8 @@ Page({
     if (this.backTimer) clearTimeout(this.backTimer)
     this.backTimer = setTimeout(() => wx.navigateBack(), 600)
   },
-  async refresh() {
+  // afterQuote：云端刚报回现价（PRICE_CHANGED）——强刷目录，提示已在 onSubmit 弹过、这里不再弹
+  async refresh(afterQuote = false): Promise<void> {
     if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（第3轮审计·与 onPickAddress/onToggleAddon 同闸）
     if (!checkout.getDraft().items.length) {
       if (this.unloaded) return // 页面已退出（守卫扩面统一不变量）：不再对下一页 navigateBack
@@ -65,8 +79,10 @@ Page({
     // 封面时效兜底（同 lib/cart freshCover·病根#15）：草稿里的 cover 可能是
     // 结算前很久（购物车页/详情页）快照下的持久化临时址（约 2h 时效），到本页展示时可能已过期挂图；
     // allRaw 命中会话缓存零云调用（miss 兜底重拉一次，同 cart.ts onLoad 写法）。
-    const allRaw = (await getAllProducts()) || []
+    // 同一份 allRaw 顺带刷新单价（加购时记的价可能已过时）。
+    const allRaw = (await (afterQuote ? getAllProducts({ force: true }) : getAllProducts())) || []
     if (this.data.submitting || this.unloaded) return // 恢复点复核：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
+    const changed = checkout.applyLivePrices(allRaw)
     // draft 在 await 之后读：与 summaryFen() 取同一时刻的快照——
     // 若在前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
     // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。
@@ -78,9 +94,10 @@ Page({
       addons: checkout.sellableAddons().map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
-      amountNum: (s.amountFen / 100).toFixed(2),
+      amountNum: (checkout.payableFen() / 100).toFixed(2),
       count: draft.items.reduce((n, l) => n + l.qty, 0),
     })
+    if (changed && !afterQuote) this.notePriceChanged()
   },
   onPickAddress() {
     if (this.data.submitting) return // 提交在途禁止跳地址页：否则地址页压栈后·下单成功的 redirectTo/switchTab 打到栈顶地址页、劫持返回
@@ -100,12 +117,14 @@ Page({
     }
     tapHaptic()
     const draft = checkout.getDraft()
-    trackEvent('order_submit', 'checkout', '', { count: draft.items.reduce((n, l) => n + l.qty, 0), amountFen: checkout.summaryFen().amountFen }) // 电商漏斗埋点（R41）
+    const expectedFen = checkout.payableFen() // 页面显示的应付：云端现价对不上就拒单回 PRICE_CHANGED，不按用户没看到的价扣
+    trackEvent('order_submit', 'checkout', '', { count: draft.items.reduce((n, l) => n + l.qty, 0), amountFen: expectedFen }) // 电商漏斗埋点（R41）
     this.setData({ submitting: true })
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
       { name: a.name, phone: a.phone, region: a.region, detail: a.detail },
-      checkout.getIdemKey() // 同一草稿的重试复用同一个键（网络超时重试不重复建单）
+      checkout.getIdemKey(), // 同一草稿的重试复用同一个键（网络超时重试不重复建单）
+      expectedFen
     )
     // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/
     // requestPayment（真实支付授权框）/switchTab——建单失败且已退页直接收尾；建单成功则订单已真实生成，
@@ -118,8 +137,17 @@ Page({
     }
     if (!r.ok) {
       // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）——唯一留在本页的路径·此处才解锁重试
-      this.setData({ submitting: false })
       const errCode = String(r.error || '')
+      if (errCode === 'PRICE_CHANGED') {
+        checkout.quoteAmountFen(r.amountFen) // 应付按云端现价显示，下次提交也带它
+        // 新应付与解锁同一次上屏、当场弹提示，不等强刷目录（要几百毫秒到几秒）：否则这段时间按钮已放开、
+        // 页面还是旧价，用户再点就按一个页面上没显示过的价建单了
+        this.setData({ submitting: false, amountNum: (checkout.payableFen() / 100).toFixed(2) })
+        this.notePriceChanged()
+        await this.refresh(true) // 逐行单价也对上现价
+        return
+      }
+      this.setData({ submitting: false })
       const dropped = checkout.dropRejectedLine(errCode)
       if (dropped) {
         // 那一行已移出本单（及购物车）：点名告诉用户是哪件。还有别的商品就重渲染、可直接再提交；
@@ -144,7 +172,7 @@ Page({
     // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
     // 成功页金额用回包权威值（order.amount）：前端 summaryFen 是本地估算，缺货重试/搭配购变化等场景可能与云端现算分叉；
     // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用。
-    const fallbackFen = checkout.summaryFen().amountFen // 捕获前端估算分（finishSubmitted 消费草稿前）·仅作回退兜底
+    const fallbackFen = checkout.payableFen() // 捕获前端应付分（finishSubmitted 消费草稿前）·仅作回退兜底
     const amountFen = checkout.resolveOrderAmountFen(r.order, fallbackFen)
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
     const order = (r.order || {}) as Record<string, any>
@@ -168,7 +196,7 @@ Page({
     }
     // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
     const failModal = (title: string, content: string) => wx.showModal({ title, content, showCancel: false, success: () => goHomeTab() })
-    if (outcome.kind === 'paid') {
+    if (outcome.kind === 'paid' || outcome.kind === 'confirming') {
       this.toSuccess(orderId, amountFen)
       return
     }

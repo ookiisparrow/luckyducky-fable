@@ -1,26 +1,3 @@
-import { COLLECTIONS } from '@ldrw/shared'
-import { alert, transition, sendAgentCard, AGENT_DESK_URL } from '../../../kit'
-import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type JevResult } from './jev'
-import { composeScriptReply, looksGreeting, wantsHuman } from './scriptReply'
-import {
-  REFRESH_BTN_LABEL,
-  REFRESH_MENU_ASK,
-  csTestAssumeRecentOrder,
-  loadTrialRefreshGate,
-  interceptTrialRefresh,
-} from './trialRefresh'
-import { loadAndAdvancePack, readEpochForHandoff, readPackSession, writeHandoffStub } from './csPack'
-import { sendBubbles } from './bubbles'
-
-const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
-const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sales', needStatus: 'greeting' }
-
-// 缺档与读失败都折成 null（真 sdk 缺档即 reject），null 的含义由调用方定
-const docData = (db: any, coll: string, id: string): Promise<any> =>
-  db.collection(coll).doc(id).get().then((g: any) => (g && g.data) || null, () => null)
-const dropKfState = (db: any, id: string): Promise<void> =>
-  db.collection(COLLECTIONS.kfState).doc(id).remove().then(() => {}, () => {})
-
 /**
  * 客服分流引擎（避免幻觉第一·非生成式）：关键词识别 → 高亮 msgmenu 气泡分流；按回传 menu_id →
  * 下级菜单 / miniprogram 小程序卡片 / 文字答案 / 转人工。身份桥接（external_userid→openid）查「你的订单」。
@@ -28,92 +5,27 @@ const dropKfState = (db: any, id: string): Promise<void> =>
  *
  * ⚠️ 线上消息 wire 形状（msgmenu 点击回什么字段）以真机为准（根因#8）：normalize 同时兼容
  * text.menu_id（点击回传）与 text.content（自由打字），真机验证后按实际收口。
- */
-
-// ── 一批消息处理：去重认领 + 防吞单 ──
-
-/**
- * 原子认领去重（确定性 _id 撞号即已处理过·根因#1 幂等）。三态（根因#8）：
- * - `first`：本次认领成功（首见）→ 处理；
- * - `duplicate`：撞号·真重复（已认领过）→ 跳过安全；
- * - `error`：add 因基建失败（DB 权限/集合缺/瞬时）→ **绝不可当重复静默跳过**（会无回复、无告警、不重试＝永久吞消息）。
  *
- * 若把 add 的任何异常都返 false（=已处理·跳过），基建错也被当重复 → 真实客服消息静默丢失。故 add 失败后
- * **回查该 seen 文档是否真存在**：存在＝真撞号（duplicate）；不存在＝add 没写进去（基建错·error），消息未认领须重试。
+ * 本文件只做编排（一条消息走哪条路、回什么）；各路的实现在同目录 batch / menus / csat / customer / session。
+ * 闸开时自由文本的回话由三块配合，分工不同、不能互相替代：
+ * - scriptReply：Jev 分类 → 流程节点 → 从 cs-scripts 话术池抽句，决定对客说什么；
+ * - csAtomic：只管包装破损，按 atomic-v1 序列拼原文气泡，scriptReply 认出包装破损时改用它的气泡；
+ * - csPack：只记会话/交接账（triage 规则 → 状态机 → 交接包），不产对客文字。
+ * 三块之间只有包装破损识别逐字等价（csAtomic 复用 csPack.looksPackagingDamage）；其余形似的几处
+ * （looksLogistics / persistableFlow / stepBubbles / finalizeBubbles）口径不同，各在函数旁写了差异，勿合并。
  */
-type ClaimResult = 'first' | 'duplicate' | 'error'
-export async function firstSeen(db: any, msgid: string): Promise<ClaimResult> {
-  try {
-    await db.collection(COLLECTIONS.kfState).add({ data: { _id: 'seen:' + msgid, at: Date.now() } })
-    return 'first'
-  } catch {
-    return (await docData(db, COLLECTIONS.kfState, 'seen:' + msgid)) ? 'duplicate' : 'error'
-  }
-}
-
-/**
- * 逐条处理一批客服消息（防吞单）：① 原子认领去重（撞号跳过）② 每条包 try/catch——
- * 单条失败**不中断整批**（否则 handleMessage 抛错会 unwind 整个 sync 循环：游标不推进 +
- * 已认领的消息永久跳过 = 静默吞掉顾客消息）；失败时 **撤回认领 + alert HANDLE_FAILED**。
- * 返回 true＝本批没处理完（有失败，或到了 deadline 停下）。调用方据此**保留旧游标**下次重拉：成功项 seen 去重、
- * 失败项和没轮到的重试——顾客消息至少处理一次。（抛错路径均为瞬时：DB/网络；send errcode 不抛·已自 alert。）
- */
-export async function processKfBatch(
-  db: any,
-  msgs: any[],
-  handleOne: (msg: any) => Promise<void>,
-  deadline = Infinity
-): Promise<boolean> {
-  let anyFailed = false
-  for (const msg of msgs || []) {
-    // 函数超时会在处理中途硬杀，被杀那条已认领、下次按重复跳过＝吞消息：到点就停，剩下的不认领
-    if (Date.now() > deadline) return true
-    const msgid = String((msg && msg.msgid) || '')
-    if (msgid) {
-      const claim = await firstSeen(db, msgid)
-      if (claim === 'duplicate') continue // 真重复·已处理过·跳过安全
-      if (claim === 'error') {
-        // 认领基础设施错误（DB 权限/集合缺/瞬时）：告警 + 本批失败 → 调用方保留旧游标重试，绝不静默跳过吞消息
-        console.error('[kf] claim failed (infra)', { msgid })
-        alert('security', 'kfCallback', 'CLAIM_FAILED', {})
-        anyFailed = true
-        continue // 未认领成功就不处理，留待下次重拉重认领（避免无认领下重复副作用）
-      }
-    }
-    try {
-      await handleOne(msg)
-    } catch (e) {
-      console.error('[kf] handle threw', { msgid }, String(e))
-      alert('security', 'kfCallback', 'HANDLE_FAILED', {})
-      // 撤回认领 → 不永久吞单（配合调用方保留旧游标重试）
-      if (msgid) await dropKfState(db, 'seen:' + msgid)
-      anyFailed = true
-    }
-  }
-  return anyFailed
-}
-
-// ── 关键词识别（确定性·低幻觉）：命中类别 + 被识别词 ──
-const KEYWORDS: { cat: Category; words: string[] }[] = [
-  { cat: 'logistics', words: ['物流', '快递', '发货', '没到', '到货', '运单', '单号', '收货'] },
-  { cat: 'activation', words: ['激活码', '激活', '课程', '视频', '兑换', '观看', '看不了'] },
-  {
-    cat: 'aftersale',
-    words: ['退款', '退货', '换货', '售后', '漏发', '坏了', '少了', '质量', '退', '换'],
-  },
-  { cat: 'tutorial', words: ['教程', '钩织', '针法', '图解', '怎么钩', '教学'] },
-]
-type Category = 'logistics' | 'activation' | 'aftersale' | 'tutorial'
-
-/** 识别自由文本命中的类别 + 命中词（无命中返 null）。 */
-export function recognize(text: string): { cat: Category; word: string } | null {
-  const t = String(text || '')
-  for (const g of KEYWORDS) {
-    const hit = g.words.find((w) => t.includes(w))
-    if (hit) return { cat: g.cat, word: hit }
-  }
-  return null
-}
+import { COLLECTIONS } from '@ldrw/shared'
+import { readEpochForHandoff } from '../../../kit'
+import { JEV_FAIL_OPEN_TEXT, loadJevGate, logJevEvidence, tryJevClassify, type JevResult } from './jev'
+import { composeScriptReply, looksGreeting, wantsHuman } from './scriptReply'
+import { interceptTrialRefresh } from './trialRefresh'
+import { loadAndAdvancePack, readPackSession, writeHandoffStub } from './csPack'
+import { sendBubbles } from './bubbles'
+import { recognize, rootMenu, welcomeMenu, menuFor, type Category, type MsgMenuContent } from './menus'
+import { CSAT_REASONS, attachCsatNote, csatReasonMenu, parseRate, rateMenu, recordCsat } from './csat'
+import { kfUserHasRecentOrder, resolveOpenid, summarizeOrders } from './customer'
+import { enqueueSession, heldStatus } from './session'
+import { docData, dropKfState } from './store'
 
 /**
  * 从客服消息 wire 取 external_userid（根因#8 真机字段位置·桩测过≠真机字段对）：text 消息在**顶层**
@@ -122,115 +34,6 @@ export function recognize(text: string): { cat: Category; word: string } | null 
  */
 export function extUserId(msg: any): string {
   return String((msg && (msg.external_userid || (msg.event && msg.event.external_userid))) || '')
-}
-
-// ── msgmenu 内容（head 高亮识别词 + list 高亮可点选项 + tail「或直接打字」） ──
-interface MenuItem {
-  id: string
-  content: string
-}
-interface MsgMenuContent {
-  head_content: string
-  list: { type: 'click'; click: { id: string; content: string } }[]
-  tail_content: string
-}
-
-function menu(head: string, items: MenuItem[], tail = '或直接打字告诉我～'): MsgMenuContent {
-  return {
-    head_content: head,
-    list: items.map((it) => ({
-      type: 'click' as const,
-      click: { id: it.id, content: it.content },
-    })),
-    tail_content: tail,
-  }
-}
-
-/** 首张菜单（无关键词命中 / 进会话）：四大入口 + 评价服务 + 找人工。测版可多一颗刷新按钮。 */
-export function rootMenu(opts?: { trialRefresh?: boolean }): MsgMenuContent {
-  const items: MenuItem[] = [
-    { id: 'cat:logistics', content: '📦 我的订单 / 物流' },
-    { id: 'cat:activation', content: '🎬 激活码 / 课程 / 视频' },
-    { id: 'cat:aftersale', content: '🔄 退换货 / 售后' },
-    { id: 'cat:tutorial', content: '🧶 钩织教程' },
-    { id: 'csat', content: '⭐ 评价服务' },
-    { id: 'human', content: '🙋 其它 / 找人工' },
-  ]
-  if (opts && opts.trialRefresh) items.push({ id: REFRESH_MENU_ASK, content: REFRESH_BTN_LABEL })
-  return menu('想咨询什么？点一下快速定位 👇', items)
-}
-
-export async function welcomeMenu(db: any): Promise<MsgMenuContent> {
-  const gate = await loadTrialRefreshGate(db)
-  return rootMenu({ trialRefresh: gate.on })
-}
-
-// ── 满意度评分（CSAT·会话后评分 1-5 + 可选备注·确定性菜单不靠生成）──
-/** 评分气泡：5 档星级（点一下即评分·rate:1..5）。 */
-function rateMenu(): MsgMenuContent {
-  return menu(
-    '给本次服务打个分吧（点一下）👇',
-    [
-      { id: 'rate:5', content: '⭐⭐⭐⭐⭐ 非常满意' },
-      { id: 'rate:4', content: '⭐⭐⭐⭐ 满意' },
-      { id: 'rate:3', content: '⭐⭐⭐ 一般' },
-      { id: 'rate:2', content: '⭐⭐ 不太满意' },
-      { id: 'rate:1', content: '⭐ 很不满意' },
-    ],
-    '点星星即可，感谢你的反馈～'
-  )
-}
-
-// 备注预设标签（可选·deterministic·避免自由文本进热路径）：值＝入库备注文案，'none'＝不补充（空备注）。
-const CSAT_REASONS: Record<string, string> = {
-  resolved: '问题已解决',
-  unresolved: '问题没解决',
-  slow: '回复有点慢',
-  attitude: '态度很好',
-  none: '',
-}
-
-/** 评分后的「补充原因」气泡（可选备注·点一下即记·不补充也行）。 */
-function csatReasonMenu(): MsgMenuContent {
-  return menu(
-    '想补充点什么吗？（可选）',
-    Object.entries(CSAT_REASONS).map(([k, v]) => ({ id: 'csatnote:' + k, content: v || '不补充了' })),
-    '点一下就好，不补充也没关系～'
-  )
-}
-
-/** 解析评分 menu_id（rate:1..5）→ 分数；非法返 null（route 据此分流·入库再 fail-closed 校验一次）。 */
-export function parseRate(menuId: string): number | null {
-  const m = /^rate:([1-5])$/.exec(String(menuId || ''))
-  return m ? Number(m[1]) : null
-}
-
-/** 命中关键词后的高亮气泡：head 点出识别词，list 是贴问题的下级选项。 */
-function menuFor(cat: Category, word: string): MsgMenuContent {
-  if (cat === 'logistics')
-    return menu(`看你在问「${word}」相关 👇`, [
-      { id: 'order:query', content: '查我的订单 / 物流' },
-      { id: 'logistics:eta', content: '多久发货' },
-      { id: 'addr:change', content: '改收货地址' },
-      { id: 'human', content: '转人工' },
-    ])
-  if (cat === 'activation')
-    return menu(`看你在问「${word}」相关 👇`, [
-      { id: 'activation:howto', content: '激活码怎么用' },
-      { id: 'course:open', content: '去看我的课程' },
-      { id: 'human', content: '转人工' },
-    ])
-  if (cat === 'aftersale')
-    return menu(`看你在问「${word}」相关 👇`, [
-      { id: 'aftersale:policy', content: '退换政策' },
-      { id: 'aftersale:apply', content: '去申请售后' },
-      { id: 'human', content: '转人工（承诺/纠纷）' },
-    ])
-  // tutorial（探索线）：先给课程入口 + 人工
-  return menu(`看你在问「${word}」相关 👇`, [
-    { id: 'course:open', content: '去看教程 / 课程' },
-    { id: 'human', content: '转人工' },
-  ])
 }
 
 // ── menu_id 路由 ──
@@ -298,231 +101,6 @@ async function faqAnswer(db: any, faqKey: string): Promise<string | null> {
   return d.answer ? String(d.answer) : null
 }
 
-// ── 满意度评分入库（CSAT）──
-interface CsatInput {
-  externalUserId: string
-  openid: string | null
-  score: number
-  note?: string
-}
-/**
- * 记一条满意度评分。**不信前端·根因#3**：score 越界（非 1..5）一律 fail-closed 不入库——防伪造/脏分
- * 污染满意度均分。确定性 _id=`csat:<euid>:<createdAt>`；并在 kfState 记最近一条
- * （`csatlast:<euid>`）供「补充备注」菜单回写——只在 CSAT 交互时读写、不进每条消息热路径。返回 csat 文档 id。
- */
-export async function recordCsat(db: any, input: CsatInput): Promise<string | null> {
-  const score = Number(input.score)
-  if (!(score >= 1 && score <= 5)) return null // 越界分不入库（fail-closed）
-  const euid = String(input.externalUserId || '')
-  if (!euid) return null
-  const createdAt = Date.now()
-  const id = 'csat:' + euid + ':' + createdAt
-  // 评分写库失败不静默吞、不谎报成功（病根#14）：若两次 .set().catch(()=>{}) 后恒返回 id——写没成功
-  // 也回 csatId＝假成功（getCsatReport 会漏这条·且调用方以为记上了）。故：评分主写失败→告警 + 返回 null
-  // （调用方据 null 可知没记上）；指针（csatlast·仅供 attachCsatNote 找最近记录）写失败非致命，告警但评分已落。
-  let wrote = true
-  await db
-    .collection(COLLECTIONS.csat)
-    .doc(id)
-    .set({
-      data: {
-        externalUserId: euid,
-        openid: input.openid || null,
-        score,
-        note: String(input.note || '').slice(0, 200),
-        createdAt,
-      },
-    })
-    .catch(() => {
-      wrote = false
-    })
-  if (!wrote) {
-    alert('anomaly', 'recordCsat', 'CSAT_WRITE_FAIL', { euid })
-    return null
-  }
-  await db
-    .collection(COLLECTIONS.kfState)
-    .doc('csatlast:' + euid)
-    .set({ data: { csatId: id, at: createdAt } })
-    .catch(() => {
-      alert('anomaly', 'recordCsat', 'CSAT_POINTER_FAIL', { euid }) // 评分已落·仅备注指针失败·非致命
-    })
-  return id
-}
-
-/** 回写最近一条满意度的备注（点「补充原因」预设标签时·非热路径）。无最近记录则静默跳过。 */
-export async function attachCsatNote(db: any, externalUserId: string, note: string): Promise<void> {
-  const euid = String(externalUserId || '')
-  if (!euid || !note) return
-  const last = await docData(db, COLLECTIONS.kfState, 'csatlast:' + euid)
-  const csatId = last && last.csatId
-  if (!csatId) return
-  await db
-    .collection(COLLECTIONS.csat)
-    .doc(csatId)
-    .update({ data: { note: String(note).slice(0, 200) } })
-    .catch(() => {
-      alert('anomaly', 'attachCsatNote', 'CSAT_NOTE_FAIL', { euid })
-    })
-  await dropKfState(db, 'csatlast:' + euid)
-}
-
-// ── 身份桥接（external_userid → openid）+ 订单摘要 ──
-/** 查映射表得 openid（不信前端·根因#3：映射由 kfBind 在小程序侧建）。未绑定返 null。 */
-export async function resolveOpenid(db: any, externalUserId: string): Promise<string | null> {
-  if (!externalUserId) return null
-  const d = await docData(db, COLLECTIONS.kfIdentity, 'ext:' + externalUserId)
-  return d && d.openid ? String(d.openid) : null
-}
-
-/** 会话内回「你的订单」摘要（实时查·零幻觉）：取最近 3 单状态。 */
-export async function summarizeOrders(db: any, openid: string): Promise<string> {
-  const r = await db
-    .collection(COLLECTIONS.orders)
-    .where({ _openid: openid })
-    .orderBy('createdAt', 'desc')
-    .limit(3)
-    .get()
-    .catch(() => null)
-  if (!r) return '订单暂时查不到，请稍后再试，或点「转人工」。' // 库挂 ≠ 名下没有订单（根因#14）
-  const list = (r && r.data) || []
-  if (!list.length) return '没查到你名下的订单。如果刚下单可稍后再试，或点「转人工」。'
-  // refund_required 用词对齐 admin/src/lib/format.ts 的选择："待退款"而非"退款处理中"（后者与售后 approved 状态撞车，见该文件同款注释）
-  const STAT: Record<string, string> = { pending: '待支付', paid: '已支付/待发货', shipped: '已发货', refund_required: '待退款', payment_exception: '支付异常待处理', done: '已完成', closed: '已关闭' }
-  // 运单号在 shipping 子对象（发货时 adminApi 写 shipping:{company,trackingNo}）——取顶层 o.trackingNo 会永远显示不出（根因#8）
-  const lines = list.map((o: any) => {
-    const tracking = o.shipping && o.shipping.trackingNo
-    return `· 订单 ${o.id || o._id}：${STAT[o.status] || o.status}${tracking ? '（运单 ' + tracking + '）' : ''}`
-  })
-  return '你最近的订单：\n' + lines.join('\n') + '\n需要更多帮助点「转人工」。'
-}
-
-/** 与 summarizeOrders 同口径：最近 3 单。库挂返 null（根因#14：库挂 ≠ 没单）。 */
-export async function hasRecentOrders(db: any, openid: string): Promise<boolean | null> {
-  const r = await db
-    .collection(COLLECTIONS.orders)
-    .where({ _openid: openid })
-    .orderBy('createdAt', 'desc')
-    .limit(3)
-    .get()
-    .catch(() => null)
-  if (!r) return null
-  return ((r.data || []).length > 0)
-}
-
-/**
- * 客服用户有没有近期订单。未绑定=无单；库挂当有单（不误走无单澄清）。测版默认假设有单。
- * knownOpenid：调用方已读过该顾客映射时传入（'' = 已知未绑定），不传才在此读。
- */
-export async function kfUserHasRecentOrder(db: any, euid: string, knownOpenid?: string): Promise<boolean> {
-  if (csTestAssumeRecentOrder()) return true
-  const openid = knownOpenid ?? (await resolveOpenid(db, euid))
-  if (!openid) return false
-  const hit = await hasRecentOrders(db, openid)
-  return hit !== false
-}
-
-// ── 会话入队（csSession 的 writer·会话进自建工作台待接队列）──
-/**
- * 转人工时把这通会话写入 csSession 待接队列（坐席台 `listQueue` 读它）。
- * 确定性 _id=`wxkf:<openKfId>:<externalUserId>`（一顾客一活会话）：用 `add`——撞 id 即会话已在队列
- * （pending/active/…）→ 抛错被吞 → **不 clobber**（坐席已认领的 active 不被顾客再点转人工重置回 pending·根因#1 幂等）。
- * 创建于**初始态 pending**（cs.spec.ts `initial`）——非 `transition()`（状态流转 claim/close/escalate 是坐席台 action）。
- * best-effort：入队失败不反噬顾客回复/平台转接（同 ensureKfIdentity）。closed 会话重开为新 pending 属会话生命周期。
- */
-/**
- * 三态返回（同 firstSeen 三态款·根因#8）：'queued'＝真正新入队（首建/closed 重开）；'already'＝已在
- * 队列/接待中（撞号不 clobber）；'failed'＝基建错（add 没写进去且回查确认 doc 不存在）——**绝不可当成功**：
- * 若把任何 add 异常都当撞号吞掉，DB 故障时会话没入队、顾客却收到「已为你转接」＝假转接无人接。
- * 调用方（transfer 分支）据 'failed' 改话术如实提示重试。
- */
-export async function enqueueSession(
-  db: any,
-  openKfId: string,
-  externalUserId: string
-): Promise<'queued' | 'already' | 'failed'> {
-  const euid = String(externalUserId || '')
-  if (!euid || !openKfId) return 'failed' // 不造无主会话
-  const now = Date.now()
-  const id = 'wxkf:' + openKfId + ':' + euid
-  let queued = false // 真正新入队（首建 or closed 重开）才推送——已在 pending/active 的不重复骚扰坐席
-  try {
-    await db.collection(COLLECTIONS.csSession).add({
-      data: {
-        _id: id,
-        status: 'pending',
-        externalUserId: euid,
-        openKfId,
-        createdAt: now,
-        updatedAt: now,
-      },
-    })
-    queued = true
-  } catch {
-    // add 失败先回查：doc 真存在＝撞确定性 _id（正常幂等路径）；不存在＝基建错（DB 权限/瞬时）→ 'failed' 如实上报
-    if (!(await docData(db, COLLECTIONS.csSession, id))) {
-      console.error('[kf] enqueue failed (infra)', { id })
-      alert('security', 'kfCallback', 'ENQUEUE_FAILED', {})
-      return 'failed'
-    }
-    // 撞确定性 _id＝该顾客已有会话 doc：pending/active/escalated 不动（不 clobber·坐席已认领的不被重置·根因#1）；
-    // **closed 则重开**（closed→pending·声明流转 cs.spec.ts·原子：非 closed 时 moved=false 天然不 clobber）——
-    // 否则老客二次点「找人工」会被此撞 id 静默吞、永进不了队列。
-    // createdAt 刷新＝重新排队（FIFO 队尾）+ getThread 消息流从重开起算（不翻旧会话历史）。
-    // qc/qcSampledAt 一并**真删字段**（patch 成 `qc: null` 有语义 bug）：conversations.ts 的
-    // saveQcMark/listQcSampled 用 DB 层 CAS `_.exists(false)` 判「未评过」——该条件要求字段真缺失，patch 成
-    // null 只是把值改成 null、字段仍「存在」，_.exists(false) 永远判「已评过」→ 重开后 saveQcMark 永远 409
-    // ALREADY_MARKED、listQcSampled(onlyPending) 也漏收（sampleQc 的内存 `!s.qc` 判断与此不一致：!null 为
-    // true，能选中候选，DB CAS 却写不进——两套判断对同一字段的「清空」语义打架）。故用 `_.remove()`（真删
-    // 键·对齐 $unset）才能让内存真值判断与 DB exists(false) 判断同一套语义。
-    const _ = db.command
-    const r = await transition(COLLECTIONS.csSession, id, ['closed'], 'pending', {
-      agentId: null,
-      claimedAt: null,
-      createdAt: now,
-      updatedAt: now,
-      qc: _.remove(),
-      qcSampledAt: _.remove(),
-    }).catch(() => ({ moved: false })) /* best-effort：不反噬顾客回复 */
-    queued = !!(r && (r as any).moved)
-  }
-  if (queued) await notifyOnlineAgents(db, id) // 推送·fail-soft（sendAgentCard 内吞错·不反噬入队）
-  return queued ? 'queued' : 'already'
-}
-
-// 新会话入队 → 推「新会话待接」到在线坐席手机（fail-soft）。
-// 在线坐席＝agentState.status='online'；其 wecomUserId 从 adminConfig 同 _id doc 取（坐席账号加的字段）。
-// 全程 fail-soft（sendAgentCard 内吞错·此处 try/catch 兜查询）：推送失败绝不反噬顾客转人工入队（守卫 enqueue-push-fail-soft）。
-async function notifyOnlineAgents(db: any, sessionId: string): Promise<void> {
-  try {
-    const st = await db
-      .collection(COLLECTIONS.agentState)
-      .where({ status: 'online' })
-      .limit(50) // 坐席席位上限同账号扫描窗·有界读
-      .get()
-      .catch(() => ({ data: [] }))
-    const ids = (st.data || []).map((a: any) => a._id).filter(Boolean)
-    if (!ids.length) return
-    // 键映射：超管坐席身份是 'admin'（checkKey 固定），但其账号 doc 是 'auth'——不映射则超管
-    // 在线也查不到 wecomUserId＝只有超管值班时推送恒为空（escalate 推送读 'auth' 同口径）。
-    const docIds = ids.map((id: string) => (id === 'admin' ? 'auth' : id))
-    const cfg = await db
-      .collection(COLLECTIONS.adminConfig)
-      .where({ _id: db.command.in(docIds) })
-      .limit(docIds.length)
-      .get()
-      .catch(() => ({ data: [] }))
-    const touser = (cfg.data || []).map((d: any) => d.wecomUserId).filter(Boolean).map(String)
-    await sendAgentCard(db, touser, {
-      title: '新会话待接',
-      description: '有顾客转入人工客服，请及时到工作台接待。',
-      url: AGENT_DESK_URL + '?session=' + sessionId,
-    })
-  } catch {
-    /* fail-soft：推送不反噬转人工入队 */
-  }
-}
-
 // ── 发送负载构造（touser + open_kfid + msgtype） ──
 const base = (touser: string, openKfId: string) => ({ touser, open_kfid: openKfId })
 const buildText = (touser: string, openKfId: string, content: string) => ({
@@ -562,22 +140,6 @@ export interface DispatchCtx {
   openid?: string
 }
 
-/**
- * 「谁在接待」单源判定：pending/active/escalated＝人工链路占用中
- * （bot 须让位）→ 返状态串；closed/无会话＝bot 可应答 → 返 null。handleMessage 与 index.ts 进会话欢迎
- * （enter_session）都过它——若只有 handleMessage 查、enter_session 直发欢迎菜单，排队中顾客重开聊天窗会被
- * bot 抢话（且点菜单又被本闸静默＝发了菜单点了没反应的自相矛盾）。
- */
-export async function heldStatus(
-  db: any,
-  openKfId: string,
-  externalUserId: string
-): Promise<string | null> {
-  const held = await docData(db, COLLECTIONS.csSession, 'wxkf:' + openKfId + ':' + externalUserId)
-  const hs = held && held.status
-  return hs === 'pending' || hs === 'active' || hs === 'escalated' ? hs : null
-}
-
 // 关单评分标记（CSAT 闭环）：closeConversation 发「回复 1-5 分」提示时立 `csatask:<euid>` 标记，
 // 本文件收到纯数字 1-5 且标记在 48h 窗口内才记分——防顾客随口发的数字被误当评分（副作用绑提示·不裸吃数字）。
 const CSAT_ASK_TTL_MS = 48 * 3600_000
@@ -606,6 +168,68 @@ async function handleCsatScoreText(
   }
   await send(buildMsgMenu(to, openKfId, csatReasonMenu()))
   return true
+}
+
+const HUMAN_LADDER_EV: JevResult = { model: 'local-human', urgency: 0, department: 'sales' }
+const GREET_EV: JevResult = { model: 'local-hello', urgency: 0, department: 'sales', needStatus: 'greeting' }
+
+// 自由打字（无 menu_id）的分流。
+// 闸开：自由文本一律 Jev + 话术库，旧关键词气泡不参与。挂了发短句，不回菜单。
+// 闸关：今天的关键词/根菜单兜底，不打话术路径。
+async function textRoute(ctx: DispatchCtx, incoming: Incoming): Promise<Route> {
+  const { db } = ctx
+  const gate = await loadJevGate(db)
+  if (gate.on) {
+    const textLen = String(incoming.text || '').length
+    const human = wantsHuman(incoming.text)
+    const hello = looksGreeting(incoming.text)
+    // Jev 并行只为取证；人工/招呼选句不靠它。
+    const evP = tryJevClassify(gate.key, incoming.text)
+    const hasRecentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId, ctx.openid)
+    const useEv = human ? HUMAN_LADDER_EV : hello ? GREET_EV : await evP
+    const got = useEv
+      ? await composeScriptReply(db, incoming.externalUserId, incoming.text, useEv, { hasRecentOrder })
+      : null
+    const ev = await evP
+    console.log('[kf] humanLadder', {
+      matched: human,
+      humanAsks: got ? got.humanAsks : null,
+      node: got ? got.node : null,
+      needStatus: ev && ev.needStatus ? ev.needStatus : null,
+      ...(human && !got ? { compose: 'null' } : {}),
+      stateLen: textLen,
+    })
+    if (human) {
+      if (got && got.node === 'human') return { type: 'transfer' as const }
+      if (got && got.text && (got.node === 'humanAsk' || got.node === 'humanAsk2'))
+        return { type: 'text' as const, content: got.text, pieces: got.pieces }
+      return { type: 'text' as const, content: '怎么了？😳' }
+    }
+    if (hello) {
+      if (got && got.text && got.node !== 'askNext' && got.node !== 'askMore')
+        return { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
+      return { type: 'text' as const, content: '在的在的，请说。' }
+    }
+    if (got && (got.node === 'human' || got.text)) {
+      if (ev)
+        logJevEvidence(ev, got.topic, {
+          stateLen: textLen,
+          node: got.node,
+          topic: got.topic,
+          acting: got.acting,
+          checkpoint: got.checkpoint,
+        })
+      return got.node === 'human'
+        ? { type: 'transfer' as const }
+        : { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
+    }
+    if (ev) logJevEvidence(ev, null, { stateLen: textLen })
+    return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
+  }
+  const hit = recognize(incoming.text)
+  return hit
+    ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
+    : ({ type: 'menu', content: await welcomeMenu(db) } as Route)
 }
 
 /** 处理单条入站消息：menu_id 优先按路由走，否则自由文本走关键词识别→高亮气泡。 */
@@ -639,64 +263,7 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
 
   if (await handleCsatScoreText(ctx, incoming, openidOf)) return
 
-  const r: Route = incoming.menuId
-    ? route(incoming.menuId)
-    : await (async () => {
-        // 闸开：自由文本一律 Jev + 话术库，旧关键词气泡不参与。挂了发短句，不回菜单。
-        // 闸关：今天的关键词/根菜单兜底，不打话术路径。
-        const gate = await loadJevGate(db)
-        if (gate.on) {
-          const textLen = String(incoming.text || '').length
-          const human = wantsHuman(incoming.text)
-          const hello = looksGreeting(incoming.text)
-          // Jev 并行只为取证；人工/招呼选句不靠它。
-          const evP = tryJevClassify(gate.key, incoming.text)
-          const hasRecentOrder = await kfUserHasRecentOrder(db, incoming.externalUserId, ctx.openid)
-          const useEv = human ? HUMAN_LADDER_EV : hello ? GREET_EV : await evP
-          const got = useEv
-            ? await composeScriptReply(db, incoming.externalUserId, incoming.text, useEv, { hasRecentOrder })
-            : null
-          const ev = await evP
-          console.log('[kf] humanLadder', {
-            matched: human,
-            humanAsks: got ? got.humanAsks : null,
-            node: got ? got.node : null,
-            needStatus: ev && ev.needStatus ? ev.needStatus : null,
-            ...(human && !got ? { compose: 'null' } : {}),
-            stateLen: textLen,
-          })
-          if (human) {
-            if (got && got.node === 'human') return { type: 'transfer' as const }
-            if (got && got.text && (got.node === 'humanAsk' || got.node === 'humanAsk2'))
-              return { type: 'text' as const, content: got.text, pieces: got.pieces }
-            return { type: 'text' as const, content: '怎么了？😳' }
-          }
-          if (hello) {
-            if (got && got.text && got.node !== 'askNext' && got.node !== 'askMore')
-              return { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
-            return { type: 'text' as const, content: '在的在的，请说。' }
-          }
-          if (got && (got.node === 'human' || got.text)) {
-            if (ev)
-              logJevEvidence(ev, got.topic, {
-                stateLen: textLen,
-                node: got.node,
-                topic: got.topic,
-                acting: got.acting,
-                checkpoint: got.checkpoint,
-              })
-            return got.node === 'human'
-              ? { type: 'transfer' as const }
-              : { type: 'text' as const, content: got.text, bubbles: true, pieces: got.pieces }
-          }
-          if (ev) logJevEvidence(ev, null, { stateLen: textLen })
-          return { type: 'text' as const, content: JEV_FAIL_OPEN_TEXT }
-        }
-        const hit = recognize(incoming.text)
-        return hit
-          ? ({ type: 'menu', content: menuFor(hit.cat, hit.word) } as Route)
-          : ({ type: 'menu', content: await welcomeMenu(db) } as Route)
-      })()
+  const r: Route = incoming.menuId ? route(incoming.menuId) : await textRoute(ctx, incoming)
 
   switch (r.type) {
     case 'transfer': {

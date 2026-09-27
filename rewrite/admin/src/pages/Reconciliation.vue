@@ -8,6 +8,7 @@ import { CircleDollarSign, RotateCcw, Wallet, Download, CircleCheck, TriangleAle
 import { getReconciliation, getBillMatch, downloadBill } from '../api/system'
 import { mapRecon, mapBillMatch, type ReconVM, type BillMatchVM } from '../lib/mapSystem'
 import { orderErrorText } from '../lib/mapMoney'
+import { writeFailText } from '../lib/status'
 import { useLatest } from '../lib/latest'
 import { saveBlob } from '../lib/saveBlob'
 import { dayKeyCST, dayStartMsCST } from '@ldrw/shared'
@@ -83,7 +84,7 @@ async function pullBill() {
   const reloadOk = await reload() // 先刷新对账（其间显加载中·结束落空）；busy 贯穿拉取+刷新防连点
   busy.value = false
   // 只在拉取与刷新都成功时显纯成功；reload 失败别被无条件覆盖——保留其错误原文（病根#14）
-  if (!r.ok) message.value = '拉取失败：' + orderErrorText(r.error)
+  if (!r.ok) message.value = writeFailText('拉取失败', r.error, orderErrorText)
   else if (!reloadOk) message.value = '账单已拉取入库，但对账刷新失败：' + message.value
   else message.value = '账单已拉取入库，勾对已刷新'
 }

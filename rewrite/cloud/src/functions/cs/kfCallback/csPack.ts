@@ -5,6 +5,7 @@
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
+import { packSessionId } from '../../../kit'
 import type { JevResult } from './jev'
 import PACK from './csPackAssets.generated.json'
 
@@ -107,10 +108,6 @@ const ALLOWED: Record<PackMachineState, PackMachineState[]> = {
 }
 
 const PACKAGING_RE = /包装|摔坏|破损|压坏|压烂|磕坏|外箱|摔烂/
-
-export function packSessionId(euid: string): string {
-  return 'jevpack:' + euid
-}
 
 export function handoffDocId(euid: string, epoch: number): string {
   return 'handoff:' + euid + ':' + String(epoch)
@@ -393,16 +390,6 @@ export async function writeHandoffStub(
     script: 'human_queued',
   })
   return payload
-}
-
-export async function readEpochForHandoff(db: any, euid: string): Promise<number> {
-  const got = await db
-    .collection(COLLECTIONS.kfState)
-    .doc('jevsession:' + euid)
-    .get()
-    .catch(() => null)
-  const n = Number(got && got.data && got.data.epoch)
-  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
 }
 
 export async function loadAndAdvancePack(

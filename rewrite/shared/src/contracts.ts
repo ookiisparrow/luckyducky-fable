@@ -28,6 +28,15 @@ interface WxPaymentParams {
   paySign: string
 }
 
+/** createOrder 入参（mp api/orders.ts 手抄）。全是不可信输入、云端逐个校验，类型只锁键名。 */
+export interface CreateOrderReq {
+  items?: unknown
+  address?: unknown
+  idempotencyKey?: unknown
+  /** 结算页显示的应付总额（整数分）。与云端现价应付不符回 PRICE_CHANGED（带 amountFen）；不传不核对。 */
+  expectedAmountFen?: unknown
+}
+
 // ── 五个热 action 的响应契约（钱链×4 + 学习链×1）──
 export type CreateOrderResp = AppResp<{ order: OrderDoc }>
 /** pay 双分支：0 元直付 {paid,paidAt}（paid 写 boolean 不写字面量 true——ok() 泛型推断会宽化）| 收银台 {payment}。 */
@@ -103,7 +112,8 @@ export interface AdminOverrideRefund {
 /** getDashboard。gmv 是元；txAlerts.partial＝钱链异常有一路没查到，三类列表可能不全。 */
 export interface AdminDashboard {
   stats: { users: number; orders: number; gmv: number; codesTotal: number; codesActivated: number; learners: number }
-  approx: { gmv: boolean; hot: boolean; stuck: boolean; sampleSize: number }
+  /** toShip：待发货扫描触顶，toShip 数只是下限。 */
+  approx: { gmv: boolean; hot: boolean; stuck: boolean; sampleSize: number; toShip: boolean }
   funnel: { ordered: number; paid: number; activated: number }
   /** 真能发的单数（paid、无金额不符、不被退款拦，与 shipOne 同判据）。 */
   toShip: number

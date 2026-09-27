@@ -1,5 +1,6 @@
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { getDb, isDocMissing, isEmptyDoc } from './db'
+import type { OrderDoc } from '@ldrw/shared'
+import { getDb, getDocOrNull, isDocMissing, isEmptyDoc } from './db'
 import { notifyAlert } from './observe'
 
 // 实物库存原子原语（根因#1「下单即预留+乐观 CAS 防超卖」）。
@@ -209,4 +210,39 @@ export async function getInventory(productIds?: string[]): Promise<{ list: any[]
     if (rows.length < PAGE) return { list, truncated: false }
   }
   return { list, truncated: true }
+}
+
+/**
+ * 待付单关单并回补预留：超时关单定时器、pay 惰性关单、用户取消三处共用。回 true＝这次是本次关的（已回补）。
+ * 先 closed 后回补：宁可晚到的回调误判售罄（可退款），不冒先回补被并发买走的超卖。
+ * 条件写抛错≠没写上：回包丢了而写已落地时，单已 closed、定时器只扫 pending 再也扫不到，这里不回补就永久少卖。
+ * 读回按本次写的 closedAt 认领（别人关的不认，回补归关单那一方）；还是 pending＝没写上，照抛——定时器下次扫描重关，
+ * 用户那边报错可重试。
+ * ponytail: 读回也失败只能告警交人工；要根除得给关单加「待回补」标记让定时器捡。同毫秒两方关单且本次写抛错才会误认领。
+ */
+export async function closePendingOrder(
+  id: string,
+  reserved: OrderDoc['reserved'] | undefined,
+  extra: Record<string, unknown> = {}
+): Promise<boolean> {
+  const db = getDb()
+  const closedAt = Date.now()
+  let moved: boolean
+  try {
+    const r = await db
+      .collection(COLLECTIONS.orders)
+      .where({ _id: id, status: 'pending' })
+      .update({ data: { ...extra, status: 'closed', closedAt } })
+    moved = !!(r.stats && r.stats.updated === 1)
+  } catch (e) {
+    const now = await getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id)).catch(() => undefined)
+    moved = !!(now && now.status === 'closed' && now.closedAt === closedAt)
+    await notifyAlert('money', 'closePendingOrder', 'CLOSE_WRITE_FAIL', {
+      id,
+      readBack: now === undefined ? 'fail' : moved ? 'landed' : (now && now.status) || 'missing',
+    })
+    if (now === undefined || (now && now.status === 'pending')) throw e
+  }
+  if (moved && Array.isArray(reserved) && reserved.length) await restoreStock(reserved)
+  return moved
 }

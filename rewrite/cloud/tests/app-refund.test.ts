@@ -175,10 +175,10 @@ describe('refundCallback（黄金：防伪·核验 fail-closed·幂等·回补�
     expect(await cb({ out_refund_no: 'ghost', refund_status: 'SUCCESS' })).toEqual({ errcode: 0, errmsg: 'OK' })
   })
 
-  it('大白话：退款成功后——未发货单回补库存；已发货单不回补（实物已出库，回补=幻影超卖）', async () => {
+  it('大白话：退款成功后——未发货单按下单预留回补库存；已发货单不回补（实物已出库，回补=幻影超卖）', async () => {
     control.setOpenId('')
-    // 未发货（paid）→ 回补
-    seedOrder()
+    // 未发货（paid）→ 回补（只还下单时扣过的；没预留＝不限量，不回补）
+    seedOrder({ reserved: [{ productId: 'p1', spec: '基础款', qty: 1 }] })
     seedAS()
     control.seed('inventory', [{ _id: 'p1__基础款', productId: 'p1', spec: '基础款', stock: 0 }])
     await cb(SUCCESS)
@@ -187,13 +187,12 @@ describe('refundCallback（黄金：防伪·核验 fail-closed·幂等·回补�
     const o1 = control.dump('orders')[0]
     expect(o1['refunded.p1__基础款'] ?? o1.refunded?.['p1__基础款']).toBeTruthy() // 订单留对账痕
 
-    // 已发货（shipped）→ 不回补
-    seedOrder({ _id: 'o9', id: 'o9', status: 'shipped' } as any)
+    // 已发货（shipped）→ 不回补（同样有预留，才证明是发货状态挡住的）
+    seedOrder({ _id: 'o9', id: 'o9', status: 'shipped', reserved: [{ productId: 'p1', spec: '基础款', qty: 1 }] } as any)
     seedAS({ _id: 'o9__p1', orderId: 'o9', lineId: 'p1', qty: 1 } as any)
-    control.seed('inventory', [{ _id: 'p1__', productId: 'p1', spec: '', stock: 0 }])
     await cb({ ...SUCCESS, out_refund_no: 'o9__p1', out_trade_no: 'o9' })
     expect(control.dump('afterSales').find((a: any) => a._id === 'o9__p1').status).toBe('refunded')
-    expect(control.dump('inventory').find((x: any) => x._id === 'p1__').stock).toBe(0) // 未回补
+    expect(control.dump('inventory')[0].stock).toBe(1) // 未回补
   })
 
   // P1 修复（根因#14 失败必可观测）：退款回调晚到、此时售后单已被人工 rejectRefund 改成 rejected 时，

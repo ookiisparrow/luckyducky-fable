@@ -15,12 +15,14 @@ import {
   COUPON,
   SHIP,
   ORDER_STATUS,
+  PAID_ORDER_STATUSES,
+  MONEY_RECEIVED_STATUSES,
   buildBadStatus,
   cstIso,
 } from '@ldrw/shared'
 // 响应契约（病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
 // （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
-import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc, ErrCode } from '@ldrw/shared'
+import type { CreateOrderReq, CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc, ErrCode } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -30,6 +32,8 @@ import {
   restoreStock,
   transition,
   callFlow,
+  ORDER_PAID_ON_WX,
+  closePendingOrder,
   refundNoFor,
   alert,
   pageQuery,
@@ -60,6 +64,17 @@ const lineIdOf = (productId: string, spec: string) => `${productId}__${spec || '
 // 订单单读：只有真缺档才回 null（调用方报 NOT_FOUND），其余读失败照抛、网关回 INTERNAL——
 // 前端把 NOT_FOUND 当确定空态不给重试。
 const readOrder = (db: any, id: string) => getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id))
+
+// 支付配置：没配（缺档/集合没建）回 {}，读失败回 null——调用方报 DOC_READ_FAIL，不冒充「没配/没开」。
+const readPayCfg = (db: any): Promise<Record<string, any> | null> =>
+  db
+    .collection(COLLECTIONS.config)
+    .doc('pay')
+    .get()
+    .then(
+      (g: any) => (g && g.data) || {},
+      (e: unknown) => (isDocMissing(e) || isCollectionMissing(e) ? {} : null)
+    )
 
 // 集合没建才建（首单/首个售后前）：热路径不再每单白调一次 createCollection。
 const addCreatingColl = (db: any, coll: string, data: object) =>
@@ -229,11 +244,12 @@ async function placeOrder(db: any, OPENID: string, claimId: string, order: Omit<
 export const createOrder = withOpenId(
   withRateLimit('createOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<CreateOrderResp> => {
     const _ = db.command
-    const e: any = event
+    const e = event as CreateOrderReq
 
     const lines = (Array.isArray(e.items) ? e.items : [])
-      .filter((l: any) => l && l.id && Number.isInteger(l.qty) && l.qty > 0)
-      .map((l: any) => ({ ...l, sku: typeof l.sku === 'string' ? l.sku.slice(0, 30) : '' }))
+      .filter((l: any) => l && Number.isInteger(l.qty) && l.qty > 0)
+      .map((l: any) => ({ id: str(l.id, 200), sku: str(l.sku, 30), qty: l.qty }))
+      .filter((l: any) => l.id)
     if (!lines.length) return err(ERR.EMPTY_ITEMS)
     if (lines.length > MAX_ORDER_LINES) return err(ERR.TOO_MANY_ITEMS)
     if (lines.some((l: any) => l.qty > MAX_QTY)) return err(ERR.BAD_QTY)
@@ -246,11 +262,7 @@ export const createOrder = withOpenId(
         .collection(COLLECTIONS.products)
         .where({ id: _.in(prodIds) })
         .get(),
-      db
-        .collection(COLLECTIONS.config)
-        .doc('pay')
-        .get()
-        .catch(() => null),
+      readPayCfg(db),
     ])
     const priced = priceItems(lines, new Map<string, any>(res.data.map((p: any) => [p.id, p])))
     if ('error' in priced) return err(priced.error)
@@ -262,6 +274,8 @@ export const createOrder = withOpenId(
     const amountFen = asFen(Math.max(0, goodsFen + toFen(SHIP) - toFen(COUPON)))
     // 券额若被改回非 0 且把货款抵穿，仍拒单——不给「低价 SKU 白送」留面。
     if (goodsFen > 0 && amountFen === 0) return err(ERR.COUPON_EXCEEDS_GOODS)
+    const expected = e.expectedAmountFen
+    if (expected != null && !Number.isInteger(expected)) return err(ERR.BAD_ARGS)
     const goods = fenToYuan(goodsFen)
     const amount = fenToYuan(amountFen)
 
@@ -270,7 +284,8 @@ export const createOrder = withOpenId(
 
     // 支付配置 fail-closed：只认环境级开关——mock 仅显式 ALLOW_MOCK_PAY=1 放行（生产永不设），
     // 库内 config 声称 mock 不作数（可篡改数据不当安全闸），缺/错配置绝不伪造已付单。
-    const payMode = cfg && cfg.data && cfg.data.mode === 'real' ? 'real' : 'mock'
+    if (!cfg) return err(ERR.DOC_READ_FAIL)
+    const payMode = cfg.mode === 'real' ? 'real' : 'mock'
     if (payMode === 'mock' && process.env.ALLOW_MOCK_PAY !== '1') return err(ERR.PAY_CONFIG_MISSING)
 
     // 在途未支付单上限闸（防滥用·见 MAX_PENDING_ORDERS 注释）：real 模式建 pending 单会持库存锁，
@@ -296,6 +311,13 @@ export const createOrder = withOpenId(
     if (claimId) {
       const replay = await claimOrReplay(db, OPENID, claimId)
       if (replay) return replay
+    }
+    // 购物车/结算页的价是加购时的快照：改价后不拦，用户会按页面上看不到的新价付款。核价放在认领幂等键之后：
+    // 同键已建成的单直接回放（那张单的价就是用户当初看到并提交的）；新认领的键核不上就放掉键——小程序拒后不换键，
+    // 占着键，用户确认新价再提交会被回放成旧价单。
+    if (expected != null && expected !== amountFen) {
+      if (claimId) await db.collection(COLLECTIONS.orderIdempotency).doc(claimId).remove().catch(() => {})
+      return err(ERR.PRICE_CHANGED, { amountFen })
     }
 
     // 下单即预留（乐观 CAS 防超卖）：任一不足整单拒（已扣回滚在 reserveStock 内）
@@ -339,28 +361,17 @@ export const pay = withOpenId(
 
     // 订单读与支付配置读互不依赖：并行省一次往返；订单校验（NOT_FOUND/BAD_STATUS/超时关单）失败时
     // cfg 结果直接丢弃（纯读零副作用）。
-    const [order, cfg] = await Promise.all([
-      readOwnOrder(db, id, OPENID),
-      db
-        .collection(COLLECTIONS.config)
-        .doc('pay')
-        .get()
-        .catch(() => null),
-    ])
+    const [order, payCfg] = await Promise.all([readOwnOrder(db, id, OPENID), readPayCfg(db)])
     if (!order) return err(ERR.NOT_FOUND)
     if (order.status !== 'pending') return err(buildBadStatus(order.status))
 
     // 惰性超时：到点的 pending 当场关闭（定时器只是兜底）；抢占成功才回补预留（幂等绑转移）
     if (Date.now() - order.createdAt > PAY_WINDOW_MS) {
-      const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
-        closedAt: Date.now(),
-      })
-      if (moved && Array.isArray(order.reserved) && order.reserved.length)
-        await restoreStock(order.reserved)
+      await closePendingOrder(id, order.reserved)
       return err(ERR.ORDER_CLOSED)
     }
 
-    const payCfg = (cfg && cfg.data) || {}
+    if (!payCfg) return err(ERR.DOC_READ_FAIL)
     if (payCfg.mode !== 'real' || !payCfg.flowId) return err(ERR.PAY_NOT_ENABLED)
 
     const totalFee = toFen(order.amount)
@@ -377,13 +388,23 @@ export const pay = withOpenId(
 
     // 触发支付工作流（JSAPI 下单）：openid 显式传入，金额/单号均来自库内订单
     const firstName = order.items && order.items[0] ? String(order.items[0].name) : '钩织材料包'
-    const p = await callFlow(String(payCfg.flowId), {
-      description: ('小棉鸭 · ' + firstName).slice(0, 40),
-      out_trade_no: order.id,
-      amount: { total: totalFee, currency: 'CNY' },
-      payer: { openid: OPENID },
-    })
+    const p = await callFlow(
+      String(payCfg.flowId),
+      {
+        description: ('小棉鸭 · ' + firstName).slice(0, 40),
+        out_trade_no: order.id,
+        amount: { total: totalFee, currency: 'CNY' },
+        payer: { openid: OPENID },
+      },
+      { quiet: true }
+    )
+    // 付款成功、回调未到时再点支付：微信拒同号重复下单，或回调恰在这次下单途中到了。钱已收，不是通道故障，
+    // 不告警（工作流失败告警也等读回之后才补报）；翻已付只认回调。
+    if (p === ORDER_PAID_ON_WX) return err(ERR.ORDER_ALREADY_PAID)
     if (!p || !p.paySign) {
+      const now = await readOrder(db, id).catch(() => null)
+      if (now && MONEY_RECEIVED_STATUSES.includes(now.status)) return err(ERR.ORDER_ALREADY_PAID)
+      if (p && p.flowFail) alert('money', 'flow', p.flowFail.code, p.flowFail.ctx)
       alert('money', 'pay', 'NO_PREPAY', { orderId: order.id }) // 用户付不了款＝漏单，必须可告警
       return err(ERR.UNIFIED_ORDER_FAIL)
     }
@@ -414,7 +435,7 @@ export const applyRefund = withOpenId(
 
     const order = await readOwnOrder(db, orderId, OPENID)
     if (!order) return err(ERR.NOT_FOUND)
-    if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
+    if (!PAID_ORDER_STATUSES.includes(order.status)) return err(buildBadStatus(order.status))
 
     const item = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
     if (!item) return err(`UNKNOWN_ITEM:${reqLine}`)
@@ -505,8 +526,8 @@ export const confirmReceive = withOpenId(
 
 /**
  * 用户主动取消待支付单：仅本人 + 仅 pending 可取消；
- * 复用已声明的 pending→closed 边（状态机零改动）；关单回补预留幂等绑 CAS——与超时关单/并发取消
- * 天然互斥，只回补一次（照抄 pay 惰性关单/closeExpiredOrders 的错向安全：transition 先、回补后）。
+ * 复用已声明的 pending→closed 边（状态机零改动）；与超时关单、pay 惰性关单共用 closePendingOrder——
+ * 条件写天然互斥，只回补一次。
  */
 export const cancelOrder = withOpenId(
   withRateLimit('cancelOrder', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
@@ -515,12 +536,9 @@ export const cancelOrder = withOpenId(
     const order = await readOwnOrder(db, id, OPENID)
     if (!order) return err(ERR.NOT_FOUND)
     if (order.status !== 'pending') return err(buildBadStatus(order.status))
-    const { moved } = await transition(COLLECTIONS.orders, id, ['pending'], 'closed', {
-      closedAt: Date.now(),
-      cancelledBy: 'user', // 台账区分手动取消 vs 超时关单
-    })
+    // cancelledBy：台账区分手动取消 vs 超时关单
+    const moved = await closePendingOrder(id, order.reserved, { cancelledBy: 'user' })
     if (!moved) return err(buildBadStatus((await readOrder(db, id))?.status || 'unknown')) // 并发已被关/已付
-    if (Array.isArray(order.reserved) && order.reserved.length) await restoreStock(order.reserved) // 回补绑 moved·只一次
     return ok({ closedAt: Date.now() })
   })
 )

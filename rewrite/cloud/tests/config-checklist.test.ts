@@ -2,7 +2,7 @@
 //
 // 两类守卫：
 // ① 源码扫描——configChecklist.ts 里 `process.env` 只允许出现在 `!!`/`Boolean(` 布尔语境（防裸读值），
-//    且任何 `.where(...)` 起的查询链只要调了 `.get()` 就必须同链带 `.limit(`（根因#7 有界纪律）。
+//    且每条查询链在 `.get()` 之前必须是单文档 `.doc(` 或带 `.limit(`（根因#7 有界纪律）。
 //    结构抄既有源码扫描型守卫（scm-overview-bounded.test.ts 的 stripComments 范式，防 E1 注释假绿）。
 // ② 行为哨兵——mock env + seed DB 塞入 SENTINEL_ 前缀哨兵串，断言 getConfigChecklist 响应体
 //    JSON.stringify 后不含任一哨兵串（探测规则只判「配了没」、绝不把探到的值吐回前端）。
@@ -37,17 +37,14 @@ describe('源码扫描：configChecklist.ts 零回显（process.env 只在布尔
     expect(safe).toBe(total)
   })
 
-  it('大白话：任何 db.collection(...).where(...) 起的查询链只要含 .get() 就必须同链带 .limit(', () => {
+  it('大白话：每条 db.collection(...) 查询链读到 .get() 之前必须有界——单文档 .doc( 或显式 .limit(', () => {
     const idxs = [...body.matchAll(/db\.collection\(/g)].map((m) => m.index as number)
-    expect(idxs.length).toBeGreaterThan(0) // 门①各 .doc(id).get() 单文档读仍在，断言本身没扫空（防切片逻辑失效假绿）
-    const chains = idxs.map((start, i) => body.slice(start, i + 1 < idxs.length ? idxs[i + 1] : body.length))
-    const whereChains = chains.filter((c) => /\.where\(/.test(c))
-    // 批K：stockLedger/materials 两条 where 链已挪进 kit/scmStock.ts 门1 收口（rw-material-stock-single-seam·
-    // boundedness 由该 kit 函数内部 limit(1) 兜底），本文件现在合法地没有裸 where 链——不再断言必有，
-    // 只保留「万一将来又加回来必须带 limit」的前向防护。
-    for (const c of whereChains) {
-      if (/\.get\(\)/.test(c)) expect(c).toMatch(/\.limit\(/)
-    }
+    const reads = idxs
+      .map((start, i) => body.slice(start, i + 1 < idxs.length ? idxs[i + 1] : body.length))
+      .filter((c) => c.includes('.get()'))
+      .map((c) => c.slice(0, c.indexOf('.get()')))
+    expect(reads.length).toBeGreaterThan(0) // 断言本身没扫空（防切片逻辑失效假绿）
+    for (const r of reads) expect(r).toMatch(/\.doc\(|\.limit\(/)
   })
 })
 
@@ -146,11 +143,11 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
     }
   })
 
-  it('大白话：WXPAY_MCH_* 未入库但 adminApi 自身环境变量已配 → 不误报 missing（规则②兜底）', async () => {
+  it('大白话：WXPAY_MCH_* 未入库但 adminApi 自身环境变量已配 → 不误报 missing（规则②兜底；私钥在环境变量要迁走，标 check）', async () => {
     process.env.WXPAY_MCH_PRIVATE_KEY = 'legacy-env-key'
     process.env.WXPAY_MCH_SERIAL = 'legacy-serial'
     const r = await post('getConfigChecklist', SUPER, {})
-    expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_PRIVATE_KEY').status).toBe('ok')
+    expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_PRIVATE_KEY').status).toBe('check')
     expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_SERIAL').status).toBe('ok')
   })
 

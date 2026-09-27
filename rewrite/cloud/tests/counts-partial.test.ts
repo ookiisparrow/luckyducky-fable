@@ -28,7 +28,7 @@ function fakeCountDb(shouldFail: (filter: any) => boolean, total = 2) {
   }
 }
 
-const body = (res: any) => JSON.parse(res.body)
+const body = (res: any) => JSON.parse(JSON.stringify(res)) // 过一遍 JSON＝网关发出去的回包
 
 describe('orderCounts partial（P1·item7：后端别把「查失败」悄悄兜成 0 骗前端）', () => {
   it('大白话：某个状态的 count() 失败——回包仍是 ok:true（不拖累整包），但带 partial:true，该状态计数占位 0 不可信', async () => {

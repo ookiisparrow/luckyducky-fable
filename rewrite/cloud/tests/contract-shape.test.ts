@@ -1,7 +1,10 @@
 // mp↔cloud 响应契约键集合哨兵（批B10 立·W1 收官扩至全覆盖·守卫 rw-app-response-contract·
 // 病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
 // 目的：mp 物理进不了 @ldrw/shared（微信开发者工具编译限制），响应形状全靠手抄——cloud 改键 mp 编译
-// 不红＝静默漂移面。本文件对 app 网关 **24 个 action** 的响应做 Object.keys 排序全等断言：增键/删键/
+// 不红＝静默漂移面。订单/售后、收银台、商品、评价、学习链读口另有双向锁：tests/contracts/app-orders.json、
+// app-shop-learning.json 的 sample 由云端（p-contract-admin-shape / p-contract-app-shape.test.ts）整体全等锁住、
+// 小程序映射层（mp/tests/p-contract-mp-mappers.test.ts）拿来喂；首页/页面 CMS 内容、帮助视频、FAQ、下单、取播放地址、
+// 用户资料这些 action 仍只有本文件的单向键集锁。本文件对 app 网关 **24 个 action** 的响应做 Object.keys 排序全等断言：增键/删键/
 // 改名都红，覆盖编译锁的盲区（加键 TS 宽赋值不红；createOrder 的 order:any 展开编译锁无牙）。
 // 覆盖面分三批（钱链/学习热链 5 个 → 第二批读 action 4 个 → W1 收官 15 个），**成功态与失败态都锁**：
 // 带闸 action 失败时成功那半的键（list/items/user）会整个消失，mp 裸解构即 undefined，故失败态各自锁。
@@ -95,7 +98,7 @@ const DRAFT = { id: 'pd1', name: '小鸭礼盒', tag: '基础款', price: '198',
 const publishProduct1 = async () => {
   await saveDraft(adminCtx({ product: DRAFT }))
   const r = await publishProduct(adminCtx({ id: 'pd1' }))
-  expect(JSON.parse(r.body).ok).toBe(true)
+  expect(r.ok).toBe(true)
 }
 
 beforeEach(() => {
@@ -236,8 +239,8 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     // courses 公开目录是白名单投影、且上面那条哨兵全靠自造 seed（绕过写侧）——cleanCourse/publishCourse
     // 若改名 title/name 字段，seed 哨兵全绿而学员端目录静默变空白。经真写侧发布一份再读回，锁死两端。
     const draft = { id: 'cW', title: '进阶课', sort: 99, chapters: [{ id: 'chW', title: '第二章', lessons: [{ id: 'lW', name: '收针一节', dur: '8:00', segments: [{ id: 'sW', name: '藏线头', dur: '3:00', videoFileId: '' }] }] }] }
-    expect(JSON.parse((await saveCourseDraft(adminCtx({ course: draft }))).body).ok).toBe(true)
-    expect(JSON.parse((await publishCourse(adminCtx({ courseId: 'cW' }))).body).ok).toBe(true)
+    expect((await saveCourseDraft(adminCtx({ course: draft }))).ok).toBe(true)
+    expect((await publishCourse(adminCtx({ courseId: 'cW' }))).ok).toBe(true)
     const r = await call('getCourses')
     expect(r.ok).toBe(true)
     const c = r.list.find((x: any) => x.id === 'cW')
@@ -438,7 +441,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     const saved = await saveKb(adminCtx({
       entries: [{ key: 'logistics:eta', question: '什么时候发货？', answer: '48 小时内。', category: 'logistics', order: 0, featured: true }],
     }))
-    expect(JSON.parse(saved.body).ok).toBe(true)
+    expect(saved.ok).toBe(true)
     // 写侧字段集（真写入回读）：question/answer/featured 任一改名，这里先红
     expect(keysOf(control.dump('kb')[0])).toEqual(['_id', 'answer', 'category', 'enabled', 'featured', 'order', 'question', 'updatedAt'])
     const r = await call('getPublicFaq')
@@ -581,7 +584,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
   it('submitReview→getReviews 端到端：写侧 13 键真写入（含 picked:false）；未挑选公开读空；挑过才下发 7 键——_openid/orderId/lineId/productId/_id/picked 不出网关', async () => {
     control.seed('orders', [DONE_ORDER])
     control.seed('users', [{ _id: 'oME', _openid: 'oME', nickname: '幸运鸭' }])
-    const s = await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5, text: '很好', tags: ['手感好'], photos: ['cloud://rev-a.jpg'] })
+    const s = await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5, text: '很好', tags: ['手感好'], photos: ['cloud://env.x/reviews/oDone/rev-a.jpg'] })
     expect(keysOf(s)).toEqual(['ok']) // 成功零载荷（同 trackEvent：写类 action 刻意不回数据）
 
     // 写侧字段集（真写入回读·不是自造 seed）
@@ -591,7 +594,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect((await call('getReviews', { productId: 'p1' })).list).toEqual([]) // 未挑选不上墙
 
     const pick = await setReviewPicked(adminCtx({ id: written._id, picked: true }))
-    expect(JSON.parse(pick.body).ok).toBe(true)
+    expect(pick.ok).toBe(true)
     // 读侧下发面：既有 getReviews 用例造的是 seed 回声，这条是端到端——写侧加字段若被顺手放进读侧映射即红
     const r = await call('getReviews', { productId: 'p1' })
     expect(keysOf(r.list[0])).toEqual(REVIEW_KEYS)

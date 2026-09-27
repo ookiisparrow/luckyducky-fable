@@ -105,9 +105,12 @@ describe('rw-user-writes-throttled 从 ACTIONS 注册表推导', () => {
 describe('rw-status-transitions-declared 建档状态须属 initial', () => {
   const SPEC = {
     'rewrite/shared/src/order.ts':
-      "export const AFTERSALE_STATUS_SPEC = {\n  collection: 'afterSales',\n  initial: ['applied'],\n  terminal: ['refunded'],\n  transitions: [\n    { from: ['applied'], to: 'approved' },\n    { from: ['approved'], to: 'refunded' },\n  ],\n} as const\n",
+      "export const AFTERSALE_STATUS_SPEC = {\n  collection: 'afterSales',\n  initial: ['applied'],\n  terminal: ['refunded'],\n  transitions: [\n    { from: ['applied'], to: 'approved' },\n    { from: ['approved'], to: 'refunded' },\n  ],\n} as const\n" +
+      "export const ODD_STATUSES: readonly AfterSaleStatus[] = ['applied', 'refunded']\n",
     'rewrite/shared/src/cs.spec.ts': '',
     'rewrite/shared/src/scm.ts': '',
+    'rewrite/shared/src/learning.ts':
+      "export const QRCODE_STATUS_SPEC = {\n  collection: 'qrcodes',\n  initial: ['unused'],\n  terminal: ['activated'],\n  transitions: [\n    { from: ['unused'], to: 'activated' },\n  ],\n} as const\n",
   }
   const run = (body) => guard('rw-status-transitions-declared').run(scratch({ ...SPEC, 'rewrite/cloud/src/functions/f.ts': body }))
 
@@ -133,5 +136,46 @@ describe('rw-status-transitions-declared 建档状态须属 initial', () => {
 
   it('update 写非 initial 状态不受建档规则约束', () => {
     expect(run("await db.collection('afterSales').doc(x).update({ data: { status: 'approved' } })\n")).toEqual([])
+  })
+
+  // payCallback 的 pending→paid 就是这种写法：泛型 + 三元目标，两个目标都得核
+  it('transition<T>(…) 三元目标里有未声明边 → 红', () => {
+    const bad = run("await transition<AfterSaleDoc>(COLLECTIONS.afterSales, id, ['applied'], ok ? 'approved' : 'refunded', patch)\n")
+    expect(bad.join('\n')).toMatch(/未声明边 applied→refunded/)
+  })
+
+  // activateCourse 的写法：边取自声明表的某一条，还得对上 transition 的集合
+  const QR = "const QR = QRCODE_STATUS_SPEC.transitions[0]\n"
+  it('[...T.from], T.to 取自声明表且集合对得上 → 绿', () => {
+    expect(run(QR + 'await transition(COLLECTIONS.qrcodes, code, [...QR.from], QR.to, {})\n')).toEqual([])
+  })
+
+  it('[...T.from], T.to 拿别的集合的边 → 红', () => {
+    const bad = run(QR + 'await transition(COLLECTIONS.afterSales, code, [...QR.from], QR.to, {})\n')
+    expect(bad.join('\n')).toMatch(/未声明边 unused→activated/)
+  })
+
+  it('from/to 认不出 → 红（守卫失明不静默绿）', () => {
+    expect(run('await transition(COLLECTIONS.afterSales, id, from, to)\n').join('\n')).toMatch(/认不出/)
+  })
+
+  it('解析不了的调用形态 → 红（不是跳过）', () => {
+    expect(run("await transition(COLLECTIONS.afterSales, id, ['applied'], pick('approved'))\n").join('\n')).toMatch(/认不出/)
+  })
+
+  it('条件 CAS 用 shared 状态集常量 → 按常量展开核边', () => {
+    const bad = run("await db.collection(COLLECTIONS.afterSales).where({ _id: x, status: _.in([...ODD_STATUSES]) }).update({ data: { status: 'approved' } })\n")
+    expect(bad.join('\n')).toMatch(/未声明边 refunded→approved/)
+  })
+
+  it('条件 CAS 的状态集认不出 → 红（不当空集放绿）', () => {
+    const bad = run("await db.collection(COLLECTIONS.afterSales).where({ _id: x, status: _.in(LOCAL_SET) }).update({ data: { status: 'approved' } })\n")
+    expect(bad.join('\n')).toMatch(/认不出/)
+  })
+
+  // 声明文件没进 SPECS 时 learning.ts:84 曾整条不查：集合没声明表就红，新状态机文件漏收也一样
+  it('transition() 的集合没有声明表 → 红（含解析不了的调用形态）', () => {
+    expect(run("await transition(COLLECTIONS.batches, id, ['a'], 'b', {})\n").join('\n')).toMatch(/batches 没有状态声明表/)
+    expect(run("await transition('batches', id, ['a'], pick('b'))\n").join('\n')).toMatch(/batches 没有状态声明表/)
   })
 })

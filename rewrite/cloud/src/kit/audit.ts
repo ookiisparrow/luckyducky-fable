@@ -2,8 +2,8 @@ import { getDb } from './db'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 操作审计（根因#3 信任边界可追溯）：管理端动钱/状态的操作留「谁·何时·做了什么·成没成」痕，
-// 退款/发货/改价/调库存事后可查。单一收口：仅 adminApi 分发处经 recordAudit
-// 写 auditLog。**fail-soft**：审计失败绝不反噬业务响应。安全（CLAUDE.md）：凭证（口令 key/密码/webhook）
+// 退款/发货/改价/调库存事后可查。auditLog 只经 recordAudit 写（adminApi 分发处的操作与登录、客服试用会话刷新）。
+// **fail-soft**：审计失败绝不反噬业务响应，只回报成败，要不要告警由调用方定。安全（CLAUDE.md）：凭证（口令 key/密码/webhook）
 // 不入审计——summary 已剥。operator＝真实操作者账号身份（由 checkKey 解析后贯入·
 // 见 adminApi/index.ts；缺省回退 'admin' 保 fail-soft）——留痕「谁查/改了谁」，不糊成单口令 admin。
 
@@ -20,7 +20,7 @@ function summarize(data: any): Record<string, unknown> {
   return out
 }
 
-/** 记一条管理端操作审计；**fail-soft——绝不抛错**（审计不反噬业务）。 */
+/** 记一条管理端操作审计：写成回 true、写失败回 false；**fail-soft——绝不抛错**（审计不反噬业务）。 */
 export async function recordAudit(entry: {
   action: string
   module?: string
@@ -29,7 +29,7 @@ export async function recordAudit(entry: {
   data?: any
   ok: boolean
   error?: string
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     await getDb()
       .collection(COLLECTIONS.auditLog)
@@ -45,8 +45,9 @@ export async function recordAudit(entry: {
           ts: Date.now(),
         },
       })
+    return true
   } catch {
-    /* fail-soft：审计不反噬业务响应 */
+    return false
   }
 }
 

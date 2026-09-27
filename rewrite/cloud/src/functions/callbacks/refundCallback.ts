@@ -1,9 +1,9 @@
-import { toFen, COLLECTIONS } from '@ldrw/shared'
+import { toFen, COLLECTIONS, AFTERSALE_SCAN_CAP, AFTERSALE_INFLIGHT_STATUSES } from '@ldrw/shared'
 import { defineNotifyCallback, notifyAlert, restoreStock, isDocMissing } from '../../kit'
 
 // 退款结果回调。防伪/ACK/id 提取由框架强制。
 // 核验 fail-closed：成功通知的订单号+金额须与售后单一致，否则不置已退款、留 refundMismatch 痕+告警；
-// 幂等：applied/approved→refunded 抢占只一次；回补库存仅限未发货单（已发货实物已出库·回补=幻影超卖）。
+// 幂等：applied/approved→refunded 抢占只一次；回补库存仅限未发货单（已发货实物已出库·回补=幻影超卖），且不超过下单预留。
 // 回调点位绑定控制台工作流 refundnotify。
 const ACK = { errcode: 0, errmsg: 'OK' }
 
@@ -71,7 +71,7 @@ export const main = defineNotifyCallback<any>({
         .catch(() => {})
       return
     }
-    if (as.status !== 'applied' && as.status !== 'approved') {
+    if (!AFTERSALE_INFLIGHT_STATUSES.includes(as.status)) {
       // 回调晚到、此时售后单本地状态已不是 applied/approved（如已被人工 rejectRefund 拒绝、或本来就
       // 已是 refunded 幂等重复通知）——静默 return 会丢失关键信号：微信已核验到位（单号/金额都对得上
       // 才能走到这里）的真实退款成功通知，但本地状态却认为「没在退款中」。已是 refunded 属正常幂等
@@ -92,7 +92,7 @@ export const main = defineNotifyCallback<any>({
     const _ = db.command
     const grab = await db
       .collection(COLLECTIONS.afterSales)
-      .where({ _id: asId, status: _.in(['applied', 'approved']) })
+      .where({ _id: asId, status: _.in([...AFTERSALE_INFLIGHT_STATUSES]) })
       .update({
         data: {
           status: 'refunded',
@@ -111,7 +111,27 @@ export const main = defineNotifyCallback<any>({
       if (!ord || !ord.data) {
         await notifyAlert('money', 'refundCallback', 'RESTOCK_SKIPPED_ORDER_READ_FAIL', { asId, orderId: as.orderId })
       } else if (ord.data.status === 'paid') {
-        await restoreStock([{ productId: as.productId, spec: as.spec || '', qty: as.qty }])
+        // 只还下单时真扣过的（reserved；不限量的 SKU 不在里面），再减同 SKU 其它已退售后的件数：否则先按件退、
+        // 再越规退整行会多还，下单时不限量、后改限量的 SKU 会凭空多出库存。各张售后都是抢占成功后才读，
+        // 两张并发退款至少一张看得见对方——只会少还、不会多还。读不到就判不了还多少，同样只能告警人工补。
+        const sameSku = (l: any) => l.productId === as.productId && (l.spec || '') === (as.spec || '')
+        const sumQty = (ls: any[]) => ls.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+        const reservedQty = sumQty((Array.isArray(ord.data.reserved) ? ord.data.reserved : []).filter(sameSku))
+        if (reservedQty > 0) {
+          const peers = await db
+            .collection(COLLECTIONS.afterSales)
+            .where({ orderId: as.orderId })
+            .limit(AFTERSALE_SCAN_CAP)
+            .get()
+            .catch(() => null)
+          if (!peers) {
+            await notifyAlert('money', 'refundCallback', 'RESTOCK_SKIPPED_AFTERSALE_READ_FAIL', { asId, orderId: as.orderId })
+          } else {
+            const done = sumQty(peers.data.filter((a: any) => a._id !== asId && a.status === 'refunded' && sameSku(a)))
+            const qty = Math.min(Number(as.qty) || 0, reservedQty - done)
+            await restoreStock([{ productId: as.productId, spec: as.spec || '', qty }])
+          }
+        }
       }
       // 订单留对账痕（失败不阻塞 ACK：售后单是退款状态单一来源）。key 用 lineId（回退 productId，
       // 兼容无 lineId 的旧售后单）而非裸 productId：同一 productId 可能有多条不同 spec 的订单行

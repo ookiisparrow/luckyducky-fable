@@ -6,6 +6,7 @@ import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
 import { launchErrorText } from '../lib/mapSystem'
 import { serialSave } from '../lib/serialSave'
+import { readDuration } from '../lib/videoBatch'
 import { confirmed, failText } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -38,25 +39,6 @@ async function reload() {
   conflicted.value = false // 重新载入即解除冲突态·恢复自动保存
   message.value = ''
   void nextTick(() => (loaded = true))
-}
-
-// 视频时长自动读取（选完视频读元数据填 dur·mm:ss）
-function readDuration(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file)
-    const v = document.createElement('video')
-    v.preload = 'metadata'
-    v.onloadedmetadata = () => {
-      URL.revokeObjectURL(url)
-      const s = Math.round(v.duration || 0)
-      resolve(s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '')
-    }
-    v.onerror = () => {
-      URL.revokeObjectURL(url)
-      resolve('')
-    }
-    v.src = url
-  })
 }
 
 // 防抖自动保存（手动按钮的话编排忘点即丢）：900ms + 离页补存·load 期不触发·不 reload（免打断编辑）

@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { getDocOrNull, setOrAdd, str, err } from '../../../kit'
+import type { Ctx } from '../lib'
+import { getDocOrNull, setOrAdd, str, err, ok } from '../../../kit'
 import { COLLECTIONS, cleanBomTemplate } from '@ldrw/shared'
 
 // 进销存配方管理（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=配方面）。
@@ -15,16 +15,16 @@ export async function getBomSetup({ db }: Ctx) {
   const t = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
   const { _id: _omit, updatedAt: _omit2, ...template } = (t as Record<string, any>) || {}
   const p = await db.collection(COLLECTIONS.bomProfiles).limit(200).get()
-  return reply(200, { ok: true, template: t ? template : null, profiles: p.data || [] })
+  return ok({ template: t ? template : null, profiles: p.data || [] })
 }
 
 /** 保存全局模板（整存·模板就一张，数值＝业务数据 admin 填）。 */
 export async function saveBomTemplate({ db, data }: Ctx) {
   const clean = cleanBomTemplate(data.template)
-  if (!clean) return reply(400, err('BAD_TEMPLATE'))
+  if (!clean) return err('BAD_TEMPLATE')
   const next = { ...clean, updatedAt: Date.now() }
   await setOrAdd(db.collection(COLLECTIONS.config), 'scmBomTemplate', next)
-  return reply(200, { ok: true })
+  return ok()
 }
 
 /** 保存产品差异位（_id=productId·三色 + 专属包装/卡片料号，全部必填）。 */
@@ -33,14 +33,14 @@ export async function saveBomProfile({ db, data }: Ctx) {
   // trim 尾随/前导空格：不 trim 会把 'abc123 ' 落成幽灵 _id，真实产品 'abc123' 持续
   // 「未填差异位」、组装时 NO_PROFILE 拒绝，前端却已提示保存成功——契约不一致的静默数据错位。
   const productId = str(p && p.productId, 200).trim().slice(0, 40)
-  if (!productId) return reply(400, err('NO_PRODUCT'))
+  if (!productId) return err('NO_PRODUCT')
   const colors = (p && p.yarnColors) || {}
   for (const tier of ['L', 'M', 'S']) {
-    if (!SLUG.test(String(colors[tier] || ''))) return reply(400, err('BAD_COLOR')) // 三档颜色全要填
+    if (!SLUG.test(String(colors[tier] || ''))) return err('BAD_COLOR') // 三档颜色全要填
   }
   const packagingMaterialId = str(p && p.packagingMaterialId, 200)
   const cardMaterialId = str(p && p.cardMaterialId, 200)
-  if (!packagingMaterialId || !cardMaterialId) return reply(400, err('NO_SPECIFIC'))
+  if (!packagingMaterialId || !cardMaterialId) return err('NO_SPECIFIC')
   const next = {
     yarnColors: { L: String(colors.L), M: String(colors.M), S: String(colors.S) },
     packagingMaterialId: packagingMaterialId.slice(0, 80),
@@ -48,5 +48,5 @@ export async function saveBomProfile({ db, data }: Ctx) {
     updatedAt: Date.now(),
   }
   await setOrAdd(db.collection(COLLECTIONS.bomProfiles), productId, next)
-  return reply(200, { ok: true, productId })
+  return ok({ productId })
 }

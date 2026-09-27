@@ -3,6 +3,7 @@
 // 详情「立即购买」单件成稿（fromCart=false·不动购物车）。金额分口径与 cart 同源。
 import { CHECKOUT_ADDONS, COUPON, SHIP, type CheckoutAddon } from './checkoutConst'
 import * as cart from './cart'
+import { mapDetail } from './mapDetail'
 
 // checkoutConst 里 hook/yarn 是写死占位、不是货架真 SKU。展示层过滤掉，钱账仍认 CHECKOUT_ADDONS。
 const PLACEHOLDER_ADDON_IDS = new Set(['hook', 'yarn'])
@@ -28,6 +29,9 @@ let fromCart = false
 // 网络超时后用户点第二次不会重复扣库存/建二单。草稿清空（finishSubmitted/__resetForTest）即失效，
 // 下次结算重新生成，不会跨草稿误粘。
 let idemKey = ''
+// 云端 PRICE_CHANGED 报回的现价应付（分）：目录没刷到现价时，页面照它显示、下次提交照它带 expectedAmountFen；
+// 草稿一变（换草稿/改搭配购/移行/提交成功）就作废，回到本地合计。
+let quotedFen: number | null = null
 const newIdemKey = (): string => Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
 
 export function prepareFromCart(): void {
@@ -37,6 +41,7 @@ export function prepareFromCart(): void {
     .map((it) => ({ id: it.id, sku: it.sku, name: it.name, tag: it.tag, price: it.price, qty: it.qty, cover: it.cover, lineId: it.lineId }))
   fromCart = true
   idemKey = newIdemKey()
+  quotedFen = null
 }
 
 export function prepareBuyNow(p: { id: string; sku?: string; name: string; tag?: string; price: number; cover?: string }): void {
@@ -44,6 +49,7 @@ export function prepareBuyNow(p: { id: string; sku?: string; name: string; tag?:
   draftItems = [{ id: p.id, sku, name: p.name, tag: p.tag || '', price: p.price, qty: 1, cover: p.cover || '', lineId: cart.lineIdOf(p.id, sku) }]
   fromCart = false
   idemKey = newIdemKey()
+  quotedFen = null
 }
 
 export function getDraft(): { items: DraftLine[]; fromCart: boolean } {
@@ -59,6 +65,7 @@ export function getIdemKey(): string {
 export function toggleAddon(addonId: string): void {
   const a = CHECKOUT_ADDONS.find((x) => x.id === addonId)
   if (!a) return
+  quotedFen = null
   const i = draftItems.findIndex((l) => l.id === addonId)
   if (i >= 0) draftItems.splice(i, 1)
   else draftItems.push({ id: a.id, sku: '', name: a.name, tag: '搭配购', price: a.price, qty: 1, cover: '', lineId: cart.lineIdOf(a.id, '') })
@@ -72,6 +79,32 @@ export function summaryFen(): { goodsFen: number; shipFen: number; couponFen: nu
   return { goodsFen, shipFen, couponFen, amountFen: Math.max(0, goodsFen + shipFen - couponFen) }
 }
 
+/** 本次应付（分）：云端报过现价就以它为准，否则本地合计。页面「实付款」与建单 expectedAmountFen 都用它。 */
+export function payableFen(): number {
+  return quotedFen ?? summaryFen().amountFen
+}
+
+/** 记下云端 PRICE_CHANGED 回包里的现价应付（分）；不是非负整数就不记（回到本地合计）。 */
+export function quoteAmountFen(fen: unknown): void {
+  quotedFen = typeof fen === 'number' && Number.isInteger(fen) && fen >= 0 ? fen : null
+}
+
+/** 加购时记的单价可能已过时：按商品现档刷新草稿单价（规格行取规格价·同云端 createOrder 定价口径），
+ *  现档残缺/查不到/规格没了就保留原价（真买不了由云端拒单）。来自购物车的行同步回写购物车。返回是否有行变价。 */
+export function applyLivePrices(allRaw: Record<string, unknown>[]): boolean {
+  let changed = false
+  for (const l of draftItems) {
+    if (CHECKOUT_ADDONS.some((a) => a.id === l.id)) continue
+    const vm = mapDetail(allRaw.find((x) => String(x.id || x._id || '') === l.id))
+    const live = !vm ? undefined : l.sku ? vm.skus.find((s) => s.name === l.sku)?.price : vm.price
+    if (live === undefined || Math.round(live * 100) === Math.round(l.price * 100)) continue
+    l.price = live
+    if (fromCart) cart.reprice(l.id, l.sku, live)
+    changed = true
+  }
+  return changed
+}
+
 export const fenLabel = (fen: number): string => '¥' + (fen / 100).toFixed(2)
 
 /** 提交成功收尾：来自购物车的按实际提交数量精确扣（cart.consume 语义）；清草稿。 */
@@ -80,6 +113,7 @@ export function finishSubmitted(): void {
   draftItems = []
   fromCart = false
   idemKey = ''
+  quotedFen = null
 }
 
 /** 建单成功页展示金额（分）：优先取 createOrder 回包权威值（order.amount 为元）；
@@ -130,6 +164,7 @@ export function dropRejectedLine(msg: string): string {
   const hit = draftItems.filter((l) => l.id === id && (sku === null || l.sku === sku))
   if (!hit.length) return ''
   draftItems = draftItems.filter((l) => !hit.includes(l))
+  quotedFen = null
   if (fromCart) hit.forEach((l) => cart.remove(l.id, l.sku))
   if (draftItems.every((l) => CHECKOUT_ADDONS.some((a) => a.id === l.id))) draftItems = []
   return hit[0].name + (sku ? '（' + sku + '）' : '')
@@ -140,4 +175,5 @@ export function __resetForTest(): void {
   draftItems = []
   fromCart = false
   idemKey = ''
+  quotedFen = null
 }

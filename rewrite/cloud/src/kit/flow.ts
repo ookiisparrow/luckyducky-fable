@@ -44,28 +44,44 @@ export function refundNoFor(afterSaleId: string): string {
 
 /**
  * 触发云开发工作流（根因#12 平台接缝单点：与微信支付的收/退款接缝收口一处，
- * 平台规则变更改动面最小）。返回工作流 result.data（预付单参数/退款结果），异常/无 data 返回 null。
+ * 平台规则变更改动面最小）。返回工作流 result.data（预付单参数/退款结果），异常/无 data 返回 null；
+ * 微信回「订单已支付」时返回 ORDER_PAID_ON_WX（见下）。
  *
  * 失败必留痕：`.catch(() => null)` 会把平台真实报错吞成
  * 一句 REFUND_TRIGGER_FAIL、排障只能靠猜——故两条失败分支（调用异常/有响应无 data）都落
  * [LD_ALERT] 行带 flowId + 报错摘要（截断防日志爆量·不含 openid/凭证），返回语义不变（fail-soft）。
+ * quiet：失败不在这里报，改回 { flowFail: { code, ctx } } 交调用方原样补报——pay 要先读回订单，回调已先到
+ * （钱已收）时这条钱链告警是假的。
  */
-export async function callFlow(flowId: string, data: unknown): Promise<any> {
-  const brief = (v: unknown): string => {
+export async function callFlow(flowId: string, data: unknown, opts: { quiet?: boolean } = {}): Promise<any> {
+  const text = (v: unknown): string => {
     try {
-      return String(v instanceof Error ? v.message : JSON.stringify(v)).slice(0, 300)
+      return String(v instanceof Error ? v.message : JSON.stringify(v))
     } catch {
       return 'UNSERIALIZABLE'
     }
+  }
+  const brief = (v: unknown) => text(v).slice(0, 300)
+  const fail = (code: string, ctx: Record<string, unknown>) => {
+    if (opts.quiet) return { flowFail: { code, ctx } }
+    alert('money', 'flow', code, ctx)
+    return null
   }
   let res: any
   try {
     res = await cloud.callFunction({ name: 'cloudbase_module', data: { name: flowId, data } })
   } catch (e) {
-    alert('money', 'flow', 'FLOW_CALL_FAIL', { flowId, error: brief(e) })
-    return null
+    if (WX_ORDER_PAID.test(text(e))) return ORDER_PAID_ON_WX
+    return fail('FLOW_CALL_FAIL', { flowId, error: brief(e) })
   }
+  if (WX_ORDER_PAID.test(text(res && res.result))) return ORDER_PAID_ON_WX
   if (res && res.result && res.result.data != null) return res.result.data
-  alert('money', 'flow', 'FLOW_NO_DATA', { flowId, result: brief(res && res.result) })
-  return null
+  return fail('FLOW_NO_DATA', { flowId, result: brief(res && res.result) })
 }
+
+// 微信说「这单已经付过了」：付款成功、回调未到时用户再点支付，同一单号重复下单会被拒。这是正常业务、不是
+// 通道故障，不报钱链告警，交调用方回 ORDER_ALREADY_PAID。微信官方 JSAPI 下单错误码表没列这一项；v2 统一下单
+// 文档和社区 v3 接入用的都是 ORDERPAID。工作流把微信报错包在哪一层没有真机样本，所以在整个回包和抛错文案里认
+// 这个词：认不出就走原来的失败告警，不会把没付的单当成已付。
+const WX_ORDER_PAID = /\bORDERPAID\b/
+export const ORDER_PAID_ON_WX = Object.freeze({ orderPaid: true as const })

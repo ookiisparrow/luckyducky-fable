@@ -120,6 +120,11 @@ describe('模块归因：每个 action 都按 modules.json 的 adminActionFiles 
     expect(Object.keys(want).sort()).toEqual(Object.keys(registries.ACTIONS).sort())
     expect({ ...registries.ADMIN_ACTION_MODULE_BY_NAME }).toEqual(want)
   })
+
+  it('大白话：建号/停用坐席写口令哈希、清会话，是身份凭证逻辑，归 identity，不归客服', () => {
+    for (const a of ['createAgent', 'setAgentWecomUserId', 'disableAgent', 'listAgents'])
+      expect(registries.ADMIN_ACTION_MODULE_BY_NAME[a], a).toBe('identity')
+  })
 })
 
 describe('操作审计：成功不带模块、异常带模块，两路字段一致', () => {

@@ -116,6 +116,19 @@ describe('停售/恢复', () => {
     expect((await post('republishProduct', { id: 'p1' })).ok).toBe(true)
     expect(control.dump('products')[0]).toMatchObject({ listed: true, unlistedAt: null })
   })
+
+  it('大白话：已在售再点恢复（连点/别的窗口先点了）照样成功，不报商品不存在', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', listed: true, unlistedAt: null }])
+    expect((await post('republishProduct', { id: 'p1' })).ok).toBe(true)
+  })
+
+  it('大白话：已在售再点恢复、读回那一下库挂了——报读库失败，不说成商品不存在', async () => {
+    control.seed('products', [{ _id: 'p1', id: 'p1', listed: true, unlistedAt: null }])
+    control.setBeforeGet((a: any) => {
+      if (a.coll === 'products' && a.id === 'p1') throw new Error('MOCK_DB_FAIL')
+    })
+    expect(await post('republishProduct', { id: 'p1' })).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
+  })
 })
 
 describe('节点列表', () => {

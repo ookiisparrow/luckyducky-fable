@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
-import { handleMessage, kfUserHasRecentOrder, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
-import { csTestAssumeRecentOrder } from '../src/functions/cs/kfCallback/trialRefresh'
+import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
+import { kfUserHasRecentOrder } from '../src/functions/cs/kfCallback/customer'
 import { sendBubbles } from '../src/functions/cs/kfCallback/bubbles'
 import {
   PACKAGING_NO_ORDER_ID,
@@ -16,7 +16,7 @@ import {
 } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow } from '../src/functions/cs/kfCallback/scriptReply'
 import { formatRefreshDone } from '@ldrw/shared'
-import { getDb } from '../src/kit'
+import { csTestAssumeRecentOrder, getDb } from '../src/kit'
 
 const PHOTO1 = atomicText('business/packaging/ask_photo_01')
 const PHOTO3 = [

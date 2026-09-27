@@ -17,18 +17,23 @@ Page({
     busy: false,
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  // 反馈是非幂等写：超时后原样重交复用同一个键，云端撞键只留一条；改了任何一栏就是新的一次提交，清掉换新键
+  idemKey: '',
   unloaded: false, // 提交在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理·防手动返回后孤儿定时器多弹页
   },
   onCat(e: WechatMiniprogram.TouchEvent) {
+    this.idemKey = ''
     this.setData({ cat: String(e.currentTarget.dataset.key) })
   },
   onContent(e: WechatMiniprogram.TextareaInput) {
+    this.idemKey = ''
     this.setData({ content: e.detail.value })
   },
   onContact(e: WechatMiniprogram.Input) {
+    this.idemKey = ''
     this.setData({ contact: e.detail.value })
   },
   async onSubmit() {
@@ -39,7 +44,8 @@ Page({
     }
     tapHaptic()
     this.setData({ busy: true })
-    const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim())
+    if (!this.idemKey) this.idemKey = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
+    const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim(), this.idemKey)
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交；toast 加 mask 挡点；定时器存实例待 onUnload 清

@@ -8,7 +8,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 
 const HOUR = 3600 * 1000
 const ctx = (data?: any, agentId = 'admin') => ({ db: cloud.database(), cloud, data, agentId }) as any
-const body = (res: any) => JSON.parse(res.body)
+const body = (res: any) => JSON.parse(JSON.stringify(res)) // 过一遍 JSON＝网关发出去的回包
 
 beforeEach(() => control.reset())
 

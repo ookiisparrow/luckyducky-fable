@@ -1,7 +1,8 @@
-import { ERR, moduleOfAction } from '@ldrw/shared'
+import { ERR } from '@ldrw/shared'
+import REGISTRY from '../../../../../modules.json'
 import { err, recordAnomaly, str } from '../../kit'
 import { login, updateProfile, deleteAccount } from './actions/user'
-import { getProducts, getProductDetail, getContent, getPageContent } from './actions/catalog'
+import { getProducts, getProductDetail, getContent, getPageContent, getHelpVideos } from './actions/catalog'
 import {
   activateCourse,
   confirmEnter,
@@ -11,7 +12,7 @@ import {
   getMyProgress,
   trackEvent,
 } from './actions/learning'
-import { getHelpVideos, getReviews, getRatingSummary, submitReview } from './actions/reviews'
+import { getReviews, getRatingSummary, submitReview } from './actions/reviews'
 import { getPublicFaq } from './actions/faq'
 import {
   createOrder,
@@ -70,6 +71,10 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.ass
   submitCheckpointPhoto,
 } satisfies Record<string, (event: unknown) => Promise<unknown>>)
 
+// 异常归因按仓根 modules.json 的 appActions 查模块（esbuild 把 JSON 内联进产物，不另抄镜像）
+const ACTION_MODULE: Record<string, string> = Object.create(null)
+for (const [mod, spec] of Object.entries(REGISTRY.modules)) for (const a of spec.appActions) ACTION_MODULE[a] = mod
+
 export const main = async (event: any) => {
   const action = str(event?.action, 200)
   const handler = ACTIONS[action]
@@ -84,8 +89,7 @@ export const main = async (event: any) => {
     await recordAnomaly(
       'server-exception',
       'APP_ACTION_UNCAUGHT',
-      // module：按模块正册归因（modules.json→moduleMap 镜像·module-map.test.ts 锁同步）
-      { fp: action, action, module: moduleOfAction(action), msg: String((e as Error)?.message || e).slice(0, 200) },
+      { fp: action, action, module: ACTION_MODULE[action] ?? 'unknown', msg: String((e as Error)?.message || e).slice(0, 200) },
       'high'
     )
     return err(ERR.INTERNAL)

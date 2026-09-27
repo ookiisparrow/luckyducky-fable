@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, str, err } from '../../../kit'
+import type { Ctx } from '../lib'
+import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, str, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 
@@ -15,12 +15,12 @@ const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
 export async function getRestockPlan({ db, data }: Ctx) {
   const targets = Array.isArray(data.targets) ? data.targets : []
-  if (!targets.length || targets.length > 50) return reply(400, err('BAD_TARGETS'))
+  if (!targets.length || targets.length > 50) return err('BAD_TARGETS')
   for (const t of targets) {
-    if (!t || !str(t.productId, 200) || !Number.isInteger(t.sets) || t.sets <= 0) return reply(400, err('BAD_TARGETS'))
+    if (!t || !str(t.productId, 200) || !Number.isInteger(t.sets) || t.sets <= 0) return err('BAD_TARGETS')
   }
   const tDoc = await getDocOrNull(db.collection(COLLECTIONS.config).doc('scmBomTemplate'))
-  if (!tDoc) return reply(400, err('NO_TEMPLATE'))
+  if (!tDoc) return err('NO_TEMPLATE')
   const { _id: _omit, updatedAt: _omit2, ...template } = tDoc as Record<string, any>
 
   // 聚合需求：Σ各产品 resolveBom（同料号跨产品累加）
@@ -28,9 +28,9 @@ export async function getRestockPlan({ db, data }: Ctx) {
   for (const t of targets) {
     const productId = str(t.productId, 200)
     const profile = await getDocOrNull(db.collection(COLLECTIONS.bomProfiles).doc(productId))
-    if (!profile) return reply(400, err('NO_PROFILE', { productId }))
+    if (!profile) return err('NO_PROFILE', { productId })
     const r = resolveBom(template as any, profile, t.sets)
-    if (!r.ok) return reply(400, { ok: false, error: r.error, productId })
+    if (!r.ok) return { ok: false, error: r.error, productId }
     for (const l of r.lines) need.set(l.materialId, (need.get(l.materialId) || 0) + l.qty)
   }
 
@@ -69,7 +69,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
   const sups = await db.collection(COLLECTIONS.suppliers).limit(200).get()
   const supName = new Map((sups.data || []).map((s: any) => [s._id, s.name]))
   const purchaseGroups = [...groups.values()].map((g) => ({ ...g, supplierName: supName.get(g.supplierId) || (g.supplierId || '未挂供应商') }))
-  return reply(200, { ok: true, outworkGaps, purchaseGroups, missingMaterials })
+  return ok({ outworkGaps, purchaseGroups, missingMaterials })
 }
 
 /** 拆 fg 流水的 itemKey（`fg:${productId}__${spec}`）回 productId/spec，供产销统计展示用。 */
@@ -84,8 +84,7 @@ function parseFgKey(itemKey: string): { productId: string; spec: string } {
  * 汇总经门1 kit/scmStock.sumLedgerByItemKey 读（守卫 rw-material-stock-single-seam：stockLedger 全库仅门1 读写）。 */
 export async function getFgSummary(_ctx: Ctx) {
   const [packed, shipped] = await Promise.all([sumLedgerByItemKey('assembly_in'), sumLedgerByItemKey('ship')])
-  return reply(200, {
-    ok: true,
+  return ok({
     packed: packed.list.map((r) => ({ ...parseFgKey(r.itemKey), qty: r.total })),
     shipped: shipped.list.map((r) => ({ ...parseFgKey(r.itemKey), qty: -r.total })), // delta 存负数（出库），展示转正
     truncated: packed.truncated || shipped.truncated,

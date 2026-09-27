@@ -14,15 +14,18 @@ import {
 } from '../lib/mapProducts'
 import { serialSave } from '../lib/serialSave'
 import { transportErrorText } from '../lib/mapSystem'
+import { writeFailText } from '../lib/status'
 import { Store, GripVertical } from 'lucide-vue-next'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
 import EmptyState from '../components/ui/EmptyState.vue'
+import UiButton from '../components/ui/Button.vue'
 
 const rows = ref<ShowcaseRowVM[]>([])
 const message = ref('')
 const saveState = ref<'' | 'saving' | 'saved' | 'error'>('')
+const saveErr = ref('') // 徽标只有「保存失败」四个字，原因（尤其部分写入）另写一行
 
 const featured = computed(() => rows.value.filter((r) => r.featured))
 
@@ -40,8 +43,18 @@ let timer: ReturnType<typeof setTimeout> | null = null
 // 在途的补存链，防旧快照晚到覆盖新实例已存的排序/推荐编辑。
 const flushSave = serialSave(async () => {
   const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
-  saveState.value = r.ok ? 'saved' : 'error'
+  // 公共表的码（超时等）整句自成一句、可能已生效：徽标再亮「保存失败」就和下面那行自相矛盾
+  saveState.value = r.ok ? 'saved' : transportErrorText(r.error) ? '' : 'error'
+  // 云端逐条写、失败只记下不回滚：其余已落库，只说「全失败」会让人以为整表没动
+  const failedIds = !r.ok && r.error === 'PARTIAL_WRITE' && Array.isArray(r.failedIds) ? r.failedIds.map(String) : []
+  const names = failedIds.map((id) => rows.value.find((x) => x.id === id)?.name || id).join('、')
+  // 每次保存都发整表，重发即收敛；刷新反而会拿云端现状盖掉这次的排序
+  saveErr.value = r.ok ? '' : failedIds.length ? `这几个商品的排序或首页开关没存上：${names}，其余已存——别刷新（会丢掉这次的排序），点「重存」把整表再写一遍即可` : writeFailText('保存失败', r.error)
 }, 'showcase')
+function resave() {
+  saveState.value = 'saving'
+  void flushSave()
+}
 function persist() {
   saveState.value = 'saving'
   if (timer) clearTimeout(timer)
@@ -105,6 +118,8 @@ onMounted(reload)
     </PageHeader>
 
     <p v-if="message" class="ld-status">{{ message }}</p>
+    <p v-if="saveErr" class="ld-status">{{ saveErr }}</p>
+    <UiButton v-if="saveErr" size="sm" variant="ghost" :disabled="saveState === 'saving'" @click="resave">重存</UiButton>
 
     <Card v-if="rows.length">
       <div class="work">

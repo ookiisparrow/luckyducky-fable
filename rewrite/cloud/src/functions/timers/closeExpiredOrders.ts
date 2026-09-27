@@ -1,9 +1,8 @@
 import { PAY_WINDOW_MS, COLLECTIONS, ERR } from '@ldrw/shared'
-import { getDb, ok, err, isServerCall, restoreStock, notifyAlert } from '../../kit'
+import { getDb, ok, err, isServerCall, notifyAlert, closePendingOrder } from '../../kit'
 
 // 超时关单（定时触发器）：pending 超支付窗 → closed，抢占成功那次才回补
-// 预留库存（绑状态转移＝天然幂等，已 closed 不在查询内）。bounded ≤200/次。
-// 先 closed 后回补（此序错向安全：宁可晚到回调误判售罄[可退款]，不冒先回补被并发买走的超卖）。
+// 预留库存（绑状态转移＝天然幂等，已 closed 不在查询内）。bounded ≤200/次。关单与回补见 closePendingOrder。
 
 // 每批并发关几单：串行 200 单逼近函数超时，全并发又会一下子把库打满
 const CONCURRENCY = 5
@@ -24,16 +23,8 @@ export const main = async () => {
     await notifyAlert('money', 'closeExpiredOrders', 'EXPIRED_ORDERS_READ_FAIL', {})
     return err(ERR.INTERNAL)
   }
-  const closeOne = async (o: any): Promise<boolean> => {
-    const r = await db
-      .collection(COLLECTIONS.orders)
-      .where({ _id: o._id, status: 'pending' })
-      .update({ data: { status: 'closed', closedAt: Date.now() } })
-      .catch(() => ({ stats: { updated: 0 } }))
-    if (!(r.stats && r.stats.updated === 1)) return false
-    if (Array.isArray(o.reserved) && o.reserved.length) await restoreStock(o.reserved)
-    return true
-  }
+  // 一单写失败不拖垮整批：没关上的留在 pending，下次扫描重关（自愈）
+  const closeOne = (o: any): Promise<boolean> => closePendingOrder(o._id, o.reserved).catch(() => false)
   const list: any[] = expired.data || []
   let closed = 0
   for (let i = 0; i < list.length; i += CONCURRENCY) {

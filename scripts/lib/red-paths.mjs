@@ -13,6 +13,9 @@ export const RED_PATHS = [
   'rewrite/cloud/src/functions/app/index.ts',
   'rewrite/cloud/src/functions/adminApi/index.ts',
   'rewrite/cloud/src/functions/adminApi/lib.ts',
+  // 后台账号：建号写口令哈希、停用清会话（agents）与企微免登签发会话（wecomLogin）
+  'rewrite/cloud/src/functions/adminApi/actions/agents.ts',
+  'rewrite/cloud/src/functions/adminApi/actions/wecomLogin.ts',
   // 云端 app 面：下单/支付/退款申请/订单读
   'rewrite/cloud/src/functions/app/actions/orders.ts',
   // 云端 adminApi 面：订单/退款/对账/账单下载

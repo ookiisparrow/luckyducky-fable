@@ -1,4 +1,4 @@
-import { withOpenId, withRateLimit, ok, err, str, msgSecCheck, SCENE_COMMENT } from '../../../kit'
+import { withOpenId, withRateLimit, ok, err, str, msgSecCheck, SCENE_COMMENT, ensureDoc, hash53 } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 用户意见反馈：上线初期 bug 高发期主动收用户反馈。
@@ -34,7 +34,7 @@ export const submitFeedback = withOpenId(
     const sec = await msgSecCheck(content, OPENID, SCENE_COMMENT, 'open')
     if (!sec.ok) return err('SEC_CHECK_FAIL')
     const category = (CATEGORIES as readonly string[]).includes(e.category) ? e.category : 'other'
-    await addTo(db, COLLECTIONS.feedback, {
+    const data = {
       _openid: OPENID,
       category,
       content,
@@ -43,7 +43,12 @@ export const submitFeedback = withOpenId(
       version: str(e.version, CAPS.version),
       platform: str(e.platform, CAPS.platform),
       createdAt: Date.now(),
-    })
+    }
+    // 客户端超时后重交的是同一次提交：按「本人 + 幂等键」算确定性 _id，撞号即已写过，不落第二条。
+    // 旧版小程序不带键，只能照旧 add。
+    const key = str(e.idempotencyKey, 200).trim()
+    if (key) await ensureDoc(COLLECTIONS.feedback, 'fb_' + hash53(OPENID + '|' + key), data)
+    else await addTo(db, COLLECTIONS.feedback, data)
     return ok()
   })
 )

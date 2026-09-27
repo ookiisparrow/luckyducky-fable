@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { runInspection, pageQuery, recordAnomaly, throttleHit, str, err } from '../../../kit'
+import type { Ctx } from '../lib'
+import { runInspection, pageQuery, recordAnomaly, throttleHit, str, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 运行期观测·控制台数据层（体检面板 + 异常账本·治病根#14 告警进人眼）：手动巡检 / 最新体检 / 异常列表 /
@@ -9,7 +9,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 /** 立即巡检（手动触发一轮·同定时器 timers/inspect·写 inspectRuns + 红项落 anomaly + 高危推告警）。 */
 export async function runInspect(_ctx: Ctx) {
   const run = await runInspection('manual')
-  return reply(200, { ok: true, run })
+  return ok({ run })
 }
 
 /** 最新体检报告 + 未处理异常计数（体检面板首屏）。 */
@@ -29,7 +29,7 @@ export async function getInspectStatus({ db }: Ctx) {
       .count()
       .then((r: any) => r.total || 0),
   ])
-  return reply(200, { ok: true, latest, openAnomalies })
+  return ok({ latest, openAnomalies })
 }
 
 /** 异常账本列表（按 lastSeen 倒序·可筛 resolved/kind·有界分页·不封顶静默挤出）。
@@ -57,25 +57,25 @@ export async function listAnomalies({ db, data }: Ctx) {
       .then((r: any) => (typeof r.total === 'number' ? r.total : null))
       .catch(() => null),
   ])
-  return reply(200, { ok: true, list, limit, total })
+  return ok({ list, limit, total })
 }
 
 /** 标记异常已处理（写·自动审计·resolvedBy 记真实操作者）。 */
 export async function resolveAnomaly({ db, data, agentId }: Ctx) {
   const id = str(data && data.id, 200)
-  if (!id) return reply(200, err('BAD_ARGS'))
+  if (!id) return err('BAD_ARGS')
   const r = await db
     .collection(COLLECTIONS.anomalies)
     .doc(id)
     .update({ data: { resolved: true, resolvedAt: Date.now(), resolvedBy: agentId || 'admin' } })
     .catch(() => ({ stats: { updated: 0 } }))
-  return reply(200, { ok: !!(r.stats && r.stats.updated), id })
+  return { ok: !!(r.stats && r.stats.updated), id }
 }
 
 const AUDIT_DEFAULT_LIMIT = 30 // 审计日志默认页大小（同订单/售后体量·bounded·根因#7）
 
-// 审计日志读出口（根因#3 信任边界可追溯）：kit/audit.ts::recordAudit 全量写 auditLog，
-// 本 action 是它的读出口（否则只能控制台裸翻数据库）。只读 auditLog（写侧单点仍在 kit/audit.ts）。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
+// 审计日志读出口（根因#3 信任边界可追溯）：auditLog 只经 kit/audit.ts::recordAudit 写（操作、登录、客服试用会话刷新），
+// 本 action 是它的读出口（否则只能控制台裸翻数据库），只读不写。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
 // getConfigChecklist 等「系统组」action 先例——不复用 customer:view，那是「客户是谁」越权面，这里是「谁动过
 // 系统」，权限语义不同）。cursor 分页复用 kit/paging.ts pageQuery（同 listCsatEntries 样板，无新分页实现）。
 //
@@ -114,7 +114,7 @@ export async function listAudit({ db, data }: Ctx) {
     summary: r.summary && typeof r.summary === 'object' ? r.summary : {}, // 原样透传：写侧 summarize 已剥敏感字段
     ts: Number(r.ts) || 0,
   }))
-  return reply(200, { ok: true, entries, nextCursor, hasMore })
+  return ok({ entries, nextCursor, hasMore })
 }
 
 // web 前端错误上报（治病根#14 client-error 通道 web 半边）：admin/agent 两端 errorReporter.ts（三件套
@@ -142,12 +142,12 @@ function hashSig(s: string): string {
 /** web 前端错误上报唯一落口（admin/agent 两端共用）：节流→校验→落 anomalies。fail-soft 由 recordAnomaly 自身承担。 */
 export async function reportClientError({ data, agentId }: Ctx) {
   const over = await throttleHit('clientError:' + (agentId || 'anon'), CLIENT_ERROR_THROTTLE)
-  if (over) return reply(200, { ok: true, dropped: true }) // 节流丢弃不算错误，前端不必重试
+  if (over) return ok({ dropped: true }) // 节流丢弃不算错误，前端不必重试
   const d = data || {}
   const msg = str(d.msg, 500)
-  if (!msg) return reply(200, err('BAD_ARGS'))
+  if (!msg) return err('BAD_ARGS')
   const source = d.source === 'admin' || d.source === 'agent' ? d.source : 'unknown'
   const page = str(d.page, 200)
   await recordAnomaly('client-error', CLIENT_ERROR_CODE[source] || 'WEB_JS_ERROR', { fp: hashSig(msg), source, page, msg, agentId: agentId || '' }, 'low')
-  return reply(200, { ok: true })
+  return ok()
 }

@@ -81,6 +81,15 @@ export function bump(id: string, delta: number, sku = ''): void {
   save()
 }
 
+/** 按现价改写一行单价（结算页发现改价时回写，下次结算不再按旧价提示）；划线价不高于现价就去掉，免得划线比现价还低。 */
+export function reprice(id: string, sku: string, price: number): void {
+  const it = load().find(keyOf(id, sku))
+  if (!it) return
+  it.price = price
+  if (it.was !== undefined && it.was <= price) it.was = undefined
+  save()
+}
+
 export function toggle(id: string, sku = ''): void {
   const it = load().find(keyOf(id, sku))
   if (it) it.selected = !it.selected

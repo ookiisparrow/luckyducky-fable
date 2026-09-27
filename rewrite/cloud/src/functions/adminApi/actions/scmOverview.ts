@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { listMaterialDocs, recentStockLedger } from '../../../kit'
+import type { Ctx } from '../lib'
+import { listMaterialDocs, recentStockLedger, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 
@@ -67,8 +67,7 @@ export async function getScmOverview({ db }: Ctx) {
     at: Number(l.at) || 0,
   }))
 
-  return reply(200, {
-    ok: true,
+  return ok({
     lowStock,
     payables,
     payableTotalFen,

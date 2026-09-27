@@ -8,7 +8,6 @@ const ORDER_LIMIT = 200
 const ACT_LIMIT = 100
 // 已付口径（取 shared PAID_ORDER_STATUSES·与看板 GMV 同义·营收只计已付·不另手抄一份）。orders.amount 存「元」（createOrder 经 fenToYuan 入库·与看板 GMV 同口径），故 totalSpent
 // 单位＝元（展示层直接 ￥，不 /100）。
-const PAID = PAID_ORDER_STATUSES
 
 export const profileProvider: CustomerPanelProvider = {
   key: 'profile',
@@ -23,7 +22,7 @@ export const profileProvider: CustomerPanelProvider = {
       rows(db.collection(COLLECTIONS.activations).where({ _openid: openid }).limit(ACT_LIMIT)),
       rows(db.collection(COLLECTIONS.events).where({ _openid: openid }).orderBy('createdAt', 'desc').limit(1)),
     ])
-    const paid = orders.filter((o: any) => PAID.includes(o.status))
+    const paid = orders.filter((o: any) => PAID_ORDER_STATUSES.includes(o.status))
     // 分累加再回元（钱链口径）：元浮点直加会漂（0.1+0.2 类），逐单 toFen 求和后 fenToYuan 一次
     const totalSpent = fenToYuan(asFen(paid.reduce((n: number, o: any) => n + toFen(Number(o.amount) || 0), 0)))
     const entered = acts.filter((a: any) => !!a.enteredAt).length

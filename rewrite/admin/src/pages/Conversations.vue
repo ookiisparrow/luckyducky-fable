@@ -6,7 +6,7 @@ import { useRoute } from 'vue-router'
 import { Search, RotateCcw, ClipboardCheck, RefreshCw } from 'lucide-vue-next'
 import { CS_REFRESH_COPY } from '@ldrw/shared'
 import { searchConversations, conversationsReport, sampleQc, saveQcMark, listQcSampled, getTrialRefreshGate, refreshTrialSession } from '../api/cs'
-import { mapMessages, mapReport, mapQcRows, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
+import { mapMessages, mapReport, mapQcRows, csErrorText, type MsgVM, type ReportVM, type QcRowVM } from '../lib/mapCs'
 import { failText, writeFailText } from '../lib/status'
 import { usePager, appendNew } from '../lib/latest'
 import UiButton from '../components/ui/Button.vue'
@@ -39,7 +39,7 @@ async function loadReport() {
   const r = await conversationsReport(slaMinInited ? slaMin.value * 60000 : undefined)
   reportBusy.value = false
   report.value = mapReport(r) // 出错/空档都为 null（卡隐）——出错时另透传原文，别让「加载失败」被读成「暂无数据」
-  reportErr.value = r.ok ? '' : failText('质检报表加载失败', r.error)
+  reportErr.value = r.ok ? '' : failText('质检报表加载失败', r.error, csErrorText)
   if (r.ok) {
     const backendSlaMs = Number(r.slaMs) // 后端回传的本次实际生效阈值（权威·见 conversationsReport 回包 slaMs 字段）
     if (Number.isFinite(backendSlaMs) && backendSlaMs > 0) slaMin.value = Math.round(backendSlaMs / 60000) || slaMin.value
@@ -57,14 +57,14 @@ async function search() {
   if (pager.isStale(my)) return // 已发起更新的检索·丢弃过期结果
   msgs.value = r.ok ? mapMessages(r.messages) : []
   pager.reset(r)
-  message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : failText('检索失败', r.error)
+  message.value = r.ok ? (msgs.value.length ? '' : '没有匹配的会话') : failText('检索失败', r.error, csErrorText)
 }
 
 async function more() {
   const r = await pager.next((cursor) => searchConversations({ ...searchFilter, cursor })) // 复用检索快照·不现读输入框（防串档）
   if (!r) return
   if (!r.ok) {
-    message.value = failText('加载更多失败', r.error) // 别静默吞·反复点无反应（病根#14）
+    message.value = failText('加载更多失败', r.error, csErrorText) // 别静默吞·反复点无反应（病根#14）
     return
   }
   message.value = '' // 翻页成功清旧错（上次失败留的「加载更多失败」提示别一直挂在成功之后）
@@ -108,7 +108,7 @@ async function loadQcSampled() {
   const r = await listQcSampled({})
   if (qcPager.isStale(my)) return
   if (!r.ok) {
-    qcMsg.value = failText('加载失败', r.error)
+    qcMsg.value = failText('加载失败', r.error, csErrorText)
     return
   }
   qcRows.value = mapQcRows(r.list).map(toQcRow)
@@ -120,7 +120,7 @@ async function moreQc() {
   const r = await qcPager.next((cursor) => listQcSampled({ cursor }))
   if (!r) return
   if (!r.ok) {
-    qcMsg.value = failText('加载更多失败', r.error)
+    qcMsg.value = failText('加载更多失败', r.error, csErrorText)
     return
   }
   qcMsg.value = ''
@@ -133,7 +133,7 @@ async function doSampleQc() {
   const r = await sampleQc(10)
   qcSampling.value = false
   if (!r.ok) {
-    qcMsg.value = writeFailText('抽样失败', r.error)
+    qcMsg.value = writeFailText('抽样失败', r.error, csErrorText)
     return
   }
   const fresh = mapQcRows(r.sampled).map(toQcRow)
@@ -155,7 +155,12 @@ async function saveQc(row: QcRow) {
   const r = await saveQcMark(row.sessionKey, row.draftScore, row.draftNote.trim())
   row.busy = false
   if (!r.ok) {
-    row.err = r.error === 'ALREADY_MARKED' ? '已被评过分（可能是并发保存）' : writeFailText('保存失败', r.error)
+    row.err =
+      r.error === 'ALREADY_MARKED'
+        ? '已被评过分（可能是并发保存）'
+        : r.error === 'NOT_FOUND'
+          ? '找不到这条会话（可能已被清理），刷新列表后再评'
+          : writeFailText('保存失败', r.error, csErrorText)
     return
   }
   row.scored = true
@@ -219,7 +224,7 @@ async function doTrialRefresh() {
       ? '人工处理中，默认不能刷新。如需强制请走管理端并写原因。'
       : err === 'TRIAL_ONLY'
         ? '当前环境未开放刷新'
-        : writeFailText('刷新失败', err)
+        : writeFailText('刷新失败', err, csErrorText)
 }
 
 onMounted(() => {
