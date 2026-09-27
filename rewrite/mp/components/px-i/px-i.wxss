@@ -1,0 +1,17 @@
+:host {
+  display: inline-block;
+  flex: 0 0 auto;
+  line-height: 0;
+  vertical-align: middle;
+}
+.px {
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+}
+.px-dot {
+  position: absolute;
+}
+.px-halo {
+  opacity: 0.25;
+}

@@ -33,4 +33,31 @@ page {
      应用范围＝全局 page（拍板·不只标题）。族名单源 utils/brandFont.ts。 */
   --ld-font-brand: 'WenYuan Rounded SC', 'WenYuan Rounded SC T2', 'WenYuan Rounded SC T3', 'PingFang SC',
     'SF Pro Rounded', ui-rounded, 'Hiragino Sans GB', system-ui, sans-serif;
+
+  /* ── v5 视觉（Claude Design「Lucky Ducky App v5 字重」稿）──
+     重做中的页面只用下面这组；上面旧色票随页面重做逐步退役，全部换完即删。
+     字：圆体 300 辅助小字 / 500 正文 / 700 标题 / 900 大标题；价格、单号、时长、计数用等宽 500/600。
+     语义色只落在状态灯、描边、短文字上；文字用加深档（-text）；一屏最多两种（紫不计）；主键不上色。 */
+  --v5-canvas: #fafaf8; /* 页面底 */
+  --v5-sunk: #ededea; /* 图片占位、凹槽、平面键 */
+  --v5-ink: #111111;
+  --v5-ink-2: #62625c; /* 次要文字 */
+  --v5-ink-3: #8f8f88; /* 弱/不可点 */
+  --v5-ink-4: #9a9a92; /* 输入框占位 */
+  --v5-hair: rgba(17, 17, 17, 0.14); /* 发丝线、浅色键描边 */
+  --v5-key: #1c1c1a; /* 墨黑键 */
+  --v5-key-seat: #68685f; /* 墨黑键底部键座 */
+  --v5-key-hi: #f7f7f4; /* 键帽白、墨黑键上的字 */
+  --v5-violet: #8a5ae0; /* 当前/选中 */
+  --v5-violet-text: #6b3fc4;
+  --v5-violet-soft: #b79cf0;
+  --v5-ok: #3f9a5e;
+  --v5-ok-text: #2f7a48;
+  --v5-warn: #f4bd3f;
+  --v5-warn-text: #8a6100;
+  --v5-err: #d9483b;
+  --v5-err-text: #b7362b;
+  --v5-dark: #121212; /* 播放页暗底 */
+  --v5-dark-key: #262626;
+  --v5-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 }

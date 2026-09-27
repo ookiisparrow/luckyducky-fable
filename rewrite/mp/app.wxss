@@ -5,10 +5,100 @@ page {
   color: var(--ld-ink);
   font-size: 28rpx;
   font-family: var(--ld-font-brand); /* 品牌字体全局应用——见 tokens.wxss 注释 */
-  font-weight: 500; /* 只注册了 500/700 两档字重（brandFont.ts BRAND_FONT_TIERS），不钉此值会落到默认 400——
-    CSS 字重匹配会就近吃 500 那档渲染（而非回退栈下一个字体族），全站正文视觉变粗且不可预期；
-    显式钉 500 使其命中已注册字重、行为确定 */
+  font-weight: 500; /* 注册字重只有 300/500/700/900（brandFont.ts BRAND_FONT_TIERS），默认 400 没有对应档——
+    显式钉 500 使正文命中已注册字重、行为确定 */
   -webkit-font-smoothing: antialiased;
+}
+
+/* ── v5 按键（键帽）三档 + 暗色两档 ──
+   用法：<view class="k k-ink" hover-class="k-ink-down" hover-stay-time="100">。高 44（.k）/ 48（.k.k-48）。
+   墨黑键每屏最多一颗（主要/重要节点）；浅色键＝默认与次操作；平面键＝弱/未选；dk/inv 只在播放页暗底。
+   按下＝下沉 2px + 键座变薄（设计稿 PRESS 表）。 */
+.k {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
+}
+.k-48 {
+  height: 48px;
+}
+.k-ink {
+  background: var(--v5-key);
+  color: var(--v5-key-hi);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -3px 0 var(--v5-key-seat), 0 1px 0 #111,
+    0 4px 8px -3px rgba(0, 0, 0, 0.35);
+}
+.k-ink-down {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 var(--v5-key-seat), 0 0 0 #111,
+    0 1px 2px -1px rgba(0, 0, 0, 0.35);
+}
+.k-light {
+  background: #ffffff;
+  color: var(--v5-ink);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px var(--v5-hair), 0 1px 2px rgba(17, 17, 17, 0.08);
+}
+.k-light-down {
+  transform: translateY(2px);
+  background: #f0f0ed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
+}
+.k-flat {
+  background: var(--v5-sunk);
+  color: var(--v5-ink-3);
+}
+.k-flat-down {
+  transform: translateY(2px);
+  background: #e3e3df;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+.k-dk {
+  background: var(--v5-dark-key);
+  color: #f2f2ec;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -3px 0 #000, 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.k-dk-down {
+  transform: translateY(2px);
+  background: #202020;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 #000, 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.k-inv {
+  background: var(--v5-key-hi);
+  color: var(--v5-ink);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -3px 0 var(--v5-ink-4), 0 1px 0 #000, 0 4px 8px -3px rgba(0, 0, 0, 0.6);
+}
+.k-inv-down {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 var(--v5-ink-4), 0 0 0 #000, 0 1px 2px -1px rgba(0, 0, 0, 0.6);
+}
+/* 列表行 / 卡片按下：不下沉，只压暗底色 */
+.k-row-down {
+  background: rgba(17, 17, 17, 0.05);
+}
+/* 凹槽：输入框、分段选择器底槽 */
+.well {
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: var(--v5-sunk);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+.well-focus {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1.5px var(--v5-violet);
+}
+/* 等宽数字：价格、单号、时长、计数 */
+.mono {
+  font-family: var(--v5-font-mono);
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
 /* 骨架屏微光（home/catalog 共用·加载态设计对齐 Claude Design 通过稿）：配 background-size:200% 的

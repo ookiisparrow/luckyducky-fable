@@ -42,18 +42,21 @@ const ROOT = resolve(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'assets/brand-fonts')
 
 // 产物版本（进文件名·CDN 缓存失效靠改名）：字符集/分层口径变更时 +1，并同步 rewrite/mp/utils/brandFont.ts。
-const V = 'v2'
+const V = 'v3'
 
-// 设计 --font-display 实际只用 Medium(500)/Bold(700) 两档（600 就近落 700、400 就近落 500）。
+// v5 视觉（Claude Design「字重」稿）：300 细字（辅助小字）/500 正文/700 标题/900 首屏大标题。
+// 300/900 只进 tier1+tier2（界面字）；tier3 是 UGC 兜底，只出 500/700（控体积·细/粗缺字时逐字回退到 500/700 渲染）。
 const WEIGHTS = [
+  { src: 'WenYuanRoundedSC-Light.otf', tag: 'light', weight: 300, tiers: ['tier1', 'tier2'] },
   { src: 'WenYuanRoundedSC-Medium.otf', tag: 'medium', weight: 500 },
   { src: 'WenYuanRoundedSC-Bold.otf', tag: 'bold', weight: 700 },
+  { src: 'WenYuanRoundedSC-Heavy.otf', tag: 'heavy', weight: 900, tiers: ['tier1', 'tier2'] },
 ]
 
 function run() {
   const srcDir = process.env.BRAND_FONT_SRC
   if (!srcDir) {
-    console.error('✗ 需设 BRAND_FONT_SRC=源 OTF 目录（含 WenYuanRoundedSC-Medium.otf / -Bold.otf·84MB 不入仓）')
+    console.error('✗ 需设 BRAND_FONT_SRC=源 OTF 目录（含 WenYuanRoundedSC-{Light,Medium,Bold,Heavy}.otf·84MB 不入仓）')
     process.exit(1)
   }
   const pyftsubset = process.env.PYFTSUBSET || 'pyftsubset'
@@ -75,7 +78,7 @@ function run() {
     writeFileSync(join(OUT_DIR, `${t.name}.txt`), t.text)
     const charsetFile = join(tmp, `${t.name}.txt`)
     writeFileSync(charsetFile, t.text)
-    for (const w of WEIGHTS) {
+    for (const w of WEIGHTS.filter((x) => !x.tiers || x.tiers.includes(t.name))) {
       const srcPath = join(srcDir, w.src)
       if (!existsSync(srcPath)) {
         console.error(`✗ 源字体缺失：${srcPath}`)
@@ -101,7 +104,7 @@ function run() {
     }
   }
   console.log(`产物 → ${OUT_DIR}（不进 src·wx.loadFontFace 远程分层加载·守卫 rw-mp-package-budget + rw-mp-font-tier-subset-covers）`)
-  console.log('下一步（靠人·控制台）：6 个 woff 传 CloudBase 静态托管 /fonts/ 下（README 部署节·含 CDN 缓存建议）')
+  console.log('下一步（靠人·控制台）：10 个 woff 传 CloudBase 静态托管 /fonts/ 下（README 部署节·含 CDN 缓存建议）')
 }
 
 run()

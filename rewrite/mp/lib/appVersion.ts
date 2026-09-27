@@ -71,7 +71,7 @@ export function currentAppVersionLine(): string {
 
 // 日期＝上海日历当天（YYYY-MM-DD）；第二行＝「更新 YYYY-MM-DD」，一眼能看见更新时间。
 // 自动戳：pre-commit / CI 合入 main|test / preview:mp / release.mjs / mac-sync-ends。
-export const DEV_UPDATE_DATE = '2026-09-26'
+export const DEV_UPDATE_DATE = '2026-09-28'
 
 export function formatAppVersionDetail(
   _envVersion: string,
