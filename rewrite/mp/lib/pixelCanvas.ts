@@ -18,22 +18,29 @@ type Canvas2D = {
 type Host = WechatMiniprogram.Component.TrivialInstance
 
 export interface PixelCanvas {
+  /** 画面状态变了（加箱子/开走等）：停着的循环重新跑起来 */
+  kick(): void
   setVisible(v: boolean): void
   destroy(): void
 }
 
+/** 画布格数：定值，或按实测宽度（px）算（满宽画布如小货车，列数随屏宽）。 */
+export type PixelDims = { cols: number; rows: number } | ((widthPx: number) => { cols: number; rows: number })
+
 /**
- * @param draw 每帧回调：t＝可见累计毫秒（暂停期间不走表，恢复后接着播），P 画一格
+ * @param draw 每帧回调：t＝可见累计毫秒（暂停期间不走表，恢复后接着播），P 画一格；
+ *             返回 false＝画面静止，停帧省电，状态变了由 kick() 唤醒（小货车停着时）
  * @param loop false＝只画一帧（静态图/减弱动效）
  */
 export function mountPixelCanvas(
   host: Host,
-  cols: number,
-  rows: number,
+  dims: PixelDims,
   cell: number,
-  draw: (t: number, P: Plot) => void,
+  draw: (t: number, P: Plot) => boolean | void,
   loop = true
 ): PixelCanvas {
+  let cols = 0
+  let rows = 0
   let canvas: Canvas2D | null = null
   let ctx: Ctx2D | null = null
   let raf = 0
@@ -52,10 +59,10 @@ export function mountPixelCanvas(
     ctx.fillStyle = col
     ctx.fillRect(edge(gx), edge(gy), edge(gx + 1) - edge(gx), edge(gy + 1) - edge(gy))
   }
-  const paint = () => {
-    if (!canvas || !ctx) return
+  const paint = (): boolean => {
+    if (!canvas || !ctx) return false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    draw(elapsed, P)
+    return draw(elapsed, P) !== false
   }
   const tick = () => {
     raf = 0
@@ -63,8 +70,8 @@ export function mountPixelCanvas(
     const now = Date.now()
     elapsed += lastNow ? Math.min(48, now - lastNow) : 16
     lastNow = now
-    paint()
-    if (loop && shown && inView) raf = canvas.requestAnimationFrame(tick)
+    const more = paint()
+    if (loop && more && shown && inView) raf = canvas.requestAnimationFrame(tick)
   }
   const kick = () => {
     if (!canvas || raf || !loop || !shown || !inView || dead) return
@@ -83,6 +90,9 @@ export function mountPixelCanvas(
     .exec((res) => {
       const node = res && res[0] && (res[0].node as Canvas2D | undefined)
       if (dead || !node) return
+      const d = typeof dims === 'function' ? dims(Number(res[0].width) || 0) : dims
+      cols = d.cols
+      rows = d.rows
       node.width = edge(cols)
       node.height = edge(rows)
       ctx = node.getContext('2d')
@@ -98,6 +108,7 @@ export function mountPixelCanvas(
   })
 
   return {
+    kick,
     setVisible(v) {
       shown = v
       if (v) kick()

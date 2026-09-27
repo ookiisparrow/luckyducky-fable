@@ -23,7 +23,7 @@ Component({
       const delay = this.data.delay
       live.set(
         this,
-        mountPixelCanvas(this, 13, 13, this.data.size, (t, P) => {
+        mountPixelCanvas(this, { cols: 13, rows: 13 }, this.data.size, (t, P) => {
           const tt = hold && t + delay >= hold ? hold : t + delay
           const plot = this.data.dark ? (x: number, y: number, c: string) => P(x, y, PIXEL_ANIM_DARK[c] || c) : P
           f(plot, tt, this.data.p >= 0 ? this.data.p : null)

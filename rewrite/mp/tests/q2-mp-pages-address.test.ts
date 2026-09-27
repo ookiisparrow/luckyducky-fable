@@ -1,7 +1,7 @@
-// 地址列表页 + 地址编辑页行为：管理/结算选址两种模式的点选、设默认、长按删除确认；编辑页回填、
-// 新增标题、保存按钮亮暗、四要素与电话校验、保存参数去空白、保存防双击、删除确认。
+// 地址列表页 + 地址编辑页行为（v5：删除收进编辑页、按住删除）：管理/结算选址两种模式的点选；编辑页回填、
+// 页名、保存按钮亮暗、四要素校验（toast）与电话校验（输入框下方提示）、保存参数去空白、保存防双击、按住删除。
 // 地址簿 lib/address 用真的（wx 存储桩），只桩震感。Page 桩同 p-mp-order-page.test.ts（setData 补回调）。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
 
@@ -62,38 +62,15 @@ describe('地址列表：管理态', () => {
     ])
     expect(wxMock.navigateBack).not.toHaveBeenCalled()
   })
-
-  it('大白话：点选中圈改默认——列表立刻刷新、只剩一个默认，不离开本页', async () => {
-    const page = await mount('address')
-    page.onShow()
-    page.onRadioTap(tap(2))
-    expect(page.data.list.map((a: any) => a.isDefault)).toEqual([false, true])
-    expect(saved().map((a) => a.isDefault)).toEqual([false, true])
-    expect(wxMock.navigateBack).not.toHaveBeenCalled()
-  })
-
-  it('大白话：长按删除要二次确认——点取消不删，点删除才删且刷新列表', async () => {
-    const page = await mount('address')
-    page.onShow()
-    page.onLongPressRow(tap(1))
-    expect(wxMock.showModal.mock.calls[0][0]).toMatchObject({ title: '删除地址', confirmText: '删除' })
-    wxMock.showModal.mock.calls[0][0].success({ confirm: false })
-    expect(page.data.list).toHaveLength(2)
-    wxMock.showModal.mock.calls[0][0].success({ confirm: true })
-    expect(page.data.list.map((a: any) => a.id)).toEqual([2])
-    expect(page.data.list[0].isDefault).toBe(true) // 删了默认地址，剩下那条补成默认
-  })
 })
 
 describe('地址列表：结算选址态（?pick=1）', () => {
-  it('大白话：点一行或点选中圈——设成默认并退回结算页（结算页回来读默认地址）', async () => {
+  it('大白话：点一行——设成默认并退回结算页（结算页回来读默认地址）', async () => {
     const page = await mount('address', { pick: '1' })
     expect(page.data.picking).toBe(true)
     page.onTapRow(tap(2))
     expect(saved().find((a) => a.isDefault)?.id).toBe(2)
-    page.onRadioTap(tap(1))
-    expect(saved().find((a) => a.isDefault)?.id).toBe(1)
-    expect(wxMock.navigateBack).toHaveBeenCalledTimes(2)
+    expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
     expect(wxMock.navigateTo).not.toHaveBeenCalled()
   })
 
@@ -107,16 +84,16 @@ describe('地址列表：结算选址态（?pick=1）', () => {
 })
 
 describe('地址编辑：进页', () => {
-  it('大白话：带 id 进来——回填四项和默认开关，地区拆成选择器初值，保存按钮亮；不改标题', async () => {
+  it('大白话：带 id 进来——回填四项和默认开关，地区拆成选择器初值，保存按钮亮；页名「编辑收货地址」', async () => {
     const page = await mount('address-edit', { id: '1' })
     expect(page.data).toMatchObject({ id: 1, name: '鸭', phone: '13800000000', region: A1.region, detail: '1 号', isDefault: true, valid: true })
     expect(page.data.regionArr).toEqual(['上海', '上海市', '浦东新区'])
-    expect(wxMock.setNavigationBarTitle).not.toHaveBeenCalled()
+    expect(page.data.title).toBe('编辑收货地址')
   })
 
-  it('大白话：新增进来——标题改成「新增收货地址」，表单空、保存按钮暗；填齐四项才亮', async () => {
+  it('大白话：新增进来——页名「新增收货地址」，表单空、保存按钮暗；填齐四项才亮', async () => {
     const page = await mount('address-edit')
-    expect(wxMock.setNavigationBarTitle).toHaveBeenCalledWith({ title: '新增收货地址' })
+    expect(page.data.title).toBe('新增收货地址')
     expect(page.data).toMatchObject({ id: null, name: '', valid: false })
     page.onInput({ currentTarget: { dataset: { field: 'name' } }, detail: { value: '鸡' } })
     page.onInput({ currentTarget: { dataset: { field: 'phone' } }, detail: { value: '13700000000' } })
@@ -136,15 +113,18 @@ describe('地址编辑：保存', () => {
     page.onRegionChange({ detail: { value: ['北京市', '北京市', '朝阳区'] } })
   }
 
-  it('大白话：缺一项提示「四项都要填哦」；电话不足 7 位数字提示「电话号码不太对」；都不落库不退回', async () => {
+  it('大白话：缺一项提示「四项都要填哦」；电话不足 7 位数字在输入框下方提示「电话号码不太对」；都不落库不退回；改电话提示消失', async () => {
     const page = await mount('address-edit')
     page.onSave()
     fillNew(page, { phone: '12-34-56' })
     page.onSave()
-    expect(wxMock.showToast.mock.calls.map((c: any[]) => c[0].title)).toEqual(['四项都要填哦', '电话号码不太对'])
+    expect(wxMock.showToast.mock.calls.map((c: any[]) => c[0].title)).toEqual(['四项都要填哦'])
+    expect(page.data.phoneErr).toBe('电话号码不太对')
     expect(saved()).toHaveLength(2)
     expect(wxMock.navigateBack).not.toHaveBeenCalled()
     expect(page.data.saving).toBe(false)
+    page.onInput({ currentTarget: { dataset: { field: 'phone' } }, detail: { value: '1370000000' } })
+    expect(page.data.phoneErr).toBe('')
   })
 
   it('大白话：电话恰好 7 位数字（座机）能保存并退回——云端下单也收 7 位，前端不能更严', async () => {
@@ -179,18 +159,30 @@ describe('地址编辑：保存', () => {
   })
 })
 
-describe('地址编辑：删除', () => {
-  it('大白话：编辑态删除要二次确认——取消不删，确认才删并退回；新增态点删除无反应', async () => {
+describe('地址编辑：按住删除', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('大白话：编辑态按住 0.7 秒才删并退回；松手太快不删、提示按住', async () => {
     const page = await mount('address-edit', { id: '2' })
-    page.onDelete()
-    wxMock.showModal.mock.calls[0][0].success({ confirm: false })
+    page.onDelHoldStart()
+    vi.advanceTimersByTime(200)
+    page.onDelHoldEnd()
+    vi.advanceTimersByTime(1000)
     expect(saved()).toHaveLength(2)
-    wxMock.showModal.mock.calls[0][0].success({ confirm: true })
+    expect(wxMock.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: '按住删除这个地址' }))
+
+    page.onDelHoldStart()
+    vi.advanceTimersByTime(700)
     expect(saved().map((a) => a.id)).toEqual([1])
     expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
+  })
 
-    const fresh = await mount('address-edit')
-    fresh.onDelete()
-    expect(wxMock.showModal).toHaveBeenCalledTimes(1)
+  it('大白话：新增态没有东西可删，按住无反应', async () => {
+    const page = await mount('address-edit')
+    page.onDelHoldStart()
+    vi.advanceTimersByTime(1000)
+    expect(saved()).toHaveLength(2)
+    expect(wxMock.navigateBack).not.toHaveBeenCalled()
   })
 })

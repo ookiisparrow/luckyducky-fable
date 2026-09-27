@@ -20,7 +20,7 @@ Component({
       if (!s) return
       live.set(
         this,
-        mountPixelCanvas(this, s.cols, s.rows, this.data.scale, (t, P) => s.draw(t, P))
+        mountPixelCanvas(this, { cols: s.cols, rows: s.rows }, this.data.scale, (t, P) => s.draw(t, P))
       )
     },
     detached() {

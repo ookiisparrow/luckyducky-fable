@@ -1,190 +1,97 @@
-/* 地址管理·重设计对齐 Checkout.jsx coam-* 版式（设计 402px 画板→rpx ×1.87）。
-   页浅紫底、白卡圆角+浅影；选中圈(check)标默认、右侧笔分栏编辑；token 见 styles/tokens.wxss。
-   co-/coam- 前缀沿设计（本页 wxss 独立作用域，与 checkout 同名类互不影响）。 */
-.co {
-  min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  color: var(--ld-content);
+/* 收货地址（v5「字重」稿 A6） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-.co image {
+.ad-title {
   display: block;
+  padding: 4px 16px 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-
-/* ---------- 内容容器 ---------- */
-.co-body {
-  padding: 22rpx 26rpx 8rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 22rpx;
+.ad-list {
+  margin: 12px 16px 16px;
+  border-bottom: 1px solid var(--v5-hair);
 }
-
-/* ---------- 地址卡 ---------- */
-.co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-.coam-card {
-  display: flex;
-  align-items: stretch;
-}
-.coam-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 22rpx;
-  padding: 30rpx;
-}
-/* 选中圈：默认态填幸运紫 + 白勾 */
-.coam-radio {
-  width: 38rpx;
-  height: 38rpx;
-  flex: 0 0 auto;
-  margin-top: 4rpx;
-  border-radius: 50%;
-  border: 2rpx solid #cccccc; /* 未选圈灰边（设计 checkout.css #CCC）·tokens 无对应中性灰边 */
-  background: var(--ld-bg);
-  box-sizing: border-box;
+.ad-row {
+  padding: 12px 0;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
 }
-.coam-radio.on {
-  background: var(--ld-purple);
-  border-color: var(--ld-purple);
+.ad-radio {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  flex: 0 0 auto;
+  border-radius: 50%;
 }
-.coam-check {
-  width: 22rpx;
-  height: 22rpx;
-}
-.coam-text {
-  flex: 1 1 auto;
+.ad-text {
+  flex: 1;
   min-width: 0;
-}
-.coam-line1 {
   display: flex;
-  align-items: baseline;
-  gap: 18rpx;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
 }
-.coam-name {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
+.ad-line1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.coam-phone {
-  font-size: 26rpx;
-  color: var(--ld-content);
-  letter-spacing: 0.4rpx;
+.ad-name {
+  font-size: 17px;
+  font-weight: 500;
 }
-.co-addr-tag {
-  display: inline-block;
-  font-size: 20rpx;
-  color: var(--ld-purple-tab);
-  background: var(--ld-bg-lilac);
-  border: 1rpx solid var(--ld-purple-line);
-  border-radius: 8rpx;
-  padding: 1rpx 11rpx;
+.ad-phone {
+  font-size: 15px;
+  color: var(--v5-ink-2);
 }
-.coam-addr {
-  display: block;
-  font-size: 25rpx;
-  color: var(--ld-content-2);
+.ad-def {
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  background: var(--v5-sunk);
+  font-size: 13px;
+  font-weight: 300;
+}
+.ad-where {
+  font-size: 13px;
+  font-weight: 300;
   line-height: 1.5;
-  margin-top: 12rpx;
+  color: var(--v5-ink-2);
 }
-/* 编辑笔分栏 */
-.coam-edit {
+.ad-edit {
   flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 30rpx;
-  border-left: 1rpx solid var(--ld-line-soft);
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.coam-edit-ico {
-  width: 36rpx;
-  height: 36rpx;
-}
-.coam-edit:active {
-  background: var(--ld-bg-lilac);
-}
-
-/* ---------- 空态 ---------- */
-.coam-empty {
+.ad-empty {
+  padding: 0 0 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  padding: 130rpx 52rpx;
+  gap: 12px;
 }
-.coam-empty-ico {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
-  background: var(--ld-bg-lilac);
-  border: 1rpx solid var(--ld-purple-line);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 30rpx;
+.ad-empty-t {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
 }
-.coam-empty-svg {
-  width: 52rpx;
-  height: 52rpx;
+.ad-dock-space {
+  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
 }
-.coam-empty-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
-}
-.coam-empty-sub {
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-  line-height: 1.6;
-  margin-top: 15rpx;
-}
-
-/* ---------- 底部固定坞 ---------- */
-.co-dock-space {
-  height: 170rpx;
-}
-.co-dock {
+.ad-dock {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--ld-bg);
-  box-shadow:
-    0 -2rpx 0 var(--ld-line),
-    0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.coam-dock {
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
-}
-.co-submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 600;
-}
-.co-submit-hover {
-  opacity: 0.9;
-}
-.coam-add {
-  padding: 26rpx 0;
-}
-.coam-add-ico {
-  width: 34rpx;
-  height: 34rpx;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  background: var(--v5-canvas);
 }
