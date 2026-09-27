@@ -137,12 +137,13 @@ describe('Settings.vue 载入与保存参数', () => {
   })
 })
 
-describe('Settings.vue 没有中文映射的码挂括号', () => {
-  it('大白话：载入、保存、清除被拒都写「X失败（码）」，不写成「X失败：码」', async () => {
+describe('Settings.vue 读库失败说中文', () => {
+  it('大白话：载入、保存、清除遇到 DOC_READ_FAIL 都写「X失败：云端数据暂时读不出来」，不甩裸码', async () => {
+    const T = '云端数据暂时读不出来。请稍后重试。'
     getSettingsMock.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
     const w = mount(Settings)
     await flushPromises()
-    expect(w.text()).toContain('加载失败（DOC_READ_FAIL）')
+    expect(w.text()).toContain('加载失败：' + T)
 
     loadWith({ alertWebhookSet: true, alertWebhookTail: 'wxyz' })
     saveSettingsMock.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
@@ -150,10 +151,11 @@ describe('Settings.vue 没有中文映射的码挂括号', () => {
     await flushPromises()
     await btn(w2, '保存').trigger('click')
     await flushPromises()
-    expect(w2.text()).toContain('保存失败（DOC_READ_FAIL）')
+    expect(w2.text()).toContain('保存失败：' + T)
     await btn(w2, '清除').trigger('click')
     await btn(w2, '确认清除').trigger('click')
     await flushPromises()
-    expect(w2.text()).toContain('清除失败（DOC_READ_FAIL）')
+    expect(w2.text()).toContain('清除失败：' + T)
+    expect(w2.text()).not.toContain('DOC_READ_FAIL')
   })
 })

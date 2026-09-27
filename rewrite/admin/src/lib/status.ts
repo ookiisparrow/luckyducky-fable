@@ -34,16 +34,17 @@ export function useLoadStatus() {
   return { message, ok, note, load }
 }
 
-/** 读失败提示：点名哪块没出来（多处同文案分不清是谁挂了）；没有中文映射的业务码挂括号保留，给排查留线索。 */
-export function failText(what: string, code: unknown): string {
+/** 读失败提示：点名哪块没出来（多处同文案分不清是谁挂了）。
+ *  explain：本域业务码表（如 orderErrorText / launchErrorText），给了就「X：中文原因」；不给则业务码挂括号保留，给排查留线索。 */
+export function failText(what: string, code: unknown, explain?: (_c: unknown) => string): string {
   const c = String(code || '')
   const t = transportErrorText(c)
-  return t ? `${what}：${t}` : c ? `${what}（${c}）` : `${what}，请重试`
+  return t ? `${what}：${t}` : explain ? `${what}：${explain(c)}` : c ? `${what}（${c}）` : `${what}，请重试`
 }
 
 /** 写失败提示：公共表（mapSystem TRANSPORT_ERR）的码直接用表里整句、不冠「X失败」——超时这类可能已生效，冠「失败」会诱人重复提交；其余句子本身已说清没做成。 */
-export function writeFailText(what: string, code: unknown): string {
-  return transportErrorText(code) || failText(what, code)
+export function writeFailText(what: string, code: unknown, explain?: (_c: unknown) => string): string {
+  return transportErrorText(code) || failText(what, code, explain)
 }
 
 // 多路并行加载的分路报错：每路失败点名「X加载失败：原因」，按传入顺序用「；」连；全成功回 ''。
