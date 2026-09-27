@@ -130,7 +130,7 @@ describe('授权页：撤回与同意一样便捷（合规·个人信息保护�
     const live = consentWxml.replace(/<!--[\s\S]*?-->/g, '')
     const revoke = live.match(/<view[^>]*bind:tap="onRevoke"[^>]*>/)
     expect(revoke, '撤回键要用 bind:tap 轻点触发').not.toBeNull()
-    expect(revoke![0]).not.toMatch(/wx:if|wx:elif|wx:else|touchstart|longpress/)
+    expect(revoke![0]).not.toMatch(/wx:if|wx:elif|wx:else|touchstart="(?!onKeyDown")|longpress/)
     const agree = live.match(/<view[^>]*bind:tap="onAgree"[^>]*>/)
     expect(agree).not.toBeNull()
     expect(agree![0]).not.toMatch(/wx:if|wx:elif|wx:else/)

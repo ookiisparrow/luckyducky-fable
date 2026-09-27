@@ -3,8 +3,11 @@
 import { getCourseById } from '../../lib/courses'
 import { mapFinish } from '../../lib/mapLearning'
 import { tapHaptic } from '../../lib/haptics'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: { courseId: '', name: '', lessonsLabel: '', durLabel: '' },
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome 范式）
   onUnload() {

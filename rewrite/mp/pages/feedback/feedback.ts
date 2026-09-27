@@ -1,6 +1,7 @@
 // 意见反馈：submitFeedback 接 UI（分类/内容/联系方式·云端白名单+限频）。
 import { tapHaptic } from '../../lib/haptics'
 import { submitFeedback } from '../../api/user'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 const CATS = [
   { key: 'bug', label: '有问题' },
@@ -9,6 +10,8 @@ const CATS = [
 ]
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     cats: CATS,
     cat: 'bug',

@@ -2,8 +2,11 @@
 import { tapHaptic } from '../../lib/haptics'
 import { getReviews } from '../../api/reviews'
 import { mapReviews, mapSummary, type ReviewVM, type SummaryVM } from '../../lib/mapReviews'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     list: [] as ReviewVM[],
     summary: null as SummaryVM | null,

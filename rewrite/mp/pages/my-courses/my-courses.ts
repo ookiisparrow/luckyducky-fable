@@ -4,8 +4,11 @@ import { getMyCourses } from '../../api/learning'
 import { getMyProgress } from '../../api/user'
 import { getAllCourses } from '../../lib/courses'
 import { mapMyCourses, type MyCourseVM } from '../../lib/mapLearning'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     list: [] as MyCourseVM[],
     loading: true,

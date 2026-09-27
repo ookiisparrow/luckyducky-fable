@@ -15,10 +15,13 @@ import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGu
 import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
     showSplash: true, // 冷启动品牌开屏：初值 true=首帧即盖上，splash（min-hold+数据就绪 race+硬上限）自撤后经 onSplashDone 置 false。

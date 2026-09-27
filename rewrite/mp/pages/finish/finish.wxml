@@ -15,6 +15,6 @@
 </view>
 
 <view class="fn-dock">
-  <view class="k k-light k-48 fn-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onCatalog">课程目录</view>
-  <view class="k k-ink k-48 fn-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onReview">去评价</view>
+  <view class="k k-light k-48 fn-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onCatalog" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">课程目录</view>
+  <view class="k k-ink k-48 fn-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onReview" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去评价</view>
 </view>

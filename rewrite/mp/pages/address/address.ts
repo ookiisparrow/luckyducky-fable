@@ -2,8 +2,11 @@
 // 结算页 onShow 读默认地址，无跨页传参耦合）。删除收进编辑页（按住删除）。
 import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     list: [] as ReturnType<typeof addr.getList>,
     picking: false,

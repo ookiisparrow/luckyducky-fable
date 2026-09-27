@@ -4,8 +4,11 @@
 import { tapHaptic } from '../../lib/haptics'
 import { setDataShareConsent } from '../../api/user'
 import { readConsentHint, writeConsentHint, consentLabel } from '../../lib/consent'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     state: null as boolean | null,
     stateLabel: consentLabel(null),

@@ -53,7 +53,7 @@
   <view class="rv-state" wx:if="{{!loading && loadFailed}}">
     <text class="rv-state-title">网络开小差</text>
     <text class="rv-state-hint">评价没加载出来，请重试</text>
-    <view class="k k-light rv-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+    <view class="k k-light rv-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
   <view class="rv-state" wx:elif="{{!loading && !list.length}}">
     <text class="rv-state-title">还没有评价</text>

@@ -3,6 +3,7 @@
 // 自己占位（状态栏+44），页面内容照常从它下面流下去；栏本身 fixed 不随页面滚。
 // 返回走 lib/nav goBackOrHome：深链进来没有上一页时回首页，不留死按钮。
 import { goBackOrHome } from '../../lib/nav'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Component({
   options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的全局键帽 .k-*
@@ -17,6 +18,8 @@ Component({
     },
   },
   methods: {
+    onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+    onKeyUp: keyUp,
     onBack() {
       goBackOrHome()
     },

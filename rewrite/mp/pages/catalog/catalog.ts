@@ -10,8 +10,11 @@ import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热
 import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer } from '../../lib/mapPages'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
     courseId: '',

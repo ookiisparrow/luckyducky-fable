@@ -27,6 +27,7 @@ import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer, type CatalogPlayerVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 拖动文案刷新节流（ms）：位置由 seek.wxs 渲染层 60fps 跟手，curClock/snapName 文案经 onSeekTick 回逻辑层
@@ -60,6 +61,8 @@ function buildCapText(strip: LessonStrip | null, segDone: boolean, course: Cours
 }
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
     title: '',

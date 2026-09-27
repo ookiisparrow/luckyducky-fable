@@ -2,6 +2,7 @@
 // active 由各 tab 页 onShow 经 getTabBar().setActive() 回写；购物车角标随每次回写刷新。
 import { count as cartCount } from '../lib/cart'
 import { loginGate } from '../lib/loginGate'
+import { keyDown, keyUp } from '../lib/keyFx'
 
 // 每实例一份退订句柄（多 tabBar 页各自挂本组件·同 privacy-sheet/login-sheet 范式）
 const unsubs = new WeakMap<object, () => void>()
@@ -34,6 +35,8 @@ Component({
     },
   },
   methods: {
+    onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+    onKeyUp: keyUp,
     setActive(id: string) {
       this.setData({ active: id, cartCount: cartCount() })
     },

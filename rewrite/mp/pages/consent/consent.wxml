@@ -23,6 +23,6 @@
 
 <view class="cs-dock-space"></view>
 <view class="cs-dock">
-  <view class="k k-light k-48 cs-revoke {{busy ? 'cs-dim' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRevoke">撤回授权</view>
-  <view class="k k-ink k-48 cs-main {{busy ? 'cs-dim' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAgree">同意共享</view>
+  <view class="k k-light k-48 cs-revoke {{busy ? 'cs-dim' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRevoke" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">撤回授权</view>
+  <view class="k k-ink k-48 cs-main {{busy ? 'cs-dim' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAgree" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">同意共享</view>
 </view>

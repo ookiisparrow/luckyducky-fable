@@ -7,7 +7,7 @@
   <!-- 自绘返回：custom 导航无原生返回箭头；带 tapHaptic 故不用 v5-nav（onBack 走 goBackOrHome） -->
   <view class="wl-nav" style="padding-top:{{statusBarHeight}}px">
     <view class="wl-hit" bind:tap="onBack">
-      <view class="k k-sm k-light wl-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"><px-i name="back" /></view>
+      <view class="k k-sm k-light wl-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
     </view>
     <text wx:if="{{phase === 'nocode' || (phase === 'result' && kind !== 'activated')}}" class="wl-nav-t">激活课程</text>
   </view>
@@ -24,7 +24,7 @@
       </view>
     </view>
     <view class="wl-dock">
-      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBack">返回</view>
+      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBack" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">返回</view>
     </view>
   </block>
 
@@ -49,16 +49,16 @@
     </view>
     <view class="wl-dock">
       <view class="wl-row" wx:if="{{kind === 'mine'}}">
-        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onEnter">继续学习</view>
+        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onEnter" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续学习</view>
       </view>
       <!-- 没兑成但码可能是好的：「再试一次」用原码重发，不清码不误导 -->
       <view class="wl-row" wx:elif="{{kind === 'error'}}">
-        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact">联系客服</view>
-        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onRetryCode">再试一次</view>
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onRetryCode" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">再试一次</view>
       </view>
       <view class="wl-row" wx:else>
-        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact">联系客服</view>
-        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onGoHome">回首页</view>
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onGoHome" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">回首页</view>
       </view>
     </view>
   </block>
@@ -81,7 +81,7 @@
       </view>
     </view>
     <view class="wl-dock">
-      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onNextWelcome">下一步</view>
+      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onNextWelcome" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">下一步</view>
     </view>
   </block>
 
@@ -108,8 +108,8 @@
         <text class="t-sys wl-warn-t">{{welcome.w1.warning}}</text>
       </view>
       <view class="wl-row">
-        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome">先逛逛</view>
-        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onEnter">进入课程</view>
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">先逛逛</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onEnter" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">进入课程</view>
       </view>
     </view>
   </block>

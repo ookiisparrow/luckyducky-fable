@@ -18,9 +18,9 @@
     </view>
 
     <view class="ls-row">
-      <view class="k k-flat k-48 ls-later" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose">暂不登录</view>
+      <view class="k k-flat k-48 ls-later" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">暂不登录</view>
       <!-- 未勾协议：灰色平面键（老板拍板），点了仍提示先勾选；勾上变墨黑主键 -->
-      <view class="k k-48 ls-go {{agreed ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{agreed ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" catch:tap="onLogin">{{submitting ? '登录中…' : '微信一键登录'}}</view>
+      <view class="k k-48 ls-go {{agreed ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{agreed ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" catch:tap="onLogin" data-k="{{agreed ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{submitting ? '登录中…' : '微信一键登录'}}</view>
     </view>
   </view>
 </view>

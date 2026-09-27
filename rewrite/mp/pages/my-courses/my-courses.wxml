@@ -9,7 +9,7 @@
     <px-anim name="signal" size="4" />
     <text class="mc-state-t">网络开小差</text>
     <text class="mc-state-h">课程没加载出来，请重试</text>
-    <view class="k k-light mc-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+    <view class="k k-light mc-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
 
   <!-- 骨架占位（加载中，不写死假进度） -->

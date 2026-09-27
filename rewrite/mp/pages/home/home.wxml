@@ -29,11 +29,11 @@
       <text class="mono hm-tagline">{{content.hero.tagline}}</text>
     </view>
     <view class="hm-hero-keys">
-      <view class="k k-light hm-search" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="toIntro">
+      <view class="k k-light hm-search" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="toIntro" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <text class="hm-search-text">{{content.hero.search}}</text>
         <px-i name="down" tone="#62625c" />
       </view>
-      <view class="k k-ink hm-buy" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProducts">购买</view>
+      <view class="k k-ink hm-buy" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProducts" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">购买</view>
     </view>
     <view class="hm-gap-c"></view>
   </view>
@@ -65,7 +65,7 @@
         <view class="hm-card-foot">
           <text class="mono hm-price">{{item.priceLabel}}</text>
           <view class="hm-add-hit" catch:tap="onAddProduct" data-id="{{item.id}}">
-            <view class="k k-sm k-light hm-add" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"><px-i name="plus" /></view>
+            <view class="k k-sm k-light hm-add" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
           </view>
         </view>
       </view>
@@ -149,7 +149,7 @@
     </view>
     <view class="hm-closing-copy">
       <text class="hm-closing-title">{{content.closing.title}}</text>
-      <view class="k k-ink k-48 hm-closing-btn" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProducts">
+      <view class="k k-ink k-48 hm-closing-btn" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProducts" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <view class="hm-sheen"><view class="hm-sheen-a"></view><view class="hm-sheen-b"></view><view class="hm-sheen-c"></view></view>
         <text class="hm-closing-cta">{{content.closing.cta}}</text>
       </view>
@@ -171,7 +171,7 @@
 </scroll-view>
 
 <!-- 回到顶部（滚过一屏半浮现） -->
-<view wx:if="{{showTop}}" class="k k-light hm-backtop" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop">
+<view wx:if="{{showTop}}" class="k k-light hm-backtop" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
   <px-i name="up" />
   <text>顶部</text>
 </view>

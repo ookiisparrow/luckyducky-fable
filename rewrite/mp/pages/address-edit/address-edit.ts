@@ -4,10 +4,13 @@ import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
 
 import { createHold, type Hold } from '../../lib/hold'
+import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 
 const DEL_HOLD_MS = 700 // 设计稿 data-ms=700
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     id: null as number | null,
     name: '',
@@ -97,6 +100,7 @@ Page({
   },
   onDelHoldStart() {
     if (this.data.id == null) return
+    keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
     this.delHold().start()
   },
   onDelHoldEnd() {

@@ -2,6 +2,7 @@
 // （本人已完成订单/商品在单内/一单一行一评——撞主键如实回「已评过」）。
 import { tapHaptic } from '../../lib/haptics'
 import { submitReview } from '../../api/reviews'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 预设标签
 const REV_LABEL = ['点星评分', '很差', '较差', '一般', '满意', '超赞'] // 星级文案随 v5 稿 B3（STAR_L）
@@ -14,6 +15,8 @@ const REV_ERR = new Map([
 ])
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     name: '',
     rating: 0,

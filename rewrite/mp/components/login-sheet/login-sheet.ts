@@ -6,6 +6,7 @@
 import { loginGate } from '../../lib/loginGate'
 import { login } from '../../api/user'
 import { tapHaptic } from '../../lib/haptics'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 // 每实例一份退订句柄（页面栈里多页可同时挂本组件，不能共用模块级单变量·同 privacy-sheet）
 const unsubs = new WeakMap<object, () => void>()
@@ -30,6 +31,8 @@ Component({
     },
   },
   methods: {
+    onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+    onKeyUp: keyUp,
     onToggleAgree() {
       this.setData({ agreed: !this.data.agreed })
     },

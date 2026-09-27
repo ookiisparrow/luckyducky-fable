@@ -7,6 +7,7 @@ import { clearAll as clearAddresses } from '../../lib/address'
 import { loginGate } from '../../lib/loginGate'
 import { writeStoredCont } from '../../lib/meCont'
 import { createHold, type Hold } from '../../lib/hold'
+import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
 // 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
@@ -14,6 +15,8 @@ const PHONE_MIN_DIGITS = 7
 const PHONE_MAX_DIGITS = 11
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     sb: 20, // 状态栏高（自绘顶栏：返回键要先问「放弃修改？」，v5-nav 的返回拦不住）
     leaveOpen: false, // 「放弃编辑确认」半屏
@@ -89,6 +92,7 @@ Page({
     this.setData({ phone: e.detail.value })
   },
   onLogoutStart() {
+    keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
     this._holdOut?.start()
   },
   onLogoutEnd() {
@@ -99,6 +103,7 @@ Page({
   },
   onDeleteStart() {
     if (this._deleting) return
+    keyPress('light')
     this._holdDel?.start()
   },
   onDeleteEnd() {

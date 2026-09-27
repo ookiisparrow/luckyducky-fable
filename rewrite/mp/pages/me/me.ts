@@ -16,6 +16,7 @@ import { goHomeTab } from '../../lib/homeIntent'
 // consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 // 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
 // ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
@@ -59,6 +60,8 @@ const seededMe = mapMe(null)
 const seededLoggedIn = loginGate.hasAgreed() // 首帧跟继续学习卡同款：本地 hint 已同意就先画登录态，不等云回包（根因#8/#14）
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·用户需求）
     hatchKey: '', // 小鸭蛋：非空＝已学完这门课（孵化·小鸭按课 id 定样子）；空＝未孵化蛋（取数失败/加载中也是蛋）

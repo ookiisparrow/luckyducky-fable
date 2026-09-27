@@ -9,6 +9,7 @@ import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { openCustomerService } from '../../utils/customerService'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 // 图册窗口（病根#15 图片面）：current±1 才渲染，circular 时首尾邻接也算窗口内——
 // swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
@@ -22,6 +23,8 @@ function computeGalleryWindow(len: number, current: number): boolean[] {
 }
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     loading: true,
     loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试

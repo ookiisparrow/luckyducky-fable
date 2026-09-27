@@ -4,7 +4,7 @@
 <view class="pe-nav-space" style="height: {{sb + 44}}px">
   <view class="pe-nav" style="padding-top: {{sb}}px">
     <view class="pe-hit" bind:tap="onBack">
-      <view class="k k-sm k-light pe-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"><px-i name="back" /></view>
+      <view class="k k-sm k-light pe-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
     </view>
     <text class="pe-nav-t">编辑资料</text>
   </view>
@@ -27,7 +27,7 @@
   </view>
   <view class="pe-dock-space"></view>
   <view class="pe-dock">
-    <view class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+    <view class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
 </block>
 
@@ -74,7 +74,7 @@
   <view class="pe-dock-space"></view>
   <view class="pe-dock">
     <view wx:if="{{busy}}" class="k k-flat k-48 pe-save">保存</view>
-    <view wx:else class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave">保存</view>
+    <view wx:else class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
   </view>
 </block>
 
@@ -88,8 +88,8 @@
       <text class="pe-sheet-sub t-sys">改过的内容不会保存。</text>
     </view>
     <view class="pe-sheet-ks">
-      <view class="k k-light k-48 pe-leave" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLeaveGo">放弃</view>
-      <view class="k k-ink k-48 pe-stay" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onLeaveStay">继续编辑</view>
+      <view class="k k-light k-48 pe-leave" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLeaveGo" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">放弃</view>
+      <view class="k k-ink k-48 pe-stay" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onLeaveStay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续编辑</view>
     </view>
   </view>
 </view>

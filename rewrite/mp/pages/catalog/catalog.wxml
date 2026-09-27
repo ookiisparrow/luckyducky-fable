@@ -8,14 +8,14 @@
     <px-anim name="signal" size="4" />
     <text class="ct-state-t">网络开小差</text>
     <text class="ct-state-h">目录没加载出来，请重试</text>
-    <view class="k k-light ct-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+    <view class="k k-light ct-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
 
   <!-- 课程不存在（courseId 缺失或云端查无此课）：给出路，扫码进来的用户到此不能没路走 -->
   <view class="ct-state" wx:elif="{{state === 'missing'}}">
     <text class="ct-state-t">没找到这门课</text>
     <text class="ct-state-h">可能课程已下架，或者这个链接不对</text>
-    <view class="k k-light ct-go" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoCourses">去我的课程看看</view>
+    <view class="k k-light ct-go" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoCourses" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去我的课程看看</view>
   </view>
 
   <!-- 骨架（加载中，不写死假章节） -->
@@ -48,7 +48,7 @@
 
     <!-- 「开始学习」：continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
     <view class="ct-cta-wrap">
-      <view class="k {{continueTarget ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart">
+      <view class="k {{continueTarget ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="play" />
         <text>{{resumeCta}}</text>
       </view>

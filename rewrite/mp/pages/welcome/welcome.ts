@@ -13,8 +13,11 @@ import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
 import { goHomeTab } from '../../lib/homeIntent'
 import { openCustomerService } from '../../utils/customerService'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
     phase: 'nocode' as 'nocode' | 'result' | 'w2',
