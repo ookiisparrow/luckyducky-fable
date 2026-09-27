@@ -1,4 +1,4 @@
-import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC } from '@ldrw/shared'
+import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC, PAID_ORDER_STATUSES } from '@ldrw/shared'
 // 响应契约（病根#5/#8）：getPlaybackUrl 返回类型绑定 shared 契约——删键/改名 tsc 红；
 // 加键编译不红（TS 宽赋值），牙在 tests/contract-shape.test.ts 键集合哨兵。
 import type { GetPlaybackUrlResp } from '@ldrw/shared'
@@ -156,7 +156,7 @@ export const confirmEnter = withOpenId(
       if (prodIds.length) {
         const orders = await db
           .collection(COLLECTIONS.orders)
-          .where({ _openid: OPENID, status: _.in(['paid', 'shipped', 'done']) })
+          .where({ _openid: OPENID, status: _.in([...PAID_ORDER_STATUSES]) })
           .orderBy('createdAt', 'asc')
           .limit(200) // 显式上界：防默认 100 截断漏到要撤退货权的订单
           .get()

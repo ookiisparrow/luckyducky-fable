@@ -164,13 +164,16 @@ export interface AfterSaleDoc {
 }
 
 /** 已付订单状态集合单源（GMV/对账/客户画像总消费口径·防四处漂移）：pending/closed/
- *  refund_required 未付不计。adminApi lib.ts / dashboard.ts / customer360 profile.ts 等都 import 这一份——
+ *  refund_required 未付不计。dashboard.ts / customer360 profile.ts 等都 import 这一份——
  *  各自手抄的话，改状态机漏改一处即口径分叉；放在订单状态声明旁。 */
 export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped', 'done']
 
 /** 已收到钱的订单状态（对账口径）：refund_required 与 payment_exception 也收了款，漏掉会把它们的微信流水
  *  报成「微信有我方无」，而它们的退款又照常计入。GMV/画像仍用 PAID_ORDER_STATUSES。 */
 export const MONEY_RECEIVED_STATUSES: readonly OrderStatus[] = [...PAID_ORDER_STATUSES, 'refund_required', 'payment_exception']
+
+/** 能发货的订单状态：paid 首发、shipped 改单号。发货前的状态闸和发货条件更新共用，两处不一致就会放过或错拦。 */
+export const SHIPPABLE_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped']
 
 /** 占退款额度的售后状态（算已退/可退封顶时要减掉的）。 */
 export const AFTERSALE_QUOTA_STATUSES: readonly AfterSaleStatus[] = ['applied', 'approved', 'refunded']

@@ -15,6 +15,7 @@ import {
   COUPON,
   SHIP,
   ORDER_STATUS,
+  PAID_ORDER_STATUSES,
   MONEY_RECEIVED_STATUSES,
   buildBadStatus,
   cstIso,
@@ -434,7 +435,7 @@ export const applyRefund = withOpenId(
 
     const order = await readOwnOrder(db, orderId, OPENID)
     if (!order) return err(ERR.NOT_FOUND)
-    if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
+    if (!PAID_ORDER_STATUSES.includes(order.status)) return err(buildBadStatus(order.status))
 
     const item = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
     if (!item) return err(`UNKNOWN_ITEM:${reqLine}`)

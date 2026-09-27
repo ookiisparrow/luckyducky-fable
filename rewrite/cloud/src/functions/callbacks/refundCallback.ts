@@ -1,4 +1,4 @@
-import { toFen, COLLECTIONS, AFTERSALE_SCAN_CAP } from '@ldrw/shared'
+import { toFen, COLLECTIONS, AFTERSALE_SCAN_CAP, AFTERSALE_INFLIGHT_STATUSES } from '@ldrw/shared'
 import { defineNotifyCallback, notifyAlert, restoreStock, isDocMissing } from '../../kit'
 
 // 退款结果回调。防伪/ACK/id 提取由框架强制。
@@ -71,7 +71,7 @@ export const main = defineNotifyCallback<any>({
         .catch(() => {})
       return
     }
-    if (as.status !== 'applied' && as.status !== 'approved') {
+    if (!AFTERSALE_INFLIGHT_STATUSES.includes(as.status)) {
       // 回调晚到、此时售后单本地状态已不是 applied/approved（如已被人工 rejectRefund 拒绝、或本来就
       // 已是 refunded 幂等重复通知）——静默 return 会丢失关键信号：微信已核验到位（单号/金额都对得上
       // 才能走到这里）的真实退款成功通知，但本地状态却认为「没在退款中」。已是 refunded 属正常幂等
@@ -92,7 +92,7 @@ export const main = defineNotifyCallback<any>({
     const _ = db.command
     const grab = await db
       .collection(COLLECTIONS.afterSales)
-      .where({ _id: asId, status: _.in(['applied', 'approved']) })
+      .where({ _id: asId, status: _.in([...AFTERSALE_INFLIGHT_STATUSES]) })
       .update({
         data: {
           status: 'refunded',

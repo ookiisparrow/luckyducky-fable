@@ -3,6 +3,7 @@
 // 富详情抽屉（订单进度时间线 / 逐商品激活态 getOrderDetail / 交易单号 / 微信发货合规上报状态）、
 // shipped 改单号 · done 查看、物流公司预设下拉、列表手机号掩码（PII）。删除/解除仍走 no-alert 两步确认。
 import { ref, computed, onMounted } from 'vue'
+import { PAID_ORDER_STATUSES } from '@ldrw/shared'
 import { useRouter } from 'vue-router'
 import { usePager, appendNew } from '../lib/latest'
 import { RefreshCw, Search, Package, X, PackageCheck, ScanLine, TriangleAlert } from 'lucide-vue-next'
@@ -129,7 +130,7 @@ function closeDrawer() {
 function timeline(row: OrderRowVM) {
   return [
     { label: '下单', at: row.createdAtMs, sub: '', done: true },
-    { label: '付款成功', at: row.paidAtMs, sub: row.transactionId ? '微信支付' : '', done: ['paid', 'shipped', 'done'].includes(row.status) || !!row.paidAtMs },
+    { label: '付款成功', at: row.paidAtMs, sub: row.transactionId ? '微信支付' : '', done: (PAID_ORDER_STATUSES as readonly string[]).includes(row.status) || !!row.paidAtMs },
     { label: '已发货', at: row.shippedAtMs, sub: row.company ? `${row.company} · ${row.trackingNo}` : '', done: ['shipped', 'done'].includes(row.status) },
     {
       label: row.status === 'done' ? '已完成' : '待收货',

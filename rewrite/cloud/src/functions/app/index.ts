@@ -2,7 +2,7 @@ import { ERR } from '@ldrw/shared'
 import REGISTRY from '../../../../../modules.json'
 import { err, recordAnomaly, str } from '../../kit'
 import { login, updateProfile, deleteAccount } from './actions/user'
-import { getProducts, getProductDetail, getContent, getPageContent } from './actions/catalog'
+import { getProducts, getProductDetail, getContent, getPageContent, getHelpVideos } from './actions/catalog'
 import {
   activateCourse,
   confirmEnter,
@@ -12,7 +12,7 @@ import {
   getMyProgress,
   trackEvent,
 } from './actions/learning'
-import { getHelpVideos, getReviews, getRatingSummary, submitReview } from './actions/reviews'
+import { getReviews, getRatingSummary, submitReview } from './actions/reviews'
 import { getPublicFaq } from './actions/faq'
 import {
   createOrder,

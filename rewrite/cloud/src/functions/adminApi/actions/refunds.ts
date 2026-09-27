@@ -7,6 +7,7 @@ import {
   AFTERSALE_STATUS,
   AFTERSALE_QUOTA_STATUSES,
   AFTERSALE_SCAN_CAP,
+  MONEY_RECEIVED_STATUSES,
   buildBadStatus,
 } from '@ldrw/shared'
 import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing, getDocOrNull, str, err, ok } from '../../../kit'
@@ -109,7 +110,7 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 为什么不放行 closed：closed 是「钱根本没收」的正常关单（超时未支付/主动取消），放行＝凭空退款给
   // 没付过钱的人，是纯资损洞。「已收钱」是本入口的前提，不是状态多寡的问题。
   // 钱守恒：refundShareFen 行/单双口径封顶照旧——payment_exception 用 paidFee 作为全单实付分母。
-  if (!['paid', 'shipped', 'done', 'refund_required', 'payment_exception'].includes(order.status))
+  if (!MONEY_RECEIVED_STATUSES.includes(order.status))
     return err(buildBadStatus(order.status))
   const orderStatusAtStart = order.status // 竞态可观测闸用（见 alertIfShippedMeanwhile）
 

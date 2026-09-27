@@ -10,44 +10,8 @@ import {
   IMAGE_URL_MAX_AGE,
   imgSecCheck,
   msgSecCheck,
-  isDocMissing,
   str,
 } from '../../../kit'
-
-/**
- * 求助面板辅助视频：两级（主题→小段）白名单下发；fileID 留服务端，
- * 批量换短时 URL（≤50/批·映射不串位）；无视频/换不到 → null（前端占位）。
- */
-// 频控（病根#13）：批量签发视频临时地址的读端点，按 openid 限速防无节流刷签名地址。
-export const getHelpVideos = withOpenId(
-  withRateLimit('getHelpVideos', { max: 30, windowMs: 60_000 }, async ({ db }) => {
-    let got: any
-    try {
-      got = await db.collection(COLLECTIONS.content).doc('helpVideos').get()
-    } catch (e) {
-      if (isDocMissing(e)) got = null // 真无档：求助面板空列表
-      else return err(ERR.INTERNAL) // 库挂 ≠ 没有求助视频（根因#14）
-    }
-    const items = (got?.data?.items || []) as any[]
-    const allIds = items.flatMap((it) =>
-      ((it.segments || []) as any[]).map((sg) => String(sg.videoFileId || '')).filter(Boolean)
-    )
-    const urlMap = await getTempUrls(allIds)
-    const out = items.map((it) => ({
-      id: String(it.id || ''),
-      title: String(it.title || ''),
-      sub: String(it.sub || ''),
-      desc: String(it.desc || ''),
-      segments: ((it.segments || []) as any[]).map((sg) => ({
-        id: String(sg.id || ''),
-        name: String(sg.name || ''),
-        dur: String(sg.dur || ''),
-        url: sg.videoFileId ? (urlMap[String(sg.videoFileId)] ?? null) : null,
-      })),
-    }))
-    return ok({ items: out })
-  })
-)
 
 const SUMMARY_SAMPLE = 200
 

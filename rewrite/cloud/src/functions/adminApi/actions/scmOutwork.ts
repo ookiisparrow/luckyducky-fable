@@ -7,7 +7,7 @@ import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/sh
 // 业务定稿：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
 // 损耗=发−收可见 → 计件工钱应付（收回数×单价）→ 结算销账。
 // 出入库只经门1 kit/scmStock.applyStockMoves（守卫 rw-material-stock-single-seam）；状态只走门2 transition()
-// 且边全在 shared/scm.spec.ts 声明内（守卫 rw-status-transitions-declared 对账）。
+// 且边全在 shared/scm.ts 声明内（守卫 rw-status-transitions-declared 对账）。
 // RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权）；写类 action 自动审计（shouldAudit）。
 // 金额纪律：pieceRateFen / payableFen 全链整数「分」（Fen·根因#4）；数量一律正整数（团数·守卫 scm-uom-integer 纪律）。
 

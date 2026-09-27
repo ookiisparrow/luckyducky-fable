@@ -9,7 +9,7 @@ import { listDrafts } from '../api/products'
 import { isVodFileId, progressPercent } from '@ldrw/shared'
 import { courseVideoStats } from '../lib/mapContent'
 import { launchErrorText } from '../lib/mapSystem'
-import { planLessonBatch } from '../lib/videoBatch'
+import { planLessonBatch, readDuration } from '../lib/videoBatch'
 import { serialSave } from '../lib/serialSave'
 import { useLatest } from '../lib/latest'
 import { setUploadLock, clearUploadLock, isUploadLocked } from '../lib/uploadLock'
@@ -163,25 +163,6 @@ async function load() {
   saveState.value = ''
   void nextTick(() => (loaded = true)) // 载入后的用户编辑才自动保存
   return true
-}
-
-// 视频时长自动读取（选完视频读元数据填 dur·mm:ss）
-function readDuration(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file)
-    const v = document.createElement('video')
-    v.preload = 'metadata'
-    v.onloadedmetadata = () => {
-      URL.revokeObjectURL(url)
-      const s = Math.round(v.duration || 0)
-      resolve(s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '')
-    }
-    v.onerror = () => {
-      URL.revokeObjectURL(url)
-      resolve('')
-    }
-    v.src = url
-  })
 }
 
 // 防抖自动保存（手动按钮的话编视频编排忘点即丢）：900ms + 离页补存·load 期不触发

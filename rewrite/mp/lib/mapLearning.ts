@@ -305,7 +305,7 @@ export function mapCatalog(
 }
 
 // 播放页求助面板·帮助视频：云端 getHelpVideos 返回两级主题→小段
-// （rewrite/cloud/src/functions/app/actions/reviews.ts）。清洗脏结构：非数组归空、
+// （rewrite/cloud/src/functions/app/actions/catalog.ts）。清洗脏结构：非数组归空、
 // id/title/sub/desc/dur String 化（dur 原样字符串，不重新格式化）、url 非串归 null（短时地址过期/未剪辑）；
 // 无 title 且无 segments 的主题剔除（脏档不占一个空分组位）。
 export interface HelpVideoSegVM {

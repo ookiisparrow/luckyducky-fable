@@ -1,4 +1,4 @@
-import { COLLECTIONS, ORDER_STATUS, AFTERSALE_QUOTA_STATUSES, AFTERSALE_INFLIGHT_STATUSES, buildBadStatus } from '@ldrw/shared'
+import { COLLECTIONS, ORDER_STATUS, AFTERSALE_QUOTA_STATUSES, AFTERSALE_INFLIGHT_STATUSES, SHIPPABLE_ORDER_STATUSES, buildBadStatus } from '@ldrw/shared'
 import type { OrderDoc, AfterSaleDoc, ErrCode } from '@ldrw/shared'
 import { pageQuery, uploadShippingToWx, notifyAlert, applyStockMoves, isCollectionMissing, str, err, ok } from '../../../kit'
 import { activationFor, readDoc, type Ctx } from '../lib'
@@ -147,7 +147,7 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
   const lockNow = Date.now()
   const upd = await db
     .collection(COLLECTIONS.orders)
-    .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: _.neq('busy') })
+    .where({ _id: id, status: _.in([...SHIPPABLE_ORDER_STATUSES]), shipUploadLock: _.neq('busy') })
     .update({
       data: {
         status: 'shipped',
@@ -162,7 +162,7 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
   if (!fresh.ok) return 'DOC_READ_FAIL' // 读失败不能报成「状态不对」
   const freshData: OrderDoc | null = fresh.data
   const freshStatus = (freshData && freshData.status) || 'unknown'
-  if (freshStatus !== 'paid' && freshStatus !== 'shipped') return buildBadStatus(freshStatus)
+  if (!(SHIPPABLE_ORDER_STATUSES as readonly string[]).includes(freshStatus)) return buildBadStatus(freshStatus)
   // 陈旧锁抢占（SHIP_LOCK_STALE_MS 见上方注释）：只有「仍是 busy」且「按时间戳判定已过期」才抢占；
   // 未过期＝真的在处理中，照旧拒绝 SHIP_IN_PROGRESS。CAS 精确带上读到的 shipUploadLockAt 值，
   // 防止本次重读之后、抢占写之前又有别的合法调用已经拿到了新的 busy（那种情况精确匹配天然落空，
@@ -172,7 +172,7 @@ async function grabShipLock(db: any, id: string, order: OrderDoc, company: strin
   if (!stale) return 'SHIP_IN_PROGRESS'
   const preempt = await db
     .collection(COLLECTIONS.orders)
-    .where({ _id: id, status: _.in(['paid', 'shipped']), shipUploadLock: 'busy', shipUploadLockAt: lockAt })
+    .where({ _id: id, status: _.in([...SHIPPABLE_ORDER_STATUSES]), shipUploadLock: 'busy', shipUploadLockAt: lockAt })
     .update({
       data: {
         status: 'shipped',
@@ -218,7 +218,7 @@ async function shipOne(db: any, idRaw: any, companyRaw: any, trackingRaw: any, o
   const order: OrderDoc = got.data
   const cur = order.status
   // paid = 首次发货；shipped = 改单号。其余状态不允许动。
-  if (cur !== 'paid' && cur !== 'shipped') return err(buildBadStatus(cur))
+  if (!SHIPPABLE_ORDER_STATUSES.includes(cur)) return err(buildBadStatus(cur))
   // 金额异常单（feeMismatch 留痕）须先「解除」后才能发货
   if (order.feeMismatch) return err('FEE_MISMATCH_HOLD')
   // 退款↔履约状态同步闸：afterSales 与 orders 是两套状态机，退款从不改订单状态，所以发货前现场直读

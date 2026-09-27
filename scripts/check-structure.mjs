@@ -246,10 +246,10 @@ export const repoChecks = [
     // 客服小程序卡片 pagepath 须为已注册路由（根因#8 桩过≠真机能开·外审 R1-R4·P2.11）：cs/kfCallback/dispatch.ts
     // 的 miniprogram route 写死 page 字符串，曾写错 pages/aftersale（少 s·实际 aftersales）、pages/course（实际在
     // pkg-video 分包 = pkg-video/courses/index）——桩测把错路径锁成假绿，真机点卡片打不开目标页。锁每个 page 都在
-    // pages.json 注册（主包 path + 分包 root/path），路由改名/迁分包后客服卡片当场红。
+    // app.json 注册（主包 pages + 分包 root/path），路由改名/迁分包后客服卡片当场红。
     id: 'kf-card-page-registered',
     roots: ['#8'],
-    desc: '客服卡片 pagepath 须为小程序已注册路由（根因#8·外审 P2.11）：旧线 packages/cloud dispatch.ts×pages.json + 新线 rewrite/cloud dispatch.ts×rewrite/mp/app.json（主包 pages + subPackages root/path）双面扫——防卡片跳不存在页真机打不开。课程链路审计 2026-07-17 扩新线面：原只扫旧线冻结参照，新线死链（pkg-video 分包路径从未落地）在守卫真空里假绿',
+    desc: '客服卡片 pagepath 须为小程序已注册路由（根因#8·外审 P2.11）：rewrite/cloud dispatch.ts × rewrite/mp/app.json（主包 pages + subPackages root/path）——防卡片跳不存在页真机打不开',
     run() {
       const bad = []
       // 新线（原生小程序 app.json·真正部署面）
@@ -993,30 +993,37 @@ export const repoChecks = [
     // 状态写入只走声明流转（根因#2）：rewrite/cloud 里 transition(coll, …) 的边、裸条件 CAS（where status →
     // update status）的边须在 rewrite/shared 声明流转表内；写 status 的字面量须是声明状态。谱源直接解析，零生成器。
     // 两种声明形态：`*_STATUS_SPEC = { collection, initial, terminal, transitions }`（order.ts 的订单/售后、
-    // cs.spec.ts 的 CS_SESSION_STATUS_SPEC）；`export type XStatus = 'a' | …` + `X_TRANSITIONS = [{ from, to }]`
-    // （scm.ts 的 PURCHASE_ORDER_TRANSITIONS / OUTWORK_ORDER_TRANSITIONS·集合名＝X 的 camelCase + s）。
+    // cs.spec.ts 的 CS_SESSION_STATUS_SPEC、learning.ts 的 QRCODE_STATUS_SPEC）；`export type XStatus = 'a' | …` +
+    // `X_TRANSITIONS = [{ from, to }]`（scm.ts 的 PURCHASE_ORDER_TRANSITIONS / OUTWORK_ORDER_TRANSITIONS·集合名＝X 的 camelCase + s）。
+    // 调用点的 from/to 认不出（既非字面量、也展不开成声明表的边或 shared 的 *_STATUSES 常量）一律红：认不出＝没核过。
     id: 'rw-status-transitions-declared',
     roots: ['#2'],
-    desc: '状态写入只走声明流转（根因#2）：rewrite/cloud 的 transition()/条件 CAS 的边与 status 字面量，须在 rewrite/shared 的 order.ts、cs.spec.ts、scm.ts 声明表内；.add/.set 建档写的 status 须属该表 initial——越流转、打错状态名或跳过初始态建档即红',
+    desc: '状态写入只走声明流转（根因#2）：rewrite/cloud 的 transition()/条件 CAS 的边与 status 字面量，须在 rewrite/shared 的 order.ts、cs.spec.ts、scm.ts、learning.ts 声明表内；.add/.set 建档写的 status 须属该表 initial——越流转、打错状态名、跳过初始态建档、调用点的边认不出或 transition 的集合没声明表即红',
     run(root = ROOT) {
-      const SPECS = ['rewrite/shared/src/order.ts', 'rewrite/shared/src/cs.spec.ts', 'rewrite/shared/src/scm.ts']
+      const SPECS = ['rewrite/shared/src/order.ts', 'rewrite/shared/src/cs.spec.ts', 'rewrite/shared/src/scm.ts', 'rewrite/shared/src/learning.ts']
       const base = join(root, 'rewrite/cloud/src/functions')
       if (!existsSync(base)) return []
       const edges = {} // coll -> Set('from=>to')
       const states = {} // coll -> Set(state)
       const specOf = {} // coll -> spec 路径（报错用）
       const initials = {} // coll -> Set(initial)；只有 *_STATUS_SPEC 形态声明了 initial
+      const specTrans = {} // X_STATUS_SPEC -> [{ from, to }] 按声明顺序：展开调用点的 X_STATUS_SPEC.transitions[N]
+      const sets = {} // X_STATUSES -> [state]：展开调用点用的 shared 状态集常量
       const addEdges = (coll, spec, body) => {
         edges[coll] ??= new Set()
         states[coll] ??= new Set()
         specOf[coll] = spec
+        const list = []
         for (const tm of body.matchAll(/\{\s*from:\s*\[([^\]]*)\]\s*,\s*to:\s*'([a-z_]+)'/g)) {
+          const from = [...tm[1].matchAll(/'([a-z_]+)'/g)].map((f) => f[1])
+          list.push({ from, to: tm[2] })
           states[coll].add(tm[2])
-          for (const f of tm[1].matchAll(/'([a-z_]+)'/g)) {
-            edges[coll].add(f[1] + '=>' + tm[2])
-            states[coll].add(f[1])
+          for (const f of from) {
+            edges[coll].add(f + '=>' + tm[2])
+            states[coll].add(f)
           }
         }
+        return list
       }
       const bad = []
       for (const spec of SPECS) {
@@ -1025,11 +1032,11 @@ export const repoChecks = [
           continue
         }
         const src = readFileSync(join(root, spec), 'utf8')
-        for (const bm of src.matchAll(/export const \w+_STATUS_SPEC = \{([\s\S]*?)\n\} as const/g)) {
-          const coll = (bm[1].match(/collection:\s*'(\w+)'/) || [])[1]
+        for (const bm of src.matchAll(/export const (\w+_STATUS_SPEC) = \{([\s\S]*?)\n\} as const/g)) {
+          const coll = (bm[2].match(/collection:\s*'(\w+)'/) || [])[1]
           if (!coll) continue
-          addEdges(coll, spec, bm[1])
-          for (const lm of bm[1].matchAll(/(initial|terminal):\s*\[([^\]]*)\]/g))
+          specTrans[bm[1]] = addEdges(coll, spec, bm[2])
+          for (const lm of bm[2].matchAll(/(initial|terminal):\s*\[([^\]]*)\]/g))
             for (const s of lm[2].matchAll(/'([a-z_]+)'/g)) {
               states[coll].add(s[1])
               if (lm[1] === 'initial') (initials[coll] ??= new Set()).add(s[1])
@@ -1041,6 +1048,11 @@ export const repoChecks = [
           const typeName = coll[0].toUpperCase() + coll.slice(1, -1) + 'Status'
           const union = src.match(new RegExp(`export type ${typeName} = ([^\\n]+)`))
           if (union) for (const s of union[1].matchAll(/'([a-z_]+)'/g)) states[coll].add(s[1])
+        }
+        // 展开不了的 ...引用 → 不登记，调用点落到「认不出」
+        for (const sm of src.matchAll(/export const (\w+_STATUSES)\b[^=]*=\s*\[([^\]]*)\]/g)) {
+          const list = [...sm[2].matchAll(/\.\.\.(\w+)|'([a-z_]+)'/g)].flatMap((x) => (x[1] ? sets[x[1]] ?? [null] : [x[2]]))
+          if (!list.includes(null)) sets[sm[1]] = list
         }
       }
       const COLLS = new Set(Object.keys(edges))
@@ -1058,33 +1070,68 @@ export const repoChecks = [
         const ms = [...head.matchAll(/(?:\.collection\(|transition\()\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)]
         return ms.length ? ms[ms.length - 1][1] || ms[ms.length - 1][2] : null
       }
+      // 集合没声明表＝边无从核对，放绿就是整条不查（新状态机文件没进 SPECS 时 learning.ts 曾这样漏）
+      const noSpec = (rel, coll) => `${rel}：transition('${coll}', …) 的集合 ${coll} 没有状态声明表（SPECS 未收录）——声明文件加进 SPECS，守卫才核得了（根因#2）`
       const undeclaredOf = (coll, from, to) => from.filter((f) => !edges[coll].has(f + '=>' + to))
+      // 调用点实参 → 状态列表：字面量（含三元两支）| [...]X_STATUSES | [...]T.from / T.to（const T = X_STATUS_SPEC.transitions[N]）；认不出回 null
+      // ponytail: 字面量与变量混写（ok ? 'a' : other）只核字面量那支，真要全核得上 AST
+      const statesOf = (expr, src) => {
+        const lits = [...expr.matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+        if (lits.length) return lits
+        const m = expr.trim().match(/^(?:\[\.\.\.)?(\w+)(?:\.(from|to))?\]?$/)
+        if (!m) return null
+        if (!m[2]) return sets[m[1]] ?? null
+        const d = src.match(new RegExp(`const ${m[1]} = (\\w+)\\.transitions\\[(\\d+)\\]`))
+        const t = d && specTrans[d[1]]?.[d[2]]
+        return t ? [t[m[2]]].flat() : null
+      }
       for (const p of files) {
         const src = readFileSync(p, 'utf8')
         const rel = relative(root, p)
-        // transition(coll, …, [from…] | fromFor('x'), 'to')
-        const transRe = /transition\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(?:\[([^\]]*)\]|fromFor\(\s*['"]([a-z_]+)['"]\s*\))\s*,\s*['"]([a-z_]+)['"]/g
+        // transition[<T>](coll, id, from, to…)：from＝[…] | fromFor('x') | 标识符；to 到下一个逗号或右括号（字面量/三元/T.to）
+        const transRe = /transition(?:<[^>()]*>)?\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))\s*,[^,]+,\s*(fromFor\(\s*['"]([a-z_]+)['"]\s*\)|\[[^\]]*\]|[\w.]+)\s*,\s*([^,()]+?)\s*[,)]/g
         let tm
+        const parsed = new Set()
         while ((tm = transRe.exec(src))) {
           const coll = tm[1] || tm[2]
-          if (!COLLS.has(coll)) continue
-          const to = tm[5]
-          if (tm[4] !== undefined) {
-            if (tm[4] !== to)
-              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), '${to}') 参数不一致——fromFor 求的是 '${tm[4]}' 的合法 from，实际写 '${to}'，越流转会被静默放行（根因#2）`)
+          parsed.add(tm.index)
+          if (!COLLS.has(coll)) {
+            bad.push(noSpec(rel, coll))
             continue
           }
-          const from = [...tm[3].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
-          const un = undeclaredOf(coll, from, to)
+          const to = statesOf(tm[5], src)
+          if (tm[4] !== undefined) {
+            if (!to || to.some((t) => t !== tm[4]))
+              bad.push(`${rel}：transition('${coll}', …, fromFor('${tm[4]}'), ${tm[5].trim()}) 参数不一致——fromFor 求的是 '${tm[4]}' 的合法 from，目标却不是它，越流转会被静默放行（根因#2）`)
+            continue
+          }
+          const from = statesOf(tm[3], src)
+          if (!from || !to) {
+            bad.push(`${rel}：transition('${coll}', …, ${tm[3]}, ${tm[5].trim()}) 的边认不出——from/to 写成字面量、shared 的 *_STATUSES 常量或 X_STATUS_SPEC.transitions[N]，守卫才核得了（根因#2）`)
+            continue
+          }
+          const un = to.flatMap((t) => undeclaredOf(coll, from, t).map((f) => f + '→' + t))
           if (un.length)
-            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to}') 含未声明边 ${un.map((f) => f + '→' + to).join('、')}——${specOf[coll]} 流转表里没有，越流转或先改声明（根因#2）`)
+            bad.push(`${rel}：transition('${coll}', …, [${from.join(',')}] → '${to.join("'|'")}') 含未声明边 ${un.join('、')}——${specOf[coll]} 流转表里没有，越流转或先改声明（根因#2）`)
         }
-        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\(\[([^\]]*)\]\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
+        // 上面的正则没认出来的调用（实参里套了带括号/逗号的表达式等）照样算认不出，不能静默跳过；注释里提到的不算
+        for (const hm of src.matchAll(/transition(?:<[^>()]*>)?\(\s*(?:['"](\w+)['"]|COLLECTIONS\.(\w+))/g)) {
+          const line = src.slice(src.lastIndexOf('\n', hm.index) + 1, hm.index)
+          if (parsed.has(hm.index) || /\/\/|^\s*\*/.test(line)) continue
+          const coll = hm[1] || hm[2]
+          if (!COLLS.has(coll)) bad.push(noSpec(rel, coll))
+          else bad.push(`${rel}:${src.slice(0, hm.index).split('\n').length}：transition('${coll}', …) 的边认不出——from/to 写成字面量、shared 的 *_STATUSES 常量或 X_STATUS_SPEC.transitions[N]，守卫才核得了（根因#2）`)
+        }
+        const casRe = /\.where\(\s*\{[^{}]*?status:\s*(?:['"]([a-z_]+)['"]|(?:db\.command|_)\.in\((\[[^\]]*\]|\w+)\))[^{}]*?\}\s*\)[\s\S]{0,60}?\.update\(\s*\{\s*data:\s*\{[\s\S]{0,160}?\bstatus:\s*['"]([a-z_]+)['"]/g
         let cm
         while ((cm = casRe.exec(src))) {
           const coll = collOf(src.slice(0, cm.index))
           if (!coll || !COLLS.has(coll)) continue
-          const from = cm[1] ? [cm[1]] : [...cm[2].matchAll(/['"]([a-z_]+)['"]/g)].map((x) => x[1])
+          const from = cm[1] ? [cm[1]] : statesOf(cm[2], src)
+          if (!from) {
+            bad.push(`${rel}：条件 CAS ${coll} status in ${cm[2]} 认不出——写成字面量或 shared 的 *_STATUSES 常量，守卫才核得了（根因#2）`)
+            continue
+          }
           const un = undeclaredOf(coll, from, cm[3])
           if (!un.length || src.slice(Math.max(0, cm.index - 800), cm.index).includes('structure-ok')) continue
           bad.push(`${rel}：条件 CAS ${coll} [${from.join(',')}] → '${cm[3]}' 含未声明边 ${un.map((f) => f + '→' + cm[3]).join('、')}——${specOf[coll]} 流转表里没有（根因#2）`)
@@ -1404,7 +1451,7 @@ export const repoChecks = [
   {
     // 公开目录读上界（病根#7 规模·容量审计 2026-07-12）：getProducts/getCourses 是全站最热公开读
     // （每个新会话必调），裸 .get() 命中云开发服务端默认 100 条**静默截断**——商品/课程破百后排序靠后
-    // 的整批消失且无报错无告警（仓内自证：adminApi/lib.ts:92、kit/inventory.ts 注释同一病根）。守此
+    // 的整批消失且无报错无告警（仓内自证：adminApi/lib.ts getTxAlerts、kit/inventory.ts 注释同一病根）。守此
     // 不变量：两条查询链必须带显式 .limit(（口径同 learning.ts 已有 .limit(200) 先例）。
     id: 'rw-app-catalog-reads-bounded',
     roots: ['#7'],
@@ -1825,9 +1872,7 @@ export const repoChecks = [
 // 形状：{ id, inScope(absPath)->bool, test(line, {file, lines, i})->msg|null }
 // 按主张追加（B3 起：禁 #ifdef 多端回退、禁 api 运行时引 data/…）。
 export const fileRules = [
-  // —— 以下 4 条为旧线（packages/）5 条守卫的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
-  // 旧线守卫扫描面锁死 packages/ 路径，对唯一在迭代的 rewrite/ 空转；本批不改旧条（继续守 packages/
-  // 冻结基线），另立新条落地到 rewrite/。SRC_DIRS 已扩到含 'rewrite'（见下方 A.0），否则新条也是装饰。
+  // 逐文件规则只扫得到 SRC_DIRS 下的文件：规则管的目录不在 SRC_DIRS 里就是空转。
   {
     // T2 域分组（根因账本 #5）镜像：rewrite/cloud 云函数业务代码禁裸用 cloud.init()/getWXContext()。
     id: 'rw-kit-only-cloud-primitives',
