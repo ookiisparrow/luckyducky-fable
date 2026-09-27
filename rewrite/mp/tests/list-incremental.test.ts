@@ -27,6 +27,7 @@ vi.mock('../api/reviews', () => ({ getReviews: getReviewsMock }))
 vi.mock('../lib/mapReviews', () => ({
   mapReviews: (list: Array<Record<string, unknown>>) => list.map((r) => ({ ...r })),
   mapSummary: () => null,
+  hiddenByTag: (list: unknown[]) => list.map(() => false),
 }))
 // 两页共用：haptics
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
@@ -114,7 +115,9 @@ describe('列表翻页增量 setData（根因#7·翻页只追加新行·不整�
     const keys = Object.keys(patch)
     expect(keys.some((k) => /^list\[\d+\]$/.test(k))).toBe(true)
     expect(keys).not.toContain('list')
+    expect(keys).not.toContain('hidden') // 标签筛选的藏行表同样按路径键追加
     expect(patch['list[2]']).toBeTruthy()
+    expect(patch['hidden[2]']).toBe(false)
     expect(page.data.list.length).toBe(3)
   })
 })

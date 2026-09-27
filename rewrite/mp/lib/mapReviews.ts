@@ -67,3 +67,9 @@ export function mapSummary(summary: unknown): SummaryVM | null {
       .map((t: any) => ({ tag: String(t[0]), n: Number(t[1]) || 0 })),
   }
 }
+
+/** 标签筛选（设计稿 A3 点标签只看带该标签的评价）：第 from 条起每行藏不藏。tag 空＝全显示。
+ *  接口不支持按标签拉列表，只能筛已加载的行——页面在匹配太少时继续往下翻页补齐。 */
+export function hiddenByTag(list: ReviewVM[], tag: string, from = 0): boolean[] {
+  return list.slice(from).map((r) => !!tag && !r.tags.includes(tag))
+}

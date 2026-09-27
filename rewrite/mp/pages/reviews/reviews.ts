@@ -1,7 +1,7 @@
 // 商品评价列表：首页汇总头（均分/分布/标签 Top5·首页返回后前端缓存）+ 游标分页。
 import { tapHaptic } from '../../lib/haptics'
 import { getReviews } from '../../api/reviews'
-import { mapReviews, mapSummary, type ReviewVM, type SummaryVM } from '../../lib/mapReviews'
+import { hiddenByTag, mapReviews, mapSummary, type ReviewVM, type SummaryVM } from '../../lib/mapReviews'
 import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
@@ -15,6 +15,9 @@ Page({
     hasMore: false,
     cursor: null as unknown,
     title: '商品评价', // 顶栏页名：详情页带来商品名时显示「商品名 · 评价」
+    tag: '', // 标签筛选（设计稿 A3）：当前选中的标签，空＝全部
+    hidden: [] as boolean[], // 与 list 同下标：该行不带所选标签就藏
+    shown: 0, // 筛选后露出的条数（空筛选态用）
   },
   productId: '',
   loadingMore: false, // 触底翻页在途标记：防快速多次触底并发请求各自 append 造成重复行
@@ -40,10 +43,14 @@ Page({
       if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
       return
     }
+    const list = mapReviews(r.list)
+    const hidden = hiddenByTag(list, this.data.tag)
     this.setData({
       loading: false,
       loadFailed: false,
-      list: mapReviews(r.list),
+      list,
+      hidden,
+      shown: hidden.filter((h) => !h).length,
       summary: mapSummary(r.summary), // 首页汇总·翻页不重算（前端缓存）
       cursor: r.nextCursor,
       hasMore: !!r.hasMore,
@@ -69,12 +76,28 @@ Page({
     // 增量 setData（根因#7 规模）：翻页只把新增行按路径键 list[N] 追加，不整表重发已渲染卡（O(n²) 传输）。
     // list 仍留 data（wxml 绑定它·wx:key="index" 追加式只读安全，见 wxml 泄露防护注释）；仅 append 不整表重发。
     const patch: Record<string, unknown> = { cursor: r.nextCursor, hasMore: !!r.hasMore }
+    const rows = mapReviews(r.list)
+    const hid = hiddenByTag(rows, this.data.tag)
     let idx = this.data.list.length
-    for (const rv of mapReviews(r.list)) {
+    rows.forEach((rv, i) => {
       patch['list[' + idx + ']'] = rv
+      patch['hidden[' + idx + ']'] = hid[i]
       idx++
-    }
+    })
+    patch.shown = this.data.shown + hid.filter((h) => !h).length
     this.setData(patch)
+  },
+  // 点标签只看带它的评价，再点一次放回全部（设计稿 a_revTag）
+  onTag(e: WechatMiniprogram.TouchEvent) {
+    const t = String(e.currentTarget.dataset.tag || '')
+    const tag = this.data.tag === t ? '' : t
+    const hidden = hiddenByTag(this.data.list, tag)
+    this.setData({ tag, hidden, shown: hidden.filter((h) => !h).length })
+    void this.fillTag()
+  },
+  // 接口不支持按标签拉列表：匹配不到一屏（8 条）就接着往下翻页补，最多 5 页，免得短列表滑不动、触不了底
+  async fillTag() {
+    for (let n = 0; n < 5 && this.data.tag && this.data.hasMore && this.data.shown < 8 && !this.loadingMore; n++) await this.onReachBottom()
   },
   // 买家秀晒图·点开大图（当前图为焦点·同条评价全部图为轮播集）
   onPreviewPhoto(e: WechatMiniprogram.TouchEvent) {

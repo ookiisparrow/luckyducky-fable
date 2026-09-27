@@ -1,6 +1,6 @@
 // 黄金 learning-content §七（评价读取半边：条数 0 视同无数据/汇总形状/星级拼装）。
 import { describe, it, expect } from 'vitest'
-import { stars, mapReviews, mapSummary } from '../lib/mapReviews'
+import { stars, mapReviews, mapSummary, hiddenByTag } from '../lib/mapReviews'
 import reviewsWxml from '../pages/reviews/reviews.wxml?raw'
 
 describe('星级拼装（黄金 §四：实心+空心拼满 5 颗）', () => {
@@ -64,5 +64,18 @@ describe('汇总映射（黄金 §七读取：条数 0 视同无数据）', () =
     expect(mapSummary({ score: '4.5', count: 200, approx: true })!.countLabel).toBe('近 200 条评价')
     expect(mapSummary({ score: '4.5', count: 12, approx: false })!.countLabel).toBe('12 条评价')
     expect(reviewsWxml).toContain('{{summary.countLabel}}') // 评价页头用这句，不再自己拼 count
+  })
+})
+
+describe('标签筛选（v5 A3）', () => {
+  it('大白话：点一个标签只留带它的评价；再点同一个（tag 空）全部放回；翻页追加的新行接着按同一标签藏', () => {
+    const list = mapReviews([
+      { rating: 5, tags: ['教程清晰'] },
+      { rating: 4, tags: ['好看'] },
+      { rating: 5, tags: ['好看', '教程清晰'] },
+    ])
+    expect(hiddenByTag(list, '好看')).toEqual([true, false, false])
+    expect(hiddenByTag(list, '')).toEqual([false, false, false])
+    expect(hiddenByTag(list, '教程清晰', 2)).toEqual([false])
   })
 })

@@ -15,15 +15,20 @@
       </view>
     </view>
   </view>
-  <!-- ponytail: 设计稿标签可点选筛选；现接口只给标签统计、不支持按标签拉列表，先做静态展示，接口支持后再接 -->
+  <!-- 标签筛选（设计稿 A3）：点选只看带该标签的评价，再点放回。
+       ponytail: 接口不支持按标签拉列表，只筛已加载的行 + 不足一屏自动往下翻页补（reviews.ts fillTag）；评价量大了在 getReviews 加 tag 参数改云端筛。 -->
   <view class="rv-tags" wx:if="{{summary.tags.length}}">
-    <view class="rv-tag" wx:for="{{summary.tags}}" wx:key="tag">{{item.tag}}<text class="rv-tag-n">{{item.n}}</text></view>
+    <view wx:for="{{summary.tags}}" wx:key="tag" class="k {{tag === item.tag ? 'k-light' : 'k-flat'}} rv-tag" hover-start-time="20"
+      hover-class="{{tag === item.tag ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-tag="{{item.tag}}" bind:tap="onTag"
+      data-k="{{tag === item.tag ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <px-i wx:if="{{tag === item.tag}}" name="led" tone="#8A5AE0" />{{item.tag}}<text class="rv-tag-n">{{item.n}}</text>
+    </view>
   </view>
 
   <!-- wx:key 刻意用 index：ReviewVM 无任何唯一字段，云端 getReviews 刻意不透传 _id
        （orderId__lineId 组合会向其他用户泄露订单信息）；该列表为追加式只读（无删除/重排），index 安全。 -->
   <view class="rv-list" wx:if="{{list.length}}">
-    <view class="rv-item" wx:for="{{list}}" wx:key="index">
+    <view class="rv-item" wx:for="{{list}}" wx:key="index" wx:if="{{!hidden[index]}}">
       <view class="rv-top">
         <text class="rv-name">{{item.name}}</text>
         <view class="rv-stars">
@@ -58,6 +63,9 @@
   <view class="rv-state" wx:elif="{{!loading && !list.length}}">
     <text class="rv-state-title">还没有评价</text>
     <text class="rv-state-hint">买过的钩友完成订单后可以来写第一条</text>
+  </view>
+  <view class="rv-state" wx:elif="{{tag && !shown && !hasMore}}">
+    <text class="rv-state-hint">还没有带「{{tag}}」的评价</text>
   </view>
   <view class="rv-more" wx:if="{{hasMore}}">上拉加载更多</view>
 </view>
