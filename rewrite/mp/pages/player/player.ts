@@ -331,6 +331,10 @@ Page({
     this.exitSegDone()
   },
 
+  // 整门课最后一节播完「完成课程」→ C10 结业页（孵化小鸭）；redirect 不叠栈，返回回到进播放页之前那页
+  onFinishCourse() {
+    wx.redirectTo({ url: '/pages/finish/finish?courseId=' + this.courseId })
+  },
   // C9 学完一节「重看本节」：回本课时第一段可播段起播；本课时只有这一段就原地重播（不重挂 <video>）。
   onReplayLesson() {
     const cur = this.data.current

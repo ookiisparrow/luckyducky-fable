@@ -220,6 +220,15 @@ function latestProgress(progressList: unknown, courseId: string): Record<string,
  * admin 撤下/替换视频的编辑），不可播则视同未命中、落入课时内/全课首个 hasVideo 段兜底——对外承诺「非空即可播放」不因此松动。
  * 脏结构安全同 segmentIdsOf 风格。
  */
+/** 结业页（v5 C10）：课程名、学完几节（只数有内容的课时）、视频总时长（取整分钟·无时长数据不显示）。 */
+export function mapFinish(course: unknown): { name: string; lessonsLabel: string; durLabel: string } {
+  const { lessons } = flattenCatalog(course)
+  const real = lessons.filter((l) => l.segments.length > 0)
+  const sec = real.reduce((sum, l) => sum + l.segments.reduce((s, seg) => s + seg.dur, 0), 0)
+  const c = course && typeof course === 'object' ? (course as Record<string, unknown>) : {}
+  return { name: String(c.title || ''), lessonsLabel: `${real.length} 节`, durLabel: sec > 0 ? `${Math.round(sec / 60)} 分钟` : '' }
+}
+
 export function mapCatalog(
   course: unknown,
   progressList: unknown,

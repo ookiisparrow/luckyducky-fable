@@ -117,6 +117,7 @@
       "mpPages": [
         "catalog",
         "player",
+        "finish",
         "my-courses",
         "welcome"
       ],

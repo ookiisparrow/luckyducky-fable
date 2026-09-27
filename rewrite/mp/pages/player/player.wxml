@@ -138,7 +138,7 @@
   </view>
 
   <!-- C9 学完一节（课时末段播完）：分段全亮 + 完成文案 + 重看本节 / 继续下一节。
-       全课最后一段（无下一节）只留「重看本节」——结业页 C10 未做，保持原「停在完成态」行为。 -->
+       全课最后一段（无下一节）：重看本节 / 完成课程（进 C10 结业页 pages/finish）。 -->
   <view wx:if="{{state === 'playing' && segDone && strip && strip.segIndex === strip.segTotal}}" class="lp-done">
     <view class="lp-done-body">
       <view class="lp-done-segs">
@@ -148,8 +148,9 @@
       <text class="lp-done-title">这一节学完了</text>
     </view>
     <view class="lp-done-keys">
-      <view class="k k-48 {{canNext ? 'k-dk' : 'k-inv lp-done-main'}}" hover-class="{{canNext ? 'k-dk-down' : 'k-inv-down'}}" hover-stay-time="100" bind:tap="onReplayLesson">重看本节</view>
+      <view class="k k-48 k-dk" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson">重看本节</view>
       <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext">继续下一节<px-i name="arrow" /></view>
+      <view wx:else class="k k-48 k-inv lp-done-main" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onFinishCourse">完成课程</view>
     </view>
   </view>
 
