@@ -1,7 +1,10 @@
 // mp↔cloud 响应契约键集合哨兵（批B10 立·W1 收官扩至全覆盖·守卫 rw-app-response-contract·
 // 病根#5 手抄副本漂移 + #8 编译绿≠契约没漂）。
 // 目的：mp 物理进不了 @ldrw/shared（微信开发者工具编译限制），响应形状全靠手抄——cloud 改键 mp 编译
-// 不红＝静默漂移面。本文件对 app 网关 **24 个 action** 的响应做 Object.keys 排序全等断言：增键/删键/
+// 不红＝静默漂移面。订单/售后、收银台、商品、评价、学习链读口另有双向锁：tests/contracts/app-orders.json、
+// app-shop-learning.json 的 sample 由云端（p-contract-admin-shape / p-contract-app-shape.test.ts）整体全等锁住、
+// 小程序映射层（mp/tests/p-contract-mp-mappers.test.ts）拿来喂；首页/页面 CMS 内容、帮助视频、FAQ、下单、取播放地址、
+// 用户资料这些 action 仍只有本文件的单向键集锁。本文件对 app 网关 **24 个 action** 的响应做 Object.keys 排序全等断言：增键/删键/
 // 改名都红，覆盖编译锁的盲区（加键 TS 宽赋值不红；createOrder 的 order:any 展开编译锁无牙）。
 // 覆盖面分三批（钱链/学习热链 5 个 → 第二批读 action 4 个 → W1 收官 15 个），**成功态与失败态都锁**：
 // 带闸 action 失败时成功那半的键（list/items/user）会整个消失，mp 裸解构即 undefined，故失败态各自锁。

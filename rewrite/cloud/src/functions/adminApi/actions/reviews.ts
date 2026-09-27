@@ -1,4 +1,4 @@
-import { reply, type Ctx } from '../lib'
+import { reply, readDoc, type Ctx } from '../lib'
 import { pageQuery, getTempUrls, IMAGE_URL_MAX_AGE, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
@@ -49,6 +49,12 @@ export async function setReviewPicked({ db, data }: Ctx) {
     .doc(id)
     .update({ data: { picked } })
     .catch(() => null)
-  if (!upd || !upd.stats || upd.stats.updated !== 1) return reply(400, err('NOT_FOUND'))
+  if (!upd || !upd.stats) return reply(400, err('NOT_FOUND'))
+  // 真云内容没变回 updated:0（连点/别的窗口先点了同一状态），读回有这条就算成功
+  if (upd.stats.updated !== 1) {
+    const back = await readDoc(db.collection(COLLECTIONS.reviews).doc(id).get())
+    if (!back.ok) return reply(200, err('DOC_READ_FAIL'))
+    if (!back.data) return reply(400, err('NOT_FOUND'))
+  }
   return reply(200, { ok: true, picked })
 }

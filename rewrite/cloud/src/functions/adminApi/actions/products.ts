@@ -302,7 +302,13 @@ async function setListed({ db, data }: Ctx, listed: boolean) {
     .doc(id)
     .update({ data: { listed, unlistedAt: listed ? null : Date.now() } })
     .catch(() => null)
-  if (upd?.stats?.updated !== 1) return reply(400, err('NO_PRODUCT'))
+  if (!upd?.stats) return reply(400, err('NO_PRODUCT'))
+  // 真云内容没变回 updated:0（已在售再点恢复），读回有这件商品就算成功
+  if (upd.stats.updated !== 1) {
+    const back = await readDoc(db.collection(COLLECTIONS.products).doc(id).get())
+    if (!back.ok) return reply(200, err('DOC_READ_FAIL'))
+    if (!back.data) return reply(400, err('NO_PRODUCT'))
+  }
   return reply(200, { ok: true })
 }
 export const unpublishProduct = (ctx: Ctx) => setListed(ctx, false)

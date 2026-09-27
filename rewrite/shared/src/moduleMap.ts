@@ -3,6 +3,7 @@
  * 云函数运行时物理进不了 JSON 单源，故设此镜像——rewrite/cloud/tests/module-map.test.ts 与正册逐键比对，改正册漏改此表即红。
  * 消费者：app/index.ts 顶层兜底把 module 写进 anomalies 账本 ctx（admin Anomalies 页按模块看「今天谁在冒错」）。
  */
+// Stryker disable all: 表里的变异体都在模块加载时求值（静态变异体），每个都得整套测试重跑、全量跑多半超时又按已检出计，分数虚高；表内容由 module-map.test.ts 逐键比对 modules.json 锁住
 export const APP_ACTION_MODULE: Record<string, string> = {
   login: 'identity',
   updateProfile: 'identity',
@@ -36,6 +37,7 @@ export const APP_ACTION_MODULE: Record<string, string> = {
   submitCheckpointPhoto: 'cs',
   getPublicFaq: 'cs',
 }
+// Stryker restore all
 
 /** 查 action 所属模块；未登记（理论上被 module-registry-complete 挡住）回 'unknown' 不抛。 */
 export const moduleOfAction = (action: string): string => APP_ACTION_MODULE[action] ?? 'unknown'
