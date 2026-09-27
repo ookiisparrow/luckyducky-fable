@@ -289,7 +289,7 @@ export const submitReview = withOpenId(
     // UGC 文本内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：评价文本 + 标签（用户可填自由文本）
     // 合并一次 msgSecCheck 外呼，违规/校不了一律拒、整条不落库——「证明安全」才放行。
     // 违规回 TEXT_RISKY（前端让改文字），校不了回 SEC_CHECK_FAIL（前端说稍后再试）：接口抖动/能力没开时说「文字不合适」，
-    // 用户拿正常文字怎么改都过不了。靠 kit 违规分支回 TEXT_RISKY 区分——kit 还没改前违规也落 SEC_CHECK_FAIL。
+    // 用户拿正常文字怎么改都过不了。
     const textUgc = [text, ...tags].filter(Boolean).join(' ')
     if (textUgc) {
       const tsec = await msgSecCheck(textUgc, OPENID)

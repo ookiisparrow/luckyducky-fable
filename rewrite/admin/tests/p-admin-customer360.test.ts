@@ -46,7 +46,7 @@ describe('Customer360.vue 搜索', () => {
   it('大白话：搜索失败说失败，不说「没找到」', async () => {
     api.searchCustomer.mockResolvedValue({ ok: false, status: 200, error: 'USER_LOOKUP_FAIL' })
     const w = await mountAndSearch()
-    expect(statuses(w)).toEqual(['搜索失败（USER_LOOKUP_FAIL）'])
+    expect(statuses(w)).toEqual(['搜索失败：查客户时读库失败，这次没查全。请稍后重试。'])
   })
 
   it('大白话：真没人才说「没找到匹配的客户」', async () => {

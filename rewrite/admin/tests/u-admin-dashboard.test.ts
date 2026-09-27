@@ -64,6 +64,14 @@ describe('Dashboard.vue 加载', () => {
     expect(w.text()).toContain('部分待处理计数没能加载')
   })
 
+  it('大白话：待发货扫描触顶（approx.toShip=true）——格子显「N+」，告诉人这只是下限', async () => {
+    const d = await m.getDashboard()
+    m.getDashboard.mockResolvedValue({ ...d, toShip: 2000, approx: { toShip: true } })
+    const w = mount(Dashboard)
+    await flushPromises()
+    expect(w.text()).toContain('2000+待发货')
+  })
+
   it('大白话：看板没回待发货数（toShip），提示部分计数没加载，不把 0 当真', async () => {
     const d = await m.getDashboard()
     delete d.toShip

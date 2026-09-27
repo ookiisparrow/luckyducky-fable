@@ -23,7 +23,7 @@ import UiButton from '../components/ui/Button.vue'
 const LOW = LOW_STOCK_THRESHOLD // 低库存阈值（与 Inventory 同口径·单源见 lib/thresholds.ts）
 const router = useRouter()
 const vm = ref<ReturnType<typeof mapDashboard>>(null)
-const todo = ref({ ship: 0, refund: 0, lowStock: 0, prep: 0 })
+const todo = ref({ ship: 0, shipApprox: false, refund: 0, lowStock: 0, prep: 0 })
 const todoPartial = ref(false) // 待处理计数有副请求加载失败＝true（病根#14：别把「没加载到」显示成「无待办」）
 // 库存扫描触顶：读到了只是没数全，低库存数可能少算；与加载失败分开说，刷新也消不掉，别叫人去刷新
 const lowTruncated = ref(false)
@@ -52,7 +52,8 @@ function alertQuery(a: { label: string; ids: string[] }): Record<string, string>
   return { q: raw.includes('__') ? raw.split('__')[0] : raw }
 }
 const TODOS = computed(() => [
-  { key: 'ship', label: '待发货', n: todo.value.ship, to: '/orders', icon: Truck, tone: 'warn' },
+  // 待发货扫描触顶时数只是下限，显「N+」
+  { key: 'ship', label: '待发货', n: todo.value.ship, plus: todo.value.shipApprox, to: '/orders', icon: Truck, tone: 'warn' },
   { key: 'refund', label: '待审退款', n: todo.value.refund, to: '/refunds', icon: RotateCcw, tone: 'warn' },
   { key: 'prep', label: '上新未完成', n: todo.value.prep, to: '/products', icon: PackagePlus, tone: 'warn' },
   { key: 'low', label: '低库存 / 售罄', n: todo.value.lowStock, to: '/inventory', icon: Boxes, tone: 'red' },
@@ -133,7 +134,7 @@ onMounted(load)
         <div class="todos">
           <button v-for="t in TODOS" :key="t.key" class="todo" :class="[t.tone, { zero: !t.n && !t.unknown }]" @click="router.push(t.to)">
             <component :is="t.icon" :size="18" :stroke-width="1.8" class="todo-ico" />
-            <div class="todo-txt"><span class="todo-n">{{ t.unknown ? '?' : t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
+            <div class="todo-txt"><span class="todo-n">{{ t.unknown ? '?' : t.plus ? t.n + '+' : t.n }}</span><span class="todo-l">{{ t.label }}</span></div>
           </button>
         </div>
       </Card>

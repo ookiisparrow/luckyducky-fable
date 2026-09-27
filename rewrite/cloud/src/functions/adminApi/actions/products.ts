@@ -320,9 +320,9 @@ export async function saveShowcase({ db, data }: Ctx) {
   const items = Array.isArray(data.items) ? data.items.slice(0, 100) : []
   if (!items.length) return reply(400, err('NO_ITEMS'))
   const productsColl = db.collection(COLLECTIONS.products)
-  let failed = 0 // 逐条失败计数（根因#14）：若 .catch(()=>{}) 静默吞错，无论成败前端
-  // 永远收到 ok:true——「已保存」是假象。故任一失败即回 ok:false（admin Showcase.vue
-  // 按 r.ok 通用判断成败）。
+  // 逐条记下没写成的（根因#14）：若 .catch(()=>{}) 静默吞错，无论成败前端永远收到 ok:true——「已保存」是假象。
+  // 任一失败即回 ok:false 并带 failedIds，后台才能点名是哪几个商品没存上。
+  const failedIds: string[] = []
   for (const it of items) {
     const id = str(it?.id, 200)
     if (!id) continue
@@ -330,15 +330,15 @@ export async function saveShowcase({ db, data }: Ctx) {
       .doc(id)
       .update({ data: { sort: Number(it.sort) || 0, featured: !!it.featured } })
       .catch(() => {
-        failed++
+        failedIds.push(id)
       })
   }
-  if (failed) {
+  if (failedIds.length) {
     // 真留痕：裸 alert() 只打 console.error 一行，不落 anomalies 账本、
     // admin listAnomalies 查不到、企微群也收不到——不满足「留痕」二字（同 learning.ts ensureActivation
     // 注释 / orders.ts shipOne 既有写法）。故用 notifyAlert：①同样打日志 ②落 anomalies 账本 ③按配置推企微。
-    await notifyAlert('anomaly', 'saveShowcase', 'PARTIAL_WRITE', { failed, total: items.length })
-    return reply(400, err(`PARTIAL_WRITE:${failed}`))
+    await notifyAlert('anomaly', 'saveShowcase', 'PARTIAL_WRITE', { failed: failedIds.length, total: items.length, failedIds })
+    return reply(400, err('PARTIAL_WRITE', { failedIds }))
   }
   return reply(200, { ok: true })
 }

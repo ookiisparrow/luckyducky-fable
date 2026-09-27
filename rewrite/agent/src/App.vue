@@ -2,11 +2,13 @@
 // 坐席台单屏应用：登录（口令/企微 ?code= 免登）→ 工作台。
 import { ref, onMounted } from 'vue'
 import { hasSession, loginByWecomCode, logout, onSessionLost } from './api/client'
+import { wecomLoginText } from './lib/desk'
 import Login from './Login.vue'
 import Desk from './Desk.vue'
 
 const ready = ref(false)
 const authed = ref(false)
+const wecomNote = ref('') // 免登失败落口令页时说清原因：没绑号/被停用换口令也没用，别让人对着链接反复点
 
 // 会话失效集中导登录（单源·根因#5·与 admin router.ts 同构）：client.post 遇无令牌/401 触发此回调，
 // 壳层统一登出回登录视图——Desk.vue 内各会话敏感动作（pollThread/send/act/claim/setStatus）不再需要
@@ -19,7 +21,10 @@ onSessionLost(() => {
 onMounted(async () => {
   // 企微内打开带 ?code=：免登换令牌（失败落口令登录·不卡死）
   const code = new URLSearchParams(location.search).get('code')
-  if (code && !hasSession()) await loginByWecomCode(code).catch(() => undefined)
+  if (code && !hasSession()) {
+    const r = await loginByWecomCode(code).catch(() => undefined)
+    if (r && !r.ok) wecomNote.value = wecomLoginText(r.error)
+  }
   authed.value = hasSession()
   ready.value = true
 })
@@ -27,7 +32,7 @@ onMounted(async () => {
 
 <template>
   <Desk v-if="ready && authed" @logout="authed = false" />
-  <Login v-else-if="ready" @authed="authed = true" />
+  <Login v-else-if="ready" :notice="wecomNote" @authed="authed = true" />
 </template>
 
 <style>

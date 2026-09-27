@@ -4,6 +4,9 @@ import { control } from 'wx-server-sdk'
 import { COLLECTIONS, toFen } from '@ldrw/shared'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { main as refundCallback } from '../src/functions/callbacks/refundCallback'
+import { main as payCallback } from '../src/functions/callbacks/payCallback'
+import { main as app } from '../src/functions/app/index'
+import { main as closeExpired } from '../src/functions/timers/closeExpiredOrders'
 import { sha } from '../src/functions/adminApi/lib'
 
 const post = (action: string, data: Record<string, unknown> = {}) =>
@@ -159,5 +162,40 @@ describe('并发重推退款成功通知（#400-20）', () => {
     expect(asDoc(a._id).status).toBe('refunded')
     expect(asDoc(b._id).status).toBe('refunded')
     expect(stock()).toBe(2)
+  })
+})
+
+describe('关单后晚到的支付回调复活，订单上的预留量跟着换成这次真抢到的（#400 库存虚增同根因）', () => {
+  it('限量下单扣 2 → 超时关单还 2 → 改不限量 → 晚到回调复活（没扣）→ 改回限量 5 → 退款：库存仍是 5', async () => {
+    control.seed(COLLECTIONS.products, [{ _id: 'p1', id: 'p1', name: '鸭', price: 50, tag: '' }])
+    control.seed(COLLECTIONS.inventory, [{ _id: 'p1__', productId: 'p1', spec: '', stock: 10 }])
+    control.seed(COLLECTIONS.config, [{ _id: 'pay', mode: 'real', flowId: 'flow-pay' }])
+    control.setOpenId('oBUYER')
+    const r: any = await app({
+      action: 'createOrder',
+      data: { items: [{ id: 'p1', qty: 2 }], address: { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'x' } },
+    })
+    const oid = r.order.id
+    expect(r.order.reserved).toEqual([{ productId: 'p1', spec: '', qty: 2 }])
+
+    const store = (globalThis as any).__cloudMock.store
+    const inv = () => store[COLLECTIONS.inventory].find((x: any) => x._id === 'p1__')
+    store[COLLECTIONS.orders].find((o: any) => o._id === oid).createdAt = 1
+    control.setOpenId('')
+    await closeExpired()
+    expect(inv().stock).toBe(10)
+
+    inv().stock = null
+    await payCallback({ out_trade_no: oid, trade_state: 'SUCCESS', transaction_id: 'wx-t1', amount: { total: toFen(r.order.amount) } })
+    const revived = control.dump(COLLECTIONS.orders).find((o: any) => o._id === oid)
+    expect(revived.status).toBe('paid')
+
+    inv().stock = 5
+    control.seed(COLLECTIONS.afterSales, [
+      { _id: oid + '__p1__', orderId: oid, _openid: 'oBUYER', lineId: 'p1__', productId: 'p1', spec: '', qty: 2, refundAmount: r.order.amount, outRefundNo: 'rf-e2e', status: 'approved' },
+    ])
+    await success(asDoc(oid + '__p1__'))
+    expect(asDoc(oid + '__p1__').status).toBe('refunded')
+    expect(inv().stock).toBe(5)
   })
 })

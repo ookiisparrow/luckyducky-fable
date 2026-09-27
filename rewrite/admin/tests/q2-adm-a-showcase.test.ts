@@ -100,7 +100,7 @@ describe('Showcase.vue 自动保存', () => {
 
   it('大白话：保存没成功，徽标显「保存失败」，不显「已保存」', async () => {
     vi.useFakeTimers()
-    api.saveShowcase.mockResolvedValue({ ok: false, status: 400, error: 'PARTIAL_WRITE:1' })
+    api.saveShowcase.mockResolvedValue({ ok: false, status: 400, error: 'PARTIAL_WRITE', failedIds: ['p1'] })
     const w = await mountPage()
     await w.findAll('.panel .switch')[0].trigger('click')
     await settleSave()

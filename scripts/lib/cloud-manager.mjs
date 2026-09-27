@@ -20,7 +20,8 @@ const GUIDANCE =
   '拿不到云开发生产凭证。请任选其一：\n' +
   '① 运行 `tcb login` 后重跑（脚本会自动经 `tcb secrets get --json` 复用登录态）；\n' +
   '② 或设置环境变量 TENCENTCLOUD_SECRETID / TENCENTCLOUD_SECRETKEY' +
-  '（腾讯云 CAM 子账号密钥，需云开发管理权限，可复用 VOD 用的 ld-vod 子账号或新建只读子账号）后重跑。'
+  '（腾讯云 CAM 子账号密钥，需云开发管理权限：请为运维单建子账号；别用 VOD 的 ld-vod 子账号，' +
+  '它的密钥存在库里、只该有点播权限，见 docs/外部配置手册.md）后重跑。'
 
 export class CredentialError extends Error {
   constructor(detail) {

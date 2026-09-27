@@ -444,7 +444,7 @@
       "keys": {
         "": ["approx", "funnel", "hot", "ok", "recentActivity", "stats", "stuck", "toShip", "txAlerts"],
         "stats": ["codesActivated", "codesTotal", "gmv", "learners", "orders", "users"],
-        "approx": ["gmv", "hot", "sampleSize", "stuck"],
+        "approx": ["gmv", "hot", "sampleSize", "stuck", "toShip"],
         "funnel": ["activated", "ordered", "paid"],
         "txAlerts": ["feeMismatch", "partial", "refundMismatch", "stuckRefunds"],
         "hot[]": ["count", "name", "segId"],
@@ -467,7 +467,8 @@
           "gmv": false,
           "hot": false,
           "stuck": false,
-          "sampleSize": 1000
+          "sampleSize": 1000,
+          "toShip": false
         },
         "funnel": {
           "ordered": 4,

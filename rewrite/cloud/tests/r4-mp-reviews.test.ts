@@ -20,9 +20,7 @@ beforeEach(() => {
 })
 
 describe('submitReview：文字与图片审核失败分开报', () => {
-  // 待 kit/contentsec msgSecCheck 违规分支改回 TEXT_RISKY（现在违规和接口抖动都回 SEC_CHECK_FAIL，reviews 分不开）：
-  // kit 改完这条会「意外通过」而红，届时把 it.fails 换成 it。
-  it.fails('大白话：文字含违规内容——回 TEXT_RISKY，不是图片那两个码；一条不落', async () => {
+  it('大白话：文字含违规内容——回 TEXT_RISKY，不是图片那两个码；一条不落', async () => {
     control.setOpenapiFail(true, 87014)
     const r = await call({ ...base, text: '违规文字' })
     expect(r).toEqual({ ok: false, error: 'TEXT_RISKY' })

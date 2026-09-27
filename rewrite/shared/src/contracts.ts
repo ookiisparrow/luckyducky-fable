@@ -112,7 +112,8 @@ export interface AdminOverrideRefund {
 /** getDashboard。gmv 是元；txAlerts.partial＝钱链异常有一路没查到，三类列表可能不全。 */
 export interface AdminDashboard {
   stats: { users: number; orders: number; gmv: number; codesTotal: number; codesActivated: number; learners: number }
-  approx: { gmv: boolean; hot: boolean; stuck: boolean; sampleSize: number }
+  /** toShip：待发货扫描触顶，toShip 数只是下限。 */
+  approx: { gmv: boolean; hot: boolean; stuck: boolean; sampleSize: number; toShip: boolean }
   funnel: { ordered: number; paid: number; activated: number }
   /** 真能发的单数（paid、无金额不符、不被退款拦，与 shipOne 同判据）。 */
   toShip: number

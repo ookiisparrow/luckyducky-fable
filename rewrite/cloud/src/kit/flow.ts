@@ -1,9 +1,5 @@
 import cloud from 'wx-server-sdk'
-import { COLLECTIONS } from '@ldrw/shared'
-import type { OrderDoc } from '@ldrw/shared'
-import { alert, notifyAlert } from './observe'
-import { getDb, getDocOrNull } from './db'
-import { restoreStock } from './inventory'
+import { alert } from './observe'
 
 // 微信退款单号契约（根因#12 平台接缝契约）：
 // 退款经 callFlow → 微信，`out_refund_no` 仅允许 `^[0-9a-zA-Z_|*@-]{1,64}$`。而内部售后单 _id =
@@ -89,38 +85,3 @@ export async function callFlow(flowId: string, data: unknown, opts: { quiet?: bo
 // 这个词：认不出就走原来的失败告警，不会把没付的单当成已付。
 const WX_ORDER_PAID = /\bORDERPAID\b/
 export const ORDER_PAID_ON_WX = Object.freeze({ orderPaid: true as const })
-
-/**
- * 待付单关单并回补预留：超时关单定时器、pay 惰性关单、用户取消三处共用。回 true＝这次是本次关的（已回补）。
- * 先 closed 后回补：宁可晚到的回调误判售罄（可退款），不冒先回补被并发买走的超卖。
- * 条件写抛错≠没写上：回包丢了而写已落地时，单已 closed、定时器只扫 pending 再也扫不到，这里不回补就永久少卖。
- * 读回按本次写的 closedAt 认领（别人关的不认，回补归关单那一方）；还是 pending＝没写上，照抛——定时器下次扫描重关，
- * 用户那边报错可重试。
- * ponytail: 读回也失败只能告警交人工；要根除得给关单加「待回补」标记让定时器捡。同毫秒两方关单且本次写抛错才会误认领。
- */
-export async function closePendingOrder(
-  id: string,
-  reserved: OrderDoc['reserved'] | undefined,
-  extra: Record<string, unknown> = {}
-): Promise<boolean> {
-  const db = getDb()
-  const closedAt = Date.now()
-  let moved: boolean
-  try {
-    const r = await db
-      .collection(COLLECTIONS.orders)
-      .where({ _id: id, status: 'pending' })
-      .update({ data: { ...extra, status: 'closed', closedAt } })
-    moved = !!(r.stats && r.stats.updated === 1)
-  } catch (e) {
-    const now = await getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id)).catch(() => undefined)
-    moved = !!(now && now.status === 'closed' && now.closedAt === closedAt)
-    await notifyAlert('money', 'closePendingOrder', 'CLOSE_WRITE_FAIL', {
-      id,
-      readBack: now === undefined ? 'fail' : moved ? 'landed' : (now && now.status) || 'missing',
-    })
-    if (now === undefined || (now && now.status === 'pending')) throw e
-  }
-  if (moved && Array.isArray(reserved) && reserved.length) await restoreStock(reserved)
-  return moved
-}

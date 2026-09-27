@@ -15,6 +15,11 @@ const cs = vi.hoisted(() => ({
   listQcSampled: vi.fn(),
   getTrialRefreshGate: vi.fn(),
   refreshTrialSession: vi.fn(),
+  searchCustomer: vi.fn(),
+  getCustomer360: vi.fn(),
+  getUser: vi.fn(),
+  listCheckpoints: vi.fn(),
+  saveCheckpoints: vi.fn(),
 }))
 const sys = vi.hoisted(() => ({ listAgents: vi.fn(), createAgent: vi.fn(), disableAgent: vi.fn(), setAgentWecomUserId: vi.fn() }))
 const client = vi.hoisted(() => ({ login: vi.fn() }))
@@ -27,6 +32,9 @@ import Kb from '../src/pages/Kb.vue'
 import Agents from '../src/pages/Agents.vue'
 import Login from '../src/pages/Login.vue'
 import Conversations from '../src/pages/Conversations.vue'
+import Customer360 from '../src/pages/Customer360.vue'
+import Checkpoints from '../src/pages/Checkpoints.vue'
+import { csErrorText } from '../src/lib/mapCs'
 
 beforeEach(() => {
   for (const f of [...Object.values(cs), ...Object.values(sys), client.login]) f.mockReset()
@@ -80,6 +88,18 @@ describe('Agents.vue', () => {
     expect(t).not.toContain('AGENT_NOT_FOUND')
   })
 
+  it('大白话：停用时云端说账号编号不对（BAD_ID），说中文，不甩码', async () => {
+    sys.disableAgent.mockResolvedValue({ ok: false, status: 400, error: 'BAD_ID' })
+    const w = mount(Agents)
+    await flushPromises()
+    await btn(w, '停用').trigger('click')
+    await btn(w, '确认停用？即时生效').trigger('click')
+    await flushPromises()
+    const t = w.find('.ld-status').text()
+    expect(t).toMatch(/^停用失败：[一-鿿]/)
+    expect(t).not.toContain('BAD_ID')
+  })
+
   it('大白话：改绑时查 userid 占用读库失败，说中文，不甩 WECOM_ID_LOOKUP_FAIL', async () => {
     sys.setAgentWecomUserId.mockResolvedValue({ ok: false, status: 503, error: 'WECOM_ID_LOOKUP_FAIL' })
     const w = mount(Agents)
@@ -110,6 +130,17 @@ describe('Login.vue', () => {
     expect(t).not.toContain('口令不对')
   })
 
+  it('大白话：口令错（BAD_KEY）直说口令不对，口令太短（KEY_TOO_SHORT）说至少 6 位，都不挂码', async () => {
+    client.login.mockResolvedValue({ ok: false, status: 401, error: 'BAD_KEY' })
+    let t = await submit()
+    expect(t).toContain('口令不对')
+    expect(t).not.toContain('BAD_KEY')
+    client.login.mockResolvedValue({ ok: false, status: 401, error: 'KEY_TOO_SHORT' })
+    t = await submit()
+    expect(t).toContain('6 位')
+    expect(t).not.toContain('KEY_TOO_SHORT')
+  })
+
   it('大白话：口令对了但云端没签出令牌，不说「口令不对」', async () => {
     client.login.mockResolvedValue({ ok: false, status: 200, error: 'NO_SESSION_TOKEN' })
     const t = await submit()
@@ -132,5 +163,36 @@ describe('Conversations.vue 质检评分', () => {
     const t = w.find('.qc-row-err').text()
     expect(t).toContain('找不到这条会话')
     expect(t).not.toContain('NOT_FOUND')
+  })
+})
+
+describe('客服页云端码（mapCs csErrorText）', () => {
+  it.each(['USER_LOOKUP_FAIL', 'BAD_ARGS', 'BAD_ARGS:SCORE_RANGE', 'BAD_ARGS:COLON_IN_ID', 'BAD_ARGS:EMPTY_NODE_ID', 'REASON_REQUIRED'])('大白话：%s 有中文，不落「X失败（CODE）」', (code) => {
+    const t = csErrorText(code)
+    expect(t).toMatch(/^[一-鿿]/)
+    expect(t).not.toMatch(/[A-Z]{4,}/)
+  })
+
+  it('大白话：搜客户时读库失败，说「没查全、稍后重试」，不甩 USER_LOOKUP_FAIL', async () => {
+    cs.searchCustomer.mockResolvedValue({ ok: false, status: 200, error: 'USER_LOOKUP_FAIL' })
+    const w = mount(Customer360)
+    await w.find('input').setValue('138')
+    await w.find('input').trigger('keyup.enter')
+    await flushPromises()
+    const t = w.find('.ld-status').text()
+    expect(t).toMatch(/^搜索失败：[一-鿿]/)
+    expect(t).not.toContain('USER_LOOKUP_FAIL')
+  })
+
+  it('大白话：保存节点时有节点没填编号，说中文、说清整批没存，不甩 BAD_ARGS', async () => {
+    cs.listCheckpoints.mockResolvedValue({ ok: true, list: [{ nodeId: 'n1', title: '起针', remedy: '', order: 0 }], rev: 1 })
+    cs.saveCheckpoints.mockResolvedValue({ ok: false, status: 400, error: 'BAD_ARGS:EMPTY_NODE_ID' })
+    const w = mount(Checkpoints)
+    await flushPromises()
+    await btn(w, '保存整课').trigger('click')
+    await flushPromises()
+    const t = w.findAll('.ld-status').map((p) => p.text()).join(' | ')
+    expect(t).toContain('没存')
+    expect(t).not.toContain('BAD_ARGS')
   })
 })

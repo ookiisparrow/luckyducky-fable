@@ -93,7 +93,7 @@ export interface DashboardVM {
 // mapDraftRows（避免本层反向依赖 mapProducts）。
 export interface TodoInputs {
   // 待发货取 toShip 不取 orderCounts 的 paid：paid 里还有全额退款没翻状态、售后待审被拦的单，发不了
-  dashboard: { ok?: boolean; toShip?: unknown }
+  dashboard: { ok?: boolean; toShip?: unknown; approx?: { toShip?: unknown } }
   // partial：服务端 refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
   // partial:true（该路数字不可信但不拖累整包报错）——即便各路 .ok 全过，带 partial 也要整体 partial。
   refundCounts: { ok?: boolean; counts?: Record<string, unknown>; partial?: boolean }
@@ -103,6 +103,7 @@ export interface TodoInputs {
 }
 export interface TodoCounts {
   ship: number
+  shipApprox: boolean // 云端待发货扫描触顶：ship 只是下限，页面显「N+」
   refund: number
   lowStock: number
   prep: number
@@ -116,6 +117,7 @@ export function deriveDashboardTodos(i: TodoInputs): TodoCounts {
   const rows = Array.isArray(i.drafts?.rows) ? i.drafts.rows : []
   return {
     ship: typeof toShip === 'number' ? toShip : 0,
+    shipApprox: !!i.dashboard?.ok && i.dashboard.approx?.toShip === true,
     refund: Number(rcC.applied) || 0,
     // 与库存页同一把尺子：per-SKU 阈值优先，未设退 i.low；库存 0 算售罄，不限量不计。
     lowStock: invList.filter((r) => {

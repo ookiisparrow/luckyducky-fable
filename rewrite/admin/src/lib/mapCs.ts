@@ -2,6 +2,20 @@
 // 360 单面板 error 隔离（一处挂不能全黑·与云端编排同精神）/命中依据中文/kb 行归一。
 import { dateTime } from './format'
 
+/** 客服页（会话/质检/360/节点）的云端码人话，给 failText / writeFailText 当 explain；查不到回空串，由 failText 挂括号留码。 */
+export function csErrorText(e: unknown): string {
+  const code = String(e || '')
+  const MAP: Record<string, string> = {
+    USER_LOOKUP_FAIL: '查客户时读库失败，这次没查全。请稍后重试。',
+    'BAD_ARGS:SCORE_RANGE': '评分要在 1～5 分之间。',
+    'BAD_ARGS:COLON_IN_ID': '课程号或节点编号里不能有冒号「:」，这次整批没存。请改掉再存。',
+    'BAD_ARGS:EMPTY_NODE_ID': '有节点没填编号，这次整批没存（旧节点也没动）。请补上再存。',
+    BAD_ARGS: '要查或要存的内容不全，请检查后重试。',
+    REASON_REQUIRED: '强制刷新要先写原因。',
+  }
+  return MAP[code] || ''
+}
+
 /** 毫秒 → 人话（32 秒 / 4 分 10 秒 / 2 小时 5 分）。非法回 '—'。 */
 export function msHuman(v: unknown): string {
   const n = Number(v)
