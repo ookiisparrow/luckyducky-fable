@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { pageQuery } from '../../../kit'
+import type { Ctx } from '../lib'
+import { pageQuery, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 客服满意度报表（admin 侧·只读）：聚合 csat 集合出 均分 + 1-5 分布 + 总数 + 有备注数。
@@ -24,7 +24,7 @@ export async function getCsatReport({ db }: Ctx) {
     }
   }
   const avg = n ? Math.round((sum / n) * 100) / 100 : 0 // structure-ok 非金额：满意度均分(1-5)保留两位小数·与钱链无关
-  return reply(200, { ok: true, total: n, avg, dist, withNote, approx: rows.length >= SCAN })
+  return ok({ total: n, avg, dist, withNote, approx: rows.length >= SCAN })
 }
 
 const ENTRIES_DEFAULT_LIMIT = 20 // 明细分页默认页大小（同订单/售后体量·bounded·根因#7）
@@ -74,5 +74,5 @@ export async function listCsatEntries({ db, data }: Ctx) {
     note: String(r.note || ''),
     externalUserId: String(r.externalUserId || ''),
   }))
-  return reply(200, { ok: true, entries, nextCursor, hasMore })
+  return ok({ entries, nextCursor, hasMore })
 }

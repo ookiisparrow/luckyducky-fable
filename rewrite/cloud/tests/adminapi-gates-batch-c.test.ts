@@ -133,15 +133,15 @@ describe('C2 loginByWecomCode 基建错不计入爆破频控', () => {
   })
 })
 
-// —— C3 审计 ok 判定纳入 HTTP200+{ok:false} —— //
-describe('C3 审计 ok 判定：HTTP200 且 body.ok!==false 才算成功', () => {
-  it('大白话：action 返 200+{ok:false}（业务失败）→ recordAudit 收到 ok:false，不再被记成成功', async () => {
+// —— C3 审计 ok 判定：看结果对象的 ok —— //
+describe('C3 审计 ok 判定：结果 ok!==false 才算成功', () => {
+  it('大白话：action 回 {ok:false}（业务失败）→ recordAudit 收到 ok:false，不被记成成功', async () => {
     seedSuper()
     const { registries } = await import('../src/functions/adminApi/index')
-    registries.ACTIONS.testFalseOk = async () => ({ statusCode: 200, headers: {}, body: JSON.stringify({ ok: false, error: 'BIZ_FAIL' }) })
+    registries.ACTIONS.testFalseOk = async () => ({ ok: false, error: 'BIZ_FAIL' })
     try {
       const r = await post('testFalseOk', SUPER)
-      expect(r.status).toBe(200)
+      expect(r.status).toBe(400) // 没登记的失败码一律 400
       const log = control.dump('auditLog').find((l: any) => l.action === 'testFalseOk')
       expect(log).toBeTruthy()
       expect(log.ok).toBe(false)
@@ -150,10 +150,10 @@ describe('C3 审计 ok 判定：HTTP200 且 body.ok!==false 才算成功', () =>
     }
   })
 
-  it('大白话：action 返 200+{ok:true} 仍记成功（不误伤正常路径）', async () => {
+  it('大白话：action 回 {ok:true} 仍记成功（不误伤正常路径）', async () => {
     seedSuper()
     const { registries } = await import('../src/functions/adminApi/index')
-    registries.ACTIONS.testTrueOk = async () => ({ statusCode: 200, headers: {}, body: JSON.stringify({ ok: true }) })
+    registries.ACTIONS.testTrueOk = async () => ({ ok: true })
     try {
       await post('testTrueOk', SUPER)
       const log = control.dump('auditLog').find((l: any) => l.action === 'testTrueOk')

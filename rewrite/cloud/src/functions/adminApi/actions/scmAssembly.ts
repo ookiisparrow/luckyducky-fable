@@ -1,5 +1,5 @@
-import { reply, type Ctx } from '../lib'
-import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, getDocOrNull, str, err } from '../../../kit'
+import type { Ctx } from '../lib'
+import { applyStockMoves, produceStock, listMaterialDocs, notifyAlert, pageQuery, getDocOrNull, str, err, ok } from '../../../kit'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
 import { resolveBom, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 
@@ -26,19 +26,19 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   const assemblyId = str(data.assemblyId, 200) // 前端每次提交生成一次·重试复用＝幂等键
   const productId = str(data.productId, 200)
   const spec = str(data.spec, 40) // 成品 SKU 规格（与 inventory/order.items[].spec 同键·可空）
-  if (!assemblyId || !productId) return reply(400, err('BAD_ARGS'))
+  if (!assemblyId || !productId) return err('BAD_ARGS')
   // productId/spec 定界符防护（helper 单源 shared/scmKey.ts）：二者会拼进
   // fg:${productId}__${spec} 与 inventory idOf productId__spec——只挡 spec 含 __ 不够（productId 结尾 _ +
   // spec 开头 _ 仍会撞出同一个组合键，productId 含 __ 也会让首个 __ 反解拆错）；isValidScmProductId/
   // isValidScmSpec 两条排歧规则合用即证首个 __ 唯一定界（推理见该文件头注）。出生点两处校验之一（另一处
   // products.ts saveDraft·cleanProduct 之后）——下游消费点（历史订单/存量库存）刻意不校验，各自注释指回本处。
-  if (!isValidScmProductId(productId) || !isValidScmSpec(spec)) return reply(400, err('BAD_SPEC'))
+  if (!isValidScmProductId(productId) || !isValidScmSpec(spec)) return err('BAD_SPEC')
   const sets = data.sets
-  if (!Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
+  if (!Number.isInteger(sets) || sets <= 0) return err(ERR.BAD_SETS)
   const loaded = await loadBom(db, productId)
-  if (loaded.error) return reply(400, { ok: false, error: loaded.error })
+  if (loaded.error) return { ok: false, error: loaded.error }
   const r = resolveBom(loaded.template, loaded.profile, sets)
-  if (!r.ok) return reply(400, { ok: false, error: r.error })
+  if (!r.ok) return { ok: false, error: r.error }
   const operator = agentId || 'admin'
 
   // ① claim：单据确定性 _id=assemblyId（撞 id=已执行过·并发/重试幂等）。快照在此冻结——
@@ -62,7 +62,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
     // 读不到＝写没落地，照抛走 500——不冒充「已执行过」让运营以为组装完成而不重试。
     const dup = await coll.doc(assemblyId).get().catch(() => null)
     if (!dup || !dup.data) throw e
-    return reply(409, { ok: false, error: ERR.DUPLICATE })
+    return err(ERR.DUPLICATE)
   }
 
   // ② 门1 扣原料（all-or-nothing·任一料不足即整单回滚）；失败撤回 claim——账没动，修完库存可重试
@@ -79,7 +79,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
       .catch(async () => {
         await notifyAlert('anomaly', 'runAssembly', ERR.CLAIM_ROLLBACK_FAIL, { assemblyId })
       })
-    return reply(out.error === ERR.INSUFFICIENT ? 409 : 400, { ok: false, error: out.error, materialId: out.materialId })
+    return { ok: false, error: out.error, materialId: out.materialId }
   }
 
   // ③ 门4 入成品（kit/inventory 唯一新增出口·无文档则建·不限量保持不限量）
@@ -87,7 +87,7 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
   if (!prod.ok) {
     // 争用耗尽（管理端低频·几乎不至）：原料已扣、成品未入——诚实报错不写 assembly_in 流水（不留假痕），
     // 单据保留供追查，人工经「期初盘点/调整」对平（撤销走调整单）。
-    return reply(500, { ok: false, error: ERR.PRODUCE_FAIL })
+    return err(ERR.PRODUCE_FAIL)
   }
   // ④ assembly_in 成品流水留痕（fg 行只留痕不动 materials·对账公式 Σ成品流水 ⇄ inventory）。
   // fail-soft 但不静默（病根#14）：库存已在③入账正确，流水缺痕只坏对账可溯性；重试会撞 assemblyId 幂等闸
@@ -96,30 +96,30 @@ export async function runAssembly({ db, data, agentId }: Ctx) {
     () => ({ ok: false as const })
   )
   if (!fin.ok) await notifyAlert('anomaly', 'runAssembly', ERR.ASSEMBLY_LEDGER_FAIL, { assemblyId })
-  return reply(200, { ok: true, sets, consumed: r.lines })
+  return ok({ sets, consumed: r.lines })
 }
 
 /** 只读预演：这批打包要扣什么料、库存够不够（不动账·打包页确认用）。 */
 export async function previewAssembly({ db, data }: Ctx) {
   const productId = str(data.productId, 200)
   const sets = data.sets
-  if (!productId || !Number.isInteger(sets) || sets <= 0) return reply(400, { ok: false, error: ERR.BAD_SETS })
+  if (!productId || !Number.isInteger(sets) || sets <= 0) return err(ERR.BAD_SETS)
   const loaded = await loadBom(db, productId)
-  if (loaded.error) return reply(400, { ok: false, error: loaded.error })
+  if (loaded.error) return { ok: false, error: loaded.error }
   const r = resolveBom(loaded.template, loaded.profile, sets)
-  if (!r.ok) return reply(400, { ok: false, error: r.error })
+  if (!r.ok) return { ok: false, error: r.error }
   const byId = new Map((await listMaterialDocs()).map((m: any) => [m._id, m])) // 读主档经门1（kit/scmStock）
   const lines = r.lines.map((l) => {
     const m: any = byId.get(l.materialId)
     const stock = m && Number.isInteger(m.stock) ? m.stock : 0
     return { materialId: l.materialId, name: (m && m.name) || l.materialId, uom: (m && m.uom) || 'count', need: l.qty, stock, short: Math.max(0, l.qty - stock), missing: !m }
   })
-  return reply(200, { ok: true, lines })
+  return ok({ lines })
 }
 
 /** 组装单列表（管理端查账·cursor 分页·倒序·根因#7）：走 kit pageQuery——limit 直取封顶
  *  会让超上限历史单永久不可查；defaultLimit 50。 */
 export async function listAssemblies({ db, data }: Ctx) {
   const paged = await pageQuery(db, COLLECTIONS.assemblyOrders, {}, 'at', data, 50)
-  return reply(200, { ok: true, list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
+  return ok({ list: paged.list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }

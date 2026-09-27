@@ -20,7 +20,9 @@ interface ThrottleOpts {
 const COLL = COLLECTIONS.rateLimit
 const rid = (key: string) => 'rl_' + key
 const CAS_RETRIES = 20
-const readRec = async (key: string) => (await getDb().collection(COLL).doc(rid(key)).get().catch(() => null))?.data || null
+export type ThrottleRec = Record<string, any> | null
+/** 读频控档（读失败当无档）。同一请求里要先判锁、后清零的，读一次传给两边，不再各读一遍。 */
+export const throttleRec = async (key: string): Promise<ThrottleRec> => (await getDb().collection(COLL).doc(rid(key)).get().catch(() => null))?.data || null
 
 async function bumpWindowed(
   key: string,
@@ -62,7 +64,7 @@ async function bumpWindowed(
   }
   for (let attempt = 0; attempt < CAS_RETRIES; attempt++) {
     const now = Date.now()
-    const rec = await readRec(key)
+    const rec = await throttleRec(key)
     const within = !!rec && typeof rec[windowField] === 'number' && now - rec[windowField] < windowMs
     const count = (within ? rec![countField] || 0 : 0) + 1
     const patch: Record<string, unknown> = within
@@ -106,9 +108,9 @@ async function bumpWindowed(
   return null
 }
 
-/** 锁定中？是 → 返回剩余毫秒；否 → 0。调用方据此拒绝。 */
-export async function throttleLocked(key: string): Promise<number> {
-  const rec = await readRec(key)
+/** 锁定中？是 → 返回剩余毫秒；否 → 0。调用方据此拒绝。传了预读的档就不再读。 */
+export async function throttleLocked(key: string, pre?: ThrottleRec): Promise<number> {
+  const rec = pre === undefined ? await throttleRec(key) : pre
   const left = rec && typeof rec.lockedUntil === 'number' ? rec.lockedUntil - Date.now() : 0
   return left > 0 ? left : 0
 }
@@ -125,9 +127,9 @@ export async function throttleFail(key: string, opts: ThrottleOpts): Promise<voi
   if (n !== null && n >= opts.max) alert('security', 'throttle', 'LOCKOUT', { key, lockMs: opts.lockMs })
 }
 
-/** 认证成功：清零计数与锁定（仅在有残留时写，常态零开销）。 */
-export async function throttleReset(key: string): Promise<void> {
-  const rec = await readRec(key)
+/** 认证成功：清零计数与锁定（仅在有残留时写，常态零开销）。传了预读的档就不再读。 */
+export async function throttleReset(key: string, pre?: ThrottleRec): Promise<void> {
+  const rec = pre === undefined ? await throttleRec(key) : pre
   if (rec && ((rec.fails || 0) > 0 || (rec.lockedUntil || 0) > 0)) {
     await getDb()
       .collection(COLL)

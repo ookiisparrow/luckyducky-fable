@@ -11,7 +11,7 @@ import { COLLECTIONS, ERR } from '@ldrw/shared'
  *  - assertOwnedByAgent（tests/app-cs1.test.ts 钉）：外包坐席读某会话/对应 360 须是自己 claim 的会话
  *    （csSession.agentId===本坐席 agentId）——防一个外包账号遍历全量客户 360＝批量导出。
  *
- * 两闸返回 { ok, error? }（**不 throw**：adminApi 分发对 throw 一律 500·返 { ok:false } 让调用方 reply(403)
+ * 两闸返回 { ok, error? }（**不 throw**：adminApi 分发对 throw 一律 500·返 { ok:false } 让调用方回 403
  * 更准）。fail-closed：任何缺参/查不到/不匹配一律 ok:false，不默认放行。
  */
 

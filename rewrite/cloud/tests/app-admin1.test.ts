@@ -203,7 +203,7 @@ describe('RBAC 默认拒（黄金 kit-security §D）', () => {
 
   it('大白话：登记了 cap 的 action 按能力放行——外包持 agent:handle 可过对应闸', async () => {
     registries.ACTION_CAPS.testQueue = 'agent:handle'
-    registries.ACTIONS.testQueue = async () => ({ statusCode: 200, headers: {}, body: JSON.stringify({ ok: true }) })
+    registries.ACTIONS.testQueue = async () => ({ ok: true })
     try {
       control.seed('adminConfig', [{ _id: 'auth', keyHash: sha('super-secret-key'), role: 'superadmin' }, { _id: 'agent-1', keyHash: sha('outsourced-key-1'), role: 'outsourced' }])
       const r = await post({ action: 'testQueue', key: 'outsourced-key-1' })

@@ -177,11 +177,11 @@ describe('#400-3 读失败回 DOC_READ_FAIL，不冒充「不存在/未配置」
       control.seed(COLLECTIONS.orders, [{ _id: 'o1', id: 'o1', _openid: 'oB', status: 'paid', amount: 100, items: [], feeMismatch: true }])
     })
 
-    // HTTP 码与 refunds.ts 同口径：读失败 200 + DOC_READ_FAIL，缺档 400 + NO_ORDER
+    // HTTP 码按网关 ERR_STATUS 表：读失败 503 + DOC_READ_FAIL，缺档 400 + NO_ORDER
     it('getOrderDetail：缺档 NO_ORDER，读失败 DOC_READ_FAIL', async () => {
       expect(await admin('getOrderDetail', { id: 'ghost' })).toMatchObject({ status: 400, error: 'NO_ORDER' })
       readFail(COLLECTIONS.orders, 'o1')
-      expect(await admin('getOrderDetail', { id: 'o1' })).toMatchObject({ status: 200, error: 'DOC_READ_FAIL' })
+      expect(await admin('getOrderDetail', { id: 'o1' })).toMatchObject({ status: 503, error: 'DOC_READ_FAIL' })
     })
 
     it('shipOrder：缺档 NO_ORDER，读失败 DOC_READ_FAIL', async () => {
@@ -193,7 +193,7 @@ describe('#400-3 读失败回 DOC_READ_FAIL，不冒充「不存在/未配置」
     it('clearFeeMismatch：缺档 NO_ORDER，读失败 DOC_READ_FAIL 且不动标记', async () => {
       expect(await admin('clearFeeMismatch', { id: 'ghost' })).toMatchObject({ status: 400, error: 'NO_ORDER' })
       readFail(COLLECTIONS.orders, 'o1')
-      expect(await admin('clearFeeMismatch', { id: 'o1' })).toMatchObject({ status: 200, error: 'DOC_READ_FAIL' })
+      expect(await admin('clearFeeMismatch', { id: 'o1' })).toMatchObject({ status: 503, error: 'DOC_READ_FAIL' })
       expect(control.dump(COLLECTIONS.orders)[0].feeMismatch).toBe(true)
     })
   })

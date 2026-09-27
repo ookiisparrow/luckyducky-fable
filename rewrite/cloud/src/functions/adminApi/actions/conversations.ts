@@ -1,7 +1,7 @@
-import { reply, type Ctx } from '../lib'
-import { pageQuery, str, err } from '../../../kit'
+import type { Ctx } from '../lib'
+import { pageQuery, str, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { applyTrialRefresh, loadTrialRefreshGate, trialRefreshDenyStatus } from '../../cs/kfCallback/trialRefresh'
+import { applyTrialRefresh, loadTrialRefreshGate } from '../../cs/kfCallback/trialRefresh'
 
 // 客服会话检索（外包管控底座）：坐席按客户（openid / externalUserId）+ 渠道筛选 →
 // cursor 翻页拉会话时间轴（归档单源 conversations·由 cs/kfCallback 落档）。供坐席查历史 + 质检取证。
@@ -40,8 +40,7 @@ export async function searchConversations({ db, data }: Ctx) {
     text: m.text || '',
     at: m.at || null,
   }))
-  return reply(200, {
-    ok: true,
+  return ok({
     messages,
     count: messages.length,
     nextCursor: paged.nextCursor, // 续页游标（基于原始页·keyword 过滤不影响翻页继续找）
@@ -116,8 +115,7 @@ export async function conversationsReport({ db, data }: Ctx) {
   const maxResponseMs = answered ? Math.max(...deltas) : 0
   const breaches = deltas.filter((x) => x > slaMs).length
   const pct = (n: number) => Math.round(n * 1000) / 10 // 百分比·一位小数
-  return reply(200, {
-    ok: true,
+  return ok({
     sampleSize: rows.length,
     approx: rows.length >= REPORT_SAMPLE, // 触顶＝近似（只算样本·同 dashboard）
     slaMs, // 本次实际生效阈值（前端未传 slaMs 时＝DEFAULT_SLA_MS·权威口径回传，前端据此初始化输入框，不各自硬编默认值）
@@ -209,7 +207,7 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
       ...(agg ? { messageCount: agg.messageCount, avgResponseMs: agg.avgResponseMs } : {}),
     })
   }
-  return reply(200, { ok: true, sampled, count: sampled.length })
+  return ok({ sampled, count: sampled.length })
 }
 
 /**
@@ -226,21 +224,21 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
 export async function saveQcMark({ db, data, agentId }: Ctx): Promise<any> {
   const d = data || {}
   const sessionKey = str(d.sessionKey, 200).trim()
-  if (!sessionKey) return reply(400, err('BAD_ARGS'))
+  if (!sessionKey) return err('BAD_ARGS')
   const score = Number(d.score)
-  if (!Number.isInteger(score) || score < 1 || score > 5) return reply(400, err('BAD_ARGS:SCORE_RANGE'))
+  if (!Number.isInteger(score) || score < 1 || score > 5) return err('BAD_ARGS:SCORE_RANGE')
   const note = str(d.note, QC_NOTE_MAX).trim()
   const got = await db.collection(COLLECTIONS.csSession).doc(sessionKey).get().catch(() => null)
   const s = got && got.data ? got.data : null
-  if (!s) return reply(404, err('NOT_FOUND'))
+  if (!s) return err('NOT_FOUND')
   const now = Date.now()
   const _ = db.command
   const r = await db
     .collection(COLLECTIONS.csSession)
     .where({ _id: sessionKey, qc: _.exists(false) })
     .update({ data: { qc: { score, note, by: String(agentId || 'admin'), at: now } } })
-  if (!r || !r.stats || r.stats.updated !== 1) return reply(409, err('ALREADY_MARKED'))
-  return reply(200, { ok: true })
+  if (!r || !r.stats || r.stats.updated !== 1) return err('ALREADY_MARKED')
+  return ok()
 }
 
 /**
@@ -269,13 +267,13 @@ export async function listQcSampled({ db, data }: Ctx): Promise<any> {
       }
     }),
   )
-  return reply(200, { ok: true, list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
+  return ok({ list, nextCursor: paged.nextCursor, hasMore: paged.hasMore })
 }
 
 /** 测版刷新闸探测：正式/预发回 enabled:false，管理端据此藏按钮。 */
 export async function getTrialRefreshGate({ db }: Ctx): Promise<any> {
   const gate = await loadTrialRefreshGate(db)
-  return reply(200, { ok: true, enabled: gate.on })
+  return ok({ enabled: gate.on })
 }
 
 function parseSessionKey(sessionId: string): { openKfId: string; euid: string } | null {
@@ -333,12 +331,12 @@ async function collectRefreshTargets(db: any, d: Record<string, any>): Promise<R
  */
 export async function refreshTrialSession({ db, data, agentId }: Ctx): Promise<any> {
   const gate = await loadTrialRefreshGate(db)
-  if (!gate.on) return reply(trialRefreshDenyStatus(), err('TRIAL_ONLY'))
+  if (!gate.on) return err('TRIAL_ONLY')
   const d = data || {}
   const reason = str(d.reason, 200).trim()
-  if (!reason) return reply(400, err('REASON_REQUIRED'))
+  if (!reason) return err('REASON_REQUIRED')
   const targets = await collectRefreshTargets(db, d)
-  if (!targets.length) return reply(400, err('BAD_ARGS'))
+  if (!targets.length) return err('BAD_ARGS')
   const force = !!d.force
   const results = []
   for (const t of targets) {
@@ -352,11 +350,6 @@ export async function refreshTrialSession({ db, data, agentId }: Ctx): Promise<a
     })
     results.push(r)
   }
-  if (results.length === 1 && !results[0].ok) {
-    const err = results[0].error
-    if (err === 'HUMAN_ACTIVE') return reply(409, { ok: false, error: err, results })
-    if (err === 'TRIAL_ONLY') return reply(trialRefreshDenyStatus(), { ok: false, error: err, results })
-    return reply(400, { ok: false, error: err, results })
-  }
-  return reply(200, { ok: true, results })
+  if (results.length === 1 && !results[0].ok) return { ok: false, error: results[0].error, results }
+  return ok({ results })
 }

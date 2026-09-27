@@ -1,5 +1,5 @@
-import { reply, ensure, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
-import { notifyAlert, getDocOrNull, str, err } from '../../../kit'
+import { ensure, newSalt, kdf, keyMatches, alertIfScanAtCap, type Ctx } from '../lib'
+import { notifyAlert, getDocOrNull, str, err, ok } from '../../../kit'
 import { COLLECTIONS, dayKeyCST, dayStartMsCST } from '@ldrw/shared'
 
 // 外包账号管理（根因#3）：商户超管建/停/列外包坐席账号
@@ -32,20 +32,20 @@ export async function createAgent({ db, data }: Ctx) {
   const name = str((data && data.name) || '', 40).trim()
   const key = str(data && data.key, Infinity) // 不截：登录端 checkKey 不截，这边截了会建出永远登不上的号
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
-  if (!name) return reply(400, err('BAD_NAME'))
-  if (key.length < 6) return reply(400, err('KEY_TOO_SHORT'))
+  if (!name) return err('BAD_NAME')
+  if (key.length < 6) return err('KEY_TOO_SHORT')
   await ensure(db, COLLECTIONS.adminConfig)
   const _ = db.command
   // ① 撞口令预检：有界扫描（同 checkKey 手法·最坏 ≤50 行 scrypt 比对，管理端低频操作可接受）+ keyMatches
   // 单源比对——认得住 legacy sha 存量账号与已带盐新账号两种在场形态，不漏判。
   // 读失败不当空扫描：否则预检形同虚设、撞口令也能建号
   const dupScan = await db.collection(COLLECTIONS.adminConfig).where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
-  if (!dupScan) return reply(503, err('KEY_LOOKUP_FAIL'))
+  if (!dupScan) return err('KEY_LOOKUP_FAIL')
   alertIfScanAtCap(dupScan.data || [], 50, 'createAgent.dupScan')
-  if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return reply(409, err('KEY_TAKEN'))
+  if ((dupScan.data || []).some((r: any) => keyMatches(r, key))) return err('KEY_TAKEN')
   const taken = await wecomUserIdTaken(db, wecomUserId, '')
-  if (taken === null) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
-  if (taken) return reply(409, err('WECOM_ID_TAKEN'))
+  if (taken === null) return err('WECOM_ID_LOOKUP_FAIL')
+  if (taken) return err('WECOM_ID_TAKEN')
   const id = 'agent:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
   const keySalt = newSalt()
   const keyHash = kdf(key, keySalt)
@@ -68,22 +68,22 @@ export async function createAgent({ db, data }: Ctx) {
   const keyDupScan = await db.collection(COLLECTIONS.adminConfig).where({ keyHash: _.exists(true) }).limit(50).get().catch(() => null)
   if (!keyDupScan) {
     await rollback('keyHash')
-    return reply(503, err('KEY_LOOKUP_FAIL'))
+    return err('KEY_LOOKUP_FAIL')
   }
   alertIfScanAtCap(keyDupScan.data || [], 50, 'createAgent.keyDupScan')
   const keyDupCount = ((keyDupScan.data || []) as any[]).filter((r: any) => keyMatches(r, key)).length
   if (keyDupCount > 1) {
     await rollback('keyHash')
-    return reply(409, err('KEY_TAKEN'))
+    return err('KEY_TAKEN')
   }
   if (wecomUserId) {
     const wDup = await db.collection(COLLECTIONS.adminConfig).where({ wecomUserId }).limit(2).get().catch(() => null)
     if (!wDup || (wDup.data || []).length > 1) {
       await rollback('wecomUserId')
-      return wDup ? reply(409, err('WECOM_ID_TAKEN')) : reply(503, err('WECOM_ID_LOOKUP_FAIL'))
+      return wDup ? err('WECOM_ID_TAKEN') : err('WECOM_ID_LOOKUP_FAIL')
     }
   }
-  return reply(200, { ok: true, agent: { id, name, role: AGENT_ROLE, disabled: false, wecomUserId } })
+  return ok({ agent: { id, name, role: AGENT_ROLE, disabled: false, wecomUserId } })
 }
 
 // 回填/改绑企微 userid：{ id, wecomUserId(空串=解绑) }。作用于外包账号或超管 'auth'（超管也可免登）。
@@ -91,7 +91,7 @@ export async function createAgent({ db, data }: Ctx) {
 export async function setAgentWecomUserId({ db, data }: Ctx) {
   const id = str(data && data.id, 200)
   const wecomUserId = str((data && data.wecomUserId) || '', 64).trim()
-  if (!id) return reply(400, err('BAD_ID'))
+  if (!id) return err('BAD_ID')
   const got = await db
     .collection(COLLECTIONS.adminConfig)
     .doc(id)
@@ -99,10 +99,10 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
     .catch(() => null)
   const acct = got && got.data
   // 只作用于真实账号（超管 auth 或 outsourced agent）——防往任意 doc 塞字段
-  if (!acct || !(id === 'auth' || acct.role === AGENT_ROLE)) return reply(404, err('AGENT_NOT_FOUND'))
+  if (!acct || !(id === 'auth' || acct.role === AGENT_ROLE)) return err('AGENT_NOT_FOUND')
   const taken = await wecomUserIdTaken(db, wecomUserId, id)
-  if (taken === null) return reply(503, err('WECOM_ID_LOOKUP_FAIL'))
-  if (taken) return reply(409, err('WECOM_ID_TAKEN'))
+  if (taken === null) return err('WECOM_ID_LOOKUP_FAIL')
+  if (taken) return err('WECOM_ID_TAKEN')
   const prevWecomUserId = acct.wecomUserId || ''
   await db.collection(COLLECTIONS.adminConfig).doc(id).update({ data: { wecomUserId, updatedAt: Date.now() } })
 
@@ -117,29 +117,29 @@ export async function setAgentWecomUserId({ db, data }: Ctx) {
         .doc(id)
         .update({ data: { wecomUserId: prevWecomUserId, updatedAt: Date.now() } })
         .catch(() => notifyAlert('security', 'setAgentWecomUserId', 'ROLLBACK_FAIL', { id, which: 'wecomUserId' }))
-      return dup ? reply(409, err('WECOM_ID_TAKEN')) : reply(503, err('WECOM_ID_LOOKUP_FAIL'))
+      return dup ? err('WECOM_ID_TAKEN') : err('WECOM_ID_LOOKUP_FAIL')
     }
   }
-  return reply(200, { ok: true, id, wecomUserId })
+  return ok({ id, wecomUserId })
 }
 
 // 停/启外包账号：{ id, disabled }（disabled=true 停·false 启）。只作用于 outsourced agent doc（不许停超管）。
 export async function disableAgent({ db, data }: Ctx) {
   const id = str(data && data.id, 200)
   const disabled = !!(data && data.disabled)
-  if (!id || id === 'auth') return reply(400, err('BAD_ID')) // 'auth'＝超管·不许停
+  if (!id || id === 'auth') return err('BAD_ID') // 'auth'＝超管·不许停
   const got = await db
     .collection(COLLECTIONS.adminConfig)
     .doc(id)
     .get()
     .catch(() => null)
   const acct = got && got.data
-  if (!acct || acct.role !== AGENT_ROLE) return reply(404, err('AGENT_NOT_FOUND'))
+  if (!acct || acct.role !== AGENT_ROLE) return err('AGENT_NOT_FOUND')
   // 停号同时清空会话（见 lib.ts 会话令牌注释）：否则重新启用时旧令牌跟着复活
   const patch: any = { disabled, updatedAt: Date.now() }
   if (disabled) patch.sessions = []
   await db.collection(COLLECTIONS.adminConfig).doc(id).update({ data: patch })
-  return reply(200, { ok: true, id, disabled })
+  return ok({ id, disabled })
 }
 
 // 列外包账号（白名单字段·不回 keyHash·回 wecomUserId 供超管看绑没绑）：id/name/role/disabled/createdAt/wecomUserId。
@@ -185,5 +185,5 @@ export async function listAgents({ db }: Ctx) {
       }
     })
   )
-  return reply(200, { ok: true, agents })
+  return ok({ agents })
 }

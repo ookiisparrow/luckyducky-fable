@@ -10,7 +10,7 @@ import { __resetTempUrlCacheForTest } from '../src/kit/storage'
 const db = () => (cloud as unknown as { database: () => any }).database()
 const save = (page: string, data: unknown) => savePageContent({ db: db(), data: { page, data } } as any)
 const getAdmin = (page: string) => getPageContent({ db: db(), data: { page } } as any)
-const bodyOf = (r: any) => JSON.parse(r.body)
+const bodyOf = (r: any) => JSON.parse(JSON.stringify(r)) // 过一遍 JSON＝网关发出去的回包
 const appCall = (action: string, data: Record<string, unknown> = {}): Promise<any> => app({ action, data })
 
 beforeEach(() => {
@@ -322,7 +322,7 @@ describe('agreement（协议·history 服务端追加与 cap·客户端伪造忽
     const r = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '2.0', sections: [] } })
     control.setBeforeUpdate(null as never)
 
-    expect(r.statusCode).toBe(200) // CAS 重试后成功，不因并发抢先而报错
+    expect(r.ok).toBe(true) // CAS 重试后成功，不因并发抢先而报错
     const c = bodyOf(await getAdmin('agreement')).content
     // 首建 2 条 + 并发方 privacy→1.5 一条 + 本轮 privacy→2.0 一条 = 4 条，一条不少
     // （旧实现：本轮整体覆盖旧 history，1.5 那条会丢，只剩 3 条）
@@ -338,13 +338,13 @@ describe('agreement（协议·history 服务端追加与 cap·客户端伪造忽
       data: { user: { version: '1.0', sections: [] }, privacy: { version: '1.0', sections: [] }, history: [], updatedAt: 1 },
     })
     const r = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '2.0', sections: [] } })
-    expect(r.statusCode).toBe(200) // 旧实现：where(_v:0) 精确匹配缺失字段恒 updated:0，5 次重试耗尽 409 CONTENTION
+    expect(r.ok).toBe(true) // 旧实现：where(_v:0) 精确匹配缺失字段恒 updated:0，5 次重试耗尽 409 CONTENTION
     const c = bodyOf(await getAdmin('agreement')).content
     expect(c._v).toBe(1) // 首次经过 CAS 分支成功写入，_v 从此落地
     expect(c.history.filter((h: any) => h.part === 'privacy' && h.version === '2.0').length).toBe(1)
     // 再存一次，确认 _v 字段落地后正常的「有版本号」CAS 分支同样工作正常，不是只对无字段这一次侥幸成功
     const r2 = await save('agreement', { user: { version: '1.0', sections: [] }, privacy: { version: '3.0', sections: [] } })
-    expect(r2.statusCode).toBe(200)
+    expect(r2.ok).toBe(true)
     const c2 = bodyOf(await getAdmin('agreement')).content
     expect(c2._v).toBe(2)
   })
@@ -353,10 +353,10 @@ describe('agreement（协议·history 服务端追加与 cap·客户端伪造忽
 describe('未知 page 一律拒绝（fail-closed·信任边界·根因#3）', () => {
   it('大白话：admin save/get 未知 page → 400 UNKNOWN_PAGE；app 公开读 → BAD_ARGS', async () => {
     const s = await save('evilPage', { anything: 1 })
-    expect(s.statusCode).toBe(400)
+    expect(s.ok).toBe(false)
     expect(bodyOf(s).error).toBe('UNKNOWN_PAGE')
     const g = await getAdmin('evilPage')
-    expect(g.statusCode).toBe(400)
+    expect(g.ok).toBe(false)
     expect(bodyOf(g).error).toBe('UNKNOWN_PAGE')
     const ar = await appCall('getPageContent', { page: 'evilPage' })
     expect(ar.ok).toBe(false)

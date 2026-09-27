@@ -1,6 +1,6 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert, err } from '../../kit'
-import { COLLECTIONS } from '@ldrw/shared'
+import { getDb, throttleRec, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert, err, type ThrottleRec } from '../../kit'
+import { COLLECTIONS, type ErrCode } from '@ldrw/shared'
 import { reply, checkKey, issueSession, revokeSession, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
@@ -32,6 +32,7 @@ import * as ops from './actions/ops'
 import * as configChecklist from './actions/configChecklist'
 import * as secureConfig from './actions/secureConfig'
 import * as reviews from './actions/reviews'
+import { trialRefreshDenyStatus } from '../cs/kfCallback/trialRefresh'
 
 // 管理控制台后端（HTTP 访问服务触发·业务 action 全部挂在 ACTIONS/ACTION_CAPS）。
 // 鉴权：login 只认口令（首登 bootstrap 须部署密钥）签发会话令牌；其余 action 先认令牌、查无再比口令；RBAC 能力位默认拒；
@@ -277,9 +278,10 @@ function clientKey(event: any): string {
 // 若取 max(ip, global) 预拒——攻击者用轮换 x-forwarded-for 的错误口令把全局计数打到阈，会把持正确口令的
 // 真超管一并锁死门外 5min（发货/退款/客服全停）。故全局锁定不预拒，仍进 checkKey，口令对即放行；口令错才计数
 // + 告警（GLOBAL_BRUTE·人工感知分布式爆破）——攻击者拿不到口令，锁不住真超管，per-IP 硬闸仍挡住单源爆破。
-async function throttleGate(tkey: string): Promise<{ ipWait: number; globalWait: number }> {
-  const [ipWait, globalWait] = await Promise.all([throttleLocked(tkey), throttleLocked(GLOBAL_KEY)])
-  return { ipWait, globalWait }
+// 本 IP 的频控档读一次带回：鉴权成功后 throttleReset 复用它，坐席台轮询每次少读一遍。
+async function throttleGate(tkey: string) {
+  const [ipRec, globalWait] = await Promise.all([throttleRec(tkey), throttleLocked(GLOBAL_KEY)])
+  return { ipRec, ipWait: await throttleLocked(tkey, ipRec), globalWait }
 }
 // 鉴权失败计数 + 分布式爆破信号（login / 企微免登 / 泛 action 三个入口共用）。全局已锁时每次失败留一行日志；
 // 进来时未锁、计完已锁才 notifyAlert 进 anomalies 并推企微。上锁那一刻并发在跑的失败请求都满足这个条件，
@@ -308,18 +310,77 @@ async function claimBrutePush(): Promise<boolean> {
   )
 }
 
-// 审计成功判定（根因#14 失败不可观测）：handler 一律经 reply() 返回 { statusCode, body:JSON字符串 }。
-// 仅看 statusCode===200 会把 ops.ts/wxbill.ts 等「HTTP 200 + body.ok:false」的业务失败误记成成功。故判：
-// statusCode===200 且解析 body 后 ok 不为 false 才算成功（body 无 ok 字段＝按成功；
-// body 非 JSON＝不该发生，保守按 200 记成功，绝不因判定本身反噬审计）。
-function auditOk(res: any): boolean {
-  if (!res || res.statusCode !== 200) return false
-  try {
-    const body = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
-    return !body || body.ok !== false
-  } catch {
-    return true
-  }
+// action 只回结果对象（kit ok/err），HTTP 状态码只在这里按失败码定：成功 200，表里没有的失败 400。
+// 前端只认三种状态：401＝会话失效，后台和坐席台会清令牌踢回登录页，所以登录后的业务码绝不能登记成 401；
+// 库存页认 409＝版本冲突；登录页认 ≥500＝不是口令的问题。其余状态码只给日志和排障看。
+const ERR_STATUS: Record<string, number> = Object.assign(Object.create(null), {
+  // 企微免登 code 换不到人：只在登录前出现，客户端手里还没有令牌
+  BAD_CODE: 401,
+  // 没权限
+  FORBIDDEN: 403,
+  NO_AGENT: 403,
+  NOT_IN_SESSION: 403,
+  NO_CONSENT: 403,
+  ESCALATED_SUPER_ONLY: 403,
+  ORDER_NO_REQUIRED: 403,
+  NO_BOUND_ACCOUNT: 403,
+  ACCOUNT_DISABLED: 403,
+  // 查无此物
+  NOT_FOUND: 404,
+  AGENT_NOT_FOUND: 404,
+  MSG_NOT_FOUND: 404,
+  NO_PURCHASE: 404,
+  NO_SUPPLIER: 404,
+  NO_OUTWORK: 404,
+  NO_WORKER: 404,
+  // 状态不对或被别人抢先：刷新后再试
+  BAD_STATUS: 409,
+  NOT_DRAFT: 409,
+  NOT_ISSUED: 409,
+  NOT_DELIVERED: 409,
+  NOT_ACTIVE: 409,
+  NOT_CLAIMABLE: 409,
+  AT_CAPACITY: 409,
+  ALREADY_CLOSED: 409,
+  ALREADY_MARKED: 409,
+  HUMAN_ACTIVE: 409,
+  VOD_PROCESSING: 409,
+  DRAFT_CONFLICT: 409,
+  STOCK_CONFLICT: 409,
+  CONCURRENT: 409,
+  CONTENTION: 409,
+  INSUFFICIENT: 409,
+  DUPLICATE: 409,
+  KEY_TAKEN: 409,
+  WECOM_ID_TAKEN: 409,
+  // 写库或调外部接口没成功
+  SERVER_ERROR: 500,
+  WRITE_FAIL: 500,
+  REMOVE_FAIL: 500,
+  GC_REMOVE_FAIL: 500,
+  GC_DELETE_FAIL: 500,
+  PRODUCE_FAIL: 500,
+  STOCK_APPLY_FAIL: 500,
+  REFUND_TRIGGER_FAIL: 500,
+  SEND_FAIL: 500,
+  DOWNLOAD_FAILED: 500,
+  UPLOAD_FAILED: 500,
+  URL_FAILED: 500,
+  // 读库或依赖暂时不可用，稍后重试可能就好
+  DOC_READ_FAIL: 503,
+  REFUND_HOLD_READ_FAIL: 503,
+  USER_LOOKUP_FAIL: 503,
+  KEY_LOOKUP_FAIL: 503,
+  WECOM_ID_LOOKUP_FAIL: 503,
+  KF_TOKEN_UNAVAILABLE: 503,
+  META_UNAVAILABLE: 503,
+  CREDS_READ_FAIL: 503,
+  CONFIG_READ_FAIL: 503,
+} satisfies Partial<Record<ErrCode, number>>)
+function statusOf(res: any): number {
+  if (res.ok !== false) return 200
+  if (res.error === 'TRIAL_ONLY') return trialRefreshDenyStatus() // 正式环境回 404 装作没有这个口
+  return ERR_STATUS[res.error] || 400
 }
 
 // 登录成功留痕（#400-8）：shouldAudit 排除了 login，分发处的操作审计记不到登录，事后查不到谁、何时、从哪登的。
@@ -342,7 +403,7 @@ async function auditLogin(operator: unknown, tkey: string, via: 'pwd' | 'wecom')
 }
 
 // 口令登录：失败计爆破，成功只清独立 IP 的计数并签发会话令牌。
-async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
+async function loginByPassword(key: unknown, tkey: string, globalWait: number, ipRec: ThrottleRec) {
   const res = await checkKey(db, key, true)
   if (!res.ok) {
     // 库故障≠错口令：不计爆破不告警；回 503 而非 401，前端不清令牌
@@ -350,7 +411,7 @@ async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
     await authFail(tkey, globalWait)
     return reply(401, res)
   }
-  if (tkey !== GLOBAL_KEY) await throttleReset(tkey) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
+  if (tkey !== GLOBAL_KEY) await throttleReset(tkey, ipRec) // 成功只清独立 IP；缺 IP/全局靠窗口衰减（防爆破信号被一次成功登入抹掉）
   // 签发会话令牌（口令不落盘）：前端此后只存/只发令牌；签发失败如实返空、前端 fail-closed 拒登
   const docId = res.agentId === 'admin' ? 'auth' : String(res.agentId || 'auth')
   const sessionToken = await issueSession(db, docId, 'pwd').catch((e) => {
@@ -365,15 +426,15 @@ async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
 // 403 NO_BOUND_ACCOUNT / 403 ACCOUNT_DISABLED=真鉴权失败（爆破证据）→ 计 throttleFail；
 // 503 KF_TOKEN_UNAVAILABLE（令牌缓存冷窗·非爆破）/ 400 BAD_ARGS（缺 code·客户端错）=既不计失败也不 reset，
 // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数（authFail）：只有真鉴权失败才可能告警。
-async function loginByWecom(data: any, tkey: string, globalWait: number) {
+async function loginByWecom(data: any, tkey: string, globalWait: number, ipRec: ThrottleRec) {
   const res = await wecomLogin.loginByWecomCode({ db, data })
-  if (res.statusCode === 200) {
-    if (tkey !== GLOBAL_KEY) await throttleReset(tkey)
-    const body = JSON.parse(res.body)
-    if (body.sessionToken) await auditLogin(body.operator, tkey, 'wecom')
-  } else if (res.statusCode === 401 || res.statusCode === 403) await authFail(tkey, globalWait)
+  const status = statusOf(res)
+  if (res.ok) {
+    if (tkey !== GLOBAL_KEY) await throttleReset(tkey, ipRec)
+    if (res.sessionToken) await auditLogin(res.operator, tkey, 'wecom')
+  } else if (status === 401 || status === 403) await authFail(tkey, globalWait)
   // 503/400 等基建/客户端错：直接返回，不触碰频控（不计不 reset·不告警）
-  return res
+  return reply(status, res)
 }
 
 export const main = async (event: any) => {
@@ -394,11 +455,11 @@ export const main = async (event: any) => {
   // 认证频控闸：口令校验前先查锁定。per-IP 到阈硬预拒；全局锁定**不**预拒（防轮换 IP 错误口令自我 DoS 锁死真超管），
   // 仅作信号——见 throttleGate 注释。
   const tkey = clientKey(event)
-  const { ipWait, globalWait } = await throttleGate(tkey)
+  const { ipRec, ipWait, globalWait } = await throttleGate(tkey)
   // 只有独立 IP 的 per-IP 锁才硬预拒。缺 IP 时 tkey===GLOBAL_KEY，ipWait 其实是全局信号——预拒会把真超管锁门外。
   if (ipWait > 0 && tkey !== GLOBAL_KEY) return reply(429, err('TOO_MANY_ATTEMPTS', { retryAfter: Math.ceil(ipWait / 1000) }))
 
-  if (action === 'login') return loginByPassword(key, tkey, globalWait)
+  if (action === 'login') return loginByPassword(key, tkey, globalWait, ipRec)
 
   // 登出（pre-auth·在能力闸前）：外包只有 agent:handle，走默认拒会 403 登不出。拿着令牌就能吊销它自己，
   // 无效令牌也回成功，回包不当令牌有效性探针，故不计爆破失败。
@@ -408,7 +469,7 @@ export const main = async (event: any) => {
   }
 
   // 企微 OAuth 免登（pre-auth·坐席无口令·同 login 受频控防刷 code）：换 userid→查绑定账号→签发 session 令牌
-  if (action === 'loginByWecomCode') return loginByWecom(data, tkey, globalWait)
+  if (action === 'loginByWecomCode') return loginByWecom(data, tkey, globalWait, ipRec)
 
   // 其余 action 一律先验口令/令牌（同受频控，防经任一 action 入口爆破）
   const auth = await checkKey(db, key, false)
@@ -417,7 +478,7 @@ export const main = async (event: any) => {
     await authFail(tkey, globalWait) // 泛 action 与 login 打的是同一把口令、同一类爆破，同 tag 'adminLogin' 聚合
     return reply(401, auth)
   }
-  if (tkey !== GLOBAL_KEY) await throttleReset(tkey)
+  if (tkey !== GLOBAL_KEY) await throttleReset(tkey, ipRec)
   // 能力闸·默认拒：登记的取 ACTION_CAPS、未登记默认高权 ADMIN_DEFAULT_CAP；超管 '*' 匹配一切。
   // 「任一命中」语义：ACTION_CAPS 值可为单 cap 或 cap 数组——principal 持数组中任一 cap 即放行，
   // admin:write 与 refund:manage 并列登记时，admin:write 持有者行为不变、refund:manage 独立可用。
@@ -431,17 +492,18 @@ export const main = async (event: any) => {
   const auditIp = tkey.replace('adminlogin:', '')
   const operator = String(auth.operator || 'admin') // 真实操作者身份·多账号可追溯
   const agentId = String(auth.agentId || operator)
-  let res: any
+  let out: ReturnType<typeof reply>
   let crash: { module?: string; error?: string } = {} // 只有异常路径带模块归因
   try {
-    res = await handler({ db, cloud, data, agentId, caps })
+    const res = await handler({ db, cloud, data, agentId, caps })
+    out = reply(statusOf(res), res) // 序列化也在 try 里：结果带 BigInt/环引用同样按崩溃回 500
   } catch (e) {
     console.error('adminApi error', action, e)
     crash = { module: ADMIN_ACTION_MODULE_BY_NAME[action] ?? 'unknown', error: 'SERVER_ERROR' }
-    res = reply(500, err('SERVER_ERROR'))
+    out = reply(500, err('SERVER_ERROR'))
   }
-  if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: auditOk(res), ...crash })
-  return res
+  if (shouldAudit(action)) await recordAudit({ action, operator, ip: auditIp, data, ok: out.statusCode === 200, ...crash })
+  return out
 }
 
 /** 测试挂载口（ACTIONS/ACTION_CAPS）。 */

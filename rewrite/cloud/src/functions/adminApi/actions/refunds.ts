@@ -9,9 +9,9 @@ import {
   AFTERSALE_SCAN_CAP,
   buildBadStatus,
 } from '@ldrw/shared'
-import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing, getDocOrNull, str, err } from '../../../kit'
+import { callFlow, refundNoFor, pageQuery, notifyAlert, isDocMissing, isCollectionMissing, getDocOrNull, str, err, ok } from '../../../kit'
 import type { OrderDoc, AfterSaleDoc, Fen } from '@ldrw/shared'
-import { reply, ensure, activationFor, readDoc, type Ctx } from '../lib'
+import { ensure, activationFor, readDoc, type Ctx } from '../lib'
 
 // 同单售后读齐（退款封顶 used / 补录分母锁都靠它）：裸 .get() 默认 100 条截断会少算 used，故显式取到
 // AFTERSALE_SCAN_CAP，触顶＝记录数异常 → 告警并返回 null 由调用方拒退。读失败不接住（交网关回 500）：
@@ -89,17 +89,17 @@ export async function overrideRefund({ db, data }: Ctx) {
   const reason = str(data && data.reason, 200)
     .trim()
     .slice(0, 100)
-  if (!orderId || !reqLine || !reason) return reply(400, err('BAD_ARGS'))
+  if (!orderId || !reqLine || !reason) return err('BAD_ARGS')
 
   // 两次纯读互不依赖，并行；判定顺序：读失败 → 退款流 → 订单（读失败≠未配置/没这单）
   const [cfg, got] = await Promise.all([
     readDoc(db.collection(COLLECTIONS.config).doc('pay').get()),
     readDoc(db.collection(COLLECTIONS.orders).doc(orderId).get()),
   ])
-  if (!cfg.ok || !got.ok) return reply(200, err('DOC_READ_FAIL'))
+  if (!cfg.ok || !got.ok) return err('DOC_READ_FAIL')
   const flowId = cfg.data && cfg.data.refundFlowId
-  if (!flowId) return reply(400, err('REFUND_FLOW_NOT_CONFIGURED'))
-  if (!got.data) return reply(400, err('NO_ORDER'))
+  if (!flowId) return err('REFUND_FLOW_NOT_CONFIGURED')
+  if (!got.data) return err('NO_ORDER')
   const order: OrderDoc = got.data
   // 状态闸放行 refund_required（用户拍板）：该终态＝关单后晚到支付回调、库存已被
   // 别人买走（payCallback PAID_BUT_OOS 唯一产生点）——**钱已经收了、货永远发不出**，必须退，不放行就没有任何
@@ -110,11 +110,11 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 没付过钱的人，是纯资损洞。「已收钱」是本入口的前提，不是状态多寡的问题。
   // 钱守恒：refundShareFen 行/单双口径封顶照旧——payment_exception 用 paidFee 作为全单实付分母。
   if (!['paid', 'shipped', 'done', 'refund_required', 'payment_exception'].includes(order.status))
-    return reply(400, err(buildBadStatus(order.status)))
+    return err(buildBadStatus(order.status))
   const orderStatusAtStart = order.status // 竞态可观测闸用（见 alertIfShippedMeanwhile）
 
   const line = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
-  if (!line) return reply(400, err('UNKNOWN_ITEM'))
+  if (!line) return err('UNKNOWN_ITEM')
   const lineId = line.lineId || line.productId
 
   // 越过资格：不看 refundable/enteredQty/既有售后（含 rejected），按整行件数算分摊上限。
@@ -124,11 +124,11 @@ export async function overrideRefund({ db, data }: Ctx) {
   // 多少）、usedOrder=全单已提交额度（既有口径，防超实付总额）；lineShare 用 used=0 算出「该行理论分摊上限
   // （不看用量）」，减去 usedLine 得该行剩余，再与 orderCap（usedOrder 封顶后的全单剩余）取小。
   const amountFen = await wxTotalFen(order, orderId, 'overrideRefund')
-  if (amountFen == null) return reply(400, err('PAYMENT_AMOUNT_MISSING'))
+  if (amountFen == null) return err('PAYMENT_AMOUNT_MISSING')
   const goodsFen = toFen(Number(order.goods))
   const itemFen = asFen(toFen(line.price) * (line.qty || 1))
   const exist = await orderAfterSales(db, orderId, 'overrideRefund')
-  if (!exist) return reply(400, err('REFUND_SCAN_CAP'))
+  if (!exist) return err('REFUND_SCAN_CAP')
   const settled = (a: AfterSaleDoc) => AFTERSALE_QUOTA_STATUSES.includes(a.status)
   const usedOrder = asFen(
     exist.filter(settled).reduce((s, a) => s + toFen(Number(a.refundAmount)), 0)
@@ -141,7 +141,7 @@ export async function overrideRefund({ db, data }: Ctx) {
   const lineShare = refundShareFen(amountFen, goodsFen, itemFen, asFen(0))
   const orderCap = refundShareFen(amountFen, goodsFen, itemFen, usedOrder)
   const refundFen = asFen(Math.min(Math.max(0, lineShare - usedLine), orderCap))
-  if (refundFen <= 0) return reply(400, err('NOTHING_LEFT'))
+  if (refundFen <= 0) return err('NOTHING_LEFT')
 
   // 确定性 _id（根因#1 幂等 + 跨函数 TOCTOU）：首个记录与客户 applyRefund
   // 共用同一 _id 命名空间 `orderId__lineId`（app/actions/orders.ts applyRefund 同款），不是各自另起一套——
@@ -191,9 +191,9 @@ export async function overrideRefund({ db, data }: Ctx) {
       .doc(asId)
       .get()
       .catch(() => null)
-    if (reread && reread.data) return reply(409, err('CONCURRENT'))
+    if (reread && reread.data) return err('CONCURRENT')
     await notifyAlert('money', 'overrideRefund', 'AFTERSALE_WRITE_FAIL', { id: asId })
-    return reply(500, err('WRITE_FAIL'))
+    return err('WRITE_FAIL')
   }
 
   const r = await callFlow(String(flowId), {
@@ -205,10 +205,10 @@ export async function overrideRefund({ db, data }: Ctx) {
   if (!flowAccepted(r)) {
     await notifyAlert('money', 'overrideRefund', 'REFUND_TRIGGER_FAIL', { id: asId })
     await rollbackApproved(db, asId, 'overrideRefund')
-    return reply(500, err('REFUND_TRIGGER_FAIL'))
+    return err('REFUND_TRIGGER_FAIL')
   }
   await alertIfShippedMeanwhile(db, orderId, orderStatusAtStart, 'overrideRefund', { id: asId, orderId })
-  return reply(200, { ok: true, id: asId })
+  return ok({ id: asId })
 }
 
 // —— 补录实际到账金额（支付异常单的运维闭环·死胡同出口）——
@@ -221,25 +221,25 @@ export async function overrideRefund({ db, data }: Ctx) {
 export async function recordPaidFee({ db, data, agentId }: Ctx) {
   const id = str(data && data.id, 200)
   const paidFee = Number((data && data.paidFeeFen) ?? NaN)
-  if (!id || !Number.isInteger(paidFee) || paidFee <= 0) return reply(400, err('BAD_ARGS'))
+  if (!id || !Number.isInteger(paidFee) || paidFee <= 0) return err('BAD_ARGS')
   const got = await readDoc(db.collection(COLLECTIONS.orders).doc(id).get())
-  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
-  if (!got.data) return reply(400, err('NO_ORDER'))
+  if (!got.ok) return err('DOC_READ_FAIL')
+  if (!got.data) return err('NO_ORDER')
   const order: OrderDoc = got.data
-  if (order.status !== 'payment_exception') return reply(400, err(buildBadStatus(order.status)))
+  if (order.status !== 'payment_exception') return err(buildBadStatus(order.status))
   // 防手滑护栏：补录金额必须与订单应付同量级——
   // 真实少付/多付不会超出应付 20 倍，超限＝打错位数/恶意放大退款分母，直接拒。
   const expectedFen = toFen(Number(order.amount) || 0)
   if (!(expectedFen > 0) || paidFee > expectedFen * 20) {
     await notifyAlert('money', 'recordPaidFee', 'BAD_AMOUNT_RANGE', { id, paidFee, expectedFen })
-    return reply(400, err('BAD_AMOUNT'))
+    return err('BAD_AMOUNT')
   }
   // 已退/在退（任何售后单）绝不允许改实付额（先退款再改 paidFee→
   // overrideRefund 按新分母重算可退余额→同一笔钱累计退两次）。售后单是退款真相单一来源，
   // 有单即锁定分母，只能人工改库介入。
   const exist = await orderAfterSales(db, id, 'recordPaidFee')
-  if (!exist) return reply(400, err('REFUND_SCAN_CAP'))
-  if (exist.length) return reply(400, err('REFUND_EXISTS'))
+  if (!exist) return err('REFUND_SCAN_CAP')
+  if (exist.length) return err('REFUND_EXISTS')
   // 已有有效实付额：无售后单时允许覆盖修正（补录错了改对），留痕 paidFeePrev 可对账。
   const prev = Number(order.paidFee)
   const prevValid = Number.isInteger(prev) && prev > 0
@@ -256,9 +256,9 @@ export async function recordPaidFee({ db, data, agentId }: Ctx) {
     })
   if (!upd.stats || upd.stats.updated !== 1) {
     await notifyAlert('money', 'recordPaidFee', 'RECORD_FAIL', { id })
-    return reply(409, err('CONCURRENT'))
+    return err('CONCURRENT')
   }
-  return reply(200, { ok: true })
+  return ok()
 }
 
 // —— 售后退款（链10：审核 + 触发退款工作流；金额在申请时已云端分摊算定）——
@@ -300,7 +300,7 @@ export async function listRefunds({ db, data }: Ctx) {
     const b = addrByOrder[String(a.orderId || '')] || { name: '', phone: '' }
     return { ...a, buyerName: b.name, buyerPhone: b.phone }
   })
-  return reply(200, { ok: true, ...paged, list: enriched })
+  return ok({ ...paged, list: enriched })
 }
 
 // 按状态服务端精确计数（根因#7 计数失真）：每状态 + 全部走 .count()（精确·不封顶·不受分页影响），
@@ -325,7 +325,7 @@ export async function refundCounts({ db }: Ctx) {
   ])
   const counts: Record<string, number> = { all }
   statuses.forEach((s, i) => (counts[s] = nums[i]))
-  return reply(200, { ok: true, counts, partial })
+  return ok({ counts, partial })
 }
 
 // 退款决策判据（激活码状态数据链·根因#8：不伪造徽章，用真数据）。读类·不写库。
@@ -333,10 +333,10 @@ export async function refundCounts({ db }: Ctx) {
 // 同口径），查 activations 算「买家是否已激活/已进课该课程」——给审核员真判据（已激活=退货权失·谨慎）。
 export async function getRefundDetail({ db, data }: Ctx) {
   const id = str(data && data.id, 200)
-  if (!id) return reply(400, err('BAD_ARGS'))
+  if (!id) return err('BAD_ARGS')
   const got = await readDoc(db.collection(COLLECTIONS.afterSales).doc(id).get())
-  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
-  if (!got.data) return reply(400, err('NO_RECORD'))
+  if (!got.ok) return err('DOC_READ_FAIL')
+  if (!got.data) return err('NO_RECORD')
   const a: AfterSaleDoc = got.data
   // 本单此行真实可退性（根因#8 判据不失真·与 approveRefund 的 ENTERED_NOT_REFUNDABLE 同口径）：
   // 判据须绑「本单这一订单行」的 refundable/enteredQty，而非「买家这门课有没有进过」——买家可能经别单/别码
@@ -351,8 +351,7 @@ export async function getRefundDetail({ db, data }: Ctx) {
   const refundableQty = line ? (Number(line.qty) || 1) - (Number(line.enteredQty) || 0) : 0
   // 行缺失＝approveRefund 的 if(line) 跳过、不因进课拦 → 视作不被 ENTERED 拦（lineRefundable:true）
   const lineRefundable = line ? line.refundable !== false && refundableQty > 0 : true
-  return reply(200, {
-    ok: true,
+  return ok({
     activation,
     lineRefundable,
     refundableQty: line ? refundableQty : null,
@@ -362,27 +361,27 @@ export async function getRefundDetail({ db, data }: Ctx) {
 
 export async function approveRefund({ db, data }: Ctx) {
   const id = str(data.id, 200)
-  if (!id) return reply(400, err('BAD_ARGS'))
+  if (!id) return err('BAD_ARGS')
   // 两次纯读互不依赖，并行；判定顺序：读失败 → 记录 → 状态 → 退款流；订单读依赖 orderId，串行
   const [got, cfg] = await Promise.all([
     readDoc(db.collection(COLLECTIONS.afterSales).doc(id).get()),
     readDoc(db.collection(COLLECTIONS.config).doc('pay').get()),
   ])
-  if (!got.ok || !cfg.ok) return reply(200, err('DOC_READ_FAIL'))
-  if (!got.data) return reply(400, err('NO_RECORD'))
+  if (!got.ok || !cfg.ok) return err('DOC_READ_FAIL')
+  if (!got.data) return err('NO_RECORD')
   const rec: AfterSaleDoc = got.data
   if (rec.status !== 'applied')
-    return reply(400, err(buildBadStatus(rec.status)))
+    return err(buildBadStatus(rec.status))
 
   const flowId = cfg.data && cfg.data.refundFlowId
-  if (!flowId) return reply(400, err('REFUND_FLOW_NOT_CONFIGURED'))
+  if (!flowId) return err('REFUND_FLOW_NOT_CONFIGURED')
   const orderGot = await readDoc(db.collection(COLLECTIONS.orders).doc(rec.orderId).get())
-  if (!orderGot.ok) return reply(200, err('DOC_READ_FAIL'))
-  if (!orderGot.data) return reply(400, err('NO_ORDER'))
+  if (!orderGot.ok) return err('DOC_READ_FAIL')
+  if (!orderGot.data) return err('NO_ORDER')
   const order: OrderDoc = orderGot.data
   const orderStatusAtStart = order.status // 竞态可观测闸用（见 alertIfShippedMeanwhile）
   const amountFen = await wxTotalFen(order, rec.orderId, 'approveRefund')
-  if (amountFen == null) return reply(400, err('PAYMENT_AMOUNT_MISSING'))
+  if (amountFen == null) return err('PAYMENT_AMOUNT_MISSING')
 
   // 复核进课退货权（根因#1 副作用绑状态机）：用户先申请退款（applied）
   // 后再确认进课时，confirmEnter 按件递增 enteredQty（全进才翻 refundable=false）。同意退款前必须按**此刻**
@@ -396,7 +395,7 @@ export async function approveRefund({ db, data }: Ctx) {
     const lineQty = line.qty || 1
     const refundableQtyNow = lineQty - (line.enteredQty || 0)
     if (line.refundable === false || refundableQtyNow <= 0) {
-      return reply(400, err('ENTERED_NOT_REFUNDABLE'))
+      return err('ENTERED_NOT_REFUNDABLE')
     }
     const recQty = Number(rec.qty) || refundableQtyNow // 旧售后单无 qty：视作当下值（不降级）
     if (refundableQtyNow < recQty) {
@@ -404,7 +403,7 @@ export async function approveRefund({ db, data }: Ctx) {
       const goodsFen = toFen(Number(order.goods))
       const itemFen = asFen(toFen(line.price) * refundableQtyNow)
       const exist = await orderAfterSales(db, rec.orderId, 'approveRefund')
-      if (!exist) return reply(400, err('REFUND_SCAN_CAP'))
+      if (!exist) return err('REFUND_SCAN_CAP')
       const used = asFen(
         exist
           .filter(
@@ -413,7 +412,7 @@ export async function approveRefund({ db, data }: Ctx) {
           .reduce((s, a) => s + toFen(Number(a.refundAmount)), 0)
       )
       const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
-      if (refundFen <= 0) return reply(400, err('NOTHING_LEFT'))
+      if (refundFen <= 0) return err('NOTHING_LEFT')
       requalify = {
         qty: refundableQtyNow,
         itemTotal: fenToYuan(itemFen),
@@ -441,7 +440,7 @@ export async function approveRefund({ db, data }: Ctx) {
       },
     })
   if (!grab.stats || grab.stats.updated !== 1) {
-    return reply(400, err(buildBadStatus('concurrent')))
+    return err(buildBadStatus('concurrent'))
   }
 
   // 触发退款工作流（kit.callFlow 单点，根因#12）：金额取售后单分摊额（重算降级后以新额为准）+ wxTotalFen，不收前端
@@ -459,10 +458,10 @@ export async function approveRefund({ db, data }: Ctx) {
   if (!flowAccepted(r)) {
     await notifyAlert('money', 'approveRefund', 'REFUND_TRIGGER_FAIL', { id })
     await rollbackApproved(db, id, 'approveRefund')
-    return reply(500, err('REFUND_TRIGGER_FAIL'))
+    return err('REFUND_TRIGGER_FAIL')
   }
   await alertIfShippedMeanwhile(db, rec.orderId, orderStatusAtStart, 'approveRefund', { id, orderId: rec.orderId })
-  return reply(200, { ok: true })
+  return ok()
 }
 
 export async function rejectRefund({ db, data }: Ctx) {
@@ -470,12 +469,12 @@ export async function rejectRefund({ db, data }: Ctx) {
   const reason = str(data.reason, 200)
     .trim()
     .slice(0, 100)
-  if (!id || !reason) return reply(400, err('BAD_ARGS'))
+  if (!id || !reason) return err('BAD_ARGS')
   const got = await readDoc(db.collection(COLLECTIONS.afterSales).doc(id).get())
-  if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
-  if (!got.data) return reply(400, err('NO_RECORD'))
+  if (!got.ok) return err('DOC_READ_FAIL')
+  if (!got.data) return err('NO_RECORD')
   const rec: AfterSaleDoc = got.data
-  if (rec.status !== 'applied') return reply(400, err(buildBadStatus(rec.status)))
+  if (rec.status !== 'applied') return err(buildBadStatus(rec.status))
   // 条件更新（原子化）：仍是 applied 才置 rejected——读检查到写入之间被同意抢先（approved·钱已进
   // 退款通道）时绝不 clobber 回 rejected（否则退款回调 from applied/approved 抢不到状态·钱退了单据却是已拒绝）。
   const grab = await db
@@ -483,7 +482,7 @@ export async function rejectRefund({ db, data }: Ctx) {
     .where({ _id: id, status: 'applied' })
     .update({ data: { status: 'rejected', rejectedAt: Date.now(), rejectReason: reason } })
   if (!grab.stats || grab.stats.updated !== 1) {
-    return reply(400, err(buildBadStatus('concurrent')))
+    return err(buildBadStatus('concurrent'))
   }
-  return reply(200, { ok: true })
+  return ok()
 }

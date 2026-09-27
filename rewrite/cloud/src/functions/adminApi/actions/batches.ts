@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto'
-import { pageQuery, str, err } from '../../../kit'
-import { reply, type Ctx } from '../lib'
+import { pageQuery, str, err, ok } from '../../../kit'
+import type { Ctx } from '../lib'
 import { COLLECTIONS, cstIso } from '@ldrw/shared'
 
 // 分页全取（避免单次拉取封顶截断——批次/码增长后旧码被挤出工作台）。
@@ -24,7 +24,7 @@ async function fetchAll(makeQuery: () => any, pageSize = 200): Promise<{ rows: a
 
 export async function listBatches({ db, data }: Ctx) {
   const courseId = str(data.courseId, 200)
-  if (!courseId) return reply(400, err('NO_COURSE_ID'))
+  if (!courseId) return err('NO_COURSE_ID')
   // 无 orderBy 时服务端不保证各页同序，skip 翻页会跨页漏/重；_id 唯一，是全序。
   const { rows, truncated } = await fetchAll(() =>
     db.collection(COLLECTIONS.qrcodes).where({ courseId }).orderBy('_id', 'asc').field({ batchId: true, status: true, createdAt: true })
@@ -36,7 +36,7 @@ export async function listBatches({ db, data }: Ctx) {
     if (q.status === 'activated') b.activated++
   }
   const list = Object.values(map).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0))
-  return reply(200, { ok: true, list, truncated })
+  return ok({ list, truncated })
 }
 
 // 易抄写字符表（无 0/O/1/I），LD 前缀 + 10 位 ≈ 1e15 空间。
@@ -98,20 +98,19 @@ export async function generateQrcodes(
 // 入参校验与钳 500 只在 generateQrcodes 一处（读库前就回 BAD_ARGS）。
 export async function createBatch({ db, data }: Ctx) {
   const r = await generateQrcodes(db, str(data.courseId, 200), data.count)
-  if (!r.ok) return reply(400, { ok: false, error: r.error })
-  return reply(200, { ok: true, batchId: r.batchId, codes: r.codes })
+  if (!r.ok) return { ok: false, error: r.error }
+  return ok({ batchId: r.batchId, codes: r.codes })
 }
 
 const CODE_PAGE = 50
 
 export async function listBatchCodes({ db, data }: Ctx) {
   const batchId = str(data.batchId, 200)
-  if (!batchId) return reply(400, err('NO_BATCH'))
+  if (!batchId) return err('NO_BATCH')
   // 一批可有几百到几千张：默认一页 50、limit 钳到 200，cursor 翻页（根因#7）。
   // createdAt 同批同值（generate 一次 now），靠 kit 复合游标 {_id} 打破平局。
   const paged = await pageQuery(db, COLLECTIONS.qrcodes, { batchId }, 'createdAt', data, CODE_PAGE, 'asc')
-  return reply(200, {
-    ok: true,
+  return ok({
     codes: paged.list.map((q: any) => q._id),
     nextCursor: paged.nextCursor,
     hasMore: paged.hasMore,

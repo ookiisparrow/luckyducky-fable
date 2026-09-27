@@ -1,5 +1,5 @@
-import { reply, ensure, type Ctx } from '../lib'
-import { notifyAlert, isCollectionMissing, str, err } from '../../../kit'
+import { ensure, type Ctx } from '../lib'
+import { notifyAlert, isCollectionMissing, str, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 知识库维护（admin 侧）：管理端维护 FAQ/知识条目（问题 + 答案 + 分类 + 启用 + 顺序 + 精选），
@@ -18,8 +18,8 @@ export async function listKb({ db }: Ctx) {
   try {
     r = await db.collection(COLLECTIONS.kb).limit(SCAN).get()
   } catch (e) {
-    if (isCollectionMissing(e)) return reply(200, { ok: true, list: [] }) // 集合未建＝真没有册（第一次保存前）
-    return reply(200, err('DOC_READ_FAIL')) // 库挂了≠空册：停手，别让后台解锁「保存整册」
+    if (isCollectionMissing(e)) return ok({ list: [] }) // 集合未建＝真没有册（第一次保存前）
+    return err('DOC_READ_FAIL') // 库挂了≠空册：停手，别让后台解锁「保存整册」
   }
   const list = ((r && r.data) || [])
     .map((d: any) => ({
@@ -32,7 +32,7 @@ export async function listKb({ db }: Ctx) {
       featured: d.featured === true, // 精选（R37b·公开读 getPublicFaq 只回此=true 的条目；旧条目无字段默认不精选）
     }))
     .sort((a: any, b: any) => a.category.localeCompare(b.category) || a.order - b.order)
-  return reply(200, { ok: true, list })
+  return ok({ list })
 }
 
 // 整体覆盖式保存知识条目（白名单字段 + 长度上限·不信前端·根因#3）：upsert 传入条目 + 删本册不在列表里的旧条目。
@@ -66,7 +66,7 @@ export async function saveKb({ db, data }: Ctx) {
   // 残留条目继续被 bot/坐席读到（可能是已改名/合并进别条的旧答案，误导话术）。upsert 已成功的部分保留（数据是
   // 新的、只是旧条目残留，重存一次即可收敛）；GC 失败经 notifyAlert 留痕 + 如实回 ok:false，别静默过关。
   const old = await db.collection(COLLECTIONS.kb).limit(SCAN).get().catch(() => null)
-  if (!old) return reply(200, err('DOC_READ_FAIL')) // 扫描失败≠空库：停 GC，不假装整册已替换
+  if (!old) return err('DOC_READ_FAIL') // 扫描失败≠空库：停 GC，不假装整册已替换
   const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
     if (!keep.has(d._id)) {
@@ -81,7 +81,7 @@ export async function saveKb({ db, data }: Ctx) {
   }
   if (failedIds.length) {
     await notifyAlert('anomaly', 'saveKb', 'GC_REMOVE_FAIL', { failedIds })
-    return reply(200, err('GC_REMOVE_FAIL', { failedIds }))
+    return err('GC_REMOVE_FAIL', { failedIds })
   }
-  return reply(200, { ok: true, count: keep.size })
+  return ok({ count: keep.size })
 }

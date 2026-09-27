@@ -64,8 +64,8 @@ describe('SCM 列表分页收口（B1·根因#7）：5 处列表读走 pageQuery
 
   it('大白话：scmMaterials.listSuppliers 调 pageQuery（defaultLimit 200=现行上限），函数体内无残留裸 .limit()；listMaterials 刻意不收口仍保持全量', () => {
     const body = funcSlice(materialsSrc, 'listSuppliers', ['saveSupplier'])
-    expect(body).toMatch(/pageQuery\(/)
-    expect(body).toMatch(/200/)
+    expect(body).toMatch(/pageQuery\(.*SUPPLIER_LIST_LIMIT\)/)
+    expect(materialsSrc).toMatch(/const SUPPLIER_LIST_LIMIT = 200\b/)
     expect(body).not.toMatch(/\.limit\(/)
     const materialsBody = funcSlice(materialsSrc, 'listMaterials', ['saveMaterial'])
     expect(materialsBody).not.toMatch(/pageQuery\(/) // 明确不收口（picker 全量语义·主档规模有界）

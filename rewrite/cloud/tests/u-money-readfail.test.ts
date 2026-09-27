@@ -166,6 +166,7 @@ describe('shipOne 退款闸：读失败拒发，集合未建放行', () => {
     failReads(afterSalesScan)
     const r = await post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF1' })
     expect(r.error).toBe('REFUND_HOLD_READ_FAIL')
+    expect(r.status).toBe(503) // 读库失败与 DOC_READ_FAIL 同组：暂时不可用、稍后重试
     expect(control.dump('orders')[0].status).toBe('paid')
   })
 

@@ -7,7 +7,7 @@ import {
   dayStartMsCST as dayStartMs,
   type CollectionName,
 } from '@ldrw/shared'
-import { reply, getTxAlerts, type Ctx } from '../lib'
+import { getTxAlerts, type Ctx } from '../lib'
 // 比对分类器在 kit/reconcile（timers/billReconcile 复用同一套原语）；北京日助手在 @ldrw/shared cst.ts。
 // DAY_MS 取别名 DAY，文件内沿用短名
 import {
@@ -18,6 +18,7 @@ import {
   toYuanAmount,
   DAY_MS as DAY,
   isCollectionMissing,
+  ok,
 } from '../../../kit'
 
 // —— 财务对账（内部账）——
@@ -119,8 +120,7 @@ export async function getReconciliation({ db, data }: Ctx) {
 
   if (degraded) await notifyAlert('money', 'reconciliation', 'RECON_READ_FAIL', { from, to })
   const partial = degraded || !!(exceptions as any).partial
-  return reply(200, {
-    ok: true,
+  return ok({
     range: { from, to },
     partial, // 任一路读失败（累计聚合/每日明细/计数/异常查询）：数据不可信标记（前端提示重试·别当真 0/all-clear）
     // 累计（aggregate 全量·元）；net 经分相减回元避浮点
@@ -189,8 +189,7 @@ export async function getBillMatch({ db, data }: Ctx) {
       })
   }
 
-  return reply(200, {
-    ok: true,
+  return ok({
     range: { from, to },
     summary: {
       matched: matched.length,

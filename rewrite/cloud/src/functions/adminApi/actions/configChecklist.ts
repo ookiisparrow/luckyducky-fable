@@ -1,5 +1,5 @@
-import { reply, readDoc, type Ctx } from '../lib'
-import { hasAdjustLedgerEntry, hasThresholdMaterial, err } from '../../../kit'
+import { readDoc, type Ctx } from '../lib'
+import { hasAdjustLedgerEntry, hasThresholdMaterial, err, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 人工配置清单（「配了没」总览·部分项可在本页填写）：
@@ -73,7 +73,7 @@ export async function getConfigChecklist({ db }: Ctx) {
   ])
   const docs = [rWxkf, rWxpay, rPay, rVod, rSettings, rBom]
   // 读失败≠未配置：显示成 missing 会诱导管理员重填密钥
-  if (docs.some((r) => !r.ok)) return reply(200, err('DOC_READ_FAIL'))
+  if (docs.some((r) => !r.ok)) return err('DOC_READ_FAIL')
   const [wxkf, wxpay, pay, vod, settings, bom] = docs.map((r) => (r.ok && r.data) || null)
   const has = (o: Record<string, unknown> | null, f: string) => !!(o && o[f])
   // wxpay 另认 adminApi 自身环境变量（规则②·同进程 wxbill.ts 读取，可信兜底）
@@ -396,5 +396,5 @@ export async function getConfigChecklist({ db }: Ctx) {
       ],
     })
 
-  return reply(200, { ok: true, groups })
+  return ok({ groups })
 }

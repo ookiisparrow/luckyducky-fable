@@ -1,6 +1,6 @@
-import { reply, type Ctx } from '../lib'
+import type { Ctx } from '../lib'
 import { COLLECTIONS, ERR } from '@ldrw/shared'
-import { isDocMissing, str } from '../../../kit'
+import { isDocMissing, str, ok, err } from '../../../kit'
 import { assembleCustomer360 } from '../customer360/orchestrator'
 
 // 客户360 只读查询：按 openid 聚合该客人全貌（订单/激活…经 provider registry·铁律三）。
@@ -10,9 +10,9 @@ import { assembleCustomer360 } from '../customer360/orchestrator'
 // 本 action 只负责取 openid → 编排 → 回结果（读类·不写库）。
 export async function getCustomer360({ db, data }: Ctx) {
   const openid = str(data && data.openid, 200).trim()
-  if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
+  if (!openid) return err(ERR.BAD_ARGS)
   const result = await assembleCustomer360(db, openid)
-  return reply(200, { ok: true, ...result })
+  return ok({ ...result })
 }
 
 // ── 检索 + 单人画像（同属 360 越权读·根因#3）──
@@ -26,7 +26,7 @@ const SEARCH_LIMIT = 20 // bounded（防一次拉爆 users·大库友好）
 // 昵称模糊（db.RegExp 子串）须真 sdk + 索引、内存桩不复现（根因#8 桩≠真），故先精确、不造不可测的模糊分支（防过度工程·留待真机验后再升级）。
 export async function searchCustomer({ db, data }: Ctx) {
   const q = str(data && data.q, 200).trim().slice(0, 64)
-  if (!q) return reply(400, { ok: false, error: ERR.BAD_ARGS })
+  if (!q) return err(ERR.BAD_ARGS)
   const found = new Map<string, any>() // openid → 摘要（去重·一人多键命中合并 matchedBy）
   const add = (u: any, by: string) => {
     const openid = String((u && (u._openid || u._id)) || '')
@@ -66,18 +66,18 @@ export async function searchCustomer({ db, data }: Ctx) {
         (e: unknown) => (isDocMissing(e) ? null : false)
       ),
   ])
-  if (!byId || !byPhone || !byNick || ord === false) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
+  if (!byId || !byPhone || !byNick || ord === false) return err(ERR.USER_LOOKUP_FAIL)
   byId.forEach((u: any) => add(u, 'openid'))
   byPhone.forEach((u: any) => add(u, 'phone'))
   byNick.forEach((u: any) => add(u, 'nickname'))
   if (ord && ord._openid) {
     const u = await rows(users.where({ _openid: ord._openid }).limit(1))
-    if (!u) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
+    if (!u) return err(ERR.USER_LOOKUP_FAIL)
     if (u.length) add(u[0], 'orderId')
     else add({ _openid: ord._openid }, 'orderId')
   }
   const customers = [...found.values()].slice(0, SEARCH_LIMIT)
-  return reply(200, { ok: true, count: customers.length, customers })
+  return ok({ count: customers.length, customers })
 }
 
 // 单客户画像：读 users 一条（建档 _id=openid·老档随机 _id → 统一按 _openid 查兼容两者·bounded limit 1）。
@@ -87,18 +87,17 @@ export async function searchCustomer({ db, data }: Ctx) {
 // 故查询异常回 null（≠真查无结果的 {data:[]}）→ 单独识别为 ok:false；「真查无结果」回 ok:true+user:null。
 export async function getUser({ db, data }: Ctx) {
   const openid = str(data && data.openid, 200).trim()
-  if (!openid) return reply(400, { ok: false, error: ERR.BAD_ARGS })
+  if (!openid) return err(ERR.BAD_ARGS)
   const r = await db
     .collection(COLLECTIONS.users)
     .where({ _openid: openid })
     .limit(1)
     .get()
     .catch(() => null)
-  if (!r) return reply(200, { ok: false, error: ERR.USER_LOOKUP_FAIL })
+  if (!r) return err(ERR.USER_LOOKUP_FAIL)
   const u = (r.data && r.data[0]) || null
-  if (!u) return reply(200, { ok: true, user: null }) // 真查无结果——如实回 null，不算失败
-  return reply(200, {
-    ok: true,
+  if (!u) return ok({ user: null }) // 真查无结果——如实回 null，不算失败
+  return ok({
     user: {
       openid: u._openid || u._id,
       nickname: u.nickname || '',

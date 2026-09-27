@@ -1,4 +1,5 @@
-import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
+import { getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
+import { ok } from '../../../kit'
 import { listOrders } from './orders'
 import { COLLECTIONS } from '@ldrw/shared'
 
@@ -22,7 +23,7 @@ async function countToShip(ctx: Ctx): Promise<{ n: number; capped: boolean }> {
   let seen = 0
   let cursor: unknown = null
   for (;;) {
-    const r = JSON.parse((await listOrders({ ...ctx, data: { status: 'paid', cursor, limit: 200 } })).body)
+    const r = await listOrders({ ...ctx, data: { status: 'paid', cursor, limit: 200 } })
     if (!r.ok) throw new Error('TO_SHIP_READ_FAIL:' + r.error) // 查不到退款态≠都能发：同看板其余读失败，整体报错
     n += r.list.filter((o: any) => !o.feeMismatch && !o.refundHold).length
     seen += r.list.length
@@ -134,8 +135,7 @@ export async function getDashboard(ctx: Ctx) {
   }))
   const recentActivity = [...ords, ...acts, ...refs].sort((a, b) => b.at - a.at).slice(0, 8)
 
-  return reply(200, {
-    ok: true,
+  return ok({
     stats: {
       users: usersN,
       orders: ordersN,

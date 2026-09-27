@@ -98,7 +98,7 @@ const DRAFT = { id: 'pd1', name: '小鸭礼盒', tag: '基础款', price: '198',
 const publishProduct1 = async () => {
   await saveDraft(adminCtx({ product: DRAFT }))
   const r = await publishProduct(adminCtx({ id: 'pd1' }))
-  expect(JSON.parse(r.body).ok).toBe(true)
+  expect(r.ok).toBe(true)
 }
 
 beforeEach(() => {
@@ -239,8 +239,8 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     // courses 公开目录是白名单投影、且上面那条哨兵全靠自造 seed（绕过写侧）——cleanCourse/publishCourse
     // 若改名 title/name 字段，seed 哨兵全绿而学员端目录静默变空白。经真写侧发布一份再读回，锁死两端。
     const draft = { id: 'cW', title: '进阶课', sort: 99, chapters: [{ id: 'chW', title: '第二章', lessons: [{ id: 'lW', name: '收针一节', dur: '8:00', segments: [{ id: 'sW', name: '藏线头', dur: '3:00', videoFileId: '' }] }] }] }
-    expect(JSON.parse((await saveCourseDraft(adminCtx({ course: draft }))).body).ok).toBe(true)
-    expect(JSON.parse((await publishCourse(adminCtx({ courseId: 'cW' }))).body).ok).toBe(true)
+    expect((await saveCourseDraft(adminCtx({ course: draft }))).ok).toBe(true)
+    expect((await publishCourse(adminCtx({ courseId: 'cW' }))).ok).toBe(true)
     const r = await call('getCourses')
     expect(r.ok).toBe(true)
     const c = r.list.find((x: any) => x.id === 'cW')
@@ -441,7 +441,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     const saved = await saveKb(adminCtx({
       entries: [{ key: 'logistics:eta', question: '什么时候发货？', answer: '48 小时内。', category: 'logistics', order: 0, featured: true }],
     }))
-    expect(JSON.parse(saved.body).ok).toBe(true)
+    expect(saved.ok).toBe(true)
     // 写侧字段集（真写入回读）：question/answer/featured 任一改名，这里先红
     expect(keysOf(control.dump('kb')[0])).toEqual(['_id', 'answer', 'category', 'enabled', 'featured', 'order', 'question', 'updatedAt'])
     const r = await call('getPublicFaq')
@@ -594,7 +594,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect((await call('getReviews', { productId: 'p1' })).list).toEqual([]) // 未挑选不上墙
 
     const pick = await setReviewPicked(adminCtx({ id: written._id, picked: true }))
-    expect(JSON.parse(pick.body).ok).toBe(true)
+    expect(pick.ok).toBe(true)
     // 读侧下发面：既有 getReviews 用例造的是 seed 回声，这条是端到端——写侧加字段若被顺手放进读侧映射即红
     const r = await call('getReviews', { productId: 'p1' })
     expect(keysOf(r.list[0])).toEqual(REVIEW_KEYS)
