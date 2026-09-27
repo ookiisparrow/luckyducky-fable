@@ -1,81 +1,85 @@
-<!-- 课程目录主页·对齐设计 C1（两层：大章节 > 小课时，段落层级只活在播放页 segstrip）。
-     hero：产品主图（复用激活背景回退链 bgFor(home, courseId, 'activated')，取不到落渐变占位）+ 底部锚定
-     「开始学习」CTA（continueTarget 为空时换灰样式，点按诚实提示，不留死跳转）。
-     目录区：整页自然流滚动（不包 scroll-view，避 sticky/scroll-view 族坑），章头行 + 课时行卡
-     （序号圈/名称/副行「N 个段落 · M 分钟 · 上次学到…」+ 右侧状态图标 done/current/todo 三态）。 -->
-<view class="ld-cat">
+<!-- 课程目录（v5「字重」稿 C6·含「课程 · 主图」）：方形产品主图 + 课时像素分段进度 + 墨黑「开始/继续」键 +
+     大章节 > 小课时两层目录（段落层级只活在播放页 segstrip）。主图复用激活背景回退链（CMS heroImage 优先），取不到落凹槽灰。 -->
+<v5-nav />
 
-  <!-- 自绘返回：navigationStyle:custom 去掉了原生返回箭头，
-       不补这个用户只剩系统手势可退；置于最外层而非 hero 内——missing/failed 空态同样需要出路。
-       白色半透明圆底＋深色箭头：hero 图深浅不定、空态是浅底，两种背景下都看得清。 -->
-  <view class="ld-cat-back" style="top: calc({{statusBarHeight}}px + 12rpx)" bind:tap="onBack" hover-class="ld-cat-back-h" hover-stay-time="80">
-    <image class="ld-cat-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-  </view>
-
-  <view wx:if="{{state !== 'missing' && state !== 'failed'}}" class="ld-cat-hero" style="padding-top: {{statusBarHeight}}px">
-    <image wx:if="{{bg}}" class="ld-cat-hero-img" src="{{bg}}" mode="aspectFill" />
-    <view wx:else class="ld-cat-hero-img ld-cat-hero-empty"></view>
-    <view class="ld-cat-cta {{continueTarget ? '' : 'disabled'}}" bind:tap="onStart" hover-class="ld-cat-cta-h" hover-stay-time="80">
-      <image class="ld-cat-cta-ico" src="/static/icons/play-circle.svg" mode="aspectFit" />
-      <text>{{resumeCta}}</text>
-    </view>
-  </view>
-
-  <!-- 骨架占位（加载中，不写死假章节） -->
-  <view class="ld-cat-list" wx:if="{{state === 'loading'}}">
-    <view class="ld-cat-lesson ld-cat-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="ld-cat-lesson-num ld-cat-skel-num"></view>
-      <view class="ld-cat-lesson-tx">
-        <view class="ld-cat-skel-line"></view>
-      </view>
-    </view>
-  </view>
-
-  <!-- 目录区：章头行 + 课时行卡（两层嵌套 wx:for，段落层级不出现） -->
-  <view class="ld-cat-list" wx:if="{{state === 'ok'}}">
-    <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch">
-      <view class="ld-cat-ch">
-        <text class="ld-cat-ch-title">{{ch.title}}</text>
-        <text class="ld-cat-ch-count">{{ch.lessonCount}} 课时</text>
-      </view>
-      <view
-        class="ld-cat-lesson {{lesson.status === 'current' ? 'cur' : ''}} {{lesson.status === 'todo' ? 'todo' : ''}}"
-        wx:for="{{ch.lessons}}"
-        wx:key="lessonId"
-        wx:for-item="lesson"
-        data-seg="{{lesson.firstPlayableSegId}}"
-        bind:tap="onTapLesson"
-        hover-class="ld-cat-lesson-h"
-        hover-stay-time="80"
-      >
-        <view class="ld-cat-lesson-num">{{lesson.no}}</view>
-        <view class="ld-cat-lesson-tx">
-          <text class="ld-cat-lesson-name">{{lesson.name}}</text>
-          <text class="ld-cat-lesson-sub">{{lesson.segCount}} 个段落{{lesson.minutes ? ' · ' + lesson.minutes + ' 分钟' : ''}}{{lesson.lastLabel ? ' · ' + lesson.lastLabel : ''}}</text>
-        </view>
-        <view class="ld-cat-lesson-st">
-          <image wx:if="{{lesson.status === 'done'}}" class="ld-cat-lesson-st-ico" src="/static/icons/badge-check.svg" mode="aspectFit" />
-          <image wx:elif="{{lesson.status === 'current'}}" class="ld-cat-lesson-st-ico" src="/static/icons/play-circle-on.svg" mode="aspectFit" />
-          <image wx:else class="ld-cat-lesson-st-ico" src="/static/icons/circle.svg" mode="aspectFit" />
-        </view>
-      </view>
-    </block>
-  </view>
-
+<view class="ct">
   <!-- 失败态：目录拉取网络失败（根因#14·守卫 rw-mp-list-loadfailed-state）——与「课程不存在」分治，给重试 -->
-  <view class="ld-cat-empty" wx:if="{{state === 'failed'}}" style="padding-top: calc({{statusBarHeight}}px + 220rpx)">
-    <view class="ld-cat-empty-title">网络开小差</view>
-    <view class="ld-cat-empty-hint">目录没加载出来，请重试</view>
-    <view class="ld-cat-retry" bind:tap="onRetryLoad">重试</view>
+  <view class="ct-state" wx:if="{{state === 'failed'}}">
+    <px-anim name="signal" size="4" />
+    <text class="ct-state-t">网络开小差</text>
+    <text class="ct-state-h">目录没加载出来，请重试</text>
+    <view class="k k-light ct-retry" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
   </view>
 
-  <!-- 空态：课程不存在（courseId 缺失或云端查无此课）。hero 在此态不渲染（本页 navigationStyle:custom
-       无原生导航条，空态需自补状态栏避让，同 welcome.wxml ld-wl-body 口径） -->
-  <view class="ld-cat-empty" wx:if="{{state === 'missing'}}" style="padding-top: calc({{statusBarHeight}}px + 220rpx)">
-    <view class="ld-cat-empty-title">没找到这门课</view>
-    <!-- 用户语言 + 出路：别用「入口」这类开发者口吻，且要给可点的地方——扫码进来的用户到此不能没路走。 -->
-    <view class="ld-cat-empty-hint">可能课程已下架，或者这个链接不对</view>
-    <view class="ld-cat-retry" bind:tap="onGoCourses">去我的课程看看</view>
+  <!-- 课程不存在（courseId 缺失或云端查无此课）：给出路，扫码进来的用户到此不能没路走 -->
+  <view class="ct-state" wx:elif="{{state === 'missing'}}">
+    <text class="ct-state-t">没找到这门课</text>
+    <text class="ct-state-h">可能课程已下架，或者这个链接不对</text>
+    <view class="k k-light ct-go" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoCourses">去我的课程看看</view>
   </view>
 
+  <!-- 骨架（加载中，不写死假章节） -->
+  <view wx:elif="{{state === 'loading'}}">
+    <view class="ct-hero"></view>
+    <view class="ct-skel">
+      <view class="ct-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
+      <view class="ct-skel-bar" style="width: 50%"></view>
+      <view class="ct-skel-segs"></view>
+      <view class="ct-skel-key"></view>
+      <view class="ct-skel-bar" style="width: 72%"></view>
+      <view class="ct-skel-bar" style="width: 64%"></view>
+      <view class="ct-skel-bar" style="width: 40%"></view>
+    </view>
+  </view>
+
+  <block wx:else>
+    <view class="ct-hero">
+      <image wx:if="{{bg}}" class="ct-hero-img" src="{{bg}}" mode="aspectFill" />
+      <view class="ct-fade-top"></view>
+      <view class="ct-fade-bot"></view>
+    </view>
+
+    <!-- 课时像素分段进度：学完墨色 / 当前紫 / 未到凹槽灰（一课时一格·直角） -->
+    <view class="ct-segs">
+      <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch">
+        <view wx:for="{{ch.lessons}}" wx:key="lessonId" wx:for-item="sg" class="ct-seg ct-seg-{{sg.status}}"></view>
+      </block>
+    </view>
+
+    <!-- 「开始学习」：continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
+    <view class="ct-cta-wrap">
+      <view class="k {{continueTarget ? 'k-ink' : 'k-flat'}}" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart">
+        <px-i name="play" />
+        <text>{{resumeCta}}</text>
+      </view>
+    </view>
+
+    <view class="ct-toc">
+      <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch" wx:for-index="ci">
+        <view class="ct-ch">
+          <text class="ct-ch-no {{ch.cur ? 'cur' : ''}}">{{ci + 1}}</text>
+          <text class="ct-ch-title">{{ch.title}}</text>
+        </view>
+        <view
+          class="ct-lesson {{lesson.status}}"
+          wx:for="{{ch.lessons}}"
+          wx:key="lessonId"
+          wx:for-item="lesson"
+          data-seg="{{lesson.firstPlayableSegId}}"
+          bind:tap="onTapLesson"
+          hover-class="k-row-down"
+        >
+          <text class="mono ct-no">{{lesson.no}}</text>
+          <view class="ct-node">
+            <px-i wx:if="{{lesson.status === 'current'}}" name="nodeCur" tone="#8a5ae0" />
+            <px-i wx:elif="{{lesson.status === 'done'}}" name="node" tone="#111111" />
+            <px-i wx:else name="ring" tone="#9a9a92" />
+          </view>
+          <text class="ct-name">{{lesson.name}}</text>
+          <text class="mono ct-dur" wx:if="{{lesson.minutes}}">{{lesson.minutes}} 分钟</text>
+        </view>
+      </block>
+      <view class="ct-toc-end"></view>
+    </view>
+  </block>
 </view>

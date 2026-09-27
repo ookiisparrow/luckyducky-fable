@@ -1,77 +1,83 @@
-<!-- 编辑资料·重设计对齐 Checkout.jsx ProfileEdit + checkout.css coprof/coaddr-* 版式（设计 402px 画板→rpx ×1.87）。
-     业务逻辑一字不动：头像选择走 button open-type=chooseAvatar→onChooseAvatar（隐私能力·privacy-sheet 保命）；
-     昵称 type=nickname→onNickname、签名→onBio、手机号→onPhone、保存→onSave 全承接 profile-edit.ts。
-     手机号＝账户联系电话（手动输入·云端 updateProfile 白名单归一化校验·与地址电话独立·供客服 360 检索）。token 见 styles/tokens.wxss。 -->
-<view class="co coprof">
-  <!-- 加载中：骨架占位，不画空白可编辑档（根因#14） -->
-  <view class="co-body" wx:if="{{loading}}">
-    <view class="co-card coaddr-form">
-      <view class="coprof-skel" wx:for="{{[1, 2, 3, 4]}}" wx:key="*this"></view>
+<!-- 编辑资料（v5「字重」稿 D3 + 「放弃编辑确认」半屏）：头像（能力按钮 open-type=chooseAvatar·隐私能力·privacy-sheet 保命）
+     + 昵称（type=nickname）+ 手机号（账户联系电话·手动输入·云端 updateProfile 白名单归一化校验·与地址电话独立）；底部保存。
+     顶栏自绘（同 v5-nav 版式）：返回键要先问「放弃修改？」。 -->
+<view class="pe-nav-space" style="height: {{sb + 44}}px">
+  <view class="pe-nav" style="padding-top: {{sb}}px">
+    <view class="pe-hit" bind:tap="onBack">
+      <view class="k k-light pe-back" hover-class="k-light-down" hover-stay-time="100"><px-i name="back" /></view>
     </view>
+    <text class="pe-nav-t">编辑资料</text>
   </view>
-
-  <!-- 登录失败：给重试，不露出空白可改表单 -->
-  <block wx:elif="{{!loaded}}">
-    <view class="co-body">
-      <text class="coprof-tip">资料没加载好</text>
-    </view>
-    <view class="co-dock-space"></view>
-    <view class="co-dock">
-      <view class="co-dockbar coaddr-dock">
-        <view class="co-submit coaddr-save" bind:tap="onRetryLoad">重试</view>
-      </view>
-    </view>
-  </block>
-
-  <block wx:else>
-  <view class="co-body">
-
-    <!-- 资料表单卡（头像行 + 昵称 + 个性签名·设计白卡分隔发丝线） -->
-    <view class="co-card coaddr-form">
-
-      <!-- 头像行：整行即微信头像能力按钮（open-type=chooseAvatar·带相机角标） -->
-      <button class="coaddr-field coprof-avatar-field" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
-        <text class="coaddr-label">头像</text>
-        <view class="coprof-avatar">
-          <image wx:if="{{avatarTemp || avatar}}" class="coprof-avatar-img" src="{{avatarTemp || avatar}}" mode="aspectFill" />
-          <image wx:else class="coprof-avatar-img coprof-avatar-empty" src="/static/logo-wordmark.svg" mode="aspectFit" />
-          <view class="coprof-cam">
-            <image class="coprof-cam-ico" src="/static/icons/camera.svg" mode="aspectFit" />
-          </view>
-        </view>
-      </button>
-
-      <!-- 昵称（微信昵称填写能力 type=nickname） -->
-      <view class="coaddr-field">
-        <text class="coaddr-label">昵称</text>
-        <input class="coaddr-input" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20" placeholder="给自己起个名字" placeholder-class="coaddr-ph" />
-      </view>
-
-      <!-- 手机号（账户联系电话·手动输入·纯数字键盘·云端白名单归一化校验·供客服 360 检索） -->
-      <view class="coaddr-field">
-        <text class="coaddr-label">手机号</text>
-        <input class="coaddr-input" type="number" value="{{phone}}" bind:input="onPhone" maxlength="11" placeholder="选填·便于联系与售后" placeholder-class="coaddr-ph" />
-      </view>
-
-      <!-- 个性签名（多行·设计 coaddr-area） -->
-      <view class="coaddr-field coaddr-field-area">
-        <text class="coaddr-label">个性签名</text>
-        <textarea class="coaddr-input coaddr-area" value="{{bio}}" bind:input="onBio" maxlength="60" placeholder="写句话介绍下自己吧～" placeholder-class="coaddr-ph" auto-height />
-      </view>
-
-    </view>
-
-    <text class="coprof-tip">点击头像，从相册上传一张照片作为形象</text>
-  </view>
-
-  <!-- 底部保存坞（全宽主 CTA） -->
-  <view class="co-dock-space"></view>
-  <view class="co-dock">
-    <view class="co-dockbar coaddr-dock">
-      <view class="co-submit coaddr-save {{busy ? 'dim' : ''}}" bind:tap="onSave">保存</view>
-    </view>
-  </view>
-  </block>
-
-  <privacy-sheet />
 </view>
+
+<!-- 加载中：骨架占位，不画空白可编辑档（根因#14） -->
+<view wx:if="{{loading}}" class="pe">
+  <view class="pe-av-wrap"><view class="pe-av skel"></view></view>
+  <view class="pe-form">
+    <view class="pe-skel skel"></view>
+    <view class="pe-skel skel"></view>
+  </view>
+</view>
+
+<!-- 登录失败：给重试，不露出空白可改表单 -->
+<block wx:elif="{{!loaded}}">
+  <view class="pe pe-fail">
+    <px-anim name="signal" size="2" />
+    <text class="pe-fail-t">资料没加载好</text>
+  </view>
+  <view class="pe-dock-space"></view>
+  <view class="pe-dock">
+    <view class="k k-ink k-48 pe-save" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+  </view>
+</block>
+
+<block wx:else>
+  <view class="pe">
+    <view class="pe-av-wrap">
+      <button class="pe-av-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" hover-class="none">
+        <view class="pe-av">
+          <image wx:if="{{avatarTemp || avatar}}" class="pe-av-img" src="{{avatarTemp || avatar}}" mode="aspectFill" />
+          <image wx:else class="pe-av-img" src="/static/hero-full.jpg" mode="aspectFill" />
+        </view>
+        <view class="k k-light pe-av-k">换</view>
+      </button>
+    </view>
+
+    <view class="pe-form">
+      <view class="pe-field">
+        <text class="pe-label">昵称</text>
+        <input class="well pe-input" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20"
+          placeholder="起个名字" placeholder-class="pe-ph" />
+      </view>
+      <view class="pe-field">
+        <text class="pe-label">手机号 · 选填</text>
+        <input class="well pe-input" type="number" value="{{phone}}" bind:input="onPhone" maxlength="11"
+          placeholder="便于联系与售后" placeholder-class="pe-ph" />
+      </view>
+    </view>
+  </view>
+
+  <view class="pe-dock-space"></view>
+  <view class="pe-dock">
+    <view wx:if="{{busy}}" class="k k-flat k-48 pe-save">保存</view>
+    <view wx:else class="k k-ink k-48 pe-save" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave">保存</view>
+  </view>
+</block>
+
+<!-- 放弃编辑确认：有改动时点返回才出 -->
+<view wx:if="{{leaveOpen}}" class="pe-sheet">
+  <view class="pe-mask" bind:tap="onLeaveStay"></view>
+  <view class="pe-panel">
+    <view class="pe-grip"></view>
+    <view class="pe-sheet-t">
+      <text class="pe-sheet-h">放弃这次修改？</text>
+      <text class="pe-sheet-sub t-sys">改过的内容不会保存。</text>
+    </view>
+    <view class="pe-sheet-ks">
+      <view class="k k-light k-48 pe-leave" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLeaveGo">放弃</view>
+      <view class="k k-ink k-48 pe-stay" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onLeaveStay">继续编辑</view>
+    </view>
+  </view>
+</view>
+
+<privacy-sheet />

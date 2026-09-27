@@ -1,7 +1,7 @@
 // 黄金 frontend-store §七（脏单归一防白屏/渲染访问点纵深防御）+ §四（金额两位小数/
 // 时间格式化非法回空）。
 import { describe, it, expect } from 'vitest'
-import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets } from '../lib/mapOrders'
+import { mapOrder, mapOrders, itemsOf, countOf, statusLabel, dateTime, amountTitle, __amountTitleSets, orderSteps } from '../lib/mapOrders'
 import { ORDER_STATUS } from '../../shared/src/order'
 
 const GOOD = {
@@ -129,5 +129,20 @@ describe('金额行标题·顾客视角「付过没有」（体检批 P1·钱链
     expect(PAID_LOOK.filter((s) => UNPAID_LOOK.includes(s))).toEqual([]) // 两类互斥
     for (const s of PAID_LOOK) expect(amountTitle(s)).toBe('实付款')
     for (const s of UNPAID_LOOK) expect(amountTitle(s)).toBe('订单金额')
+  })
+})
+
+describe('订单进度四步（v5 订单详情：下单 / 付款 / 发货 / 收货）', () => {
+  const view = (s: string) => orderSteps(s).map((x) => x.state).join(',')
+  it('大白话：待支付停在「付款」；待发货停在「发货」；待收货停在「收货」；完成全亮', () => {
+    expect(view('pending')).toBe('done,cur,todo,todo')
+    expect(view('paid')).toBe('done,done,cur,todo')
+    expect(view('shipped')).toBe('done,done,done,cur')
+    expect(view('done')).toBe('done,done,done,done')
+  })
+  it('大白话：已关闭只亮「下单」，其余灰；不认识的状态同样处理，不瞎亮', () => {
+    expect(view('closed')).toBe('done,todo,todo,todo')
+    expect(view('whatever')).toBe('done,todo,todo,todo')
+    expect(orderSteps('paid').map((x) => x.label)).toEqual(['下单', '付款', '发货', '收货'])
   })
 })

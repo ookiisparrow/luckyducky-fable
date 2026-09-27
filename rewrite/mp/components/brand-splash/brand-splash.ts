@@ -1,5 +1,4 @@
-// 品牌启动 splash（冷启动开屏·对齐 Claude Design 通过稿）：淡紫渐变底 + 居中品牌字标（轻浮动）+
-// 「创造幸运~」+ 脚注。撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（不用纯计时器固定时长）：
+// 品牌启动 splash（冷启动开屏·v5 稿 data-splash）：#fafaf8 底 + 居中品牌字标 + 等宽英文口号。撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（不用纯计时器固定时长）：
 //  · 至少停 MIN_HOLD_MS——低于此一闪而过、观感差；
 //  · 过了 min-hold 后，父级 ready（首页数据就绪）即淡出——好网络下 splash 撤得比死等 1.5s 更快；
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
@@ -21,6 +20,7 @@ const timers = new WeakMap<object, ReturnType<typeof setTimeout>[]>()
 const starts = new WeakMap<object, number>()
 
 Component({
+  options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的 .mono 与 .v5-scope 色票
   properties: {
     // 父级（home）数据就绪信号：置 true 触发 observer → maybeLeave（过了 min-hold 即淡出）
     ready: { type: Boolean, value: false, observer() { this.maybeLeave() } },

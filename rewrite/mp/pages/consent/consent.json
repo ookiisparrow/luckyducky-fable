@@ -1,3 +1,9 @@
 {
-  "navigationBarTitleText": "数据共享授权"
+  "navigationBarTitleText": "数据共享授权",
+  "navigationStyle": "custom",
+  "backgroundColor": "#fafaf8",
+  "usingComponents": {
+    "v5-nav": "/components/v5-nav/v5-nav",
+    "px-i": "/components/px-i/px-i"
+  }
 }

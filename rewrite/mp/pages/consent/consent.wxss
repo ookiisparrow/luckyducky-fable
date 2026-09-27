@@ -1,164 +1,75 @@
-/* 数据共享授权页·一致性对齐（无设计稿）：照 agreement 隐私页系（丁香底+紫描白卡）与 me 卡片词汇
-   重排，文案/字段/handler 一字不动·只换版式。token 见 styles/tokens.wxss。 */
+/* 数据共享授权（v5 稿 D7）：声明文案/handler 不动·只换版式。 */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
 .cs {
-  min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 32rpx 28rpx 60rpx;
-  box-sizing: border-box;
-}
-
-/* —— 主白卡 —— */
-.cs-card {
-  background: var(--ld-bg);
-  border: 2rpx solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-  padding: 34rpx 30rpx;
-}
-
-/* 标题行·盾形图标点题 */
-.cs-head {
+  padding: 4px 16px 16px;
   display: flex;
-  align-items: center;
-  gap: 20rpx;
-  margin-bottom: 26rpx;
-}
-.cs-head-ico {
-  flex: 0 0 auto;
-  width: 76rpx;
-  height: 76rpx;
-  border-radius: 50%;
-  background: #f0e9ff; /* 浅丁香圆·图标底（局部设计色·沿 me 空态·不入 tokens） */
-  border: 2rpx solid var(--ld-purple-line);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.cs-head-img {
-  width: 42rpx;
-  height: 42rpx;
+  flex-direction: column;
+  gap: 16px;
 }
 .cs-h {
-  flex: 1;
-  min-width: 0;
-  font-size: 30rpx;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--ld-ink);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
-
 .cs-p {
-  display: block;
-  font-size: 26rpx;
-  line-height: 1.8;
-  color: var(--ld-content);
-  margin-bottom: 20rpx;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.7;
+  color: var(--v5-ink-2);
 }
-.cs-p:last-of-type {
-  margin-bottom: 0;
-}
-
-/* 发丝线分隔 */
-.cs-div {
-  height: 1rpx;
-  background: var(--ld-line);
-  margin: 30rpx 0 26rpx;
-}
-
-/* —— 当前状态胶囊 —— */
+/* 状态牌：浅色键帽外观（不可点）+ LED */
 .cs-state {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 20rpx 24rpx;
-  border-radius: var(--ld-radius-md);
-  background: var(--ld-bg-lilac);
-  border: 1rpx solid var(--ld-purple-line);
-  margin-bottom: 30rpx;
-}
-.cs-state.on {
-  background: var(--ld-bg-sage);
-}
-.cs-state.off {
-  background: var(--ld-bg-faint);
-}
-.cs-dot {
-  flex: 0 0 auto;
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  background: var(--ld-purple-meta); /* 尚未选择 */
-}
-.cs-state.on .cs-dot {
-  background: var(--ld-purple); /* 已同意·幸运紫（mp 无绿 token） */
-}
-.cs-state.off .cs-dot {
-  background: var(--ld-content-2); /* 已撤回·中性灰 */
+  justify-content: flex-start;
 }
 .cs-state-t {
-  font-size: 26rpx;
-  color: var(--ld-content);
-}
-
-/* —— 同意 / 撤回 —— */
-.cs-acts {
-  display: flex;
-  gap: 24rpx;
-}
-.cs-btn {
   flex: 1;
-  height: 92rpx;
-  /* 药丸形：全站主按钮（结算「提交订单」/空车「去逛逛」/播放页出路）都是
-     药丸，本页不单独用圆角方块。 */
-  border-radius: var(--ld-radius-pill);
-  /* box-sizing 必写：ghost 支多一条 2rpx 边框，content-box 下实际高 96rpx——两个按钮并排
-     一高一矮、底边不齐（否则「撤回授权」比「同意共享」大一圈）。 */
-  box-sizing: border-box;
+  font-size: 17px;
+  font-weight: 500;
+}
+.cs-row {
+  height: 48px;
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-.cs-btn.primary {
-  background: var(--ld-purple-ink);
-}
-.cs-btn.ghost {
-  background: var(--ld-bg);
-  border: 2rpx solid var(--ld-purple-line);
-}
-.cs-btn.dim {
-  opacity: 0.55;
-}
-.cs-btn-t {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-}
-.cs-btn-t.on {
-  color: var(--ld-bg);
-}
-
-/* —— 完整隐私政策行（独立白卡行） —— */
-.cs-row {
-  margin-top: 20rpx;
-  padding: 28rpx 30rpx;
-  background: var(--ld-bg);
-  border: 2rpx solid var(--ld-purple-line);
-  border-radius: var(--ld-radius);
-}
-.cs-row-h {
-  background: var(--ld-bg-lilac);
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair);
 }
 .cs-row-t {
-  font-size: 26rpx;
+  flex: 1;
+  font-size: 17px;
   font-weight: 500;
-  color: var(--ld-purple-tab);
+}
+.cs-note {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--v5-ink-2);
 }
 
-/* —— 脚注 —— */
-.cs-note {
-  display: block;
-  margin-top: 22rpx;
-  padding: 0 6rpx;
-  font-size: 24rpx;
-  line-height: 1.7;
-  color: var(--ld-purple-meta);
+.cs-dock-space {
+  height: calc(60px + max(28px, env(safe-area-inset-bottom)));
+}
+.cs-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  background: var(--v5-canvas);
+}
+/* 撤回：普通浅色键、轻点即撤（撤回同意须与同意同样便捷·不做长按） */
+.cs-revoke {
+  flex: 1;
+}
+.cs-main {
+  flex: 1.6;
+}
+.cs-dim {
+  opacity: 0.55;
 }

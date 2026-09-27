@@ -6,6 +6,7 @@ import { privacyGate } from '../../lib/privacyGate'
 const unsubs = new WeakMap<object, () => void>()
 
 Component({
+  options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的全局键帽 .k-* 与 .v5-scope 色票
   data: { visible: false },
   lifetimes: {
     attached() {

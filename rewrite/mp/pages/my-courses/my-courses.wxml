@@ -1,68 +1,68 @@
-<view class="ld-mc">
-  <!-- 顶栏标题在原生导航条；此处编辑式副标题 -->
-  <view class="ld-mc-intro" wx:if="{{!loading && list.length}}">
-    <view class="ld-mc-eyebrow">MY COURSES</view>
-    <view class="ld-mc-lead">{{list.length}} 门课程 · 继续钩下去</view>
+<!-- 我的课程（v5「字重」稿 C5）：课卡（缩略占位 + 课名 + 像素分段进度 + 已学/百分比）+ 底部激活键 -->
+<v5-nav title="我的课程" />
+
+<view class="mc">
+  <text class="mc-title">我的课程</text>
+
+  <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败不引导输码 -->
+  <view class="mc-state mc-fail" wx:if="{{!loading && loadFailed}}">
+    <px-anim name="signal" size="4" />
+    <text class="mc-state-t">网络开小差</text>
+    <text class="mc-state-h">课程没加载出来，请重试</text>
+    <view class="k k-light mc-retry" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
   </view>
 
   <!-- 骨架占位（加载中，不写死假进度） -->
-  <view class="ld-mc-list" wx:if="{{loading}}">
-    <view class="ld-mc-card" wx:for="{{[1,2]}}" wx:key="*this">
-      <view class="ld-mc-cover ld-mc-skel"></view>
-      <view class="ld-mc-meta">
-        <view class="ld-mc-skel-line"></view>
-      </view>
-    </view>
-  </view>
-
-  <!-- 课程卡列表 -->
-  <view class="ld-mc-list" wx:if="{{!loading && list.length}}">
-    <view class="ld-mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="ld-mc-card-h" hover-stay-time="80">
-      <view class="ld-mc-cover">
-        <view class="ld-mc-cover-scrim"></view>
-        <view class="ld-mc-play">
-          <image class="ld-mc-play-ico" src="/static/icons/play.svg" mode="aspectFit" />
-        </view>
-        <view class="ld-mc-cover-title">{{item.title}}</view>
-        <image class="ld-mc-cover-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <!-- 学习进度（段粒度·与后台 360 同口径·无段不渲染·真值不编数·独立整行） -->
-      <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。
-           本页没有下拉刷新，点这一行走已有 onRetryLoad；catch 住，避免连课卡一起点进目录。 -->
-      <view class="ld-mc-prog" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-class="ld-mc-prog-unknown-h" hover-stay-time="80">
-        <view class="ld-mc-prog-text ld-mc-prog-unknown">学习进度暂时读不到，<text class="ld-mc-prog-retry">点此重试</text></view>
-      </view>
-      <view class="ld-mc-prog" wx:elif="{{item.totalSegments}}">
-        <!-- percent=0 不渲染 fill：min-width 下限只该抬「已学一点点」，不能让「一段没学」也显出一截紫条 -->
-        <view class="ld-mc-prog-track"><view wx:if="{{item.percent > 0}}" class="ld-mc-prog-fill" style="width: {{item.percent}}%"></view></view>
-        <!-- 单位「段」对齐数据模型与目录页（章>课时>段落）：此处数的是 segments，别另起「集」之类叫法。 -->
-        <view class="ld-mc-prog-text">已学 {{item.doneCount}}/{{item.totalSegments}} 段 · {{item.percent}}%</view>
-      </view>
-      <view class="ld-mc-meta">
-        <view class="ld-mc-entered" wx:if="{{item.enteredAtLabel}}">进课于 {{item.enteredAtLabel}}</view>
-        <view class="ld-mc-entered ld-mc-entered-faint" wx:else>视频课程</view>
-        <view class="ld-mc-go">
-          继续学习
-          <image class="ld-mc-go-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+  <view class="mc-list mc-list-load" wx:elif="{{loading}}">
+    <view class="mc-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="mc-card mc-skel-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="mc-skel-bar" style="width: 96px"></view>
+      <view class="mc-row">
+        <view class="mc-skel-thumb"></view>
+        <view class="mc-body">
+          <view class="mc-skel-bar" style="width: 60%"></view>
+          <view class="mc-skel-bar" style="width: 36%"></view>
         </view>
       </view>
     </view>
   </view>
 
-  <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败不引导输码 -->
-  <view class="ld-mc-empty" wx:if="{{!loading && loadFailed}}">
-    <view class="ld-mc-empty-title">网络开小差</view>
-    <view class="ld-mc-empty-hint">课程没加载出来，请重试</view>
-    <view class="ld-mc-empty-btn" bind:tap="onRetryLoad" hover-class="ld-mc-empty-btn-h" hover-stay-time="80">重试</view>
+  <!-- 课卡列表 -->
+  <view class="mc-list" wx:elif="{{list.length}}">
+    <view class="mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-class="mc-card-down" hover-stay-time="100">
+      <view class="mc-row">
+        <view class="mc-thumb"></view>
+        <view class="mc-body">
+          <text class="mc-name">{{item.title}}</text>
+          <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。
+               本页没有下拉刷新，点这一行走已有 onRetryLoad；catch 住，避免连课卡一起点进目录。 -->
+          <view class="mc-meta" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-class="k-row-down" hover-stay-time="100">
+            <text class="mc-left">学习进度暂时读不到，<text class="mc-retry-t">点此重试</text></text>
+          </view>
+          <block wx:elif="{{item.totalSegments}}">
+            <!-- 像素分段进度（高 4·每格 4 间隔 2·直角）：已学墨色、未学凹槽灰；percent=0 不画填充 -->
+            <view class="mc-track"><view wx:if="{{item.percent > 0}}" class="mc-fill" style="width: {{item.percent}}%"></view></view>
+            <view class="mc-meta">
+              <!-- 单位「段」对齐数据模型与目录页（章>课时>段落）：此处数的是 segments，别另起「集」之类叫法。 -->
+              <text class="mc-left">已学 {{item.doneCount}}/{{item.totalSegments}} 段</text>
+              <view class="mc-fin" wx:if="{{item.percent >= 100}}"><px-i name="led" tone="#3f9a5e" /><text>学完</text></view>
+              <text class="mono mc-pct" wx:else>{{item.percent}}%</text>
+            </view>
+          </block>
+        </view>
+      </view>
+    </view>
   </view>
 
   <!-- 空态 -->
-  <view class="ld-mc-empty" wx:elif="{{!loading && !list.length}}">
-    <view class="ld-mc-empty-ico">
-      <image class="ld-mc-empty-img" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
-    </view>
-    <view class="ld-mc-empty-title">还没有进行中的课程</view>
-    <view class="ld-mc-empty-hint">扫描二维码开始</view>
-    <view class="ld-mc-empty-btn" bind:tap="onActivate" hover-class="ld-mc-empty-btn-h" hover-stay-time="80">输入激活码</view>
+  <view class="mc-state mc-empty" wx:else>
+    <text class="mc-state-t">还没有进行中的课程</text>
+    <text class="mc-state-h">扫包装盒内的二维码，就能开始学</text>
   </view>
+
+  <view class="mc-dock-space"></view>
+</view>
+
+<view class="mc-dock">
+  <view class="k k-light k-48" hover-class="k-light-down" hover-stay-time="100" bind:tap="onActivate">输入激活码</view>
 </view>

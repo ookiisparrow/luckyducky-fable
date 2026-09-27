@@ -7,6 +7,8 @@ import { ACTIVATION_ERR_COPY } from '../lib/mapLearning'
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
+const { openCsMock } = vi.hoisted(() => ({ openCsMock: vi.fn() }))
+vi.mock('../utils/customerService', () => ({ openCustomerService: openCsMock }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
@@ -215,6 +217,12 @@ describe('激活页：出口与文案', () => {
     stack = [{}, {}]
     page.onBack()
     expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：废码 / 码被占屏点「联系客服」打开客服会话（v5 稿 C2 新增出口）', async () => {
+    const page = await mount()
+    page.onContact()
+    expect(openCsMock).toHaveBeenCalledTimes(1)
   })
 
   it('大白话：三件事屏点「先逛逛」回首页', async () => {

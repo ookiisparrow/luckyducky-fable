@@ -2,6 +2,7 @@
 // 头像临时路径先传云存储换 cloud:// 再同步（云端只收 cloud:// 或空）；上传失败昵称照常同步不带头像字段。
 import { tapHaptic } from '../../lib/haptics'
 import { login, updateProfile } from '../../api/user'
+import { goBackOrHome } from '../../lib/nav'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
 // 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
@@ -10,8 +11,10 @@ const PHONE_MAX_DIGITS = 11
 
 Page({
   data: {
+    sb: 20, // 状态栏高（自绘顶栏：返回键要先问「放弃修改？」，v5-nav 的返回拦不住）
+    leaveOpen: false, // 「放弃编辑确认」半屏
     nickname: '',
-    bio: '',
+    bio: '', // 个性签名：v5 稿不再展示/编辑，原值照载照回传（不把云端已存签名覆盖清空）
     phone: '', // 账户联系电话（手动输入·供客服 360 检索·与地址电话独立）
     avatar: '', // cloud:// 或空
     avatarTemp: '', // 本次新选的临时路径（待上传）
@@ -20,12 +23,14 @@ Page({
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  orig: { nickname: '', phone: '' }, // 载入时的原值：判断有没有改动（放弃确认）
   unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   async onLoad() {
+    this.setData({ sb: wx.getWindowInfo().statusBarHeight || 20 })
     let user: Record<string, any> | null = null
     try {
       const u = await login()
@@ -35,6 +40,7 @@ Page({
     }
     if (this.unloaded) return // 资料拉取在途已退页——迟到回包不再 setData
     if (user) {
+      this.orig = { nickname: String(user.nickname || ''), phone: String(user.phone || '') }
       this.setData({
         nickname: String(user.nickname || ''),
         bio: String(user.bio || ''),
@@ -62,8 +68,23 @@ Page({
   onPhone(e: WechatMiniprogram.Input) {
     this.setData({ phone: e.detail.value })
   },
-  onBio(e: WechatMiniprogram.Input) {
-    this.setData({ bio: e.detail.value })
+  // 返回：资料载入后有改动（昵称/手机号/新选头像）先弹「放弃编辑确认」；保存在途不拦（成功会自己返回）
+  // ponytail: 只拦自绘返回键；侧滑/安卓返回键不拦（要拦得挂 page-container，会冻页面级滚动）
+  onBack() {
+    const d = this.data
+    const dirty = d.nickname !== this.orig.nickname || d.phone !== this.orig.phone || !!d.avatarTemp
+    if (d.loaded && !d.busy && dirty) {
+      this.setData({ leaveOpen: true })
+      return
+    }
+    goBackOrHome()
+  },
+  onLeaveStay() {
+    this.setData({ leaveOpen: false })
+  },
+  onLeaveGo() {
+    this.setData({ leaveOpen: false })
+    goBackOrHome()
   },
   async onSave() {
     if (this.data.busy) return

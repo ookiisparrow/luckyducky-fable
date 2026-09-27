@@ -1,7 +1,7 @@
 // 激活页（含 W1/W2 恭喜/学习方式两屏）：扫激活卡二维码带 ?code= 进入
 // （或手动输码）→ 兑课三态屏 → （新激活）W1 恭喜屏 → W2 三件事屏 → 确认进课。
-// 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。kind==='mine'/'taken'/'invalid'
-// 三态走沉浸壳；仅 kind==='activated' 的结果屏走 W1/W2 lilac 壳（见 wxml 头注）。
+// 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。
+// 视觉＝v5 稿 C1（输入）/ C2（mine/taken/invalid/error 结果屏）/ C3（W1+W2 拆两屏），见 wxml 头注。
 import { tapHaptic } from '../../lib/haptics'
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
@@ -12,6 +12,7 @@ import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
 import { goHomeTab } from '../../lib/homeIntent'
+import { openCustomerService } from '../../utils/customerService'
 
 Page({
   data: {
@@ -119,6 +120,10 @@ Page({
   onBack() {
     tapHaptic()
     goBackOrHome()
+  },
+  // 废码/已被使用屏「联系客服」（v5 稿 C2）：找不到码或码被占时让客服帮确认。
+  onContact() {
+    openCustomerService()
   },
   onGoHome() {
     // 「先逛逛，稍后再进课」→ 首页应从头逛起：防上次恰好滚到 FAQ 板块的旧滚动位置残留，造成错位观感

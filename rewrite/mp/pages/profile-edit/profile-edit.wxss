@@ -1,167 +1,222 @@
-/* 编辑资料·重设计对齐 Checkout.jsx ProfileEdit + checkout.css coprof/coaddr-* 版式。
-   设计 402px 画板→rpx（×1.87）。页浅灰底、白卡以圆角+浅影分隔·发丝线分行；token 见 styles/tokens.wxss。
-   co-/coaddr-/coprof- 前缀沿设计。 */
-.co {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout 同调·tokens 无对应中性灰） */
-  color: var(--ld-content);
+/* 编辑资料（v5「字重」稿 D3 + 放弃编辑确认） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-.co image {
-  display: block;
+/* 自绘顶栏（同 components/v5-nav 版式） */
+.pe-nav-space {
+  flex: 0 0 auto;
 }
-
-/* ---------- 内容容器 ---------- */
-.co-body {
-  padding: 22rpx 26rpx 8rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 22rpx;
-}
-
-/* ---------- 通用白卡 ---------- */
-.co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-
-/* ---------- 资料表单（行间发丝线·末行无线） ---------- */
-.coaddr-form {
-  padding: 4rpx 30rpx;
-}
-.coaddr-field {
+.pe-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 20;
+  height: 44px;
+  padding-left: 10px;
+  padding-right: 104px;
   display: flex;
   align-items: center;
-  gap: 22rpx;
-  padding: 28rpx 0;
-  border-bottom: 1rpx solid var(--ld-line-soft);
+  gap: 4px;
+  background: var(--v5-canvas);
+  box-sizing: content-box;
 }
-.coaddr-field:last-child {
-  border-bottom: none;
-}
-.coaddr-field-area {
-  align-items: flex-start;
-}
-.coaddr-label {
-  flex: 0 0 120rpx;
-  font-size: 27rpx;
-  color: var(--ld-content);
-}
-.coaddr-field-area .coaddr-label {
-  padding-top: 6rpx;
-}
-.coaddr-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 28rpx;
-  color: var(--ld-ink);
-  line-height: 1.5;
-}
-.coaddr-area {
-  width: 100%;
-  min-height: 60rpx;
-}
-.coaddr-ph {
-  color: var(--ld-content-2);
-}
-
-/* ---------- 头像行（整行为 chooseAvatar 能力按钮·重置按钮外观） ---------- */
-.coprof-avatar-field {
-  width: 100%;
-  text-align: left;
-  background: none;
-  padding: 26rpx 0;
-  line-height: inherit;
-}
-.coprof-avatar-field::after {
-  border: none;
-}
-.coprof-avatar {
-  width: 90rpx;
-  height: 90rpx;
+.pe-hit {
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  position: relative;
-  background: var(--ld-bg-sage);
-}
-.coprof-avatar-img {
-  width: 90rpx;
-  height: 90rpx;
-  border-radius: 50%;
-}
-.coprof-avatar-empty {
-  box-sizing: border-box;
-  padding: 18rpx 10rpx;
-  background: var(--ld-bg-sage);
-}
-.coprof-cam {
-  position: absolute;
-  right: -4rpx;
-  bottom: -4rpx;
-  width: 38rpx;
-  height: 38rpx;
-  border-radius: 50%;
-  background: var(--ld-purple);
-  border: 4rpx solid var(--ld-bg);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.coprof-cam-ico {
-  width: 20rpx;
-  height: 20rpx;
+.pe-back {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+}
+.pe-nav-t {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 
-/* 加载骨架（login 在途·不画可编辑空档）：微光扫过对齐 reviews（@keyframes ld-shimmer·app.wxss） */
-.coprof-skel {
-  height: 28rpx;
-  margin: 28rpx 0;
-  border-radius: 8rpx;
-  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
-  background-size: 200% 100%;
-  animation: ld-shimmer 1500ms ease-in-out infinite;
+/* 头像：84 方块 + 右下角「换」小键；整块是 chooseAvatar 能力按钮（去掉 button 默认样式） */
+.pe-av-wrap {
+  padding: 8px 16px 0;
+  display: flex;
+  justify-content: center;
 }
-
-/* 表单下说明 */
-.coprof-tip {
+.pe-av-btn {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  line-height: normal;
+  overflow: visible;
+}
+.pe-av-btn::after {
+  border: none;
+}
+.pe-av {
+  width: 84px;
+  height: 84px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--v5-sunk);
+}
+.pe-av-img {
+  width: 100%;
+  height: 100%;
   display: block;
-  text-align: center;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-  line-height: 1.6;
-  margin: 30rpx 30rpx 8rpx;
+}
+.pe-av-k {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 300;
 }
 
-/* ---------- 底部保存坞 ---------- */
-.co-dock-space {
-  height: 160rpx;
+.pe-form {
+  padding: 24px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.co-dock {
+.pe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pe-label {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.pe-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink);
+}
+.pe-ph {
+  color: var(--v5-ink-4);
+}
+.pe-skel {
+  height: 44px;
+  border-radius: 6px;
+}
+.pe-fail {
+  padding: 48px 16px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.pe-fail-t {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
+}
+
+.pe-dock-space {
+  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
+}
+.pe-dock {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--ld-bg);
-  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.coaddr-dock {
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
+  gap: 8px;
+  background: var(--v5-canvas);
 }
-.co-submit {
-  background: var(--ld-purple);
-  color: #ffffff;
-  border-radius: var(--ld-radius-pill);
-  font-size: 30rpx;
-  font-weight: 600;
-  text-align: center;
-}
-.coaddr-save {
+.pe-save {
   flex: 1;
-  padding: 26rpx 0;
 }
-.co-submit.dim {
-  opacity: 0.5;
+
+/* 放弃编辑确认半屏 */
+.pe-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 140;
+}
+.pe-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(17, 17, 17, 0.42);
+  animation: pe-fade 180ms ease-out;
+}
+.pe-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--v5-canvas);
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: pe-up 220ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.pe-grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(17, 17, 17, 0.2);
+}
+.pe-sheet-t {
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pe-sheet-h {
+  font-size: 20px;
+  font-weight: 700;
+}
+.pe-sheet-sub {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--v5-ink-2);
+}
+.pe-sheet-ks {
+  padding-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+.pe-leave {
+  flex: 1;
+  color: var(--v5-err-text);
+}
+.pe-stay {
+  flex: 1.6;
+}
+@keyframes pe-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pe-up {
+  from {
+    transform: translateY(100%);
+  }
 }

@@ -1,6 +1,9 @@
 {
-  "navigationBarTitleText": "编辑资料",
+  "navigationStyle": "custom",
+  "backgroundColor": "#fafaf8",
   "usingComponents": {
-    "privacy-sheet": "/components/privacy-sheet/privacy-sheet"
+    "privacy-sheet": "/components/privacy-sheet/privacy-sheet",
+    "px-i": "/components/px-i/px-i",
+    "px-anim": "/components/px-anim/px-anim"
   }
 }

@@ -1,3 +1,7 @@
 {
-  "component": true
+  "component": true,
+  "usingComponents": {
+    "px-i": "/components/px-i/px-i",
+    "px-duck": "/components/px-duck/px-duck"
+  }
 }

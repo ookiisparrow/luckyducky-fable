@@ -29,7 +29,8 @@ async function mount(): Promise<Record<string, any>> {
 
 beforeEach(() => {
   loginMock.mockReset()
-  ;(globalThis as any).wx = { showToast: vi.fn() }
+  ;(globalThis as any).wx = { showToast: vi.fn(), navigateBack: vi.fn(), getWindowInfo: () => ({ statusBarHeight: 20 }) }
+  ;(globalThis as any).getCurrentPages = () => [{}, {}]
 })
 
 describe('编辑资料加载中/登录失败不画空白档案', () => {
@@ -69,5 +70,30 @@ describe('编辑资料加载中/登录失败不画空白档案', () => {
     await page.onLoad()
     expect(page.data.loading).toBe(false)
     expect(page.data.loaded).toBe(false)
+  })
+})
+
+describe('编辑资料放弃确认（v5「放弃编辑确认」半屏）', () => {
+  it('大白话：没改动点返回直接走；改了昵称/手机号/选了新头像点返回先弹确认，点「放弃」才走', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉', phone: '' } })
+    const page = await mount()
+    await page.onLoad()
+    page.onBack()
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledTimes(1)
+
+    page.onNickname({ detail: { value: '棉花' } })
+    page.onBack()
+    expect(page.data.leaveOpen).toBe(true)
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledTimes(1)
+    page.onLeaveStay()
+    expect(page.data.leaveOpen).toBe(false)
+
+    page.onNickname({ detail: { value: '棉棉' } }) // 改回原样＝没改动
+    page.onChooseAvatar({ detail: { avatarUrl: 'wxfile://tmp.png' } })
+    page.onBack()
+    expect(page.data.leaveOpen).toBe(true)
+    page.onLeaveGo()
+    expect(page.data.leaveOpen).toBe(false)
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledTimes(2)
   })
 })

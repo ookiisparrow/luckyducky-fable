@@ -133,3 +133,23 @@ export function mapOrders(list: unknown): OrderVM[] {
   if (!Array.isArray(list)) return []
   return list.map(mapOrder).filter((x): x is OrderVM => !!x)
 }
+
+export type StepState = 'done' | 'cur' | 'todo'
+const STEP_LABELS = ['下单', '付款', '发货', '收货']
+// 各状态走到第几步（0 起）以及当前步是否已完成：done 状态四步全亮；关闭/未知只亮「下单」
+const STEP_AT: Record<string, { at: number; finished: boolean }> = {
+  pending: { at: 1, finished: false },
+  paid: { at: 2, finished: false },
+  shipped: { at: 3, finished: false },
+  done: { at: 3, finished: true },
+}
+
+/** 订单进度四步（v5 订单详情）：完成＝墨、当前＝紫、未到＝灰（设计规范「进度/等级」）。 */
+export function orderSteps(status: string): Array<{ label: string; state: StepState }> {
+  const s = STEP_AT[status]
+  return STEP_LABELS.map((label, i) => {
+    if (!s) return { label, state: i === 0 ? 'done' : 'todo' }
+    if (i < s.at || (i === s.at && s.finished)) return { label, state: 'done' }
+    return { label, state: i === s.at ? 'cur' : 'todo' }
+  })
+}

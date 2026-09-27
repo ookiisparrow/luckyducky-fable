@@ -1,308 +1,259 @@
-/* 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」。设计 402px 画板 → rpx（×1.87）。
-   全屏照片铺底 + 双段暗渐 scrim + 顶部字标 + 底部锚定文案与胶囊 CTA；白字浮于暗照之上。
-   token 见 styles/tokens.wxss；照片局部暗色为设计专属值、就地写 hex+注释、不改 tokens。 */
-.ld-welcome {
-  position: relative;
+/* 激活页（v5「字重」稿 C1 / C2 / C3）：整屏纵向 flex——顶栏 + 内容 + 底部操作区（贴底，主键 48 高）。 */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
+.wl {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  background: #14121a; /* 设计沉浸底(照片缺席兜底暗色)·局部专属·非 token */
 }
 
-/* 全屏照片 / 缺席占位（灰底不裂图，白字靠底部 scrim 压暗仍可读） */
-.ld-w-photo {
-  position: absolute;
-  inset: 0;
+/* 顶栏：44 高，左返回小键（32×30，44 热区），右 104 让微信胶囊 */
+.wl-nav {
+  flex: 0 0 auto;
+  height: 44px;
+  padding-left: 10px;
+  padding-right: 104px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: content-box;
+}
+.wl-hit {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wl-back {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+}
+.wl-nav-t {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+
+.wl-body {
+  flex: 1;
+}
+.wl-head {
+  padding: 8px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wl-head-tight {
+  padding-top: 4px;
+}
+.wl-h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.wl-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+
+/* 激活码凹槽（输入 / 结果屏回显） */
+.wl-code {
+  display: block;
+  margin: 24px 16px 0;
+  width: auto;
+  height: 52px;
+  line-height: 52px;
+  padding: 0 16px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--v5-ink);
+}
+.wl-ph {
+  color: var(--v5-ink-4);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.wl-code-ro {
+  margin-top: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.wl-code-invalid,
+.wl-code-taken {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1.5px var(--v5-err);
+}
+
+/* 状态灯 + 说明 */
+.wl-msg {
+  padding: 12px 16px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.wl-msg-led {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  line-height: 0;
+}
+.wl-msg-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.5;
+}
+.wl-msg-mine {
+  color: var(--v5-ok-text);
+}
+.wl-msg-error {
+  color: var(--v5-warn-text);
+}
+.wl-msg-bad {
+  color: var(--v5-err-text);
+}
+
+/* W1：1:1 主图 + 上下渐隐 */
+.wl-hero {
+  position: relative;
+  width: 100%;
+  height: 100vw;
+  overflow: hidden;
+  background: var(--v5-sunk);
+}
+.wl-hero-img {
+  display: block;
   width: 100%;
   height: 100%;
-  z-index: 0;
 }
-.ld-w-photo-empty {
-  background: #c7c7ca; /* 设计占位照灰(#c7c7ca)·中灰托白字标·局部专属非 token */
-}
-
-/* 双段暗渐 scrim：顶部微压(字标可读) + 底部重压(文案区) */
-.ld-w-scrim {
+.wl-fade-t {
   position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    linear-gradient(to bottom, rgba(20, 18, 26, 0.42) 0%, rgba(20, 18, 26, 0) 24%),
-    linear-gradient(to top, rgba(20, 18, 26, 0.86) 0%, rgba(20, 18, 26, 0.4) 40%, rgba(20, 18, 26, 0) 66%);
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 12%;
+  background: linear-gradient(to top, rgba(250, 250, 248, 0), #fafaf8);
 }
-
-/* 顶部品牌字标（烘反白·投影保底可读） */
-.ld-w-logo {
+.wl-fade-b {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 64rpx;
-  width: auto;
-  z-index: 3;
-  filter: brightness(0) invert(1) drop-shadow(0 2rpx 10rpx rgba(0, 0, 0, 0.35));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16%;
+  background: linear-gradient(to bottom, rgba(250, 250, 248, 0), #fafaf8 88%);
 }
-
-/* —— 自绘返回——
-   照片壳整屏不滚动，absolute 即可（与 catalog 的 fixed 之别：那页整页自然流滚动）。
-   半透明黑底＋反白箭头：压在压暗的照片上，浅色照片也看得清；与右上角原生胶囊分居两侧。 */
-.ld-w-back {
-  position: absolute;
-  left: 24rpx;
-  z-index: 4;
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 999rpx;
-  background: rgba(0, 0, 0, 0.28);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ld-w-back-h {
-  background: rgba(0, 0, 0, 0.42);
-}
-.ld-w-back-ico {
-  width: 32rpx;
-  height: 32rpx;
-  transform: rotate(180deg); /* 复用 chevron-right 转向作返回箭头（不新增素材·同 player/catalog） */
-  filter: brightness(0) invert(1);
-}
-
-/* 底部锚定文案区（min-height:100vh + margin-top:auto 顶到底·正常流以便键盘抬升） */
-.ld-w-body {
-  position: relative;
-  z-index: 2;
-  margin-top: auto;
-  padding: 0 56rpx calc(96rpx + env(safe-area-inset-bottom));
-  color: #fff;
-}
-.ld-w-eyebrow {
-  font-size: 21rpx;
-  font-weight: 600;
-  letter-spacing: 4rpx;
-  text-transform: uppercase;
-  opacity: 0.9;
-}
-.ld-w-display {
-  margin-top: 22rpx;
-  font-size: 76rpx;
-  font-weight: 700;
-  line-height: 1.12;
-  letter-spacing: -1rpx;
-  text-shadow: 0 3rpx 30rpx rgba(0, 0, 0, 0.32);
-}
-.ld-w-lead {
-  margin-top: 26rpx;
-  max-width: 560rpx;
-  font-size: 30rpx;
-  font-weight: 400;
-  line-height: 1.62;
-  opacity: 0.94;
-  text-shadow: 0 2rpx 14rpx rgba(0, 0, 0, 0.3);
-}
-
-/* 沉浸态输入框：半透明白磨砂域（无 backdrop-filter·css-compat 禁）+ 白描边白字居中 */
-.ld-w-input {
-  margin-top: 40rpx;
-  width: 100%;
-  height: 100rpx;
-  padding: 0 32rpx;
-  box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.14);
-  border: 2rpx solid rgba(255, 255, 255, 0.42);
-  border-radius: 24rpx;
-  color: #fff;
-  font-size: 30rpx;
-  text-align: center;
-  letter-spacing: 4rpx;
-}
-.ld-w-ph {
-  color: rgba(255, 255, 255, 0.6);
-  letter-spacing: 2rpx;
-}
-
-/* 胶囊 CTA（设计 wel-cta-dark：深紫墨 + 阴影） */
-.ld-w-cta {
-  margin-top: 30rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
-  width: 100%;
-  height: 104rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 32rpx;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-  box-shadow: 0 12rpx 34rpx rgba(28, 28, 32, 0.32);
-}
-.ld-w-cta-ico {
-  width: 34rpx;
-  height: 34rpx;
-}
-/* 次要 CTA（换码/重输）：半透明白磨砂 + 白描边 */
-.ld-w-cta.ghost {
-  background: rgba(255, 255, 255, 0.16);
-  border: 2rpx solid rgba(255, 255, 255, 0.42);
-  box-shadow: none;
-}
-.ld-w-cta.dim {
-  opacity: 0.5;
-}
-
-/* ============ W1/W2 lilac 壳（对齐设计 W1/W2） ============
-   设计 402px 画板 → rpx（×1.866 取偶，同 catalog.wxss 换算口径）。非沉浸照片壳——浅紫底、
-   顶部品牌眉标、无 scrim。token 见 styles/tokens.wxss。 */
-.ld-wl {
-  min-height: 100vh;
-  background: var(--ld-bg-lilac);
+.wl-ok {
+  padding: 4px 16px 16px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
-.ld-wl-body {
+.wl-ok-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wl-h0 {
+  flex: 1;
+  min-width: 0;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.wl-meta {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
+}
+.wl-lead {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--v5-ink-2);
+}
+
+/* W2：三件事（发丝线分隔，等宽序号） */
+.wl-list {
+  margin: 16px 16px 0;
+  border-bottom: 1px solid var(--v5-hair);
+}
+.wl-item {
+  padding: 16px 0;
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
+}
+.wl-no {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--v5-ink-2);
+}
+.wl-item-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wl-item-h {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 24px;
+}
+.wl-item-p {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--v5-ink-2);
+}
+
+/* 底部操作区：贴底，次 1 : 主 1.6，底留 max(28px, 安全区) */
+.wl-dock {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+}
+.wl-dock-col {
+  flex-direction: column;
+  gap: 4px;
+}
+.wl-row {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0 44rpx 48rpx;
+  gap: 8px;
 }
-.ld-wl-brand {
-  font-size: 28rpx;
-  font-weight: 700;
-  letter-spacing: 4rpx;
-  color: var(--ld-purple-meta);
-}
-
-/* —— W1：产品主图卡 + 恭喜文案 —— */
-.ld-wl-hero {
-  width: 100%;
-  height: 660rpx;
-  border-radius: 44rpx;
-  margin-top: 28rpx;
-}
-.ld-wl-hero-empty {
-  background: linear-gradient(155deg, #e9efe4, #dfe5dc 55%, #e8e2f0); /* 设计 W1 hero 渐变占位·局部专属·非 token */
-}
-.ld-wl-copy {
-  text-align: center;
-  margin-top: 68rpx;
-}
-.ld-wl-title {
-  font-size: 52rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.ld-wl-course {
-  margin-top: 22rpx;
-  font-size: 32rpx;
-  font-weight: 500;
-  color: var(--ld-purple-tab);
-}
-.ld-wl-lead {
-  margin-top: 22rpx;
-  font-size: 26rpx;
-  line-height: 1.7;
-  color: var(--ld-content-2);
-}
-
-/* —— W2：三件事要点卡 —— */
-.ld-wl-points {
-  width: 100%;
-  margin-top: 30rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 26rpx;
-}
-.ld-wl-points-title {
-  font-size: 44rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-  margin-bottom: 12rpx;
-}
-.ld-wl-point {
-  display: flex;
-  gap: 26rpx;
-  align-items: flex-start;
-}
-.ld-wl-point-ico {
-  flex: 0 0 auto;
-  width: 40rpx;
-  height: 40rpx;
-  margin-top: 4rpx;
-}
-.ld-wl-point-tx {
+.wl-alt {
   flex: 1;
   min-width: 0;
 }
-.ld-wl-point-h {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
+.wl-main {
+  flex: 1.6;
+  min-width: 0;
 }
-.ld-wl-point-p {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  line-height: 1.65;
-  color: var(--ld-content-2);
-}
-
-/* —— W1/W2 共用底部：双点指示 + CTA + 警示/链接 —— */
-.ld-wl-foot {
-  margin-top: auto;
-  width: 100%;
+.wl-warn {
+  padding: 0 2px 8px;
   display: flex;
-  flex-direction: column;
-  gap: 18rpx;
+  align-items: flex-start;
+  gap: 8px;
 }
-.ld-wl-dots {
-  display: flex;
-  gap: 14rpx;
-  justify-content: center;
-  align-items: center;
-}
-.ld-wl-dot {
-  width: 14rpx;
-  height: 14rpx;
-  border-radius: 8rpx;
-  background: var(--ld-purple-line);
-}
-.ld-wl-dot.on {
-  width: 38rpx;
-  background: var(--ld-purple);
-}
-.ld-wl-warn {
-  text-align: center;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ld-wl-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
-  width: 100%;
-  height: 100rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 32rpx;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-  box-shadow: 0 12rpx 34rpx rgba(28, 28, 32, 0.2);
-}
-.ld-wl-cta.dim {
-  opacity: 0.5;
-}
-.ld-wl-cta-ico {
-  width: 34rpx;
-  height: 34rpx;
-  filter: brightness(0) invert(1); /* 白化（同 catalog.wxss 手法）：图标原色不论，统一白 */
-}
-.ld-wl-link {
-  text-align: center;
-  font-size: 25rpx;
-  color: var(--ld-purple-tab);
-  text-decoration: underline;
+.wl-warn-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--v5-warn-text);
 }

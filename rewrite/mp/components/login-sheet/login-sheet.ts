@@ -1,7 +1,7 @@
 // 登录授权半屏弹窗（R1）。
 // 真·一键登录：勾选同意《用户协议》《隐私政策》→「微信一键登录」用静默 openid 身份直接登录，
 // 登录环节不采集头像昵称（守卫 rw-mp-login-no-profile-collect·资料可后续在「编辑资料」页补）。
-// 「暂不登录」/点遮罩/✕ 关闭继续逛（软门槛·不强制·合微信运营规范）。各页放一处 <login-sheet/>，
+// 「暂不登录」/点遮罩 关闭继续逛（软门槛·不强制·合微信运营规范）。各页放一处 <login-sheet/>，
 // 经 lib/loginGate 单例共享开关（镜像 privacy-sheet+privacyGate 范式：attached 订阅/detached 退订）。
 import { loginGate } from '../../lib/loginGate'
 import { login } from '../../api/user'
@@ -11,6 +11,7 @@ import { tapHaptic } from '../../lib/haptics'
 const unsubs = new WeakMap<object, () => void>()
 
 Component({
+  options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的全局键帽 .k-* 与 .v5-scope 色票
   data: { visible: false, agreed: false, submitting: false },
   lifetimes: {
     attached() {

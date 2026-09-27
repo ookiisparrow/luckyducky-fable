@@ -1,6 +1,7 @@
 // 数据共享授权页行为：进页显示本地提示态、同意/撤回的提交参数与结果、失败不改状态、在途防重、
 // 在途退页后服务端已生效的回包仍要记下提示（下次进页才显示对的状态）。
 // 只桩云调用（callApp），api/lib/consent 与 storage 用真的。Page 桩同 p-mp-order-page.test.ts。
+import consentWxml from '../pages/consent/consent.wxml?raw'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { callAppMock, hapticMock } = vi.hoisted(() => ({ callAppMock: vi.fn(), hapticMock: vi.fn() }))
@@ -121,5 +122,17 @@ describe('授权页：同意 / 撤回', () => {
     expect(wxMock.showToast).not.toHaveBeenCalled()
     expect(page.data.state).toBe(true)
     expect((await mount()).data).toMatchObject({ state: false, stateLabel: '当前状态：已撤回授权' })
+  })
+})
+
+describe('授权页：撤回与同意一样便捷（合规·个人信息保护法）', () => {
+  it('大白话：「撤回授权」是轻点就撤、不藏在任何条件后面；「同意共享」同样常驻', () => {
+    const live = consentWxml.replace(/<!--[\s\S]*?-->/g, '')
+    const revoke = live.match(/<view[^>]*bind:tap="onRevoke"[^>]*>/)
+    expect(revoke, '撤回键要用 bind:tap 轻点触发').not.toBeNull()
+    expect(revoke![0]).not.toMatch(/wx:if|wx:elif|wx:else|touchstart|longpress/)
+    const agree = live.match(/<view[^>]*bind:tap="onAgree"[^>]*>/)
+    expect(agree).not.toBeNull()
+    expect(agree![0]).not.toMatch(/wx:if|wx:elif|wx:else/)
   })
 })

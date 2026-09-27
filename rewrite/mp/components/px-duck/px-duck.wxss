@@ -1,0 +1,8 @@
+:host {
+  display: inline-block;
+  line-height: 0;
+  pointer-events: none;
+}
+.pxc {
+  display: block;
+}

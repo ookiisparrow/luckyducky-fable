@@ -1,27 +1,25 @@
-<view class="ld-about">
-  <!-- 品牌区（居中·复用 wordmark） -->
-  <view class="ld-ab-hero">
-    <image class="ld-ab-logo" src="/static/logo-wordmark.svg" mode="aspectFit" />
-    <view class="ld-ab-brand">{{brand}}</view>
-    <view class="ld-ab-lead">{{lead}}</view>
-  </view>
+<!-- 关于我们（v5 稿 D5）：左对齐 wordmark + 自述 + CMS 段落；底部两条合规链接行 + 等宽版本行。 -->
+<v5-nav title="关于我们" />
 
-  <!-- 信息卡·发丝线分隔的三段自述 -->
-  <view class="ld-ab-card">
-    <!-- wx:key 用 title（CMS 段落·标题唯一）：mapAbout 产出 {title,body} 对象 -->
-    <view class="ld-ab-block" wx:for="{{sections}}" wx:key="title">
-      <view class="ld-ab-h">{{item.title}}</view>
-      <view class="ld-ab-p">{{item.body}}</view>
-    </view>
+<view class="ab">
+  <image class="ab-logo" src="/static/logo-wordmark.svg" mode="aspectFit" aria-label="{{brand}}" />
+  <text class="ab-lead t-sys">{{lead}}</text>
+  <!-- wx:key 用 title（CMS 段落·标题唯一）：mapAbout 产出 {title,body} 对象 -->
+  <view class="ab-sec" wx:for="{{sections}}" wx:key="title">
+    <text class="ab-h">{{item.title}}</text>
+    <text class="ab-p t-sys">{{item.body}}</text>
   </view>
+</view>
 
-  <!-- 页脚·协议链接 + 版本 -->
-  <view class="ld-ab-foot">
-    <view class="ld-ab-links">
-      <text class="ld-ab-link" bind:tap="onUserAgreement">用户协议</text>
-      <text class="ld-ab-sep">·</text>
-      <text class="ld-ab-link" bind:tap="onPrivacy">隐私政策</text>
-    </view>
-    <view class="ld-ab-version">{{version}}</view>
+<view class="ab-dock-space"></view>
+<view class="ab-dock">
+  <view class="ab-row" hover-class="k-row-down" bind:tap="onUserAgreement">
+    <text class="ab-row-t">用户协议</text>
+    <px-i name="arrow" tone="#62625c" />
   </view>
+  <view class="ab-row" hover-class="k-row-down" bind:tap="onPrivacy">
+    <text class="ab-row-t">隐私政策</text>
+    <px-i name="arrow" tone="#62625c" />
+  </view>
+  <view class="ab-ver mono">{{version}}</view>
 </view>

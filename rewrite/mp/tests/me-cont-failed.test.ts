@@ -226,3 +226,23 @@ describe('我页登录态首帧（本地已同意不先闪登出·根因#8/#14�
     expect(page.data.nickname).toBe(mapMe(null).defaultNickname)
   })
 })
+
+describe('「我」页小鸭蛋孵化判定（v5 D1·有一门课全部段看完才孵化）', () => {
+  const SEGS = [
+    { id: 'c1', title: '小棉鸭', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true }, { id: 's2', hasVideo: true }] }] }] },
+  ]
+  async function hatchKeyWith(progressList: unknown[]): Promise<string> {
+    getMyProgressMock.mockResolvedValue({ ok: true, list: progressList })
+    const page = await mountMe()
+    await page.refresh()
+    await flush()
+    return page.data.hatchKey
+  }
+  it('大白话：全部段 done → hatchKey=该课 id；差一段 / 课没有段 → 不孵化（空串）', async () => {
+    getCoursesByIdsMock.mockResolvedValue(SEGS)
+    expect(await hatchKeyWith([{ courseId: 'c1', done: { s1: true, s2: 1, stale: true } }])).toBe('c1')
+    expect(await hatchKeyWith([{ courseId: 'c1', done: { s1: true, stale: true } }])).toBe('')
+    getCoursesByIdsMock.mockResolvedValue(COURSES) // 课时无段：分母 0 不算学完
+    expect(await hatchKeyWith([{ courseId: 'c1', done: {} }])).toBe('')
+  })
+})

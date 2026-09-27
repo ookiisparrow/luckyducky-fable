@@ -1,36 +1,35 @@
-<!-- 意见反馈·一致性对齐 profile-edit/checkout co-* 白卡版式（本屏无设计源·按已建立设计语言重排·文案/字段一字未动）。
-     业务逻辑全承接 feedback.ts：cats/cat→onCat、content→onContent、contact→onContact、busy/onSubmit 提交。 -->
-<view class="co fb">
-  <view class="co-body">
+<!-- 意见反馈（v5「字重」稿 D4）：分类分段（凹槽底 + 选中浅色键亮紫灯）→ 正文凹槽 + 字数 → 联系方式 → 底部提交。
+     业务全承接 feedback.ts：cats/cat→onCat、content→onContent、contact→onContact、busy/onSubmit 提交。 -->
+<v5-nav title="意见反馈" />
 
-    <!-- 反馈类型（分段 pill·承接 cats/cat·onCat 不改） -->
-    <view class="fb-cats">
-      <text wx:for="{{cats}}" wx:key="key" class="fb-cat {{cat === item.key ? 'on' : ''}}" data-key="{{item.key}}" bind:tap="onCat">{{item.label}}</text>
-    </view>
+<view class="fb">
+  <text class="fb-title">说说你的想法</text>
 
-    <!-- 反馈正文卡（文本域 + 字数） -->
-    <view class="co-card fb-card">
-      <!-- 提示语不重复字数上限：尾部写「（最多 500 字）」在窄屏折行时
-           会把「500」拆成「50 / 0」，读起来像限 50 字；下方 {{content.length}}/500 计数已经在说同一件事。 -->
-      <textarea class="fb-text" value="{{content}}" bind:input="onContent" maxlength="500" placeholder="遇到的问题、想要的功能，都可以告诉我们" placeholder-class="fb-ph" />
-      <view class="fb-count">{{content.length}}/500</view>
-    </view>
-
-    <!-- 联系方式卡（发丝线 field 行风格） -->
-    <view class="co-card fb-form">
-      <view class="fb-field">
-        <text class="fb-label">联系方式</text>
-        <input class="fb-input" value="{{contact}}" bind:input="onContact" maxlength="100" placeholder="微信号/手机号（选填，方便回访）" placeholder-class="fb-ph" />
-      </view>
-    </view>
-
-  </view>
-
-  <!-- 底部提交坞（全宽主 CTA） -->
-  <view class="co-dock-space"></view>
-  <view class="co-dock">
-    <view class="co-dockbar">
-      <view class="co-submit {{busy ? 'dim' : ''}}" bind:tap="onSubmit">提交</view>
+  <view class="well fb-cats">
+    <view wx:for="{{cats}}" wx:key="key" data-key="{{item.key}}" bind:tap="onCat"
+      class="k fb-cat {{cat === item.key ? 'k-light' : 'fb-cat-off'}}"
+      hover-class="{{cat === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100">
+      <px-i wx:if="{{cat === item.key}}" name="led" tone="#8a5ae0" />
+      <text>{{item.label}}</text>
     </view>
   </view>
+
+  <!-- 提示语不写字数上限（窄屏折行会把「500」拆开）；右下计数已在说 -->
+  <view class="fb-area-wrap">
+    <textarea class="well fb-area" value="{{content}}" bind:input="onContent" maxlength="500"
+      placeholder="遇到的问题，或者希望我们改进的地方…" placeholder-class="fb-ph" />
+    <text class="mono fb-count">{{content.length}}/500</text>
+  </view>
+
+  <view class="fb-field">
+    <text class="fb-label">联系方式 · 选填</text>
+    <input class="well fb-input" value="{{contact}}" bind:input="onContact" maxlength="100"
+      placeholder="微信号或手机号，方便回复你" placeholder-class="fb-ph" />
+  </view>
+</view>
+
+<view class="fb-dock-space"></view>
+<view class="fb-dock">
+  <view wx:if="{{content && !busy}}" class="k k-ink k-48 fb-submit" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit">提交</view>
+  <view wx:else class="k k-flat k-48 fb-submit" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit">提交</view>
 </view>

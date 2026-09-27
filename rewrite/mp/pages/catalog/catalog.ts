@@ -1,4 +1,4 @@
-// 课程目录主页（设计 C1）：hero 产品主图 + 大章节>小课时两层目录（段落层级只活在播放页
+// 课程目录主页（v5 稿 C6）：hero 产品主图 + 像素分段进度 + 大章节>小课时两层目录（段落层级只活在播放页
 // segstrip，不在此出现）。数据源＝lib/mapLearning mapCatalog（课时状态判定/续播段解耦，见其头注）。
 // 课程结构走 lib/courses 会话缓存（本会话内不变·根因账本#15）；学习进度每次实时（onShow 重拉，同
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞。
@@ -9,7 +9,6 @@ import { getCourseByIdDetailed } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（目录页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
-import { goBackOrHome } from '../../lib/nav'
 import { mapCatalogPlayer } from '../../lib/mapPages'
 
 Page({
@@ -18,7 +17,7 @@ Page({
     courseId: '',
     state: 'loading' as 'loading' | 'ok' | 'missing' | 'failed', // failed=目录拉取网络失败（可重试·根因#14），与 missing「课程不存在」分治
     bg: '',
-    chapters: [] as CatalogChapterVM[],
+    chapters: [] as (CatalogChapterVM & { cur: boolean })[], // cur＝本章含当前课时（章序号标紫）
     continueTarget: null as { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null,
     resumeCta: mapCatalogPlayer(null).catalog.resumeCta, // 「开始学习」CTA 文案·首帧默认（CMS 到达覆盖）
   },
@@ -76,7 +75,7 @@ Page({
       return
     }
     const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
-    this.setData({ state: 'ok', chapters, continueTarget })
+    this.setData({ state: 'ok', chapters: chapters.map((ch) => ({ ...ch, cur: ch.lessons.some((l) => l.status === 'current') })), continueTarget })
     // 续播段取址预热（根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；
     // 纯 cache 暖（不 setData·新鲜命中 no-op·在途去重·err 吞掉）。段为空（全课无可播）时 prefetch 自 no-op。
     if (continueTarget) void playbackCache.prefetch(courseId, continueTarget.segmentId)
@@ -85,12 +84,6 @@ Page({
     tapHaptic()
     this.setData({ state: 'loading' })
     void this.onShow()
-  },
-  // 自绘返回：custom 导航无原生返回箭头；扫码激活直落本页时
-  // 页面栈只有一层，goBackOrHome 兜底回首页 tab，不留死按钮。
-  onBack() {
-    tapHaptic()
-    goBackOrHome()
   },
   // 「没找到这门课」空态的出路：否则整屏无可点处。
   // 去「我的课程」而非首页——能走到本页的都是学员，那里才是他找得到自己课的地方。

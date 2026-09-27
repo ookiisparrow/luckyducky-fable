@@ -4,7 +4,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { submitReview } from '../../api/reviews'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 预设标签
-const REV_LABEL = ['点星评分', '非常不满', '不满意', '一般', '满意', '非常满意']
+const REV_LABEL = ['点星评分', '很差', '较差', '一般', '满意', '超赞'] // 星级文案随 v5 稿 B3（STAR_L）
 // 云端错误码 → 提示；用 Map 而非对象字面量：'constructor' 这类原型键不会误命中
 const REV_ERR = new Map([
   ['REVIEWED', '这条已经评过了'],

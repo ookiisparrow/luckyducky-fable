@@ -1,430 +1,269 @@
-/* 课程播放页·竖屏沉浸全屏（常态结构 + 段落播完不自动切换 + 自绘 seek 条 + 阻尼震感 + 关键节点磁吸 + 拖动预览）。
-   整页纯黑铺满；视频 1:1.68（宽:高）·padding-top 百分比法（避 aspect-ratio·旧 WebView 不支持），
-   垂直居中；上下 UI 是黑条覆盖层（绝对定位 + z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
-   本文件管结构与视觉 + 段落进度条浮层 + 播完通栏重播。
-   设计稿（播放器重设计.html）画布宽 402px，本页 rpx 换算比例 750/402≈1.866（px × 1.866 ≈ rpx）。 */
+/* 课程播放页（v5 设计稿 C7 播放页 / 段间 / C9 学完一节）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv（全局 app.wxss）。
+   整页纵向 flex：顶栏 → 弹性视频舞台 → 底部控制区。求助面板与加桌引导是浅色 sheet（同设计稿 help/leave sheet）。
+   seek 条节点（.lp-seek-fill/.lp-seek-handle/.lp-seek-preview）的 width/left/显隐由 seek.wxs 写，这里只给静态外观。 */
 .ld-player {
   position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #000000; /* 整页纯黑（设计定案：全屏沉浸） */
+  display: flex;
+  flex-direction: column;
+  background: var(--v5-dark);
+  color: #f2f2ec;
 }
 
-/* —— 顶条（覆盖层·避让状态栏·标题居中·右侧空 spacer 与返回钮等宽·右上刻意留白给原生胶囊） ——
-   右侧安全缓冲＝spacer(64rpx) + 本行右 padding(56rpx) = 120rpx（缓冲缩到约 80rpx 未经真机核实，
-   不收窄）；spacer 与返回钮等宽以保标题视觉居中，真机走查后如需再调此处一并改。 */
+/* —— 顶栏：返回键 + 一行课时名；右侧 104px 留给原生胶囊 —— */
 .lp-topbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  /* z-index 高于求助面板遮罩（.lp-help-mask 20·position:fixed）：.ld-player 无 transform，fixed 元素
-     以视口为包含块，仅靠 z-index 定层级——若不高于遮罩，面板打开时自绘返回箭头会被遮罩完全盖住、
-     点不到，onBack() 里的求助面板逐层收口分支（helpSrc/helpPanel 四级链，见 player.ts）将永远
-     打不到。仍低于加桌引导遮罩（.lp-dg-mask 30）——
-     该弹窗不需要物理返回箭头参与（自身两个按钮已闭环，见 player.ts onBack 第二次按返回的判定）。 */
-  z-index: 21;
+  flex: 0 0 auto;
+}
+.lp-bar {
+  height: 44px;
+  padding: 0 104px 0 10px;
   display: flex;
   align-items: center;
-  gap: 14rpx;
-  padding: 12rpx 56rpx 20rpx 8rpx;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 100%);
-  box-sizing: content-box;
+  gap: 4px;
 }
 .lp-back {
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
-  width: 64rpx;
-  height: 64rpx;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.lp-back-ico {
-  width: 32rpx;
-  height: 32rpx;
-  transform: rotate(180deg); /* chevron-right 转向作返回箭头（复用现有图标资产，不新增素材） */
-  filter: brightness(0) invert(1); /* 图标颜色写死在 svg 内·此处仅播放器局部反白，不入 tokens */
+.lp-back-key {
+  width: 32px;
+  height: 30px;
+  padding: 0;
 }
-.lp-topbar-title {
+.lp-nav-cap {
   flex: 1;
   min-width: 0;
-  text-align: center;
-}
-.lp-title-main {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #ffffff;
-  text-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-4);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-title-sub {
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.6);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-topbar-spacer {
-  flex: 0 0 auto;
-  width: 64rpx;
-  height: 64rpx;
 }
 
 /* —— 视频舞台 —— */
 .lp-stage {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-}
-.lp-video-box {
   position: relative;
-  width: 100%;
-  padding-top: 168%; /* 默认 1:1.68·padding-top 百分比法；播放态由内联 style="padding-top:{{videoRatio}}%" 覆盖，
-                        贴合素材真实比例去左右黑边；状态框（.lp-video-box.lp-state）无内联仍用此默认 */
+  flex: 1;
+  min-height: 180px;
+  margin: 0 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: repeating-linear-gradient(135deg, #1a1a1a 0 8px, #202020 8px 16px);
+}
+.lp-stage.lesson-done {
+  flex: 0 0 200px;
+  min-height: 0;
 }
 .lp-video {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
-  /* object-fit 默认 contain：播放框已贴合素材比例（onVideoMeta 动态 padding-top），contain 下恰好铺满不裁切、无黑边；
-     极端超高素材被封顶到屏幕比例时素材比框更瘦高，contain 退化为左右留黑不裁切（此分支「去左右黑边」
-     保不住，合的是「不裁切」诉求）。 */
 }
-
-/* 全屏单击点击层（透明·playing 才挂） */
-.lp-tapzone {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-/* 暂停指示（非按钮·整屏单击即恢复·仅视觉提示·点它也走冒泡命中父层 tapzone） */
-.lp-pause-badge {
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.36);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-pause-ico {
-  width: 60rpx;
-  height: 60rpx;
-  filter: brightness(0) invert(1);
-}
-
-/* 单击提示条（设计 .tap-hint·402px 画布 ×1.866 换算 rpx）：playing 且未被首次 tap 关闭过 */
-.lp-tap-hint {
-  position: absolute;
-  /* top 由内联 style 动态提供（capsuleBottom 避让·同 .lp-segstrip 范式）：
-     定位祖先是全屏 .lp-stage，写死 top 会让提示条压进状态栏，故此处不写死 top。 */
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 3;
-  padding: 9rpx 26rpx;
-  border-radius: 26rpx;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1rpx solid rgba(255, 255, 255, 0.24);
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.6);
-  white-space: nowrap;
-}
-
-/* 分段进度条浮层（设计 .segstrip：不用 backdrop-filter——CLAUDE.md css-compat 避雷，
-   直接把底色不透明度提到 .72 替代毛玻璃）。段落层级只活在这里，目录页只到课时层。 */
-.lp-segstrip {
-  position: absolute;
-  left: 37rpx;
-  right: 37rpx;
-  /* top 由内联 style 动态提供（capsuleBottom+8·落胶囊下方）：定位祖先是全屏 .lp-stage，
-     不动态给 top 会贴屏顶撞状态栏/胶囊，故此处不写死 top。 */
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: 17rpx;
-  background: rgba(20, 15, 30, 0.72);
-  border: 1rpx solid rgba(255, 255, 255, 0.24);
-  border-radius: 30rpx;
-  padding: 24rpx 28rpx 20rpx;
-}
-.lp-segs {
-  display: flex;
-  gap: 8rpx;
-}
-.lp-seg-cell {
-  flex: 1;
-  height: 11rpx;
-  border-radius: 6rpx;
-  background: rgba(255, 255, 255, 0.24); /* todo（默认·防脏值兜底同 todo 语义） */
-}
-.lp-seg-cell.done {
-  background: var(--ld-purple);
-}
-.lp-seg-cell.cur {
-  background: var(--ld-duck);
-}
-.lp-segcap {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.lp-segcap-text {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.6);
-}
-.lp-legend {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 11rpx;
-}
-.lp-legend-dot {
-  font-size: 18rpx;
-  line-height: 1;
-  color: var(--ld-duck);
-}
-.lp-legend-text {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* 首帧前骨架（loading·首帧到达前不裂播放器） */
 .lp-skeleton {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20rpx;
-  background: #0a0a0d;
+  gap: 12px;
 }
-.lp-skeleton-spin {
-  width: 56rpx;
-  height: 56rpx;
+.lp-skeleton-text {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-4);
+}
+.lp-tapzone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.lp-tap-hint {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  font-weight: 300;
+  color: #f2f2ec;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lp-pause-badge {
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 5rpx solid rgba(255, 255, 255, 0.18);
-  border-top-color: var(--ld-duck);
-  animation: lp-spin 0.9s linear infinite;
+  background: rgba(242, 242, 236, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 4px;
+  box-sizing: border-box;
 }
-@keyframes lp-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-/* 缓冲失速角标（挂 tapzone 子节点悬浮底部居中·复用 lp-spin 动画） */
 .lp-buffering {
   position: absolute;
   left: 50%;
-  bottom: 48rpx;
+  bottom: 14px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  padding: 12rpx 28rpx;
-  border-radius: 999rpx;
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 24rpx;
-}
-.lp-buffering-spin {
-  width: 28rpx;
-  height: 28rpx;
-  border-width: 4rpx;
-}
-.lp-skeleton-text {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.62);
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  font-weight: 300;
+  color: #f2f2ec;
+  white-space: nowrap;
 }
 
-/* 非播放态占位（empty/denied/missing/error·全屏黑底居中·顶条返回始终可用） */
-.lp-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
-  padding: 0 40rpx;
-  /* box-sizing 必写：本框同时挂着 .lp-video-box 的 width:100%，
-     默认 content-box 下「100% 内容宽 + 左右各 40rpx padding」总宽超屏 80rpx，又因 left:0 起算，
-     整块文案的居中中心右移 40rpx——「课程不存在」等四种非播放态文字都肉眼可见地偏右。 */
-  box-sizing: border-box;
-}
-.lp-state-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #ffffff;
-  text-align: center;
-}
-.lp-state-hint {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.56);
-  text-align: center;
-}
-.lp-state-btn {
-  margin-top: 10rpx;
-  padding: 16rpx 46rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-duck);
-  color: #4a3408; /* 深棕·鸭黄按钮文字（局部对比色） */
-  font-size: 26rpx;
-  font-weight: 600;
-}
-.lp-state-actions {
-  display: flex;
-  gap: 20rpx;
-  margin-top: 10rpx;
-}
-.lp-state-actions .lp-state-btn {
-  margin-top: 0;
-}
-.lp-state-btn.ghost {
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  border: 2rpx solid rgba(255, 255, 255, 0.3);
-}
-
-/* —— 底条（覆盖层·仅播放中显示） —— */
-.lp-bottombar {
+/* 段间 · 停在本段末：盖在最后一帧上的暗罩 + 文案 + 两颗暗色键 */
+.lp-segend {
   position: absolute;
   left: 0;
+  top: 0;
   right: 0;
   bottom: 0;
-  z-index: 4;
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
-  padding: 40rpx 30rpx calc(28rpx + env(safe-area-inset-bottom));
-  padding-bottom: calc(28rpx + constant(safe-area-inset-bottom)); /* 旧内核双写兜底 */
-  padding-bottom: calc(28rpx + env(safe-area-inset-bottom));
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0) 100%);
-}
-
-/* 通栏重播长条（设计 .replay：仅段落播完 segDone 时显示） */
-.lp-replay {
-  width: 100%;
-  height: 108rpx;
-  border-radius: 54rpx;
-  background: #ffffff;
-  color: #241733; /* 紫墨字 --purple-ink */
-  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 19rpx;
-  font-size: 32rpx;
-  font-weight: 700;
-  box-shadow: 0 15rpx 52rpx rgba(0, 0, 0, 0.4);
+  gap: 12px;
+  padding: 0 16px;
+  background: rgba(18, 18, 18, 0.72);
 }
-.lp-replay-ico {
-  width: 36rpx;
-  height: 36rpx;
-}
-
-/* 进度行：时间 + slider + 时间 */
-.lp-progress-row {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-}
-.lp-time {
-  flex: 0 0 auto;
-  font-size: 21rpx;
-  color: rgba(255, 255, 255, 0.8);
-  min-width: 64rpx;
+.lp-segend-cap {
+  font-size: 17px;
+  font-weight: 500;
+  color: #c9c9c2;
   text-align: center;
 }
-.lp-time.cur-strong {
-  color: #ffffff;
-  font-weight: 700;
+.lp-segend-keys {
+  display: flex;
+  gap: 8px;
 }
 
-/* 自绘 seek 条（设计 .seek·画布 402px×1.866 换算，节点/触摸热区数值按规格显式给定）：
-   .lp-seek 是拖动触摸容器（≥72rpx 热区，扩大真机可点中率），内部视觉轨道保持设计原细身。 */
+/* 非播放态（空/未激活/找不到/失败）：同尺寸暗框 + 标题 + 说明 + 键 */
+.lp-state {
+  padding: 0 32px;
+  background: #1a1a1a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.lp-state-title {
+  font-size: 17px;
+  font-weight: 500;
+  color: #f2f2ec;
+}
+.lp-state-hint {
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--v5-ink-4);
+}
+.lp-state-key {
+  margin-top: 8px;
+}
+.lp-state-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* —— 底部：seek 条 + 段名/时长 + 控制键 —— */
+.lp-bottombar {
+  flex: 0 0 auto;
+  padding: 4px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lp-bottombar.is-off {
+  display: none;
+}
 .lp-seek {
   position: relative;
-  flex: 1;
-  height: 72rpx;
+  height: 24px;
   display: flex;
   align-items: center;
 }
-.lp-seek-track {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 8rpx;
-  border-radius: 4rpx;
-  background: rgba(255, 255, 255, 0.24);
-}
-/* 缓冲水位（bind:progress 尽力而为）：同轨道几何，灰阶白 0.38 介于轨道底 0.24 与紫填充之间——
-   叠在轨道之上、紫填充之下（DOM 序：track→buffer→fill），显「已缓冲到哪」不抢播放进度的紫。 */
-.lp-seek-buffer {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 8rpx;
-  border-radius: 4rpx;
-  background: rgba(255, 255, 255, 0.38);
-}
+.lp-seek-track,
+.lp-seek-buffer,
 .lp-seek-fill {
   position: absolute;
   left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 8rpx;
-  border-radius: 4rpx;
-  background: var(--ld-purple);
+  top: 10px;
+  height: 4px;
 }
+.lp-seek-track {
+  right: 0;
+  background: #333330;
+}
+/* 缓冲水位：介于轨道与紫填充之间的灰（DOM 序 track→buffer→fill） */
+.lp-seek-buffer {
+  background: #4a4a46;
+}
+.lp-seek-fill {
+  background: var(--v5-violet);
+}
+/* 关键动作节点：4px 黄方格（注意色·节点位置提示） */
 .lp-seek-node {
   position: absolute;
-  top: 50%;
-  width: 14rpx;
-  height: 14rpx;
-  transform: translate(-50%, -50%) rotate(45deg);
-  background: var(--ld-duck);
+  top: 10px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  background: var(--v5-warn);
 }
 .lp-seek-handle {
   position: absolute;
-  top: 50%;
-  width: 26rpx;
-  height: 26rpx;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: #ffffff;
-  border: 4rpx solid var(--ld-purple);
+  top: 6px;
+  width: 4px;
+  height: 12px;
+  margin-left: -2px;
+  background: #f2f2ec;
 }
 .lp-seek-handle.big {
-  width: 38rpx;
-  height: 38rpx;
+  top: 2px;
+  width: 6px;
+  height: 20px;
+  margin-left: -3px;
 }
-
-/* 拖动浮层（seeking 时显示·seek 条上方 absolute）：时间预览胶囊 + 命中关键动作节点再叠气泡。
-   left 由 seek.wxs previewLeft() 按 seekCfg.edgePx 夹取后 setStyle，不写在 wxml 上。 */
-/* 预览浮层常驻 DOM（不 wx:if seeking）·默认隐藏·left 与显隐由 seek.wxs 渲染层控制
-   （setStyle left + addClass('on')·避免 setData 重建与 WXS setStyle 抢写 position）。 */
+/* 拖动浮层（常驻 DOM·默认隐藏·left 与 .on 由 seek.wxs 控制） */
 .lp-seek-preview {
   position: absolute;
   bottom: 100%;
-  margin-bottom: 14rpx;
+  margin-bottom: 8px;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10rpx;
+  gap: 6px;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
@@ -434,415 +273,345 @@
   visibility: visible;
 }
 .lp-seek-preview-time {
-  padding: 10rpx 24rpx;
-  border-radius: var(--ld-radius-pill);
-  background: rgba(20, 15, 30, 0.88);
-  border: 1rpx solid rgba(255, 255, 255, 0.24);
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--v5-dark-key);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-size: 15px;
+  color: #f2f2ec;
   white-space: nowrap;
 }
 .lp-seek-preview-bubble {
-  padding: 15rpx 26rpx;
-  border-radius: 34rpx;
-  background: var(--ld-duck);
-  color: var(--ld-purple-ink);
-  font-size: 22rpx;
-  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--v5-warn);
+  color: var(--v5-ink);
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
-  box-shadow: 0 7rpx 26rpx rgba(242, 172, 60, 0.4);
 }
 
-/* 控制行：上一段 chevron · 中央求助大圆钮 · 下一段 chevron（设计 .crow） */
-.lp-controls {
+.lp-info {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 75rpx;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
 }
-.lp-chev {
-  flex: 0 0 auto;
-  width: 64rpx;
-  height: 64rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-chev.dim {
-  opacity: 0.36;
-}
-.lp-chev-ico {
-  width: 40rpx;
-  height: 40rpx;
-  filter: brightness(0) invert(1);
-}
-.lp-chev-prev {
-  transform: rotate(180deg);
-}
-.lp-helpbtn {
-  flex: 0 0 auto;
-  width: 108rpx;
-  height: 108rpx;
-  border-radius: 50%;
-  background: var(--ld-purple);
-  box-shadow: 0 11rpx 37rpx rgba(163, 113, 234, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-helpbtn-ico {
-  width: 48rpx;
-  height: 48rpx;
-}
-
-/* —— 求助面板（设计稿画布 402px×1.866 换算）—— */
-.lp-help-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: flex-end;
-}
-.lp-help-sheet {
-  width: 100%;
-  height: 75vh; /* 约 75% 屏高（规格） */
-  background: #ffffff;
-  color: var(--ld-ink);
-  border-radius: 45rpx 45rpx 0 0;
+.lp-info-l {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+.lp-seg-no {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-4);
+}
+.lp-seg-title {
+  font-size: 17px;
+  font-weight: 500;
+  color: #f2f2ec;
+  white-space: nowrap;
   overflow: hidden;
-  padding-bottom: env(safe-area-inset-bottom);
+  text-overflow: ellipsis;
+}
+.lp-time {
+  flex: 0 0 auto;
+  font-size: 15px;
+  color: var(--v5-ink-4);
+}
+.lp-time.on {
+  color: #f2f2ec;
+}
+
+.lp-controls {
+  display: flex;
+  gap: 8px;
+}
+.lp-ctl {
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+}
+.lp-ctl-main {
+  flex: 1.2;
+  min-width: 0;
+  padding: 0;
+}
+/* 暗底不可用键：平面、无键座、弱字 */
+.lp-key-off {
+  background: #1a1a1a;
+  color: #55554f;
+}
+
+/* —— C9 学完一节 —— */
+.lp-done {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lp-done-body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lp-done-segs {
+  display: flex;
+  gap: 2px;
+}
+.lp-done-seg {
+  flex: 1;
+  height: 4px;
+  background: #333330;
+}
+.lp-done-seg.done {
+  background: #f2f2ec;
+}
+.lp-done-seg.cur {
+  background: var(--v5-violet);
+}
+.lp-done-cap {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-4);
+}
+.lp-done-title {
+  margin-top: -8px;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: #f2f2ec;
+}
+.lp-done-keys {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+}
+.lp-done-main {
+  flex: 1;
+}
+
+/* —— 求助面板（浅色 sheet·顶边落在顶栏下沿，由 wxml top 动态给） —— */
+.lp-help-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.5);
+}
+.lp-help-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  border-radius: 12px 12px 0 0;
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .lp-help-grab {
-  flex: 0 0 auto;
-  width: 82rpx;
-  height: 9rpx;
-  border-radius: 6rpx;
-  background: var(--ld-line);
-  margin: 16rpx auto 8rpx;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(17, 17, 17, 0.2);
 }
-.lp-help-head {
-  flex: 0 0 auto;
-  padding: 0 37rpx 20rpx;
-}
-.lp-help-title {
-  font-size: 41rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.lp-help-sub {
-  margin-top: 11rpx;
-  font-size: 26rpx;
-  color: var(--ld-content-2);
-}
-.lp-help-card {
-  flex: 0 0 auto;
-  margin: 0 37rpx 20rpx;
-  border: 1rpx solid var(--ld-line);
-  border-radius: 34rpx;
-  padding: 37rpx;
+.lp-help-nav {
   display: flex;
   align-items: center;
-  gap: 26rpx;
+  gap: 8px;
 }
-.lp-help-card-pic {
+.lp-help-sq {
+  width: 32px;
+  height: 30px;
+  padding: 0;
   flex: 0 0 auto;
-  width: 97rpx;
-  height: 97rpx;
-  border-radius: 49rpx;
-  background: var(--ld-purple);
+}
+.lp-help-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-help-close {
+  width: 44px;
+  height: 44px;
+  margin: -7px -6px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.lp-help-card-ico {
-  width: 45rpx;
-  height: 45rpx;
+.lp-help-card,
+.lp-help-seg {
+  height: 56px;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lp-help-seg {
+  margin-top: 8px;
 }
 .lp-help-card-tx {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7rpx;
+  gap: 2px;
 }
 .lp-help-card-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-}
-.lp-help-card-sub {
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-}
-.lp-help-card-chev {
-  flex: 0 0 auto;
-  width: 28rpx;
-  height: 28rpx;
-}
-/* 子层（videos/faq）顶部导航：左返回箭头 + 居中标题（内嵌播放视图复用同一条导航条） */
-.lp-help-nav {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 22rpx;
-  padding: 19rpx 30rpx 30rpx;
-}
-.lp-help-back {
-  flex: 0 0 auto;
-  width: 67rpx;
-  height: 67rpx;
-  border-radius: 34rpx;
-  background: #f2ebfc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-help-back-ico {
-  width: 32rpx;
-  height: 32rpx;
-  transform: rotate(180deg); /* chevron-right 转向作返回箭头（复用现有图标资产） */
-}
-.lp-help-nav-title {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-  padding-right: 67rpx; /* 与左侧返回钮等宽，标题视觉居中 */
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-
-/* 帮助视频子层：主题列表自滚（sheet 壳体本身已 catch:touchmove 锁背景，此处内部单独可滚） */
+.lp-help-card-sub,
+.lp-help-seg-dur {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.k-flat .lp-help-seg-dur {
+  color: var(--v5-ink-3);
+}
 .lp-help-scroll {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-  padding: 0 37rpx 45rpx;
 }
 .lp-help-group-title {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-  padding: 13rpx 4rpx 15rpx;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 .lp-help-topic {
-  display: flex;
-  flex-direction: column;
-  gap: 15rpx;
-  margin-bottom: 37rpx;
+  padding-top: 16px;
 }
 .lp-help-topic-title {
-  font-size: 28rpx;
+  font-size: 17px;
   font-weight: 700;
-  color: var(--ld-ink);
 }
 .lp-help-topic-sub {
-  margin-top: -7rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-}
-.lp-help-seg {
-  display: flex;
-  align-items: center;
-  gap: 26rpx;
-  background: #ffffff;
-  border: 1rpx solid var(--ld-line);
-  border-radius: 30rpx;
-  padding: 22rpx;
-}
-.lp-help-seg.dim {
-  opacity: 0.5; /* url:null（未剪辑段）视觉置灰，tap 处理器内也短路不可点（双保险） */
-}
-.lp-help-seg-thumb {
-  flex: 0 0 auto;
-  width: 134rpx;
-  height: 97rpx;
-  border-radius: 19rpx;
-  background: linear-gradient(150deg, #4a3b68, #2c2242);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-help-seg-ico {
-  width: 37rpx;
-  height: 37rpx;
-  filter: brightness(0) invert(1); /* 深色缩略位上反白，同页既有反白手法 */
-}
-.lp-help-seg-tx {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7rpx;
-}
-.lp-help-seg-name {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: var(--ld-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lp-help-seg-dur {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v5-ink-2);
 }
 
-/* 常见问题问答列表（CMS help.faq 非空时渲染·白卡逐条·空态见 lp-help-empty） */
+/* 常见问题问答（CMS help.faq）：发丝线分隔的问答行；q/a 字号随容器（KB 条目另有 .lp-help-faq-item 下的同名规则） */
 .lp-help-faq {
-  display: flex;
-  flex-direction: column;
-  gap: 11rpx;
-  background: #ffffff;
-  border: 1rpx solid var(--ld-line);
-  border-radius: 30rpx;
-  padding: 26rpx;
-  margin-bottom: 22rpx;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--v5-hair);
+  font-size: 15px;
 }
 .lp-help-faq-q {
-  font-weight: 700;
-  color: var(--ld-ink);
+  font-weight: 500;
+  color: var(--v5-ink);
 }
 .lp-help-faq-a {
+  margin-top: 8px;
   line-height: 1.6;
-  color: var(--ld-content-2);
+  color: var(--v5-ink-2);
 }
 
-/* 帮助视频/常见问题空态（loading/empty 共用容器，文案由 wxml 分支） */
+/* 帮助视频/常见问题空态（loading/empty/fail 共用容器，文案由 wxml 分支） */
 .lp-help-empty {
-  flex: 1;
+  padding: 24px 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 20rpx;
-  padding: 60rpx 40rpx;
+  gap: 16px;
   text-align: center;
-  color: var(--ld-content-2);
-  font-size: 26rpx;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
 }
-.lp-help-empty-btn {
-  margin-top: 10rpx;
-  padding: 16rpx 46rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-duck);
-  color: #4a3408;
-  font-size: 26rpx;
-  font-weight: 600;
+.lp-help-empty-key {
+  align-self: stretch;
+  color: var(--v5-ink);
 }
 
-/* 常见问题条目（R37·KB 精选 FAQ 公开读）：卡片式 Q&A，同 lp-help-seg 卡片语言 */
+/* 常见问题条目（R37·KB 精选 FAQ）：同 CMS 问答行版式 */
 .lp-help-faq-item {
-  background: #ffffff;
-  border: 1rpx solid var(--ld-line);
-  border-radius: 30rpx;
-  padding: 22rpx;
-  margin-bottom: 22rpx;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--v5-hair);
 }
 .lp-help-faq-item .lp-help-faq-q {
-  font-size: 27rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-  margin-bottom: 10rpx;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--v5-ink);
 }
 .lp-help-faq-item .lp-help-faq-a {
-  font-size: 25rpx;
-  color: var(--ld-content-2);
+  margin-top: 8px;
+  font-size: 15px;
   line-height: 1.6;
+  color: var(--v5-ink-2);
 }
 
-/* 内嵌播放视图（简化决策：原生 <video controls>，不做自绘控制条——辅助内容非主路径） */
+/* 内嵌播放视图（原生 <video controls>，不做自绘控制条——辅助内容非主路径） */
 .lp-help-play {
   flex: 1;
-  min-height: 0;
-  background: #000000;
-  display: flex;
-  align-items: center;
+  min-height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--v5-dark);
 }
 .lp-help-play-video {
   width: 100%;
   height: 100%;
 }
 
-/* —— 首次成功退出加桌引导（仅展示一次） —— */
+/* —— 首次成功退出加桌引导（浅色底部 sheet） —— */
 .lp-dg-mask {
   position: fixed;
-  inset: 0;
-  z-index: 30;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 58rpx;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.5);
 }
-.lp-dg-dlg {
-  width: 100%;
-  max-width: 620rpx;
-  background: #ffffff;
-  color: var(--ld-ink);
-  border-radius: 45rpx;
-  padding: 48rpx 41rpx 37rpx;
+.lp-dg-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 26rpx;
+  gap: 8px;
+}
+.lp-dg-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0 16px;
 }
 .lp-dg-title {
-  font-size: 35rpx;
-  font-weight: 700;
-  text-align: center;
-}
-/* 矢量循环动画降级为静态示意区+文案 */
-.lp-dg-guide {
-  width: 100%;
-  background: #f2ebfc;
-  border-radius: 30rpx;
-  padding: 26rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15rpx;
-}
-.lp-dg-guide-pic {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 40rpx;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lp-dg-guide-ico {
-  width: 40rpx;
-  height: 40rpx;
-}
-.lp-dg-guide-text {
-  font-size: 24rpx;
-  color: var(--ld-content);
-  text-align: center;
-  line-height: 1.6;
-}
-.lp-dg-stay {
-  width: 100%;
-  height: 93rpx;
-  border-radius: 47rpx;
-  background: var(--ld-purple-ink);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30rpx;
+  font-size: 20px;
   font-weight: 700;
 }
-.lp-dg-quit {
-  font-size: 26rpx;
-  color: var(--ld-content-2);
-  padding: 11rpx 0 4rpx;
+.lp-dg-text {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--v5-ink-2);
 }

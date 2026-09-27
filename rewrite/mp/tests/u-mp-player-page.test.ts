@@ -373,3 +373,25 @@ describe('进页与拖动几何', () => {
     expect(page.buildSeekCfg(100, [{ at: 10, name: 'A' }])).toEqual({ rect: { left: 0, width: 300 }, durSec: 100, marks: [{ at: 10, name: 'A' }], edgePx: 32, snapSec: 3 })
   })
 })
+
+describe('学完一节「重看本节」', () => {
+  it('大白话：课时末段播完点重看本节 → 回本课时第一段起播；课时只有一段 → 原地从头重播', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s2'), 'enter')
+    await flush()
+    page.onEnded()
+    expect(page.data.segDone).toBe(true)
+    page.onReplayLesson()
+    await flush()
+    expect(page.data).toMatchObject({ state: 'playing', src: 'https://v/s1', segDone: false })
+    expect(page.data.current.segmentId).toBe('s1')
+
+    await page.playSegment(seg('s3'), 'seg')
+    await flush()
+    page.onEnded()
+    video.calls = []
+    page.onReplayLesson()
+    expect(video.calls).toEqual(['seek', 'play'])
+    expect(page.data).toMatchObject({ src: 'https://v/s3', segDone: false })
+  })
+})

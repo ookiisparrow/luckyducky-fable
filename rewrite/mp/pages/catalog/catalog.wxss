@@ -1,217 +1,191 @@
-/* 课程目录主页·对齐设计 C1。设计 402px 画板 → rpx（×1.866 取偶，同既有页换算口径）。
-   token 见 styles/tokens.wxss；hero 渐变占位与卡片圆角/描边引 token，chip 底色（--chip #f2ebfc）
-   tokens 缺此值——就地定义并注明设计来源，不改 tokens（单页局部值不入全局单一来源）。 */
-.ld-cat {
-  min-height: 100vh;
-  background: var(--ld-bg-lilac);
+/* 课程目录（v5「字重」稿 C6） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
+.ct {
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
-/* —— 自绘返回——
-   fixed 而非 absolute：目录区是整页自然流滚动，absolute 会随内容滚走、滚下去就没了返回入口。
-   左上角与右上角原生胶囊分居两侧不打架；白色半透明圆底让它在深色 hero 图与浅色空态上都看得清。 */
-.ld-cat-back {
-  position: fixed;
-  left: 24rpx;
-  z-index: 20;
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 4rpx 16rpx rgba(28, 28, 32, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ld-cat-back-h {
-  background: rgba(255, 255, 255, 0.95);
-}
-.ld-cat-back-ico {
-  width: 32rpx;
-  height: 32rpx;
-  transform: rotate(180deg); /* 复用 chevron-right 转向作返回箭头（不新增素材·同 player .lp-back-ico） */
-}
-
-/* —— hero：产品主图 + 底部锚定「开始学习」CTA —— */
-.ld-cat-hero {
+/* 主图：方形（padding-top 百分比法，避 aspect-ratio 旧 WebView 不支持）+ 上下渐隐到底色 */
+.ct-hero {
   position: relative;
-  height: 750rpx;
+  padding-top: 100%;
   overflow: hidden;
-  display: flex;
-  align-items: flex-end;
+  background: var(--v5-sunk);
 }
-.ld-cat-hero-img {
+.ct-hero-img {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
 }
-.ld-cat-hero-empty {
-  background: linear-gradient(160deg, #efe9dc, #e8ddce 50%, #e4d9ea); /* 设计 C1 hero 渐变占位·局部专属·非 token */
+.ct-fade-top,
+.ct-fade-bot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
 }
-.ld-cat-cta {
-  position: relative;
-  z-index: 1;
-  margin: 0 38rpx 38rpx;
-  width: calc(100% - 76rpx);
-  height: 100rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: #fff;
-  font-size: 30rpx;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-  box-shadow: 0 18rpx 46rpx rgba(0, 0, 0, 0.28);
+.ct-fade-top {
+  top: 0;
+  height: 12%;
+  background: linear-gradient(to top, rgba(250, 250, 248, 0), #fafaf8);
 }
-.ld-cat-cta-h {
-  opacity: 0.9;
-}
-.ld-cat-cta.disabled {
-  background: var(--ld-content-2);
-  box-shadow: none;
-}
-.ld-cat-cta-ico {
-  width: 34rpx;
-  height: 34rpx;
-  filter: brightness(0) invert(1); /* 底色白化（同 welcome.wxss ld-w-logo 手法）：图标原色不论，统一白 */
+.ct-fade-bot {
+  bottom: 0;
+  height: 16%;
+  background: linear-gradient(to bottom, rgba(250, 250, 248, 0), #fafaf8 88%);
 }
 
-/* —— 目录区 —— */
-.ld-cat-list {
-  padding: 18rpx 38rpx 52rpx;
+/* 课时分段进度：高 4、间隔 2、直角 */
+.ct-segs {
+  padding: 4px 16px 0;
   display: flex;
-  flex-direction: column;
-  gap: 16rpx;
+  gap: 2px;
 }
-.ld-cat-ch {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 32rpx 4rpx 12rpx;
+.ct-seg {
+  flex: 1;
+  height: 4px;
+  background: #e0e1d9;
 }
-.ld-cat-ch-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
+.ct-seg-done {
+  background: var(--v5-ink);
 }
-.ld-cat-ch-count {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
+.ct-seg-current {
+  background: var(--v5-violet);
 }
 
-.ld-cat-lesson {
+.ct-cta-wrap {
+  padding: 12px 16px 0;
+}
+
+/* 目录 */
+.ct-toc {
+  padding: 4px 16px 0;
+}
+.ct-ch {
+  padding: 24px 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 500;
+}
+.ct-ch-no {
+  color: var(--v5-ink-3);
+}
+.ct-ch-no.cur {
+  color: var(--v5-violet-text);
+}
+.ct-lesson {
+  height: 44px;
   display: flex;
   align-items: center;
-  gap: 26rpx;
-  background: #fff;
-  border: 2rpx solid var(--ld-line);
-  border-radius: var(--ld-radius-md);
-  padding: 26rpx 30rpx;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
 }
-.ld-cat-lesson-h {
-  transform: scale(0.99);
+.ct-no {
+  min-width: 22px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--v5-ink-3);
 }
-.ld-cat-lesson-num {
+/* 节点位宽取 nodeCur（7 格×2px），node/ring 居中对齐 */
+.ct-node {
+  width: 14px;
   flex: 0 0 auto;
-  width: 74rpx;
-  height: 74rpx;
-  border-radius: 50%;
-  background: #f2ebfc; /* 设计 chip 底（--chip）·tokens 未收录·局部定义 */
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-purple-tab);
 }
-.ld-cat-lesson-tx {
+.ct-name {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-.ld-cat-lesson-name {
-  font-size: 28rpx;
+  font-size: 17px;
   font-weight: 500;
-  color: var(--ld-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ld-cat-lesson-sub {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ct-dur {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--v5-ink-3);
 }
-.ld-cat-lesson-st {
-  flex: 0 0 auto;
+.ct-lesson.done .ct-no,
+.ct-lesson.done .ct-dur {
+  color: var(--v5-ink-2);
 }
-.ld-cat-lesson-st-ico {
-  width: 40rpx;
-  height: 40rpx;
+.ct-lesson.done .ct-name {
+  color: var(--v5-ink-2);
 }
-
-/* current：淡紫高亮描边 + 卡片底、课时名转紫强调 */
-.ld-cat-lesson.cur {
-  background: var(--ld-bg-lilac);
-  border-color: var(--ld-purple-line);
+.ct-lesson.current .ct-no {
+  color: var(--v5-violet-text);
 }
-.ld-cat-lesson.cur .ld-cat-lesson-name {
-  color: var(--ld-purple-tab);
+.ct-lesson.current .ct-name {
   font-weight: 700;
 }
-/* todo：序号圈转灰调，与 done/current 视觉降级 */
-.ld-cat-lesson.todo .ld-cat-lesson-num {
-  background: var(--ld-bg-sage);
-  color: var(--ld-content-2);
+.ct-toc-end {
+  border-top: 1px solid var(--v5-hair);
 }
 
-/* 骨架占位（加载中）·微光扫过对齐 home（@keyframes ld-shimmer·app.wxss） */
-.ld-cat-skel-num,
-.ld-cat-skel-line {
-  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
-  background-size: 200% 100%;
-  animation: ld-shimmer 1500ms ease-in-out infinite;
+/* 加载中骨架 */
+.ct-skel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.ld-cat-skel-line {
-  width: 320rpx;
-  height: 26rpx;
-  border-radius: 8rpx;
+.ct-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 0 4px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.ct-skel-bar {
+  height: 12px;
+  background: var(--v5-sunk);
+}
+.ct-skel-segs {
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #e0e1d9 0 12px, transparent 12px 14px);
+}
+.ct-skel-key {
+  height: 44px;
+  border-radius: 6px;
+  background: var(--v5-sunk);
 }
 
-/* —— 空态（课程不存在，对齐 my-courses 空态圈范式的精简版）—— */
-.ld-cat-empty {
+/* 失败 / 不存在 */
+.ct-state {
+  padding: 88px 16px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 12px;
   text-align: center;
-  padding: 220rpx 38rpx 0;
 }
-.ld-cat-empty-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
+.ct-state-t {
+  font-size: 17px;
+  font-weight: 500;
 }
-.ld-cat-empty-hint {
-  margin-top: 14rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
+.ct-state-h {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-
-/* 失败态重试钮（根因#14·守卫 rw-mp-list-loadfailed-state·形制同 detail pdp-empty-btn） */
-.ld-cat-retry {
-  display: inline-block;
-  margin-top: 18rpx;
-  padding: 14rpx 46rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 600;
+.ct-retry {
+  margin-top: 8px;
+  width: 120px;
+}
+.ct-go {
+  margin-top: 8px;
 }

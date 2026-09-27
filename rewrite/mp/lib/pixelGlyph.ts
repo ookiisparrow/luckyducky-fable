@@ -16,6 +16,8 @@ export const PIXEL_GLYPHS: Record<string, string[]> = {
   pause: ['XX.XX', 'XX.XX', 'XX.XX', 'XX.XX', 'XX.XX', 'XX.XX', 'XX.XX'],
   star: ['...X...', '..XXX..', 'XXXXXXX', '.XXXXX.', '..XXX..', '.XX.XX.', 'XX...XX'],
   star5: ['..X..', '.XXX.', 'XXXXX', '.XXX.', '.X.X.'],
+  // 写评价星键用的 9×9 大星（设计稿 px-star·用 size=4 场景格）
+  star9: ['....X....', '...XXX...', '...XXX...', 'XXXXXXXXX', '.XXXXXXX.', '..XXXXX..', '.XXXXXXX.', '.XXX.XXX.', 'XX.....XX'],
   led: ['.xxx.', 'xXXXx', 'xXXXx', 'xXXXx', '.xxx.'],
   dot: ['XXX', 'XXX', 'XXX'],
   node: ['.XXX.', 'XXXXX', 'XXXXX', 'XXXXX', '.XXX.'],

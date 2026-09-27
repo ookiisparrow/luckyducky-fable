@@ -62,6 +62,27 @@ function continueCourseIds(progress: unknown, mine: unknown): string[] {
   return ids
 }
 
+/** 小鸭蛋孵化判定（v5 D1）：有一门课「段数>0 且每段都在 done 里」→ 回该课 id 当 hatch-key，否则 ''。
+ *  口径同 mapLearning.mapMyCourses 的 percent===100（done 键=segmentId·取交集防 stale）；
+ *  不 import mapLearning：它会把激活错误长文案拖进 tab 首屏字体闭包（同 lib/mapMe 拆分理由）。 */
+function hatchedCourseId(progress: unknown, courses: Record<string, unknown>[]): string {
+  if (!Array.isArray(progress)) return ''
+  const doneOf = new Map<string, Record<string, unknown>>()
+  for (const p of progress as { courseId?: unknown; done?: unknown }[]) {
+    if (p && p.courseId && p.done && typeof p.done === 'object') doneOf.set(String(p.courseId), p.done as Record<string, unknown>)
+  }
+  for (const c of courses) {
+    const done = doneOf.get(String(c.id || ''))
+    if (!done) continue
+    const segs: string[] = []
+    for (const ch of Array.isArray(c.chapters) ? c.chapters : [])
+      for (const l of Array.isArray(ch?.lessons) ? ch.lessons : [])
+        for (const sg of Array.isArray(l?.segments) ? l.segments : []) if (sg && sg.id) segs.push(String(sg.id))
+    if (segs.length && segs.every((id) => done[id])) return String(c.id)
+  }
+  return ''
+}
+
 const seededCont = readStoredCont()
 const seededMe = mapMe(null)
 const seededLoggedIn = loginGate.hasAgreed() // 首帧跟继续学习卡同款：本地 hint 已同意就先画登录态，不等云回包（根因#8/#14）
@@ -69,6 +90,7 @@ const seededLoggedIn = loginGate.hasAgreed() // 首帧跟继续学习卡同款�
 Page({
   data: {
     statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·用户需求）
+    hatchKey: '', // 小鸭蛋：非空＝已学完这门课（孵化·小鸭按课 id 定样子）；空＝未孵化蛋（取数失败/加载中也是蛋）
     nickname: seededMe.defaultNickname, // 默认名先上屏；云端真昵称 refresh 覆盖
     avatar: '',
     bio: '',
@@ -155,7 +177,7 @@ Page({
     }
     const cont = continueResolve(progress.list, mine.list, courses)
     writeStoredCont(cont)
-    this.setData({ cont, contFailed: false, contLoaded: true })
+    this.setData({ cont, contFailed: false, contLoaded: true, hatchKey: hatchedCourseId(progress.list, courses) })
     if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
     return true
   },
@@ -236,7 +258,7 @@ Page({
     clearAddresses()
     loginGate.logout()
     writeStoredCont(null)
-    this.setData({ cont: null, contFailed: false, contLoaded: true })
+    this.setData({ cont: null, contFailed: false, contLoaded: true, hatchKey: '' })
     void this.refresh()
     wx.showToast({ title: '已删除', icon: 'none' })
   },
