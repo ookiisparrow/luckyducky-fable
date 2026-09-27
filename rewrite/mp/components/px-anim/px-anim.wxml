@@ -1,0 +1,1 @@
+<canvas type="2d" class="pxc" style="width:{{size * 13}}px;height:{{size * 13}}px"></canvas>

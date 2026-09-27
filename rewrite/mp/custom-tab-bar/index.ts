@@ -1,4 +1,4 @@
-// 自绘悬浮胶囊 TabBar（官方 custom-tab-bar：保留 switchTab 语义 + 自绘视觉）。
+// 底部三键 TabBar（官方 custom-tab-bar：保留 switchTab 语义 + 自绘视觉·v5 键帽：选中浅色键、未选平面键）。
 // active 由各 tab 页 onShow 经 getTabBar().setActive() 回写；购物车角标随每次回写刷新。
 import { count as cartCount } from '../lib/cart'
 import { loginGate } from '../lib/loginGate'
@@ -7,6 +7,7 @@ import { loginGate } from '../lib/loginGate'
 const unsubs = new WeakMap<object, () => void>()
 
 Component({
+  options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的全局键帽 .k-*
   data: {
     active: 'home',
     cartCount: 0,
@@ -14,9 +15,9 @@ Component({
     // 全屏遮罩想盖住底部只能让 tabBar 自身让位（订阅 loginGate·关闭即恢复）。
     hidden: false,
     tabs: [
-      { id: 'home', icon: 'house', path: '/pages/home/home' },
-      { id: 'cart', icon: 'shopping-cart', path: '/pages/cart/cart' },
-      { id: 'me', icon: 'user', path: '/pages/me/me' },
+      { id: 'home', label: '首页', path: '/pages/home/home' },
+      { id: 'cart', label: '购物车', path: '/pages/cart/cart' },
+      { id: 'me', label: '我', path: '/pages/me/me' },
     ],
   },
   lifetimes: {

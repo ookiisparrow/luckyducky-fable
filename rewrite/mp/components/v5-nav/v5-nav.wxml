@@ -1,0 +1,8 @@
+<view class="v5-scope nv-space" style="height:{{sb + 44}}px">
+  <view class="nv-bar" style="padding-top:{{sb}}px">
+    <view wx:if="{{back}}" class="nv-hit" bind:tap="onBack">
+      <view class="k k-light nv-back" hover-class="k-light-down" hover-stay-time="100"><px-i name="back" /></view>
+    </view>
+    <text wx:if="{{title}}" class="nv-title">{{title}}</text>
+  </view>
+</view>

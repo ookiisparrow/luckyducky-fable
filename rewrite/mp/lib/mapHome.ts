@@ -32,6 +32,7 @@ interface FeatureVM {
 interface TrustVM {
   icon: string
   label: string
+  anim: string // 像素动效图标名（components/px-anim）
 }
 interface ReassureItemVM {
   icon: string
@@ -84,10 +85,20 @@ const HERO_DEFAULT: HeroVM = { title: '创造幸运', tagline: BRAND_SLOGAN_EN, 
 const BRAND_DEFAULT: BrandVM = { name: '小棉鸭', lead: '我们希望每个人都能亲手创造自己的随身幸运物。' }
 const FEATURE_DEFAULT: FeatureVM = { title: '入门钩织的妙趣方案', body: '为了让钩织入门更轻松、更有趣，我们精心设计了这些小家伙。', img: '' }
 const TRUST_DEFAULT: TrustVM[] = [
-  { icon: 'truck', label: '包邮到家' },
-  { icon: 'rotate-ccw', label: '售后无忧' },
-  { icon: 'thumbs-up', label: '多数买家推荐' },
+  { icon: 'truck', label: '包邮到家', anim: 'truck' },
+  { icon: 'rotate-ccw', label: '售后无忧', anim: 'shield' },
+  { icon: 'thumbs-up', label: '多数买家推荐', anim: 'heart' },
 ]
+// 后台信任条仍按旧线性图标名配置（admin 不动）→ v5 像素动画：认得的按义对应，认不得按位置轮流（卡车/盾牌/爱心）。
+const TRUST_ANIM: Record<string, string> = {
+  truck: 'truck',
+  package: 'truck',
+  'rotate-ccw': 'shield',
+  'shield-check': 'shield',
+  'thumbs-up': 'heart',
+  'heart-handshake': 'heart',
+}
+const TRUST_ROTATION = ['truck', 'shield', 'heart']
 const REASSURE_START_BODY =
   '每份' + LEARNER_KIT + '包含初次尝试所需的一切，另含「开始练习」以及「分步交互」视频教程，助你轻松无忧创作。'
 const REASSURE_DEFAULT: ReassureVM = {
@@ -187,7 +198,7 @@ const trustItem = (raw: unknown): TrustVM | null => {
   const x = obj(raw)
   let label = str(x.label, '')
   if (label.includes('七天无理由')) label = '售后无忧' // CMS 旧稿仍按现口径显示
-  return label ? { icon: str(x.icon, ''), label } : null // 无标签整条剔除
+  return label ? { icon: str(x.icon, ''), label, anim: '' } : null // 无标签整条剔除·anim 在整组定位后补
 }
 const reassureItem = (raw: unknown): ReassureItemVM | null => {
   const x = obj(raw)
@@ -236,7 +247,7 @@ export function mapHomeContent(home: unknown): HomeContentVM {
       body: str(feature.body, FEATURE_DEFAULT.body),
       img: str(feature.img, ''),
     },
-    trust: arr(h.trust, trustItem, TRUST_DEFAULT),
+    trust: arr(h.trust, trustItem, TRUST_DEFAULT).map((t, i) => ({ ...t, anim: TRUST_ANIM[t.icon] || TRUST_ROTATION[i % 3] })),
     reassure: {
       heading: str(reassure.heading, REASSURE_DEFAULT.heading),
       lead: str(reassure.lead, REASSURE_DEFAULT.lead),

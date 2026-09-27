@@ -1,143 +1,96 @@
-<view class="pdp" wx:if="{{vm}}">
+<!-- 商品详情（v5「字重」稿 A2）：1:1 图集 + 方格页码 + 名称/价格 + 评分 + 规格格 + 款式凹槽 + 图文，底部 客服/加购/直买 -->
+<v5-nav />
 
-  <!-- 画廊 -->
-  <view class="pdp-gallery">
-    <swiper wx:if="{{vm.gallery.length}}" class="pdp-swiper" circular="{{vm.gallery.length > 1}}" bindchange="onGallery">
+<view class="pd" wx:if="{{vm}}">
+  <!-- 图集：窗口渲染（current±1·circular 首尾邻接算窗口内）：swiper 内 lazy-load 不生效（真机验证过），
+       全量 swiper-item 会让画廊全部图并发下载；galleryWindow 由 detail.ts 随 galleryIndex 同步维护。 -->
+  <view class="pd-gallery">
+    <swiper wx:if="{{vm.gallery.length}}" class="pd-swiper" circular="{{vm.gallery.length > 1}}" bindchange="onGallery">
       <swiper-item wx:for="{{vm.gallery}}" wx:key="*this">
-        <!-- 窗口渲染（current±1·circular 首尾邻接算窗口内）：swiper 内 lazy-load 不生效（真机验证过），
-             全量 swiper-item 会让画廊全部图并发下载；galleryWindow 由 detail.ts 随 galleryIndex 同步维护。 -->
-        <image wx:if="{{galleryWindow[index]}}" class="pdp-hero" src="{{item}}" mode="aspectFill" />
+        <image wx:if="{{galleryWindow[index]}}" class="pd-img" src="{{item}}" mode="aspectFill" />
       </swiper-item>
     </swiper>
-    <view wx:else class="pdp-hero pdp-hero-empty"></view>
-    <view class="pdp-count" wx:if="{{vm.gallery.length > 1}}">{{galleryIndex + 1}}/{{vm.gallery.length}}</view>
+    <view class="pd-fade-top"></view>
+    <view class="pd-fade-bottom"></view>
+  </view>
+  <view class="pd-pager" wx:if="{{vm.gallery.length > 1}}">
+    <view class="pd-dots">
+      <view wx:for="{{vm.gallery}}" wx:key="*this" class="pd-dot {{galleryIndex === index ? 'on' : ''}}"></view>
+    </view>
+    <text class="mono pd-gi">{{galleryIndex + 1}}/{{vm.gallery.length}}</text>
   </view>
 
-  <!-- 价格卡 -->
-  <view class="pdp-card pdp-price">
-    <view class="pdp-price-row">
-      <!-- 划线价在前、现价在后：与首页/购物车顺序统一，同一件商品在三个页面价格顺序一致。 -->
-      <text class="pdp-was" wx:if="{{vm.wasLabel}}">{{vm.wasLabel}}</text>
-      <text class="pdp-now"><text class="pdp-cny">¥</text>{{currentPriceNum}}</text>
-      <!-- 顾客看见的运费/售后短句；结算算钱仍走 SHIP=0（不在本页改钱链）。
-           不要写「满 ¥100 包邮」或「全场包邮」——都不是现政策。 -->
-      <text class="pdp-ship">包邮到家·售后无忧</text>
-    </view>
-    <view class="pdp-title">{{vm.name}}</view>
-    <view class="pdp-sold" wx:if="{{vm.soldLabel}}">{{vm.soldLabel}}</view>
-    <view class="pdp-sub" wx:if="{{vm.brief}}">{{vm.brief}}</view>
-    <view class="pdp-tag" wx:elif="{{vm.tag}}">{{vm.tag}}</view>
-    <view class="pdp-meta">
-      <view class="pdp-meta-item"><text class="pdp-meta-b">顺丰</text><text class="pdp-meta-s">48h 内发出</text></view>
-      <view class="pdp-meta-item"><text class="pdp-meta-b">开课后</text><text class="pdp-meta-s">不可退货</text></view>
-      <view class="pdp-meta-item"><text class="pdp-meta-b">包邮到家</text><text class="pdp-meta-s">售后无忧</text></view>
-      <view class="pdp-meta-item"><text class="pdp-meta-b">免费</text><text class="pdp-meta-s">钩错补料</text></view>
+  <view class="pd-head">
+    <text class="pd-name">{{vm.name}}</text>
+    <text class="mono pd-price">¥{{currentPriceNum}}</text>
+  </view>
+  <view class="pd-rate" hover-class="k-row-down" bind:tap="onViewReviews">
+    <block wx:if="{{rating}}">
+      <px-i name="star5" />
+      <text class="pd-rate-text">{{rating.scoreLabel}} · {{rating.count}} 条评价</text>
+    </block>
+    <text wx:else class="pd-rate-text">看看钩友们怎么说</text>
+    <px-i name="arrow" />
+    <text wx:if="{{vm.soldLabel}}" class="pd-sold">{{vm.soldLabel}}</text>
+  </view>
+  <!-- 顾客看见的运费/售后/退货口径（已拍板政策·shipping-returns-copy 测试钉）；结算算钱仍走 SHIP=0（不在本页改钱链）。
+       不要写「满 ¥100 包邮」或「全场包邮」——都不是现政策。 -->
+  <text class="pd-policy">包邮到家·售后无忧 · 开课后不可退货</text>
+
+  <view class="pd-specs" wx:if="{{vm.params.length}}">
+    <view class="pd-spec" wx:for="{{vm.params}}" wx:key="k">
+      <text class="pd-spec-k">{{item.k}}</text>
+      <text class="pd-spec-v">{{item.v}}</text>
     </view>
   </view>
 
-  <!-- 选择规格 -->
-  <view class="pdp-card" wx:if="{{vm.skus.length}}">
-    <view class="pdp-row-key">选择规格</view>
-    <view class="pdp-skus">
-      <view wx:for="{{vm.skus}}" wx:key="name" class="pdp-sku {{skuIndex === index ? 'on' : ''}}"
-        data-index="{{index}}" bind:tap="onSelectSku">
-        <text>{{item.name}}</text>
-        <text class="pdp-sku-price">{{item.priceLabel}}</text>
+  <view class="well pd-vars" wx:if="{{vm.skus.length > 1}}">
+    <view wx:for="{{vm.skus}}" wx:key="name" data-index="{{index}}" bind:tap="onSelectSku"
+      class="k pd-var {{skuIndex === index ? 'k-light' : 'pd-var-off'}}"
+      hover-class="{{skuIndex === index ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100">
+      <px-i wx:if="{{skuIndex === index}}" name="led" tone="#8a5ae0" />
+      <text class="pd-var-name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <view class="pd-sec" wx:if="{{vm.sections.length || vm.kit.length}}">
+    <text class="pd-sec-title">商品详情</text>
+    <!-- wx:key 刻意用 index（同 about/reviews）：段落无 id 字段，lead 作 key 多段空标题必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
+    <block wx:for="{{vm.sections}}" wx:key="index">
+      <text class="pd-lead" wx:if="{{item.lead}}">{{item.lead}}</text>
+      <text class="t-sys pd-body" wx:if="{{item.body}}">{{item.body}}</text>
+    </block>
+    <view class="pd-kit" wx:if="{{vm.kit.length}}">
+      <text class="pd-kit-title">套装包含</text>
+      <!-- wx:key 刻意用 index：材料无 id 字段，name 作 key 同名不同规格必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
+      <view class="pd-kit-row" wx:for="{{vm.kit}}" wx:key="index">
+        <text class="pd-kit-name">{{item.name}}</text>
+        <text class="mono pd-kit-qty" wx:if="{{item.qty}}">{{item.qty}}</text>
       </view>
     </view>
   </view>
 
-  <!-- 用户评价入口（有评价显真评分星级+条数·无评价/加载中回退静态文案·不渲染 0 星假评） -->
-  <view class="pdp-card pdp-row-link" bind:tap="onViewReviews">
-    <text class="pdp-row-key">评价</text>
-    <view class="pdp-rating" wx:if="{{rating}}">
-      <text class="pdp-rating-score">{{rating.scoreLabel}}</text>
-      <text class="pdp-rating-stars">{{rating.scoreStars}}</text>
-      <text class="pdp-rating-count">{{rating.count}} 条评价</text>
-    </view>
-    <text class="pdp-row-val" wx:else>看看钩友们怎么说</text>
-    <text class="pdp-chev">›</text>
-  </view>
-
-  <!-- 商品详情：参数表 + 图文段落 -->
-  <view class="pdp-sec" wx:if="{{vm.params.length || vm.sections.length}}">
-    <view class="pdp-sec-head"><text class="pdp-sec-title">商品详情</text></view>
-    <view class="pdp-detail">
-      <view class="pdp-param" wx:if="{{vm.params.length}}">
-        <view class="pdp-param-row" wx:for="{{vm.params}}" wx:key="k">
-          <text class="pdp-param-k">{{item.k}}</text>
-          <text class="pdp-param-v">{{item.v}}</text>
-        </view>
-      </view>
-      <!-- wx:key 刻意用 index（同 about/reviews）：段落无 id 字段，lead 作 key 多段空标题必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
-      <block wx:for="{{vm.sections}}" wx:key="index">
-        <view class="pdp-detail-lead" wx:if="{{item.lead}}">{{item.lead}}</view>
-        <view class="pdp-detail-p" wx:if="{{item.body}}">{{item.body}}</view>
-      </block>
-    </view>
-  </view>
-
-  <!-- 套装包含 -->
-  <view class="pdp-sec" wx:if="{{vm.kit.length}}">
-    <view class="pdp-sec-head"><text class="pdp-sec-title">套装包含</text></view>
-    <view class="pdp-kit-grid">
-      <!-- wx:key 刻意用 index（同 about/reviews）：材料无 id 字段，name 作 key 同名不同规格必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
-      <view class="pdp-kit-cell" wx:for="{{vm.kit}}" wx:key="index">
-        <view class="pdp-kit-name">{{item.name}}</view>
-        <view class="pdp-kit-qty" wx:if="{{item.qty}}">{{item.qty}}</view>
-      </view>
-    </view>
-  </view>
-
-  <!-- 为你推荐 -->
-  <view class="pdp-sec" wx:if="{{recs.length}}">
-    <view class="pdp-sec-head"><text class="pdp-sec-title">为你推荐</text></view>
-    <view class="pdp-recs">
-      <view class="pdp-rec" wx:for="{{recs}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapRec">
-        <view class="pdp-rec-media">
-          <image wx:if="{{item.cover}}" class="pdp-rec-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
-        </view>
-        <view class="pdp-rec-body">
-          <view class="pdp-rec-name">{{item.name}}</view>
-          <view class="pdp-rec-foot">
-            <text class="pdp-rec-now">{{item.priceLabel}}</text>
-            <text class="pdp-rec-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
-          </view>
-        </view>
-      </view>
-    </view>
-  </view>
-
-  <!-- 粘性底部购买坞 -->
-  <view class="pdp-dock-space"></view>
-  <view class="pdp-dock">
-    <view class="pdp-buy-ico" bind:tap="onService">
-      <image class="pdp-buy-ico-img" src="/static/icons/headphones.svg" mode="aspectFit" />
-      <text>客服</text>
-    </view>
-    <view class="pdp-buy-actions">
-      <view class="pdp-btn pdp-btn-cart" hover-class="pdp-btn-h" bind:tap="onAddCart">加入购物车</view>
-      <view class="pdp-btn pdp-btn-buy" hover-class="pdp-btn-h" bind:tap="onBuyNow">立即购买</view>
-    </view>
-  </view>
-
-</view>
-
-<!-- 加载骨架（网络慢时白屏观感）：头图块 + 两行文字骨架，参照 home ld-skeleton 手法本页自足 -->
-<view class="pdp-skeleton" wx:elif="{{loading}}">
-  <view class="pdp-skeleton-hero"></view>
-  <view class="pdp-skeleton-card">
-    <view class="pdp-skeleton-text"></view>
-    <view class="pdp-skeleton-text short"></view>
+  <view class="pd-dock-space"></view>
+  <view class="pd-dock">
+    <view class="k k-light k-48 pd-cs" hover-class="k-light-down" hover-stay-time="100" bind:tap="onService">客服</view>
+    <view class="k k-light k-48 pd-add" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAddCart">加入购物车</view>
+    <view class="k k-ink k-48 pd-buy" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBuyNow">立即购买</view>
   </view>
 </view>
 
-<view class="pdp-empty" wx:elif="{{!loading && loadFailed}}">
-  <view class="pdp-empty-title">网络开小差</view>
-  <view class="pdp-empty-hint">商品加载失败，请重试</view>
-  <view class="pdp-empty-btn" bind:tap="onRetryLoad" hover-class="pdp-btn-h">重试</view>
+<!-- 加载骨架：1:1 图块 + 两行文字 -->
+<view class="pd-skel" wx:elif="{{loading}}">
+  <view class="pd-skel-hero skel"></view>
+  <view class="pd-skel-line skel"></view>
+  <view class="pd-skel-line short skel"></view>
 </view>
-<view class="pdp-empty" wx:elif="{{!loading}}">
-  <view class="pdp-empty-title">商品不存在或已下架</view>
-  <view class="pdp-empty-hint">回首页看看别的吧</view>
+
+<view class="pd-state" wx:elif="{{!loading && loadFailed}}">
+  <text class="pd-state-title">网络开小差</text>
+  <text class="pd-state-hint">商品加载失败，请重试</text>
+  <view class="k k-light pd-state-btn" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
+</view>
+<view class="pd-state" wx:elif="{{!loading}}">
+  <text class="pd-state-title">商品不存在或已下架</text>
+  <text class="pd-state-hint">回首页看看别的吧</text>
 </view>

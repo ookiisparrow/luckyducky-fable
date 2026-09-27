@@ -1,4 +1,4 @@
-// 商品详情（对齐设计 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
+// 商品详情（v5「字重」稿 A2）：图册 swiper + 方格页码 + SKU 价格联动 + 加购/直买 + 客服。
 import { BRAND_SLOGAN_CN } from '../../lib/brand'
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
@@ -8,9 +8,7 @@ import { getAllProducts, getProductDetail } from '../../lib/catalog'
 import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
-import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
-import { navigateOrRedirect } from '../../lib/nav'
 
 // 图册窗口（病根#15 图片面）：current±1 才渲染，circular 时首尾邻接也算窗口内——
 // swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
@@ -32,7 +30,6 @@ Page({
     currentPriceNum: 0, // 数字部分（¥ 小、数字大）
     galleryIndex: 0,
     galleryWindow: [] as boolean[], // 随 galleryIndex 同步重算，详见 computeGalleryWindow
-    recs: [] as ProductVM[],
     rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
   },
   productId: '',
@@ -65,7 +62,6 @@ Page({
       skuIndex: i,
       currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
       galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
-      recs: mapProducts(all).filter((p) => p.id !== id).slice(0, 4), // 同一份全量表·排除本商品取 4 个
     })
     trackEvent('view_product', 'detail', vm.id, { price: vm.price }) // 电商漏斗埋点（R41）
     void this.loadDetail(id, seq)
@@ -141,7 +137,7 @@ Page({
   },
   onViewReviews() {
     const vm = this.data.vm
-    if (vm) wx.navigateTo({ url: '/pages/reviews/reviews?productId=' + vm.id })
+    if (vm) wx.navigateTo({ url: '/pages/reviews/reviews?productId=' + vm.id + '&name=' + encodeURIComponent(vm.name) })
   },
   onBuyNow() {
     const vm = this.data.vm
@@ -149,11 +145,6 @@ Page({
     tapHaptic()
     prepareBuyNow(this._line(vm)) // 直买不动购物车（草稿不收划线价）
     wx.navigateTo({ url: '/pages/checkout/checkout' })
-  },
-  onTapRec(e: WechatMiniprogram.TouchEvent) {
-    const id = String(e.currentTarget.dataset.id || '')
-    if (!id) return
-    navigateOrRedirect('/pages/detail/detail?id=' + id)
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29）：路径带 ?id= 保证收到的人打开的是

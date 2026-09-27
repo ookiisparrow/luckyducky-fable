@@ -1,4 +1,4 @@
-// 首页（9 板块）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
+// 首页（v5「字重」稿 A1·9 板块）：首屏/品牌+像素小鸭三幕/套装商品轨/信任条/拆门槛/买家秀/FAQ/收尾CTA/页脚。
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
 import { tapHaptic } from '../../lib/haptics'
@@ -28,8 +28,13 @@ Page({
     loadFailed: false,
     content: mapHomeContent(null) as HomeContentVM, // 首帧即默认文案·不空屏
     products: [] as ProductVM[],
-    openReassure: 0, // 折叠默认首条展开（设计 CollapseGroup useState(0)）
-    openFaq: 0,
+    openFaq: 0, // FAQ 默认首条展开
+    // 品牌段三幕像素小鸭（components/px-scene）：写死在包内——这是品牌动画配文，不是后台可管理内容
+    scenes: [
+      { kind: 'hats', caption: '三种颜色的帽子，随心换' },
+      { kind: 'charm', caption: '挂在包上，走到哪带到哪' },
+      { kind: 'share', caption: '帽子也能借给小熊、小蛙' },
+    ],
     showTop: false,
     toast: { show: false, text: '' },
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
@@ -128,10 +133,6 @@ Page({
     if (nextProducts !== null && JSON.stringify(nextProducts) !== JSON.stringify(this.data.products)) patch.products = nextProducts
     this.setData(patch)
     writeSnapshot(products, content.ok ? content.home : null) // 回写快照供下次冷启动首帧即真实内容（products=null 只写 home 半边）
-  },
-  toggleReassure(e: WechatMiniprogram.TouchEvent) {
-    const i = Number(e.currentTarget.dataset.index)
-    this.setData({ openReassure: this.data.openReassure === i ? -1 : i })
   },
   toggleFaq(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.index)

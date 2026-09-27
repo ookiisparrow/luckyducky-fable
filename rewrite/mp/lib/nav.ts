@@ -19,7 +19,7 @@ export function goBackOrHome(): void {
   })
 }
 
-/** 互跳页防叠栈（售后↔订单详情、详情→推荐详情会反复叠栈）：逼近微信 10 层上限（≥8，留余量）改 redirectTo
+/** 互跳页防叠栈（售后↔订单详情会反复叠栈）：逼近微信 10 层上限（≥8，留余量）改 redirectTo
  *  替换本页；否则 navigateTo，失败降级 redirectTo（不静默卡死）。 */
 export function navigateOrRedirect(url: string): void {
   if (getCurrentPages().length >= 8) wx.redirectTo({ url })

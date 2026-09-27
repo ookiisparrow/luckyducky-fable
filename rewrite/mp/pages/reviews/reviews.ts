@@ -11,12 +11,20 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「还没有评价」分治
     hasMore: false,
     cursor: null as unknown,
+    title: '商品评价', // 顶栏页名：详情页带来商品名时显示「商品名 · 评价」
   },
   productId: '',
   loadingMore: false, // 触底翻页在途标记：防快速多次触底并发请求各自 append 造成重复行
   _seq: 0, // reload 代次（同 aftersales/order-list）：onLoad + 重试 + 触底翻页并发时丢弃过期回包
   onLoad(query: Record<string, string | undefined>) {
     this.productId = String(query.productId || '')
+    let name = query.name || ''
+    try {
+      name = decodeURIComponent(name) // 各基础库对 query 是否已解码不一；名字含 % 时二次解码会抛错，失败就用原串
+    } catch {
+      // 刻意静默：只影响顶栏页名
+    }
+    if (name) this.setData({ title: name + ' · 评价' })
     void this.reload()
   },
   async reload() {

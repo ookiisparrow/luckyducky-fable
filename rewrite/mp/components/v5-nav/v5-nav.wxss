@@ -1,0 +1,36 @@
+.nv-space {
+  flex: 0 0 auto;
+}
+.nv-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 20;
+  height: 44px;
+  padding-left: 10px;
+  padding-right: 104px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--v5-canvas);
+  box-sizing: content-box;
+}
+.nv-hit {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nv-back {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+}
+.nv-title {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}

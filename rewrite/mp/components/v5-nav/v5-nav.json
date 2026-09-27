@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "usingComponents": {
+    "px-i": "/components/px-i/px-i"
+  }
+}

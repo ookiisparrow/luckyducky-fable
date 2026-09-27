@@ -69,6 +69,19 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(JSON.stringify(d)).not.toContain('undefined')
   })
 
+  it('大白话：信任条每项配一个像素动画——后台图标名认得就对应（卡车/盾牌/爱心），认不得按位置轮流', () => {
+    expect(mapHomeContent(null).trust.map((t) => t.anim)).toEqual(['truck', 'shield', 'heart'])
+    const got = mapHomeContent({
+      trust: [
+        { icon: 'thumbs-up', label: '推荐' },
+        { icon: 'rocket', label: '极速' },
+        { icon: 'shield-check', label: '保障' },
+        { label: '无图标' },
+      ],
+    }).trust.map((t) => t.anim)
+    expect(got).toEqual(['heart', 'shield', 'shield', 'truck'])
+  })
+
   it('大白话：配了某板块的一部分 → 配的用配置、没配的字段/条目回退默认（不半空）', () => {
     const def = mapHomeContent(null)
     const d = mapHomeContent({

@@ -1,82 +1,63 @@
-<view class="ld-rv-page">
-  <!-- 评分摘要：大号均分 + 星 + 分布条 + 标签 chip（真实 summary·条数 0 时 mapSummary 返 null 不渲染） -->
-  <view class="ld-rv-summary" wx:if="{{summary}}">
-    <view class="ld-rv-head">
-      <view class="ld-rv-score">
-        <text class="ld-rv-num">{{summary.scoreLabel}}</text>
-        <text class="ld-rv-stars ld-rv-stars-lg">{{summary.scoreStars}}</text>
-        <text class="ld-rv-count">{{summary.countLabel}}</text>
-      </view>
-      <view class="ld-rv-bars">
-        <view class="ld-rv-bar" wx:for="{{summary.dist}}" wx:key="label">
-          <text class="ld-rv-bar-lbl">{{item.label}}</text>
-          <view class="ld-rv-track"><view class="ld-rv-fill" style="width: {{item.pct}}%"></view></view>
-        </view>
-      </view>
+<!-- 商品评价（v5「字重」稿 A3）：大号均分 + 像素分段分布条 + 标签 + 列表（游标分页·onReachBottom 追加） -->
+<v5-nav title="{{title}}" />
+
+<view class="rv">
+  <!-- 评分摘要（真实 summary·条数 0 时 mapSummary 返 null 不渲染） -->
+  <view class="rv-sum" wx:if="{{summary}}">
+    <view class="rv-score">
+      <text class="mono rv-num">{{summary.scoreLabel}}</text>
+      <text class="rv-count">{{summary.countLabel}}</text>
     </view>
-    <view class="ld-rv-chips" wx:if="{{summary.tags.length}}">
-      <view class="ld-rv-chip" wx:for="{{summary.tags}}" wx:key="tag">{{item.tag}}<text class="ld-rv-chip-n">{{item.n}}</text></view>
+    <view class="rv-bars">
+      <view class="rv-bar" wx:for="{{summary.dist}}" wx:key="label">
+        <text class="mono rv-bar-lbl">{{item.label}}</text>
+        <view class="rv-track"><view class="rv-fill" style="width: {{item.pct}}%"></view></view>
+      </view>
     </view>
   </view>
+  <!-- ponytail: 设计稿标签可点选筛选；现接口只给标签统计、不支持按标签拉列表，先做静态展示，接口支持后再接 -->
+  <view class="rv-tags" wx:if="{{summary.tags.length}}">
+    <view class="rv-tag" wx:for="{{summary.tags}}" wx:key="tag">{{item.tag}}<text class="rv-tag-n">{{item.n}}</text></view>
+  </view>
 
-  <!-- 评价列表（游标分页·onReachBottom 追加） -->
   <!-- wx:key 刻意用 index：ReviewVM 无任何唯一字段，云端 getReviews 刻意不透传 _id
        （orderId__lineId 组合会向其他用户泄露订单信息）；该列表为追加式只读（无删除/重排），index 安全。 -->
-  <view class="ld-rv-list" wx:if="{{list.length}}">
-    <view class="ld-rv-item" wx:for="{{list}}" wx:key="index">
-      <view class="ld-rv-item-top">
-        <image class="ld-rv-av" src="/static/logo-wordmark.svg" mode="aspectFit" />
-        <text class="ld-rv-name">{{item.name}}</text>
-        <text class="ld-rv-date">{{item.timeLabel}}</text>
+  <view class="rv-list" wx:if="{{list.length}}">
+    <view class="rv-item" wx:for="{{list}}" wx:key="index">
+      <view class="rv-top">
+        <text class="rv-name">{{item.name}}</text>
+        <view class="rv-stars">
+          <px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:for-item="s" wx:key="*this" wx:if="{{s <= item.rating}}" name="star5" />
+        </view>
+        <text class="mono rv-date">{{item.timeLabel}}</text>
       </view>
-      <text class="ld-rv-stars">{{item.stars}}</text>
-      <view class="ld-rv-spec" wx:if="{{item.spec}}">{{item.spec}}</view>
-      <text class="ld-rv-text" wx:if="{{item.text}}">{{item.text}}</text>
-      <view class="ld-rv-photos" wx:if="{{item.photos.length}}">
-        <image
-          wx:for="{{item.photos}}"
-          wx:for-item="ph"
-          wx:key="*this"
-          class="ld-rv-photo"
-          src="{{ph}}"
-          mode="aspectFill"
-          lazy-load
-          data-url="{{ph}}"
-          data-urls="{{item.photos}}"
-          bind:tap="onPreviewPhoto"
-        />
-      </view>
-      <view class="ld-rv-tagrow" wx:if="{{item.tags.length}}">
-        <text class="ld-rv-tag" wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this">{{t}}</text>
+      <text class="rv-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
+      <text class="t-sys rv-text" wx:if="{{item.text}}">{{item.text}}</text>
+      <view class="rv-pics" wx:if="{{item.photos.length}}">
+        <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="*this" class="rv-pic" src="{{ph}}" mode="aspectFill"
+          lazy-load data-url="{{ph}}" data-urls="{{item.photos}}" bind:tap="onPreviewPhoto" />
       </view>
     </view>
   </view>
 
-  <!-- 骨架占位（加载中且列表空时不再整页空白·根因#8）：微光扫过对齐 home/catalog（@keyframes ld-shimmer·
-       app.wxss）。头像复用真卡店标（ReviewVM 无头像·空灰圆永远空）；图 200rpx 复用 .ld-rv-photo·两行文案条 + 图格。 -->
-  <view class="ld-rv-list" wx:if="{{loading && !list.length}}">
-    <view class="ld-rv-item ld-rv-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="ld-rv-item-top">
-        <image class="ld-rv-av" src="/static/logo-wordmark.svg" mode="aspectFit" />
-        <view class="ld-rv-skel-bar" style="width: 160rpx"></view>
-      </view>
-      <view class="ld-rv-skel-bar" style="width: 86%"></view>
-      <view class="ld-rv-skel-bar" style="width: 58%"></view>
-      <view class="ld-rv-skel-photos">
-        <view class="ld-rv-photo ld-rv-skel-block" wx:for="{{[1, 2, 3]}}" wx:for-item="p" wx:key="*this"></view>
-      </view>
+  <!-- 骨架占位（加载中且列表空时不整页空白·根因#8） -->
+  <view class="rv-list" wx:if="{{loading && !list.length}}">
+    <view class="rv-item" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="rv-skel-bar skel" style="width: 120px"></view>
+      <view class="rv-skel-bar skel" style="width: 86%"></view>
+      <view class="rv-skel-bar skel" style="width: 58%"></view>
     </view>
   </view>
 
   <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
-  <view class="ld-rv-empty" wx:if="{{!loading && loadFailed}}">
-    <view class="ld-empty-title">网络开小差</view>
-    <view class="ld-empty-hint">评价没加载出来，请重试</view>
-    <view class="ld-rv-retry" bind:tap="onRetryLoad">重试</view>
+  <view class="rv-state" wx:if="{{!loading && loadFailed}}">
+    <text class="rv-state-title">网络开小差</text>
+    <text class="rv-state-hint">评价没加载出来，请重试</text>
+    <view class="k k-light rv-retry" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad">重试</view>
   </view>
-  <view class="ld-rv-empty" wx:elif="{{!loading && !list.length}}">
-    <view class="ld-empty-title">还没有评价</view>
-    <view class="ld-empty-hint">买过的钩友完成订单后可以来写第一条</view>
+  <view class="rv-state" wx:elif="{{!loading && !list.length}}">
+    <text class="rv-state-title">还没有评价</text>
+    <text class="rv-state-hint">买过的钩友完成订单后可以来写第一条</text>
   </view>
-  <view class="ld-rv-more" wx:if="{{hasMore}}">上拉加载更多</view>
+  <view class="rv-more" wx:if="{{hasMore}}">上拉加载更多</view>
 </view>
