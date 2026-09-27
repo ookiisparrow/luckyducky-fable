@@ -31,6 +31,8 @@ export const ERR = {
   OUT_OF_STOCK: 'OUT_OF_STOCK', // 库存不足（cloud-order 域）
   TOO_MANY_PENDING: 'TOO_MANY_PENDING', // 在途未支付单超上限（防单账号零成本预留锁死热销 SKU）
   ORDER_CLAIM_PENDING: 'ORDER_CLAIM_PENDING', // 同幂等键的原请求仍在处理中（极端并发窗口）——不建二单，前端稍候按原键重试
+  PRICE_CHANGED: 'PRICE_CHANGED', // 下单带的 expectedAmountFen 与云端现价应付不符；带回 amountFen（现价应付分）
+  ORDER_ALREADY_PAID: 'ORDER_ALREADY_PAID', // 再点支付时微信侧已收款、回调还没到：前端重拉订单，显示「已付款，正在确认」
   // 售后 / 退款
   ALREADY_APPLIED: 'ALREADY_APPLIED',
   NOT_REFUNDABLE: 'NOT_REFUNDABLE',
@@ -61,6 +63,7 @@ export const ERR = {
   EMPTY_FEEDBACK: 'EMPTY_FEEDBACK',
   IMG_RISKY: 'IMG_RISKY',
   SEC_CHECK_FAIL: 'SEC_CHECK_FAIL',
+  TEXT_RISKY: 'TEXT_RISKY', // 评价文字没过内容安全（图片的是 IMG_RISKY/SEC_CHECK_FAIL）：前端提示改文字，而不是「图片没检查成功」
   // 客服 / 坐席（坐席台 agentDesk.ts + kfCallback dispatch + csAccess 闸 + 客户360）
   NO_AGENT: 'NO_AGENT',
   AT_CAPACITY: 'AT_CAPACITY',
