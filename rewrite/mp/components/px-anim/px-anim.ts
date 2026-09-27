@@ -2,9 +2,9 @@
 // v5 设计稿 pixel-anim-icons.js 的小程序版：13×13 格循环动画，图形见 lib/pixelAnim。
 // delay＝错峰起播（毫秒）；hold＝播到该时刻停住（只动一次）；p＝仅 loader：按进度逐格点亮；dark＝暗底换色。
 import { PIXEL_ANIMS, PIXEL_ANIM_DARK } from '../../lib/pixelAnim'
-import { mountPixelCanvas, type PixelCanvas } from '../../lib/pixelCanvas'
+import { mountPixelView, type PixelView } from '../../lib/pixelView'
 
-const live = new WeakMap<object, PixelCanvas>()
+const live = new WeakMap<object, PixelView>()
 
 Component({
   properties: {
@@ -23,7 +23,7 @@ Component({
       const delay = this.data.delay
       live.set(
         this,
-        mountPixelCanvas(this, { cols: 13, rows: 13 }, this.data.size, (t, P) => {
+        mountPixelView(this, { cols: 13, rows: 13 }, this.data.size, (t, P) => {
           const tt = hold && t + delay >= hold ? hold : t + delay
           const plot = this.data.dark ? (x: number, y: number, c: string) => P(x, y, PIXEL_ANIM_DARK[c] || c) : P
           f(plot, tt, this.data.p >= 0 ? this.data.p : null)

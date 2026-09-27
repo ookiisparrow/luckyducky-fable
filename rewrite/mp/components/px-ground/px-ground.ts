@@ -1,9 +1,9 @@
 // 像素地面场景 <px-ground kind="box|pin|pay|egg" hatched shell hatch-key="kit01" scale="4" />
 // 满宽、17 格高、底行虚线地面（与小货车同一条地面线）；图形见 lib/pixelTruck createGround。
 import { createGround, PX_ROWS } from '../../lib/pixelTruck'
-import { mountPixelCanvas, type PixelCanvas } from '../../lib/pixelCanvas'
+import { mountPixelView, type PixelView } from '../../lib/pixelView'
 
-const live = new WeakMap<object, PixelCanvas>()
+const live = new WeakMap<object, PixelView>()
 
 Component({
   properties: {
@@ -21,7 +21,7 @@ Component({
       let cols = 0
       live.set(
         this,
-        mountPixelCanvas(
+        mountPixelView(
           this,
           (wpx) => {
             cols = Math.floor(wpx / s)

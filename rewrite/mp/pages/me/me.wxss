@@ -6,11 +6,19 @@ page {
 /* 滚动容器：退出提醒的 page-container 武装态冻结页面级滚动（决策§30），滚动改在 scroll-view 内发生。
    须填满视口——height 而非 min-height（scroll-view 靠固定高度才产生内部滚动）。 */
 .me-scroll {
-  height: 100vh;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--v5-canvas);
 }
-.me {
-  min-height: 100vh;
+.me-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 10;
+  background: var(--v5-canvas);
 }
 .me-head {
   height: 44px;

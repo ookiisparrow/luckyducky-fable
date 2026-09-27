@@ -1,8 +1,8 @@
 // 像素小鸭场景 <px-scene kind="hats|charm|share" scale="4">：首页「品牌」段三幕，图形见 lib/pixelScenes。
 import { createScene } from '../../lib/pixelScenes'
-import { mountPixelCanvas, type PixelCanvas } from '../../lib/pixelCanvas'
+import { mountPixelView, type PixelView } from '../../lib/pixelView'
 
-const live = new WeakMap<object, PixelCanvas>()
+const live = new WeakMap<object, PixelView>()
 
 Component({
   properties: {
@@ -20,7 +20,7 @@ Component({
       if (!s) return
       live.set(
         this,
-        mountPixelCanvas(this, { cols: s.cols, rows: s.rows }, this.data.scale, (t, P) => s.draw(t, P))
+        mountPixelView(this, { cols: s.cols, rows: s.rows }, this.data.scale, (t, P) => s.draw(t, P))
       )
     },
     detached() {

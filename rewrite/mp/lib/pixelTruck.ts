@@ -3,7 +3,7 @@
 //   box    空状态纸箱          pin  收货地址定位针
 //   pay    支付成功金币：落地、轻弹、翻两圈停正面（¥），四周闪光，之后定时扫高光
 //   egg    小鸭蛋：未孵化轻晃；hatched 首次看到播孵化，之后小鸭在地面线上来回走；shell 只剩下半蛋壳
-// 每个场景＝{ rows, draw(t, P, cols) }：t＝可见累计毫秒，cols＝按画布实测宽度算出的列数；draw 返回 false＝画面静止可停帧。
+// 每个场景＝{ rows, draw(t, P, cols) }：t＝可见累计毫秒，cols＝按容器实测宽度算出的列数；draw 返回 false＝画面静止可停帧。
 // 地面线全站同一高度（状态栏+44+120+车高 68）：页面把画布放在顶栏下 120px 处即对齐，不做设计稿的 anchor 测量。
 import type { Plot } from './pixelAnim'
 

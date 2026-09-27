@@ -5,5 +5,11 @@
   pointer-events: none;
 }
 .pxc {
-  display: block;
+  position: relative;
+  overflow: hidden;
+}
+.pxr {
+  position: absolute;
+  left: 0;
+  right: 0;
 }

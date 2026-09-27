@@ -1,5 +1,5 @@
 // 像素小货车一族（v5 设计稿 pixel-truck.js 移植）行为冒烟：停车静止可停帧、go() 开走再开回、加箱子会掉落、
-// 金币/蛋有动画、纸箱/蛋壳静止。组件层（canvas/方法转发）靠开发者工具截图走查。
+// 金币/蛋有动画、纸箱/蛋壳静止。组件层（行元素渲染/方法转发）靠开发者工具截图走查。
 import { describe, it, expect } from 'vitest'
 import { createTruck, createGround, PX_ROWS } from '../lib/pixelTruck'
 

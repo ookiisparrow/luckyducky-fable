@@ -1,5 +1,5 @@
 // 像素动画移植冒烟（v5 设计稿 pixel-anim-icons.js / pixel-duck-scenes.js）：每个图形在一串时刻都画得出东西、
-// 且不越界（越界＝移植抄错坐标）。组件层（canvas 取节点/逐帧）靠真机走查。
+// 且不越界（越界＝移植抄错坐标）。组件层（行元素渲染/逐帧）靠真机走查；渲染拼行见 pixel-view 测试。
 import { describe, it, expect } from 'vitest'
 import { PIXEL_ANIMS } from '../lib/pixelAnim'
 import { createScene } from '../lib/pixelScenes'

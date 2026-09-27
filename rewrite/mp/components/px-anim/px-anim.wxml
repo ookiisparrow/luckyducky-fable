@@ -1,1 +1,3 @@
-<canvas type="2d" class="pxc" style="width:{{size * 13}}px;height:{{size * 13}}px"></canvas>
+<view class="pxc" style="width:{{size * 13}}px;height:{{size * 13}}px">
+  <view wx:for="{{pxRows}}" wx:key="t" wx:if="{{item.g}}" class="pxr" style="top:{{item.t}}px;height:{{pxCell}}px;background:{{item.g}}"></view>
+</view>

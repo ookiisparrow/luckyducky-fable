@@ -2,9 +2,9 @@
 // 满宽、17 格高；图形与状态机见 lib/pixelTruck。页面经 this.selectComponent('#truck') 调 go/restart/stamp，
 // 返回需要等待的毫秒数（等车开走再跳转；0＝没动，直接跳）。
 import { createTruck, PX_ROWS, type Truck } from '../../lib/pixelTruck'
-import { mountPixelCanvas, type PixelCanvas } from '../../lib/pixelCanvas'
+import { mountPixelView, type PixelView } from '../../lib/pixelView'
 
-const live = new WeakMap<object, { truck: Truck; cv: PixelCanvas }>()
+const live = new WeakMap<object, { truck: Truck; cv: PixelView }>()
 
 Component({
   properties: {
@@ -38,7 +38,7 @@ Component({
         pin: this.data.pin,
       })
       let cols = 0
-      const cv = mountPixelCanvas(
+      const cv = mountPixelView(
         this,
         (wpx) => {
           cols = Math.floor(wpx / s)
