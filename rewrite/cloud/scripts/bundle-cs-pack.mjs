@@ -1,7 +1,8 @@
 /**
- * 把 kfCallback/cs-pack/<id> 打成 csPackAssets.generated.json（构建时内联，运行时不拉 GitHub）。
+ * 把 kfCallback/cs-pack/<id> 里运行时真读的字段打成 csPackAssets.generated.json（构建时内联，运行时不拉 GitHub）。
+ * 只打分流规则、forbidden_transitions、交接必填字段名。话术正文、简介、槽位表留在源目录。
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = import.meta.dirname
@@ -10,22 +11,24 @@ const SRC = join(ROOT, '..', 'src', 'functions', 'cs', 'kfCallback', 'cs-pack', 
 const OUT = join(ROOT, '..', 'src', 'functions', 'cs', 'kfCallback', 'csPackAssets.generated.json')
 
 const readJson = (name) => JSON.parse(readFileSync(join(SRC, name), 'utf8'))
-const scripts = {}
-for (const f of readdirSync(join(SRC, 'scripts'))) {
-  if (!f.endsWith('.txt')) continue
-  scripts[f.replace(/\.txt$/, '')] = readFileSync(join(SRC, 'scripts', f), 'utf8')
-}
+const triage = readJson('triage_rules.json')
+const machine = readJson('state_machine.json')
+const handoff = readJson('handoff_payload.json')
 
 writeFileSync(
   OUT,
   JSON.stringify({
     pack_id: PACK_ID,
-    brief: readJson('brief.json'),
-    state_machine: readJson('state_machine.json'),
-    triage_rules: readJson('triage_rules.json'),
-    slots_schema: readJson('slots_schema.json'),
-    handoff_payload: readJson('handoff_payload.json'),
-    scripts,
+    state_machine: {
+      forbidden_transitions: machine.forbidden_transitions,
+    },
+    triage_rules: {
+      rules: triage.rules,
+      stage_keywords: triage.stage_keywords,
+    },
+    handoff_payload: {
+      required_fields: (handoff.required_fields || []).map((f) => ({ name: f.name })),
+    },
   }) + '\n'
 )
-console.log(`bundled cs-pack ${PACK_ID} (${Object.keys(scripts).length} scripts) → csPackAssets.generated.json`)
+console.log(`bundled cs-pack ${PACK_ID} (rules + forbidden + handoff names) → csPackAssets.generated.json`)

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { handleMessage, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
@@ -26,6 +29,9 @@ import { getDb } from '../src/kit'
 import { formatRefreshDone } from '@ldrw/shared'
 import PACK from '../src/functions/cs/kfCallback/csPackAssets.generated.json'
 
+const PACK_SRC = join(dirname(fileURLToPath(import.meta.url)), '../src/functions/cs/kfCallback/cs-pack/lucky-ducky-2026-09-19')
+const readPackJson = (name: string) => JSON.parse(readFileSync(join(PACK_SRC, name), 'utf8'))
+
 const db = () => getDb()
 const sendCollector = () => {
   const sent: any[] = []
@@ -46,15 +52,43 @@ const ev = (over: Record<string, unknown> = {}) => ({
 })
 
 describe('Config Pack 挂载', () => {
-  it('大白话：构建打进的包里有话术和规则，没有 GitHub 地址', () => {
+  it('大白话：构建打进的包里只有分流和交接字段，话术简介留在源文件，没有 GitHub 地址', () => {
+    const srcTriage = readPackJson('triage_rules.json')
+    const srcMachine = readPackJson('state_machine.json')
+    const srcHandoff = readPackJson('handoff_payload.json')
     expect(assets.pack_id).toBe('lucky-ducky-2026-09-19')
-    expect(assets.brief.gate && assets.brief.gate.mode).toBe('jev_total_intake')
+    expect(assets.triage_rules.rules).toEqual(srcTriage.rules)
+    expect(assets.triage_rules.stage_keywords).toEqual(srcTriage.stage_keywords)
+    expect(assets.triage_rules.rules.some((r) => r.id === 'R03_sensitive')).toBe(true)
     expect(assets.triage_rules.rules.some((r) => r.script === 'aftersale_packaging')).toBe(true)
+    expect(assets.state_machine.forbidden_transitions).toEqual(srcMachine.forbidden_transitions)
+    expect(assets.handoff_payload.required_fields).toEqual(
+      srcHandoff.required_fields.map((f: { name: string }) => ({ name: f.name }))
+    )
+    expect(assets).not.toHaveProperty('brief')
+    expect(assets).not.toHaveProperty('scripts')
+    expect(assets).not.toHaveProperty('slots_schema')
+    expect(assets.triage_rules).not.toHaveProperty('default_confidence_threshold')
+    expect(assets.triage_rules).not.toHaveProperty('consecutive_unknown_threshold')
+    expect(assets.triage_rules).not.toHaveProperty('collect_rounds_handoff')
+    expect(assets.state_machine).not.toHaveProperty('states')
+    expect(assets.state_machine).not.toHaveProperty('transitions')
+    expect(assets.state_machine).not.toHaveProperty('invariants')
+    expect(assets.state_machine).not.toHaveProperty('handoff_triggers')
+    expect(assets.state_machine).not.toHaveProperty('human_substates')
+    expect(assets.handoff_payload).not.toHaveProperty('example')
+    expect(assets.handoff_payload).not.toHaveProperty('optional_fields')
+    expect(assets.handoff_payload).not.toHaveProperty('on_enter_human')
     const blob = JSON.stringify(PACK)
     expect(blob).not.toContain('api.github.com')
     expect(blob).not.toContain('raw.githubusercontent.com')
+    const brief = readPackJson('brief.json')
+    expect(brief.gate && brief.gate.mode).toBe('jev_total_intake')
+    expect(srcTriage.collect_rounds_handoff).toBe(3)
+    expect(srcTriage.default_confidence_threshold).toBe(0.55)
+    expect(srcTriage.consecutive_unknown_threshold).toBe(2)
     for (const id of PACK_REQUIRED_SCRIPTS) {
-      expect(String(assets.scripts[id] || '').trim().length, id).toBeGreaterThan(0)
+      expect(readFileSync(join(PACK_SRC, 'scripts', `${id}.txt`), 'utf8').trim().length, id).toBeGreaterThan(0)
     }
   })
 
@@ -80,16 +114,19 @@ describe('Config Pack 挂载', () => {
     expect(rule && rule.doNotAsk).toEqual(['order_id'])
     expect(packagingMustNotAskOrderId(rule)).toBe(true)
     const r30 = assets.triage_rules.rules.find((r) => r.id === 'R30_aftersale_packaging')
+    const srcR30 = readPackJson('triage_rules.json').rules.find((r: { id: string }) => r.id === 'R30_aftersale_packaging')
     expect(r30 && r30.comment).toMatch(/只要合照，禁止要订单号/)
+    expect(srcR30 && srcR30.comment).toMatch(/只要合照，禁止要订单号/)
     expect(r30 && r30.do_not_ask).toEqual(['order_id'])
-    const photo = assets.slots_schema.slots.find((s) => s.name === 'severity_photo_hint')
+    const slots = readPackJson('slots_schema.json')
+    const photo = slots.slots.find((s: { name: string }) => s.name === 'severity_photo_hint')
     expect(photo && photo.required_for).toContain('packaging')
     expect(photo && photo.ask_variants_packaging).toEqual([
       atomicText('business/packaging/ask_photo_01'),
       atomicText('business/packaging/ask_photo_02'),
       atomicText('business/packaging/ask_photo_03'),
     ])
-    const order = assets.slots_schema.slots.find((s) => s.name === 'order_id')
+    const order = slots.slots.find((s: { name: string }) => s.name === 'order_id')
     expect(order && order.required_for).not.toContain('packaging')
     expect(order && String(order.note || '')).toMatch(/禁止要订单号/)
   })
