@@ -2,7 +2,7 @@
 // 上架四道门错误转人话（原文兜底不吞）；编辑走整档 round-trip（saveDraft 全量覆盖——表单只绑核心字段·
 // 未编辑字段原样随档提交，防高级字段被抹）。
 import { transportErrorText } from './mapSystem'
-import type { ErrCode } from '@ldrw/shared'
+import { DRAFT_LIST_CAP, type ErrCode } from '@ldrw/shared'
 
 export type ProductState = 'onsale' | 'unlisted' | 'preparing'
 
@@ -161,10 +161,18 @@ export function draftSyncOk(state: ProductState, opts?: { featured?: boolean }):
   return '已上架，已出现在小程序目录；首页人气条未打开。想出现在首页请去橱窗打开「出现在首页」'
 }
 
-/** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。 */
-export function productsListSub(all: number, preparing: number): string {
-  if (preparing > 0) return `共 ${all} 款商品 · ${preparing} 款筹备中待完成上新`
-  return `共 ${all} 款商品`
+/** 产品表副标：有筹备中才跟「待完成上新」；0 款不跟，避免「都已上架」还写待完成。
+ *  只有云端标明截断时才加「只显示最新 N 款」，N 用共享的 DRAFT_LIST_CAP。 */
+export function productsListSub(all: number, preparing: number, truncated = false): string {
+  const base = preparing > 0 ? `共 ${all} 款商品 · ${preparing} 款筹备中待完成上新` : `共 ${all} 款商品`
+  if (!truncated) return base
+  return `${base}（只显示最新 ${DRAFT_LIST_CAP} 款）`
+}
+
+/** 名单里找不到这件商品：完整名单才说可能已删除；被截断才说名单不全。 */
+export function draftNotFoundHint(truncated: boolean): string {
+  if (truncated) return `名单不全，只显示最新 ${DRAFT_LIST_CAP} 款`
+  return '可能已删除'
 }
 
 /** 新建草稿骨架（向导第 1 步与列表「去上新」同形·课程号当场绑上，后面不用手输） */

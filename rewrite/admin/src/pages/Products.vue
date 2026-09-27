@@ -25,6 +25,7 @@ import {
   type DraftRowVM,
   type StepExtras,
 } from '../lib/mapProducts'
+import { DRAFT_LIST_CAP } from '@ldrw/shared'
 import { serialSave } from '../lib/serialSave'
 import { confirmed, failText } from '../lib/status'
 import { launchErrorText } from '../lib/mapSystem'
@@ -122,7 +123,8 @@ const FILTERS = [
   { key: 'unlisted', label: '已下架' },
 ] as const
 const listReady = ref(false) // 首包回来之前不谎报「还没有商品」（polish 把空态收进表卡后首屏会闪）
-const listSub = computed(() => (listReady.value ? productsListSub(counts.value.all, counts.value.preparing) : ''))
+const listTruncated = ref(false) // 云端多探一条后标明：这一页不是全部
+const listSub = computed(() => (listReady.value ? productsListSub(counts.value.all, counts.value.preparing, listTruncated.value) : ''))
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()
   return rows.value.filter(
@@ -154,6 +156,7 @@ async function reload(keepMsg = false) {
   if (!r.ok) {
     urlMap.value = {}
     rows.value = []
+    listTruncated.value = false
   }
   message.value = r.ok ? held : failText('加载失败', r.error)
   listReady.value = true
@@ -164,6 +167,7 @@ async function silentRefresh() {
   if (r.ok) {
     urlMap.value = (r.urls as Record<string, string>) || {}
     urlMapAt = Date.now()
+    listTruncated.value = r.truncated === true
     rows.value = mapDraftRows(r.list, r.urls, r.listed, r as StepExtras)
   }
   return r
@@ -556,7 +560,7 @@ onMounted(async () => {
           </div>
         </div>
         </div>
-        <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
+        <div class="tfoot">共 {{ counts.all }} 款商品<span v-if="listTruncated">（只显示最新 {{ DRAFT_LIST_CAP }} 款）</span><span v-if="filter !== 'all' || search">（当前筛选 {{ shown.length }}）</span></div>
       </template>
       <EmptyState
         v-else-if="listReady && !message"

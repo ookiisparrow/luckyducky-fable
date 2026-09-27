@@ -136,6 +136,8 @@ describe('上新向导 /launch 建档不闪「商品不存在」（polish 自检
     const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
     await flushPromises()
     expect(wrapper.text()).toContain('没有找到这个商品')
+    expect(wrapper.text()).toContain('可能已删除')
+    expect(wrapper.text()).not.toContain('名单不全')
     expect(wrapper.text()).toContain('重试')
     const retry = wrapper.findAll('button').find((b) => b.text().includes('重试'))
     expect(retry).toBeTruthy()
@@ -143,6 +145,34 @@ describe('上新向导 /launch 建档不闪「商品不存在」（polish 自检
     await flushPromises()
     expect(wrapper.text()).toContain('新建与封面')
     expect(wrapper.text()).not.toContain('没有找到这个商品')
+    wrapper.unmount()
+  })
+
+  it('大白话：名单被截断才说列表不全；完整名单里没有，才说可能已删除', async () => {
+    listDraftsMock.mockResolvedValue({
+      ok: true,
+      list: [freshDraft('other')],
+      urls: {},
+      listed: {},
+      truncated: true,
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/launch', component: Wizard },
+        { path: '/products/:id/wizard', component: Wizard },
+        { path: '/products', component: { template: '<div/>' } },
+      ],
+    })
+    await router.push('/products/p-gone/wizard')
+    await router.isReady()
+    const wrapper = mount(Wizard, { global: { plugins: [router], stubs } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('名单不全')
+    expect(wrapper.text()).not.toContain('可能已删除')
     wrapper.unmount()
   })
 })

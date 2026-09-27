@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCard, saveCard, uploadImage, listDrafts } from '../api/products'
-import { b64SizeOk } from '../lib/mapProducts'
+import { b64SizeOk, draftNotFoundHint } from '../lib/mapProducts'
 import { launchErrorText } from '../lib/mapSystem'
 import type { AdminCardDoc } from '@ldrw/shared'
 import { buildFrontSvg, buildBackSvg } from '../lib/cardSvg'
@@ -92,10 +92,10 @@ onMounted(async () => {
   const [dr, r] = await Promise.all([listDrafts(), getCard(productId)])
   if (r.error === 'SESSION_LOST') return // 会话失效集中导登录（client.onSessionLost·单源·根因#5）
   // 商品没读到不能往下走：新卡会拿「新商品」和猜的课程号落库，「取商品封面图」也会谎报没封面。
-  // 读到了但找不到也一样：listDrafts 只回最新 100 个商品
+  // 读到了但找不到也一样：完整名单才当可能已删；云端标明截断才说名单不全
   const found = dr.ok ? dr.list.find((p) => String(p.id || p._id) === productId) : undefined
   if (!found) {
-    loadErr.value = '商品信息没加载到：' + (dr.ok ? '没找到这个商品（商品超过 100 个时列表不全）' : launchErrorText(dr.error))
+    loadErr.value = '商品信息没加载到：' + (dr.ok ? '没找到这个商品（' + draftNotFoundHint(dr.truncated === true) + '）' : launchErrorText(dr.error))
     loading.value = false
     return
   }
