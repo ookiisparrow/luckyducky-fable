@@ -4,7 +4,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import errorsSrc from '../../shared/src/errors.ts?raw'
 import ordersSrc from '../../cloud/src/functions/app/actions/orders.ts?raw'
-import { callApp } from '../utils/cloud'
+import payFlowSrc from '../lib/payFlow.ts?raw'
+import checkoutPageSrc from '../pages/checkout/checkout.ts?raw'
+import cloudbasercSrc from '../../../cloudbaserc.json?raw'
+import { callApp, CALL_TIMEOUT_MS } from '../utils/cloud'
 import { CREATE_ORDER_ERR_COPY } from '../lib/checkout'
 import { ERR_REASON } from '../lib/mapLearning'
 
@@ -29,7 +32,7 @@ describe('手抄的失败码与云端一致', () => {
     expect(ERR_PREFIXES.has('UNLISTED_ITEM')).toBe(true)
   })
 
-  it('大白话：客户端自造的码确实是小程序云调用层发的（调用失败 / 回包没有 ok / 12 秒没回）', async () => {
+  it('大白话：客户端自造的码确实是小程序云调用层发的（调用失败 / 回包没有 ok / 等满超时没回）', async () => {
     const run = async (callFunction: (o: Record<string, any>) => void, wait = 0) => {
       vi.useFakeTimers()
       ;(globalThis as any).wx = { cloud: { callFunction } }
@@ -40,7 +43,7 @@ describe('手抄的失败码与云端一致', () => {
     const got = [
       await run((o) => o.fail({})),
       await run((o) => o.success({ result: null })),
-      await run(() => undefined, 12_000),
+      await run(() => undefined, CALL_TIMEOUT_MS),
     ]
     expect(got).toEqual(['CALL_FAIL', 'BAD_RESULT', 'CALL_TIMEOUT'])
     expect([...got].sort()).toEqual([...CLIENT_CODES].sort())
@@ -50,6 +53,18 @@ describe('手抄的失败码与云端一致', () => {
     for (const code of Object.keys(CREATE_ORDER_ERR_COPY)) {
       if (!CLIENT_CODES.includes(code)) expect(cloudHas(code), code).toBe(true)
     }
+  })
+
+  it('大白话：付款分诊和结算页单独认的失败码，云端都登记着（改名了这里红，不会悄悄落回「支付没成功」「下单没成功」）', () => {
+    const codes = [...(payFlowSrc + checkoutPageSrc).matchAll(/=== '([A-Z_]+)'/g)].map((m) => m[1])
+    expect(codes).toEqual(expect.arrayContaining(['ORDER_ALREADY_PAID', 'PRICE_CHANGED']))
+    for (const code of codes) expect(ERR_VALUES.has(code), code).toBe(true)
+  })
+
+  it('大白话：客户端等回包的时限比 app 函数自己的超时长——短了会把还在跑的写判成失败、诱人重交', () => {
+    const app = JSON.parse(cloudbasercSrc).functions.find((f: { name: string }) => f.name === 'app')
+    expect(app.timeout).toBeGreaterThan(0)
+    expect(CALL_TIMEOUT_MS).toBeGreaterThan(app.timeout * 1000)
   })
 
   it('大白话：激活页认的每个失败码，云端都还发', () => {

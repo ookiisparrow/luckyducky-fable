@@ -11,6 +11,10 @@ describe('支付结果分诊（fail-closed）', () => {
     expect(mapPayResult({ ok: false, error: 'BAD_STATUS:paid' })).toEqual({ kind: 'paid' })
   })
 
+  it('大白话：云端判「微信那边其实已付、只是回调还没到」（ORDER_ALREADY_PAID）——判「正在确认」，不当支付失败', () => {
+    expect(mapPayResult({ ok: false, error: 'ORDER_ALREADY_PAID' })).toEqual({ kind: 'confirming' })
+  })
+
   it('大白话：五参齐全才拉收银台；缺任何一参（半空支付参数=收银台闪退）一律判错不拉起', () => {
     const r = mapPayResult({ ok: true, payment: PAYMENT })
     expect(r.kind).toBe('request')

@@ -26,6 +26,9 @@ const BANNER: Record<string, BannerVM> = {
   refund_required: { icon: 'wallet', tint: 'lilac', head: '待退款', sub: '该订单需人工处理退款，请联系客服协助处理' },
   payment_exception: { icon: 'info', tint: 'muted', head: '支付异常，待人工处理', sub: '到账金额与订单金额不一致，请联系客服处理退款' },
 }
+// 云端判微信那边已付、回调还没落库：库里仍是 pending，但不能再让人去支付或取消（云端取消不问微信，
+// 会把已付的钱关进已关闭单，只能人工退）
+const CONFIRMING_BANNER: BannerVM = { icon: 'package', tint: 'lilac', head: '已付款，正在确认', sub: '微信已收到付款，订单状态稍后更新' }
 
 Page({
   data: {
@@ -35,7 +38,8 @@ Page({
     banner: null as BannerVM | null,
     amountNum: '',
     canAfterSale: false,
-    paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
+    confirming: false, // 云端回过 ORDER_ALREADY_PAID：订单离开待付款前都按「已付款，正在确认」显示
+    paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返可能要十几秒，连点会重复发 pay、重复拉起收银台
     shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
   },
   onLoad(query: Record<string, string | undefined>) {
@@ -73,10 +77,11 @@ Page({
       return
     }
     const vm = mapOrder(r.order)
-    const banner = vm ? BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' } : null
+    const confirming = this.data.confirming && !!vm && vm.status === 'pending'
+    const banner = !vm ? null : confirming ? CONFIRMING_BANNER : BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' }
     const amountNum = vm ? (vm.amountLabel || '').replace(/[^0-9.]/g, '') : ''
     const canAfterSale = !!vm && ['paid', 'shipped', 'done'].includes(vm.status)
-    this.setData({ loading: false, loadFailed: false, vm, banner, amountNum, canAfterSale })
+    this.setData({ loading: false, loadFailed: false, vm, banner, amountNum, canAfterSale, confirming })
   },
   onRetryLoad() {
     tapHaptic()
@@ -114,7 +119,7 @@ Page({
   // 取消待支付单（破坏性·二次确认；仅 pending 出此入口·最终裁决在云端）
   onCancel() {
     const vm = this.data.vm
-    if (!vm || vm.status !== 'pending') return
+    if (!vm || vm.status !== 'pending' || this.data.confirming) return
     wx.showModal({
       title: '取消订单',
       content: '确定取消这笔待支付订单吗？取消后不可恢复。',
@@ -149,6 +154,11 @@ Page({
     if (outcome.kind === 'paid') {
       wx.showToast({ title: '已支付', icon: 'success' })
       settle()
+      return
+    }
+    if (outcome.kind === 'confirming') {
+      this.setData({ confirming: true, banner: CONFIRMING_BANNER }) // 先上屏：重拉失败也不能退回「等待付款」
+      settle() // 重新拉订单：回调到了就翻已付
       return
     }
     if (outcome.kind === 'request') {

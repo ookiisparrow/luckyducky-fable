@@ -145,7 +145,8 @@ describe('结算页：提交', () => {
         { id: 'p2', sku: '', qty: 1 },
       ],
       { name: '鸭', phone: '13800000000', region: '上海', detail: '1 号' },
-      expect.any(String)
+      expect.any(String),
+      27800
     )
     expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '网络不好，稍后再试', icon: 'none' })
     expect(page.data.submitting).toBe(false)

@@ -48,11 +48,15 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
-    payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
+    // 云端回过 ORDER_ALREADY_PAID 的单（微信已付、回调没落库）：仍是待付款时显示「已付款，正在确认」、不给去支付/取消。
+    // ponytail: 只记一单——两单同时卡在回调前时先那单会露回按钮；要全记就换成 id 集合
+    confirmingId: '',
+    payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返可能要十几秒，连点会重复发 pay、重复拉起收银台
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
   },
   _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
+  _pagingSeq: -1, // 翻页在途锁：记发起时的列表代次，上一页没回来再触底不重发同一游标；reload/切 tab 换了代次就不再拦
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
   _swY: 0, // 手势起点 clientY
@@ -95,10 +99,12 @@ Page({
     void this.reload()
   },
   async onReachBottom() {
-    if (!this.data.hasMore || this.data.cursor == null) return
+    if (!this.data.hasMore || this.data.cursor == null || this._pagingSeq === this._seq) return
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
+    this._pagingSeq = seq
     const r = await getMyOrders(this.data.cursor, 20, tab)
+    if (this._pagingSeq === seq) this._pagingSeq = -1 // 成败都解锁（失败要能上拉重试）
     if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
@@ -178,6 +184,11 @@ Page({
       settle()
       return
     }
+    if (outcome.kind === 'confirming') {
+      this.setData({ confirmingId: id }) // 卡片立刻改显示，重拉失败也不退回「待支付」
+      settle() // 重新拉订单：回调到了就翻已付
+      return
+    }
     if (outcome.kind === 'request') {
       wx.requestPayment({
         ...outcome.payment,
@@ -209,6 +220,7 @@ Page({
   // 取消待支付单（破坏性·二次确认；仅 pending 出此入口·最终裁决在云端）
   onCancel(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
+    if (id === this.data.confirmingId) return
     wx.showModal({
       title: '取消订单',
       content: '确定取消这笔待支付订单吗？取消后不可恢复。',

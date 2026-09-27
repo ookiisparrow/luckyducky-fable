@@ -1,7 +1,7 @@
 // 支付结果映射（纯函数·vitest 钉）：云端 pay 契约 → 页面动作。
 // 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改。
 // fail-closed：收银台五参缺任一即判错不拉起（半空参数拉起=收银台闪退·比不拉更糟）；
-// BAD_STATUS:paid 判已付（并发已付幂等成功·不吓用户）。
+// BAD_STATUS:paid 判已付（并发已付幂等成功·不吓用户）；ORDER_ALREADY_PAID 判「正在确认」（微信侧已付、回调还没落库）。
 type SignType = 'MD5' | 'HMAC-SHA256' | 'RSA'
 
 interface PaymentParams {
@@ -19,6 +19,7 @@ const PAID_BAD_STATUS = 'BAD_STATUS:paid'
 
 type PayOutcome =
   | { kind: 'paid' }
+  | { kind: 'confirming' }
   | { kind: 'request'; payment: PaymentParams }
   | { kind: 'closed'; message: string }
   | { kind: 'error'; message: string }
@@ -43,6 +44,8 @@ export function mapPayResult(r: unknown): PayOutcome {
   }
   const e = String(res.error || '')
   if (e.startsWith(PAID_BAD_STATUS)) return { kind: 'paid' } // 已付幂等
+  // 付完立刻刷新常还显示待付（回调没到），用户再点时钱已经付了：说成「支付通道繁忙」会诱人换单重付
+  if (e === 'ORDER_ALREADY_PAID') return { kind: 'confirming' }
   if (e === 'ORDER_CLOSED') return { kind: 'closed', message: '订单已超时关闭，请重新下单' }
   if (e === 'PAY_NOT_ENABLED') return { kind: 'error', message: '支付暂未开通' }
   if (e === 'UNIFIED_ORDER_FAIL') return { kind: 'error', message: '支付通道繁忙，稍后再试' }

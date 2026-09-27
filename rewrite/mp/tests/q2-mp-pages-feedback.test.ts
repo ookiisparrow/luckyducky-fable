@@ -62,6 +62,7 @@ describe('意见反馈：提交', () => {
       page: 'feedback',
       version: 'rw-m2',
       platform: 'mp',
+      idempotencyKey: expect.any(String),
     })
   })
 
