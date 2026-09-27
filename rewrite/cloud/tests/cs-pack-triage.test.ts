@@ -12,7 +12,6 @@ import {
   handoffMissingFields,
   loadPackAssets,
   matchTriageRule,
-  packSessionId,
   packagingMustNotAskOrderId,
   resolvePackScriptId,
   resolvePackagingMainScript,
@@ -20,9 +19,8 @@ import {
 } from '../src/functions/cs/kfCallback/csPack'
 import { assemblePackagingBubbles, atomicText } from '../src/functions/cs/kfCallback/csAtomic'
 import { composeLine, emptyFlow, looksGreeting } from '../src/functions/cs/kfCallback/scriptReply'
-import { flowStateId, sessionEpochId } from '../src/functions/cs/kfCallback/trialRefresh'
 import { scriptPools } from '../src/functions/cs/kfCallback/scriptPool'
-import { getDb } from '../src/kit'
+import { flowStateId, getDb, packSessionId, sessionEpochId } from '../src/kit'
 import { formatRefreshDone } from '@ldrw/shared'
 import PACK from '../src/functions/cs/kfCallback/csPackAssets.generated.json'
 

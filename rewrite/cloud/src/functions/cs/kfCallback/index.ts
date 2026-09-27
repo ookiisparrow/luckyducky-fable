@@ -12,7 +12,11 @@ import {
   msgSecCheck,
   SCENE_COMMENT,
 } from '../../../kit'
-import { handleMessage, welcomeMenu, buildMsgMenu, extUserId, processKfBatch, heldStatus, resolveOpenid, type Incoming } from './dispatch'
+import { handleMessage, buildMsgMenu, extUserId, type Incoming } from './dispatch'
+import { processKfBatch } from './batch'
+import { welcomeMenu } from './menus'
+import { resolveOpenid } from './customer'
+import { heldStatus } from './session'
 import { archiveInbound, archiveOutbound } from './archive' // 会话归档（入站/出站落档）
 
 // 微信客服 in-chat 智能客服回调（HTTP 访问服务·类比 adminApi 的 /adminapi）。
@@ -23,7 +27,7 @@ import { archiveInbound, archiveOutbound } from './archive' // 会话归档（�
 const db = getDb()
 
 // 查订单·平台原生身份桥接（根因#3 不信前端·best-effort 不反噬消息处理）：顾客的 external_userid 经微信客服
-// `kf/customer/batchget` 反查 unionid → users 找 openid → 建 `ext→openid` 映射（dispatch.resolveOpenid 读它查订单）。
+// `kf/customer/batchget` 反查 unionid → users 找 openid → 建 `ext→openid` 映射（customer.resolveOpenid 读它查订单）。
 // **绕开客户联系 idconvert 的 48002 墙**（用微信客服自己的顾客接口·平台原生）。已建映射即跳（省 batchget）。
 // 两端配合：login 存 unionid，本处 batchget 建 kfIdentity。knownOpenid 是本条消息开头已读到的映射（'' = 未绑定）。
 async function ensureKfIdentity(db: any, token: string, euid: string, knownOpenid: string): Promise<void> {
@@ -77,7 +81,7 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
   const cur = await db.collection(COLLECTIONS.kfState).doc(cursorId).get().catch(() => null)
   if (cur && cur.data && typeof cur.data.cursor === 'string') cursor = cur.data.cursor
 
-  // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 dispatch）：进会话欢迎 / 文本分流
+  // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 batch.ts）：进会话欢迎 / 文本分流
   const handleOne = async (msg: any) => {
     const euid = extUserId(msg)
     // 本条消息的 kfIdentity 只读这一次：送审、入站/出站归档、分流（ctx.openid：查单/评分/有无近单）、身份桥接共用。

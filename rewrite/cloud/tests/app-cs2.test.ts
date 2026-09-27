@@ -2,22 +2,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
-import {
-  firstSeen,
-  processKfBatch,
-  recognize,
-  route,
-  parseRate,
-  heldStatus,
-  enqueueSession,
-  handleMessage,
-  recordCsat,
-  attachCsatNote,
-  summarizeOrders,
-  buildMsgMenu,
-  rootMenu,
-  type DispatchCtx,
-} from '../src/functions/cs/kfCallback/dispatch'
+import { route, handleMessage, buildMsgMenu, type DispatchCtx } from '../src/functions/cs/kfCallback/dispatch'
+import { firstSeen, processKfBatch } from '../src/functions/cs/kfCallback/batch'
+import { recognize, rootMenu } from '../src/functions/cs/kfCallback/menus'
+import { parseRate, recordCsat, attachCsatNote } from '../src/functions/cs/kfCallback/csat'
+import { heldStatus, enqueueSession } from '../src/functions/cs/kfCallback/session'
+import { summarizeOrders } from '../src/functions/cs/kfCallback/customer'
 import { archiveInbound, archiveOutbound, payloadText } from '../src/functions/cs/kfCallback/archive'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
 import { kfSignature, getDb } from '../src/kit'

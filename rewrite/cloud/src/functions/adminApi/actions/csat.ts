@@ -3,7 +3,7 @@ import { pageQuery, ok } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
 
 // 客服满意度报表（admin 侧·只读）：聚合 csat 集合出 均分 + 1-5 分布 + 总数 + 有备注数。
-// bounded（≤SCAN 条·样本近似·CSAT 量级远低于此·approx 标注）；越界分入库时已挡（kfCallback/dispatch.ts recordCsat），这里
+// bounded（≤SCAN 条·样本近似·CSAT 量级远低于此·approx 标注）；越界分入库时已挡（kfCallback/csat.ts recordCsat），这里
 // 再忽略一次防御。名以 get 起头：shouldAudit 跳 ^get（聚合无 PII·不留痕降噪）。
 const SCAN = 1000
 
@@ -30,7 +30,7 @@ export async function getCsatReport({ db }: Ctx) {
 const ENTRIES_DEFAULT_LIMIT = 20 // 明细分页默认页大小（同订单/售后体量·bounded·根因#7）
 
 // 满意度明细钻取（admin 侧·只读·cursor 分页）：供 Csat.vue 明细表 + 负评「查会话」跳转。
-// csat 集合结构性无 agentId（recordCsat 从未写入·见 cs/kfCallback/dispatch.ts）——本 action 不产出/暗示坐席维度，
+// csat 集合结构性无 agentId（recordCsat 从未写入·见 cs/kfCallback/csat.ts）——本 action 不产出/暗示坐席维度，
 // 纯按时间窗 + 评分上限钻取。明细行回 externalUserId 字段：recordCsat 落库前必校验 `if (!euid) return null`，
 // 故凡入库的 csat 记录一律带 externalUserId（现场核实·非猜测），可据此在 Conversations 页检索定位会话。
 //

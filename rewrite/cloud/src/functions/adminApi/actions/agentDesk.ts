@@ -41,7 +41,7 @@ const MAX_TEXT = 2000 // 坐席回复文本上限（防超长入库/发送）
 const DEFAULT_AGENT_LIMIT = 5 // 默认接待上限（agentState.limit 未配时）
 const CHANNEL = 'wxkf' // 出站归档 channel（与 kfCallback archiveOutbound 同口径·多渠道区分位）
 // 会话结束满意度提示（触 CSAT·契约 closeConversation「触评分气泡」）：结束时最佳努力发给顾客，
-// 顾客回复 1-5 由 cs/kfCallback dispatch recordCsat 归档——本处只发提示、不自己写 csat。
+// 顾客回复 1-5 由 cs/kfCallback/csat.ts recordCsat 归档——本处只发提示、不自己写 csat。
 const CSAT_PROMPT = '感谢你的咨询～这次服务还满意吗？回复 1-5 分帮我们改进（5 分最满意）🙏'
 
 // 认证主体（根因#3 不信前端）：agentId＝checkKey 解析的账号 _id（外包账号 adminConfig._id / 超管 'admin'），

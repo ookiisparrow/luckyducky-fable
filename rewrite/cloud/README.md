@@ -26,7 +26,7 @@ tests/         各域测试 + kit 原语 + 契约哨兵（contract-shape.test.ts
 - `anomaly.ts` 异常落库收集器（防静默失败）· `observe.ts` 告警统一出口（`[LD_ALERT]`）· `botpush.ts` 企微群机器人推送单一收口 · `audit.ts` 管理端操作审计留痕 · `inspect.ts` 巡检机原语
 - `inventory.ts` 成品库存原子原语（预留+乐观 CAS 防超卖）· `scmStock.ts` 原料账唯一读写口（幂等流水）
 - `flow.ts` 微信退款单号契约（`out_refund_no` 字符集转换·平台接缝）· `wxpay.ts` 微信支付商户接缝（签名/请求）· `reconcile.ts` 对账原语
-- `secureConfig.ts` 敏感凭证单源读取（DB 优先 env 兜底）· `contentsec.ts` 内容安全接缝 · `shipping.ts` 发货信息上传接缝 · `storage.ts` 云存储换 URL 收口 · `vod.ts` 视频点播封装 · `wecom.ts` 企业微信封装 + 客服发送/媒体下载高层助手（`kfSendText`/`kfFetchMedia`）· `csAccess.ts` 外包客服会话访问闸 · `index.ts` 桶导出
+- `secureConfig.ts` 敏感凭证单源读取（DB 优先 env 兜底）· `contentsec.ts` 内容安全接缝 · `shipping.ts` 发货信息上传接缝 · `storage.ts` 云存储换 URL 收口 · `vod.ts` 视频点播封装 · `wecom.ts` 企业微信封装 + 客服发送/媒体下载高层助手（`kfSendText`/`kfFetchMedia`）· `csAccess.ts` 外包客服会话访问闸 · `csTrialRefresh.ts` 客服测版会话刷新（kfCallback 与 adminApi 共用）· `index.ts` 桶导出
 
 ## 红区
 

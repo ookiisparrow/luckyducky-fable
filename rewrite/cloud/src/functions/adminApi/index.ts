@@ -1,6 +1,7 @@
 import cloud from 'wx-server-sdk'
-import { getDb, throttleRec, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert, err, type ThrottleRec } from '../../kit'
+import { getDb, throttleRec, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert, err, trialRefreshDenyStatus, type ThrottleRec } from '../../kit'
 import { COLLECTIONS, type ErrCode } from '@ldrw/shared'
+import REGISTRY from '../../../../../modules.json'
 import { reply, checkKey, issueSession, revokeSession, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
@@ -32,7 +33,6 @@ import * as ops from './actions/ops'
 import * as configChecklist from './actions/configChecklist'
 import * as secureConfig from './actions/secureConfig'
 import * as reviews from './actions/reviews'
-import { trialRefreshDenyStatus } from '../cs/kfCallback/trialRefresh'
 
 // 管理控制台后端（HTTP 访问服务触发·业务 action 全部挂在 ACTIONS/ACTION_CAPS）。
 // 鉴权：login 只认口令（首登 bootstrap 须部署密钥）签发会话令牌；其余 action 先认令牌、查无再比口令；RBAC 能力位默认拒；
@@ -196,21 +196,16 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = Object.assign(Object
 } satisfies Record<string, (ctx: Ctx) => Promise<any>>)
 
 // 顶层兜底按 action 归因：action 名不带文件名，故沿 ACTIONS 的真实 handler 引用反查所属 action 文件，
-// 再按模块归因。下表是 modules.json adminActionFiles 的镜像（云函数进不了 JSON）；未匹配的动态 action 回 unknown。
-const ADMIN_ACTION_MODULES: Record<string, Record<string, unknown>[]> = {
-  identity: [agents, wecomLogin],
-  shop: [products, content, cards],
-  orders: [ordersA, refunds, reconciliation, wxbill],
-  learning: [courses, batches],
-  cs: [agentDesk, checkpoints, conversations, csat, customer360, kb],
-  scm: [scmAssembly, scmBom, scmMaterials, scmOutwork, scmOverview, scmPlanner, scmPurchase, inventoryA],
-  ops: [ops, configChecklist, secureConfig, dashboard],
-  reviews: [reviews],
+// 再按仓根 modules.json 的 adminActionFiles 归到模块（esbuild 把 JSON 内联进产物）；未匹配的动态 action 回 unknown。
+const ACTION_FILES: Record<string, Record<string, unknown>> = {
+  agents, wecomLogin, products, content, cards, orders: ordersA, refunds, reconciliation, wxbill, courses, batches,
+  agentDesk, checkpoints, conversations, csat, customer360, kb, scmAssembly, scmBom, scmMaterials, scmOutwork,
+  scmOverview, scmPlanner, scmPurchase, inventory: inventoryA, ops, configChecklist, secureConfig, dashboard, reviews,
 }
 const ADMIN_ACTION_MODULE_BY_NAME: Record<string, string> = Object.create(null)
-for (const [mod, files] of Object.entries(ADMIN_ACTION_MODULES))
-  for (const file of files)
-    for (const [action, handler] of Object.entries(file))
+for (const [mod, spec] of Object.entries(REGISTRY.modules))
+  for (const file of spec.adminActionFiles)
+    for (const [action, handler] of Object.entries(ACTION_FILES[file] ?? {}))
       if (ACTIONS[action] === handler) ADMIN_ACTION_MODULE_BY_NAME[action] = mod
 
 // 能力闸（RBAC·别让单超管裸奔）：受限 action 须 principal 具备对应能力（'*'=全能力）。值可为单 cap 或

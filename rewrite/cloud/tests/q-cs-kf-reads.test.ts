@@ -6,7 +6,7 @@ import { control } from 'wx-server-sdk'
 import { COLLECTIONS } from '@ldrw/shared'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
 import { kfSignature, getDb } from '../src/kit'
-import { kfUserHasRecentOrder } from '../src/functions/cs/kfCallback/dispatch'
+import { kfUserHasRecentOrder } from '../src/functions/cs/kfCallback/customer'
 
 const AES = 'b'.repeat(43)
 const ENV_KEYS = ['WXKF_CORPID', 'WXKF_SECRET', 'WXKF_TOKEN', 'WXKF_AESKEY', 'JEV_CS_ROUTE', 'TYPESAFE_API_KEY', 'WX_ENV_VERSION', 'TCB_ENV_VERSION']

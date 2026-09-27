@@ -8,7 +8,7 @@
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
-import { alert } from '../../../kit'
+import { EMPTY_FLOW, alert, flowStateId } from '../../../kit'
 import {
   JEV_TOPICS,
   type JevEmotionStatus,
@@ -185,6 +185,7 @@ export function wantsHuman(text: string): boolean {
   return t.length <= 6 && t.includes('人工')
 }
 
+// 词表比 menus.ts KEYWORDS 的物流类窄（没有没到/到货/收货），两处判定口径不同，合成一份会改掉其中一边的命中
 function looksLogistics(text: string): boolean {
   return /物流|快递|发货|运单|单号/.test(String(text || ''))
 }
@@ -340,25 +341,7 @@ export function compressNeed(text: string): string {
 }
 
 export function emptyFlow(): JevFlowState {
-  return {
-    node: '',
-    topic: '',
-    orderStatus: '',
-    acting: '',
-    checkpoint: '',
-    greeted: false,
-    hesitated: false,
-    surprised: false,
-    photoAsked: false,
-    severitySaid: false,
-    restated: false,
-    promised: false,
-    solved: false,
-    humanAsks: 0,
-    used: [],
-    stitchText: '',
-    stitchAt: 0,
-  }
+  return { ...EMPTY_FLOW, used: [] }
 }
 
 /** 读库：只收状态机字段，丢掉 _id / 杂字段。 */
@@ -377,7 +360,10 @@ export function loadFlow(raw: unknown): JevFlowState {
   return next
 }
 
-/** 写库：显式字段，永不带 _id（真 sdk set data 含 _id 即拒）。 */
+/**
+ * 写库：显式字段，永不带 _id（真 sdk set data 含 _id 即拒）。
+ * 与 csPack.persistablePack 不等价：这里按 FLOW_KEYS 白名单挑字段、at 在最前；那边整对象展开、at 在最后。
+ */
 export function persistableFlow(state: JevFlowState): Record<string, unknown> {
   const out: Record<string, unknown> = { at: Date.now() }
   for (const k of FLOW_KEYS) out[k] = state[k]
@@ -511,7 +497,7 @@ export async function composeScriptReply(
   humanAsks: number
   pieces?: string[]
 } | null> {
-  const id = 'jevflow:' + euid
+  const id = flowStateId(euid)
   const got = await db
     .collection(COLLECTIONS.kfState)
     .doc(id)

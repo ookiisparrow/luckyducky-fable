@@ -5,6 +5,7 @@
  * 不现编、不改写。正式闸关路径不走这里。
  */
 import { parseMaxBubbles } from './bubbles'
+import { looksPackagingDamage } from './csPack'
 import ASSETS from './csAtomicAssets.generated.json'
 
 export const PACKAGING_WITH_ORDER_SHORT_ID = 'packaging_damage_priority_short'
@@ -84,7 +85,7 @@ export function listAtomicLib(lib: string): string[] {
 
 export function detectPackagingFacets(text: string, severity?: string): PackagingFacets {
   const t = String(text || '')
-  const packagingDamage = /包装|外箱|压烂|摔坏|破损|压坏|磕坏|摔烂/.test(t)
+  const packagingDamage = looksPackagingDamage(t)
   const logisticsSevere =
     (/物流|运输|快递/.test(t) && /严重|损坏|砸|压烂|摔坏|破损/.test(t)) || /理赔|索赔/.test(t)
   const negative = packagingDamage || /烦|差|烂|坏|气|无语|失望|破|糟|体验|摔|压/.test(t)
@@ -133,6 +134,7 @@ function stepApplies(step: AtomicStep, ctx: AtomicPlayCtx): boolean {
   return !step.when
 }
 
+// 与 scriptPool.pickLine 不等价：这里每步随机抽一条（或全取）、不记已用句、丢含「订单号」的句；pickLine 按 used 去重并避开上一句
 function stepBubbles(step: AtomicStep, rand: () => number): string[] {
   const stems = stemsOf(step)
   if (!stems.length) return []
@@ -173,6 +175,7 @@ function pickPhotoBubble(texts: string[]): string {
   return (auth && texts.find((t) => t === auth)) || texts[0] || ''
 }
 
+// 与 bubbles.sendBubbles 的截断不等价：这里按优先级并条、超顶从最低优先级丢；sendBubbles 只从头截前 N 条（包装破损气泡两道都过）
 function finalizeBubbles(items: Array<{ priority: number; text: string }>, max: number): string[] {
   const groups = groupByPriority(items)
   let bubbles: Array<{ priority: number; text: string }> = []

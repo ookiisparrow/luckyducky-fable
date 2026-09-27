@@ -1,7 +1,6 @@
 import type { Ctx } from '../lib'
-import { pageQuery, str, err, ok } from '../../../kit'
+import { pageQuery, str, err, ok, applyTrialRefresh, loadTrialRefreshGate } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { applyTrialRefresh, loadTrialRefreshGate } from '../../cs/kfCallback/trialRefresh'
 
 // 客服会话检索（外包管控底座）：坐席按客户（openid / externalUserId）+ 渠道筛选 →
 // cursor 翻页拉会话时间轴（归档单源 conversations·由 cs/kfCallback 落档）。供坐席查历史 + 质检取证。
@@ -180,7 +179,7 @@ export async function sampleQc({ db, data }: Ctx): Promise<any> {
     .get() // 读失败上抛（网关 500）——不当「候选池已抽完」（根因#14）
   const rows: any[] = (res && res.data) || []
   // qc/qcSampledAt 挂在可被重开复用的 csSession 文档上——顾客二次「找人工」时
-  // cs/kfCallback/dispatch.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt，
+  // cs/kfCallback/session.ts enqueueSession 的 closed→pending 重开分支已一并清空 qc/qcSampledAt，
   // 故这里按 !qc && !qcSampledAt 过滤即可筛出未评过的候选，不会漏收重开后的新一轮会话。
   const candidates = rows.filter((s: any) => !s.qc && !s.qcSampledAt)
   // Fisher-Yates 部分洗牌（池已有界·简单实现足够）
