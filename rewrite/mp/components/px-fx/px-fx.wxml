@@ -1,0 +1,2 @@
+<canvas type="2d" id="fx" class="fx"></canvas>
+<view wx:if="{{busy}}" class="fx-block" catch:touchstart="noop" catch:tap="noop"></view>

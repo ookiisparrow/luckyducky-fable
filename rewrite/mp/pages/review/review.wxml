@@ -12,7 +12,7 @@
     <text class="rv-q">这次体验怎么样？</text>
 
     <view class="rv-stars">
-      <view wx:for="{{starIdx}}" wx:key="*this" class="k k-light rv-star" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+      <view wx:for="{{starIdx}}" wx:key="*this" id="rv-star-{{item}}" class="k k-light rv-star" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
         data-n="{{item}}" bind:tap="onStar" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="star9" size="4" tone="{{rating >= item ? '#F4BD3F' : '#C9C9C2'}}" halo="none" />
       </view>
@@ -58,3 +58,6 @@
 
 <!-- 隐私授权弹窗（晒图走 wx.chooseMedia 属隐私接口·守卫 rw-mp-privacy-gated） -->
 <privacy-sheet />
+
+<!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

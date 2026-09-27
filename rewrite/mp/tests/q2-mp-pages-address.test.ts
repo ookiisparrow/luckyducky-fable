@@ -3,7 +3,7 @@
 // 地址簿 lib/address 用真的（wx 存储桩），只桩震感。Page 桩同 p-mp-order-page.test.ts（setData 补回调）。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn(), markKeyVibe: vi.fn() }))
+vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn(), keyHaptic: vi.fn() }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {

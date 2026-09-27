@@ -26,8 +26,17 @@ export function shouldTick(prevFrame: number, frame: number, sinceLastMs: number
 // 须短于最短的按住时长 600ms，按住删除/退出「成了」那一下确认震不能被吞）。
 export const KEY_VIBE_WINDOW_MS = 450
 let lastKeyVibe = 0
-export function markKeyVibe(): void {
+const vibe = (type: 'light' | 'medium' | 'heavy') => {
+  if (typeof wx !== 'undefined' && typeof wx.vibrateShort === 'function') wx.vibrateShort({ type })
+}
+/** 键按下那一震（lib/keyFx 调）：记下时间，让同一次点按里的 tapHaptic 不再叠震。 */
+export function keyHaptic(type: 'light' | 'medium'): void {
   lastKeyVibe = Date.now()
+  vibe(type)
+}
+/** 大撒花的「哒-哒-哒」三连（设计稿 navigator.vibrate([14,60,20,60,30])，间隔取事件震节流地板）。 */
+export function burstHaptic(): void {
+  for (let i = 0; i < 3; i++) setTimeout(() => vibe(i === 2 ? 'medium' : 'light'), i * VIBE_GAP_MS)
 }
 let lastTapVibe = 0
 export function tapHaptic(type: 'light' | 'medium' | 'heavy' = 'medium'): void {

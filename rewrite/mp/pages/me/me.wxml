@@ -110,3 +110,6 @@
 
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />
+
+<!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

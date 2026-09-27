@@ -48,7 +48,7 @@
 
     <!-- 「开始学习」：continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
     <view class="ct-cta-wrap">
-      <view class="k {{continueTarget ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="k ct-start {{continueTarget ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="play" />
         <text>{{resumeCta}}</text>
       </view>
@@ -83,3 +83,6 @@
     </view>
   </block>
 </view>
+
+<!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

@@ -16,6 +16,7 @@ import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxParty, fxTransit } from '../../lib/pxFx'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -170,17 +171,24 @@ Page({
       this.ping('商品信息获取失败，请稍后重试')
     }
   },
+  // 页尾「创造幸运」：撒花后进小棉鸭详情（设计稿 party·260ms 后跳）
   toProducts() {
     tapHaptic()
     const duck = pickDuckKit(this.data.products)
-    if (duck) {
-      wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id })
-      return
-    }
-    this.scrollTo('friends') // 货架上还没有小棉鸭套装：退回商品轨，不瞎跳旧 id
+    if (!duck) return this.scrollTo('friends') // 货架上还没有小棉鸭套装：退回商品轨，不瞎跳旧 id
+    void fxParty(this, '.hm-closing-btn')
+    setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }), 260)
+  },
+  // 顶部「购买」：黄色像素彩虹从键扩散铺满后进详情（设计稿 fxRainbow）
+  toProductsTop() {
+    tapHaptic()
+    const duck = pickDuckKit(this.data.products)
+    if (!duck) return this.scrollTo('friends')
+    void fxTransit(this, 'rainbow', '.hm-buy', () => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }))
   },
   toIntro() {
-    this.scrollTo('intro') // 搜索胶囊滚到品牌介绍（设计 scrollToIntro）
+    void fxParty(this, '.hm-search')
+    setTimeout(() => this.scrollTo('intro'), 260) // 搜索胶囊撒花后滚到品牌介绍（设计 a_toIntro）
   },
   backTop() {
     this.scrollTo('top')

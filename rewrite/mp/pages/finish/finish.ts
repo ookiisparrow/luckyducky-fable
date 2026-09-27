@@ -4,6 +4,7 @@ import { getCourseById } from '../../lib/courses'
 import { mapFinish } from '../../lib/mapLearning'
 import { tapHaptic } from '../../lib/haptics'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxParty } from '../../lib/pxFx'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -12,6 +13,9 @@ Page({
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome 范式）
   onUnload() {
     this.unloaded = true
+  },
+  onReady() {
+    setTimeout(() => void fxParty(this, '.fn-egg', true), 700) // 小鸭孵出来那一下整屏大撒花（设计稿 party big）
   },
   async onLoad(query: Record<string, string | undefined>) {
     const courseId = String(query.courseId || '')

@@ -6,7 +6,7 @@
 // 音：设计稿 Web Audio 合成原样移植（衰减噪声 → 带通「咔嗒」；墨黑/暗色键按下再叠 170→80Hz 低频「咚」）；
 //   行/卡片只震不响。音频接口不支持或出错一律静默（手感是加分项，不能拖垮点按）。
 // ponytail: 真机静音键下是否仍出声、是否打断后台音乐未实测——setInnerAudioOption 已设混音+遵从静音键，真机走查确认。
-import { markKeyVibe } from './haptics'
+import { keyHaptic } from './haptics'
 
 type Kind = 'ink' | 'light' | 'flat' | 'dk' | 'inv' | 'row' | 'card'
 const HEAVY: Kind[] = ['ink', 'dk', 'inv']
@@ -103,8 +103,7 @@ const kindOf = (e: WechatMiniprogram.TouchEvent): Kind | null => {
 /** 按下：轻震（墨黑/反相主键 medium，其余 light）+ 咔嗒。按住类键的开始处理器直接调这个。 */
 export function keyPress(kind: Kind | null): void {
   if (!kind) return
-  markKeyVibe() // 让同一次点按里处理器再调 tapHaptic 不叠第二下震
-  if (typeof wx !== 'undefined' && typeof wx.vibrateShort === 'function') wx.vibrateShort({ type: kind === 'ink' || kind === 'inv' ? 'medium' : 'light' })
+  keyHaptic(kind === 'ink' || kind === 'inv' ? 'medium' : 'light') // 同一次点按里处理器再调 tapHaptic 不叠第二下震
   click(kind, true)
 }
 

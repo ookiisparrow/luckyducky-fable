@@ -3,6 +3,7 @@
 import { tapHaptic } from '../../lib/haptics'
 import { submitReview } from '../../api/reviews'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxParty } from '../../lib/pxFx'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 预设标签
 const REV_LABEL = ['点星评分', '很差', '较差', '一般', '满意', '超赞'] // 星级文案随 v5 稿 B3（STAR_L）
@@ -45,6 +46,7 @@ Page({
   },
   onStar(e: WechatMiniprogram.TouchEvent) {
     const rating = Number(e.currentTarget.dataset.n)
+    if (rating >= 4 && rating > this.data.rating) void fxParty(this, '#rv-star-' + rating, false, 40) // 好评撒一小把（设计稿）
     this.setData({ rating, ratingLabel: REV_LABEL[rating] || REV_LABEL[0] })
   },
   onTag(e: WechatMiniprogram.TouchEvent) {

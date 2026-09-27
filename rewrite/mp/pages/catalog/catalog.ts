@@ -11,6 +11,7 @@ import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer } from '../../lib/mapPages'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxTransit } from '../../lib/pxFx'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -110,7 +111,8 @@ Page({
     tapHaptic()
     // 续播到秒（数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段起播·不拼）；点课时行（onTapLesson）不带 t＝从头。
     const at = t.resumeAt > 0 ? '&t=' + t.resumeAt : ''
-    wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId + at })
+    const url = '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId + at
+    void fxTransit(this, 'dither', '.ct-start', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
   },
   // 课时行点击：firstPlayableSegId 非空跳该段；空＝本课时无可播视频（半上线），诚实提示。
   onTapLesson(e: WechatMiniprogram.TouchEvent) {
