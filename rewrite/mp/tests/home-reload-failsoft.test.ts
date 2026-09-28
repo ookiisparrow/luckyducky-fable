@@ -73,3 +73,36 @@ describe('home.reload() 商品强刷失败 fail-soft（G1）', () => {
     expect(page.data.loadFailed).toBe(false)
   })
 })
+
+// 下拉刷新换成设计稿的像素加载器（老板真机反馈：原生三个灰点与设计稿不一致）：下拉距离按加载器 8 格量化点亮，
+// 满 64px＝松手刷新；刷新拉到商品才弹「已是最新」✓，拉失败不报喜。
+describe('首页下拉刷新（像素加载器）', () => {
+  it('大白话：下拉距离每 8px 多点亮一格，64px 点满；同一格内来回拉不重复刷界面', async () => {
+    const page = await mount()
+    const spy = vi.spyOn(page, 'setData')
+    page.onPulling({ detail: { dy: 30 } })
+    expect(page.data.pullP).toBe(3 / 8)
+    page.onPulling({ detail: { dy: 31 } })
+    expect(spy).toHaveBeenCalledTimes(1)
+    page.onPulling({ detail: { dy: 200 } })
+    expect(page.data.pullP).toBe(1)
+  })
+
+  it('大白话：刷新拉到商品——收起加载器、弹「已是最新」；拉失败——照样收起，但不报喜', async () => {
+    const toast = vi.fn()
+    ;(globalThis as any).wx.showToast = toast
+    getAllMock.mockResolvedValueOnce(RAW)
+    const page = await mount()
+    page.data.pullP = 1
+    await page.onRefresher()
+    expect(page.data.refreshing).toBe(false)
+    expect(page.data.pullP).toBe(0)
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: '已是最新' }))
+
+    toast.mockClear()
+    getAllMock.mockResolvedValueOnce(null)
+    await page.onRefresher()
+    expect(page.data.refreshing).toBe(false)
+    expect(toast).not.toHaveBeenCalled()
+  })
+})

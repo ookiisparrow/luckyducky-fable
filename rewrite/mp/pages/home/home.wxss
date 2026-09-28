@@ -193,23 +193,38 @@ page {
   color: var(--v5-violet-text);
 }
 
+/* 下拉刷新区（设计稿物流页：高 64、居中、加载器 + 13px 细字 #62625c） */
+.hm-ptr {
+  width: 100vw; /* refresher 插槽按内容定宽（工具实测 103px），不撑满就不居中 */
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.hm-ptr-t {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+
 /* ③ 商品横滑 */
 .hm-rail {
   margin-top: 12px;
-  padding: 1px 0 4px;
-  white-space: nowrap;
+}
+/* 横排层（设计稿 data-scroll="rail"：flex + gap + padding 1px 16px 4px）。余量不能写在 scroll-view 上——
+   安卓真机 scroll-view 的 padding 不生效，卡片 1px 外描边顶边被裁（老板真机截图）；flex 同排默认拉齐＝卡片等高。 */
+.hm-rail-row {
+  display: flex;
+  gap: 16px;
+  width: max-content;
+  padding: 1px 16px 4px;
 }
 .hm-card {
-  display: inline-flex;
+  flex: 0 0 148px;
+  display: flex;
   flex-direction: column;
   gap: 12px;
-  vertical-align: top;
-  width: 148px;
-  margin-left: 16px;
-  white-space: normal;
-}
-.hm-card:last-child {
-  margin-right: 16px;
 }
 .hm-card-media {
   position: relative;
@@ -337,23 +352,17 @@ page {
 .hm-rail-reviews {
   margin-top: 16px;
 }
+.hm-rail-reviews .hm-rail-row {
+  gap: 12px;
+}
 .hm-rv {
-  display: inline-flex;
+  flex: 0 0 200px;
+  display: flex;
   flex-direction: column;
-  vertical-align: top;
-  width: 200px;
-  margin-left: 12px;
-  white-space: normal;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 0 0 1px var(--v5-hair);
   overflow: hidden;
-}
-.hm-rv:first-child {
-  margin-left: 16px;
-}
-.hm-rv:last-child {
-  margin-right: 16px;
 }
 .hm-rv-media {
   aspect-ratio: 3 / 4;
@@ -467,37 +476,33 @@ page {
 .hm-closing-cta {
   position: relative;
 }
-/* 墨黑键上的紫光（设计定稿「按键闪光样稿 1a·三道斜像素光」）：深紫·紫·浅紫三条斜杠，
-   每 3.6s 逐格（steps 28）跳着扫过一次，首轮延迟 1.2s；底部让出 3px 键座不压。 */
+/* 像素光泽（v5 定稿 sheenEl）：紫棋盘 32 · 浅紫实色 16 · 深紫棋盘 32，不斜、无缝，steps(22) 一格一格扫过；
+   上 4 下 7 让出键座。棋盘＝conic-gradient 8px 平铺（4px 一格）。 */
 .hm-sheen {
   position: absolute;
-  top: 0;
-  bottom: 3px;
+  top: 4px;
+  bottom: 7px;
   left: 0;
   display: flex;
-  gap: 4px;
   transform: translateX(-120px);
-  animation: hm-sheen 3.6s steps(28) 1.2s infinite;
+  animation: hm-sheen 3.6s steps(22) 1.2s infinite;
   pointer-events: none;
 }
-.hm-sheen-a,
-.hm-sheen-b,
-.hm-sheen-c {
-  transform: skewX(-18deg);
-}
 .hm-sheen-a {
-  width: 8px;
-  background: #6b3fc4;
-  opacity: 0.55;
+  width: 32px;
+  background-image: conic-gradient(#8a5ae0 25%, transparent 0 50%, #8a5ae0 0 75%, transparent 0);
+  background-size: 8px 8px;
+  opacity: 0.9;
 }
 .hm-sheen-b {
   width: 16px;
-  background: #8a5ae0;
+  background: #b79cf0;
   opacity: 0.85;
 }
 .hm-sheen-c {
-  width: 8px;
-  background: #b79cf0;
+  width: 32px;
+  background-image: conic-gradient(#6b3fc4 25%, transparent 0 50%, #6b3fc4 0 75%, transparent 0);
+  background-size: 8px 8px;
   opacity: 0.7;
 }
 @keyframes hm-sheen {

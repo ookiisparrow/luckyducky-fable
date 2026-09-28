@@ -16,7 +16,7 @@ import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxParty, fxTransit } from '../../lib/pxFx'
+import { fxParty, fxToast, fxTransit } from '../../lib/pxFx'
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -44,6 +44,7 @@ Page({
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
     // 以下三项随「整页套 scroll-view」而来（page-container 武装态冻结页面级滚动·见 utils/exitGuard）：
     refreshing: false, // <scroll-view refresher-triggered>：接管原页面级下拉刷新
+    pullP: 0, // 下拉进度 0–1（按加载器 8 格量化·满 64px＝1＝松手刷新）
     scrollInto: '', // <scroll-view scroll-into-view>：接管原 wx.pageScrollTo({selector}) 锚点跳转
     scrollAnim: true, // 本次 scroll-into-view 是否带动画（意图回顶要瞬时·点击跳转要平滑）
   },
@@ -90,13 +91,20 @@ Page({
   /** <scroll-view bindrefresherrefresh>：接管原 onPullDownRefresh（页面级下拉在 page-container 的 fixed 下失效）。 */
   async onRefresher() {
     this.setData({ refreshing: true })
+    let ok = false
     try {
-      await this.reload()
+      ok = await this.reload()
     } finally {
       // 收起下拉圈（等价原 wx.stopPullDownRefresh）。必须 finally——reload 抛异常时若漏收，
       // 下拉圈永远转下去且再也刷不动，且只有真机看得见（根因#8）。
-      this.setData({ refreshing: false })
+      this.setData({ refreshing: false, pullP: 0 })
     }
+    if (ok) fxToast(this, '已是最新') // 设计稿：刷新完像素 ✓ 轻提示；失败不报喜（失败态/快照垫底照旧）
+  },
+  /** <scroll-view bindrefresherpulling>：下拉距离 → 加载器点亮格数（8 格量化，格数变了才 setData）。 */
+  onPulling(e: WechatMiniprogram.CustomEvent<{ dy: number }>) {
+    const p = Math.min(8, Math.floor(Math.max(0, e.detail.dy) / 8)) / 8
+    if (p !== this.data.pullP) this.setData({ pullP: p })
   },
   /** <scroll-view bindscroll>：接管原 onPageScroll（阈值逻辑不变·仍只在跨阈值时 setData）。 */
   onScroll(e: WechatMiniprogram.ScrollViewScroll) {
@@ -115,12 +123,13 @@ Page({
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onLoad + 下拉刷新可能并发触发·丢弃被更晚 reload 取代的过期回包
   _hadSnapshot: false, // onLoad 是否已用首屏快照渲染过（SWR）：为 true 时网络失败不整页翻失败态（已有真内容垫着）
-  async reload() {
+  /** 拉最新首页内容与商品；返回商品是否拉到（下拉刷新据此决定报不报「已是最新」）。 */
+  async reload(): Promise<boolean> {
     const seq = ++this._seq
     // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）；
     // 兼任 SWR revalidate——onLoad 若已用快照渲染过（stale），这趟拉最新数据覆盖（fresh），陈旧即悄悄换新。
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
-    if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
+    if (seq !== this._seq) return false // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
     // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动：
     // 无条件 mapProducts(null)⇒[] 会把已有非空商品轨清成空，误导「上新在路上」空态。
@@ -137,6 +146,7 @@ Page({
     if (nextProducts !== null && JSON.stringify(nextProducts) !== JSON.stringify(this.data.products)) patch.products = nextProducts
     this.setData(patch)
     writeSnapshot(products, content.ok ? content.home : null) // 回写快照供下次冷启动首帧即真实内容（products=null 只写 home 半边）
+    return products !== null
   },
   toggleFaq(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.index)

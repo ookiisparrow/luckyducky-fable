@@ -9,8 +9,16 @@
 </view>
 <scroll-view class="hm-scroll" style="top: {{statusBarHeight + 44}}px" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}"
   refresher-enabled="{{true}}" refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresher"
+  refresher-default-style="none" refresher-threshold="{{64}}" bindrefresherpulling="onPulling"
   refresher-background="#fafaf8" scroll-into-view="{{scrollInto}}" scroll-with-animation="{{scrollAnim}}"
   bindscroll="onScroll">
+
+  <!-- 下拉刷新（设计稿物流页 lg.pull）：像素加载器随下拉逐格点亮，松手后转圈；文字 下拉刷新 → 松手刷新 → 正在刷新 -->
+  <view slot="refresher" class="hm-ptr">
+    <px-anim wx:if="{{refreshing}}" name="loader" size="2" />
+    <px-anim wx:else name="loader" size="3" p="{{pullP}}" />
+    <text class="t-sys hm-ptr-t">{{refreshing ? '正在刷新' : pullP >= 1 ? '松手刷新' : '下拉刷新'}}</text>
+  </view>
 
   <!-- 回顶锚点（scroll-into-view 目标·零高度不占版式） -->
   <view id="top"></view>
@@ -56,26 +64,30 @@
     <text class="t-sys hm-sub">{{content.feature.body}}</text>
   </view>
   <scroll-view wx:if="{{products.length}}" class="hm-rail" scroll-x enhanced show-scrollbar="{{false}}">
-    <view class="hm-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
-      <view class="hm-card-media">
-        <image wx:if="{{item.cover}}" class="hm-card-img" src="{{item.cover}}" mode="aspectFill" />
-      </view>
-      <view class="hm-card-info">
-        <text class="hm-card-name">{{item.name}}</text>
-        <view class="hm-card-foot">
-          <text class="mono hm-price">{{item.priceLabel}}</text>
-          <view class="hm-add-hit" catch:tap="onAddProduct" data-id="{{item.id}}">
-            <view class="k k-sm k-light hm-add" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
+    <view class="hm-rail-row">
+      <view class="hm-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
+        <view class="hm-card-media">
+          <image wx:if="{{item.cover}}" class="hm-card-img" src="{{item.cover}}" mode="aspectFill" />
+        </view>
+        <view class="hm-card-info">
+          <text class="hm-card-name">{{item.name}}</text>
+          <view class="hm-card-foot">
+            <text class="mono hm-price">{{item.priceLabel}}</text>
+            <view class="hm-add-hit" catch:tap="onAddProduct" data-id="{{item.id}}">
+              <view class="k k-sm k-light hm-add" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
+            </view>
           </view>
         </view>
       </view>
     </view>
   </scroll-view>
   <view wx:elif="{{loading}}" class="hm-rail hm-rail-skel">
-    <view class="hm-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="hm-card-media skel"></view>
-      <view class="hm-skel-line skel"></view>
-      <view class="hm-skel-line short skel"></view>
+    <view class="hm-rail-row">
+      <view class="hm-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+        <view class="hm-card-media skel"></view>
+        <view class="hm-skel-line skel"></view>
+        <view class="hm-skel-line short skel"></view>
+      </view>
     </view>
   </view>
   <view wx:else class="t-sys hm-empty">{{loadFailed ? '货架暂时没连上云端，下拉重试' : '上新在路上，先逛逛别处吧'}}</view>
@@ -109,18 +121,20 @@
   <!-- ⑥ 真实买家秀 -->
   <view class="hm-sec"><text class="hm-h2">{{content.reviews.heading}}</text></view>
   <scroll-view class="hm-rail hm-rail-reviews" scroll-x enhanced show-scrollbar="{{false}}">
-    <view class="hm-rv" wx:for="{{content.reviews.items}}" wx:key="user">
-      <view class="hm-rv-media">
-        <image wx:if="{{item.img}}" class="hm-card-img" src="{{item.img}}" mode="aspectFill" />
-      </view>
-      <view class="hm-rv-body">
-        <view class="hm-stars"><px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:key="*this" wx:for-item="s" name="star5" /></view>
-        <text class="t-sys hm-rv-quote">{{item.quote}}</text>
-        <view class="hm-rv-meta">
-          <text class="t-sys hm-rv-user">{{item.user}}</text>
-          <view class="t-sys hm-verified">
-            <px-i name="led" tone="#3f9a5e" />
-            <text>已验证买家</text>
+    <view class="hm-rail-row">
+      <view class="hm-rv" wx:for="{{content.reviews.items}}" wx:key="user">
+        <view class="hm-rv-media">
+          <image wx:if="{{item.img}}" class="hm-card-img" src="{{item.img}}" mode="aspectFill" />
+        </view>
+        <view class="hm-rv-body">
+          <view class="hm-stars"><px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:key="*this" wx:for-item="s" name="star5" /></view>
+          <text class="t-sys hm-rv-quote">{{item.quote}}</text>
+          <view class="hm-rv-meta">
+            <text class="t-sys hm-rv-user">{{item.user}}</text>
+            <view class="t-sys hm-verified">
+              <px-i name="led" tone="#3f9a5e" />
+              <text>已验证买家</text>
+            </view>
           </view>
         </view>
       </view>
@@ -140,7 +154,7 @@
     </view>
   </view>
 
-  <!-- ⑧ 收尾：大图 + 大字 + 墨黑键（每 3.6s 三道斜像素紫光扫过·设计定稿「按键闪光样稿 1a」） -->
+  <!-- ⑧ 收尾：大图 + 大字 + 墨黑键（每 3.6s 一道像素紫光扫过·v5 定稿 sheenEl） -->
   <view class="hm-closing">
     <view class="hm-closing-media">
       <image wx:if="{{content.closing.img}}" class="hm-hero-img" src="{{content.closing.img}}" mode="aspectFill" lazy-load />
