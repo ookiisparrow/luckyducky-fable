@@ -6,6 +6,10 @@ const ROOT = process.cwd()
 const SRC = readFileSync(join(ROOT, 'console-assets/forward-node.js'), 'utf8')
 const MD = readFileSync(join(ROOT, 'console-assets/01-支付退款工作流.md'), 'utf8')
 
+// 按云开发工作流「运行 JS 脚本」节点的真实执行方式装载：脚本体直接跑（顶层 await / return），上游节点输出以
+// 全局变量注入（wepayTrigger），环境里没有 exports / module——写成云函数形状 exports.main 会当场
+// 「exports is not defined」（2026-09-28 真事故：refundnotify 这样写，退款成功通知从未转到 refundCallback）。
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 function loadScript(js) {
   const calls = []
   let rejectNext = null
@@ -20,19 +24,17 @@ function loadScript(js) {
           throw err
         }
         calls.push(arg)
-        return { result: {} }
+        return { result: { errcode: 0, errmsg: 'OK' } }
       },
     }),
   }
-  const exports = {}
   const require = (name) => {
     if (name === '@cloudbase/node-sdk') return cloudbase
     throw new Error('unexpected require ' + name)
   }
-  const fn = new Function('require', 'exports', 'module', js)
-  fn(require, exports, { exports })
+  const fn = new AsyncFunction('require', 'wepayTrigger', js)
   return {
-    main: exports.main,
+    main: (event) => fn(require, event ? event.wepayTrigger : undefined),
     calls,
     failNext(err) {
       rejectNext = err
@@ -43,10 +45,12 @@ function loadScript(js) {
 function uncommentRefundCopy(src) {
   const start = src.indexOf('// ===== refundnotify')
   if (start < 0) throw new Error('refundnotify copy missing')
-  const lines = src
-    .slice(start)
+  // 说明块与代码之间隔一行空注释 `//`：只取它之后的代码行
+  const body = src.slice(start).split('\n//\n')[1]
+  if (!body) throw new Error('refundnotify copy body missing')
+  const lines = body
     .split('\n')
-    .filter((l) => l.startsWith('// ') && !l.startsWith('// =====') && !l.startsWith('// （'))
+    .filter((l) => l.startsWith('// '))
     .map((l) => l.slice(3))
   return lines.join('\n')
 }
@@ -54,6 +58,20 @@ function uncommentRefundCopy(src) {
 function fences(md) {
   return [...md.matchAll(/```js\n([\s\S]*?)```/g)].map((m) => m[1].trim())
 }
+
+describe('forward-node 按工作流脚本节点的真实环境能跑', () => {
+  it('两段转发代码都不许用 exports / module（节点里没有，写了就 exports is not defined、通知永远转不出去）', () => {
+    const code = (js) => js.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*\/\/(?! )/.test(l)).join('\n')
+    const live = SRC.slice(SRC.indexOf('const cloudbase = require')).split('\n// ===== refundnotify')[0]
+    for (const js of [live, uncommentRefundCopy(SRC)]) expect(code(js)).not.toMatch(/\bexports\b|\bmodule\./)
+  })
+
+  it('没有上游输出（wepayTrigger 缺失）也不崩，照常转发空数据', async () => {
+    const { main, calls } = loadScript(SRC)
+    await main({})
+    expect(calls).toHaveLength(1)
+  })
+})
 
 describe('forward-node paynotify：merge + alias + FunctionName', () => {
   it('把 OUTER out_trade_no 与 resource camelCase 合成 snake_case，三键齐写 payCallback', async () => {
@@ -66,7 +84,7 @@ describe('forward-node paynotify：merge + alias + FunctionName', () => {
         },
       },
     })
-    expect(ack).toEqual({ errcode: 0, errmsg: 'OK' })
+    expect(ack).toEqual({ errcode: 0, errmsg: 'OK' }) // 回的是业务云函数的答复（payCallback ACK）
     expect(calls).toHaveLength(1)
     expect(calls[0].name).toBe('payCallback')
     expect(calls[0].functionName).toBe('payCallback')
