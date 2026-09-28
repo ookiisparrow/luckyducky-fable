@@ -21,7 +21,7 @@
     </view>
     <view class="me-id-t">
       <text class="t-sys me-nick">{{nickname}}</text>
-      <text wx:if="{{!loggedIn}}" class="me-id-sub">登录后同步订单与学习进度</text>
+      <text wx:if="{{!loggedIn}}" class="t-sys me-id-sub">登录后同步订单与学习进度</text>
     </view>
     <view wx:if="{{loggedIn}}" class="k k-sm k-flat me-mini me-mini-weak" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onEditProfile" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">编辑</view>
     <view wx:else class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLoginTap" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">登录</view>
@@ -31,7 +31,7 @@
   <view wx:if="{{cont}}" class="me-card" hover-start-time="20" hover-class="k-row-down" bind:tap="onContinue">
     <view class="me-thumb"></view>
     <view class="me-card-t">
-      <text class="me-card-sub">{{cont.courseTitle}}</text>
+      <text class="t-sys me-card-sub">{{cont.courseTitle}}</text>
       <text class="me-card-main">{{cont.lessonName}}</text>
     </view>
     <view class="k k-ink me-play"><px-i name="play" /></view>
@@ -60,19 +60,19 @@
         <text class="me-cell-n {{counts.pending && counts.pending !== '0' ? '' : 'me-cell-zero'}}">{{counts.pending || '-'}}</text>
         <px-i wx:if="{{counts.pending && counts.pending !== '0'}}" name="led" tone="#8a5ae0" />
       </view>
-      <text class="me-cell-l">待支付</text>
+      <text class="t-sys me-cell-l">待支付</text>
     </view>
     <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top"><text class="me-cell-n {{counts.paid && counts.paid !== '0' ? '' : 'me-cell-zero'}}">{{counts.paid || '-'}}</text></view>
-      <text class="me-cell-l">待发货</text>
+      <text class="t-sys me-cell-l">待发货</text>
     </view>
     <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top"><text class="me-cell-n {{counts.shipped && counts.shipped !== '0' ? '' : 'me-cell-zero'}}">{{counts.shipped || '-'}}</text></view>
-      <text class="me-cell-l">待收货</text>
+      <text class="t-sys me-cell-l">待收货</text>
     </view>
     <view wx:if="{{entries.orders.visible}}" class="k k-flat me-cell" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top me-cell-arrow"><px-i name="arrow" /></view>
-      <text class="me-cell-l">{{entries.orders.label}}</text>
+      <text class="t-sys me-cell-l">{{entries.orders.label}}</text>
     </view>
   </view>
 

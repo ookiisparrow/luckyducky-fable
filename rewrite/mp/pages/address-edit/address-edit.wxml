@@ -5,31 +5,31 @@
 
 <view class="ae">
   <view class="ae-field">
-    <text class="ae-label">收货人</text>
+    <text class="t-sys ae-label">收货人</text>
     <input class="well ae-input" value="{{name}}" data-field="name" bind:input="onInput" maxlength="40"
       placeholder="姓名" placeholder-class="ae-ph" />
   </view>
   <view class="ae-field">
-    <text class="ae-label">手机号</text>
+    <text class="t-sys ae-label">手机号</text>
     <input class="well ae-input ae-mono {{phoneErr ? 'ae-warn' : ''}}" value="{{phone}}" data-field="phone" bind:input="onInput"
       type="number" maxlength="20" placeholder="11 位手机号" placeholder-class="ae-ph" />
-    <view wx:if="{{phoneErr}}" class="ae-err">
+    <view wx:if="{{phoneErr}}" class="t-sys ae-err">
       <px-anim name="alert" size="2" hold="400" />
       <text>{{phoneErr}}</text>
     </view>
   </view>
   <view class="ae-field">
-    <text class="ae-label">所在地区</text>
+    <text class="t-sys ae-label">所在地区</text>
     <picker mode="region" value="{{regionArr}}" bind:change="onRegionChange">
       <view class="well ae-region">
         <text class="ae-region-t {{region ? '' : 'ae-ph'}}">{{region || '省 / 市 / 区'}}</text>
-        <text class="ae-pick">选择</text>
+        <text class="t-sys ae-pick">选择</text>
         <px-i name="arrow" tone="#62625c" />
       </view>
     </picker>
   </view>
   <view class="ae-field">
-    <text class="ae-label">详细地址</text>
+    <text class="t-sys ae-label">详细地址</text>
     <input class="well ae-input" value="{{detail}}" data-field="detail" bind:input="onInput" maxlength="120"
       placeholder="街道、门牌号" placeholder-class="ae-ph" />
   </view>

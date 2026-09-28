@@ -3,6 +3,6 @@
     <view wx:if="{{back}}" class="nv-hit" bind:tap="onBack">
       <view class="k k-sm k-light nv-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
     </view>
-    <text wx:if="{{title}}" class="nv-title">{{title}}</text>
+    <text wx:if="{{title}}" class="t-sys nv-title">{{title}}</text>
   </view>
 </view>

@@ -1501,7 +1501,7 @@ export const repoChecks = [
     // ② 推导两层并集 ⊆ 两个 txt 并集——任何圆体上屏字必有层，不许静默无家。
     // 口径（v5·老板 2026-09-28 拍板并授权改本守卫）：只盯真用圆体显示的字；正文长段/用户内容走黑体 .t-sys 不在
     // 盯防范围，不设 GB2312 兜底层。
-    // 红了怎么修：BRAND_FONT_SRC=<源OTF目录> node scripts/build-brand-font.mjs 重建（txt 与 8 个 woff
+    // 红了怎么修：BRAND_FONT_SRC=<源OTF目录> node scripts/build-brand-font.mjs 重建（txt 与全部 woff
     // 一起换，脚本不允许只改 txt 不建 woff），提交产物并把 woff 重新部署到托管 /fonts/（README 部署节）。
     id: 'rw-mp-font-tier-subset-covers',
     roots: ['#8'],

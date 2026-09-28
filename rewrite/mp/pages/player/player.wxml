@@ -17,7 +17,7 @@
       <view class="lp-back" bind:tap="onBack">
         <view class="k k-sm k-dk lp-back-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
       </view>
-      <text class="lp-nav-cap">{{strip ? strip.lessonNo + ' · ' + strip.lessonName : (title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习')))}}</text>
+      <text class="t-sys lp-nav-cap">{{strip ? strip.lessonNo + ' · ' + strip.lessonName : (title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习')))}}</text>
     </view>
   </view>
 
@@ -44,15 +44,15 @@
       ></video>
       <view wx:else class="lp-video lp-skeleton">
         <px-anim name="loader" size="2" dark />
-        <text class="lp-skeleton-text">正在加载首帧…</text>
+        <text class="t-sys lp-skeleton-text">正在加载首帧…</text>
       </view>
 
       <!-- 全屏单击播放/暂停（透明点击层·paused 以 bind:play/bind:pause 回报为准）；暂停大圆/缓冲角标是它的子节点，点它们冒泡到 tapzone。 -->
       <view wx:if="{{src && !segDone}}" class="lp-tapzone" bind:tap="onTapVideo">
-        <view wx:if="{{state === 'playing' && !hintDismissed}}" class="lp-tap-hint">单击画面 播放 / 暂停</view>
+        <view wx:if="{{state === 'playing' && !hintDismissed}}" class="t-sys lp-tap-hint">单击画面 播放 / 暂停</view>
         <view wx:if="{{paused}}" class="lp-pause-badge"><px-i name="playL" tone="#f2f2ec" /></view>
         <!-- 缓冲失速角标·见 ts onVideoWaiting -->
-        <view wx:if="{{buffering && !paused}}" class="lp-buffering">
+        <view wx:if="{{buffering && !paused}}" class="t-sys lp-buffering">
           <px-anim name="loader" size="2" dark />
           <text>正在缓冲…</text>
         </view>
@@ -110,7 +110,7 @@
       <!-- 拖动浮层（常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控）；命中关键动作节点再叠黄气泡 -->
       <view class="lp-seek-preview">
         <view class="lp-seek-preview-time mono">{{curClock}}</view>
-        <view wx:if="{{snapName}}" class="lp-seek-preview-bubble">关键动作 · {{snapName}}</view>
+        <view wx:if="{{snapName}}" class="t-sys lp-seek-preview-bubble">关键动作 · {{snapName}}</view>
       </view>
       <view class="lp-seek-track"></view>
       <!-- 缓冲水位（bind:progress 尽力而为·换段清零 bufferPct·WXS 不碰） -->
@@ -123,7 +123,7 @@
 
     <view class="lp-info">
       <view class="lp-info-l">
-        <text class="lp-seg-no">{{strip ? '段落 ' + strip.segIndex + ' / ' + strip.segTotal : ''}}</text>
+        <text class="t-sys lp-seg-no">{{strip ? '段落 ' + strip.segIndex + ' / ' + strip.segTotal : ''}}</text>
         <text class="lp-seg-title">{{current ? current.segName : ''}}</text>
       </view>
       <text class="lp-time mono {{seeking ? 'on' : ''}}">{{curClock}} / {{durClock}}</text>
@@ -144,7 +144,7 @@
       <view class="lp-done-segs">
         <view class="lp-done-seg {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
       </view>
-      <text class="lp-done-cap">{{capText}}</text>
+      <text class="t-sys lp-done-cap">{{capText}}</text>
       <text class="lp-done-title">这一节学完了</text>
     </view>
     <view class="lp-done-keys">
@@ -173,14 +173,14 @@
         <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideos" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
           <view class="lp-help-card-tx">
             <text class="lp-help-card-title">{{help.videosTitle}}</text>
-            <text class="lp-help-card-sub">小段讲解都在这里</text>
+            <text class="t-sys lp-help-card-sub">小段讲解都在这里</text>
           </view>
           <px-i name="chev" tone="#62625c" />
         </view>
         <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpFaq" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
           <view class="lp-help-card-tx">
             <text class="lp-help-card-title">{{help.faqTitle}}</text>
-            <text class="lp-help-card-sub">高频问题都在这里</text>
+            <text class="t-sys lp-help-card-sub">高频问题都在这里</text>
           </view>
           <px-i name="chev" tone="#62625c" />
         </view>
@@ -194,7 +194,7 @@
         </view>
         <scroll-view wx:else class="lp-help-scroll" scroll-y>
           <block wx:if="{{helpVideosState === 'ok'}}">
-            <view class="lp-help-group-title">全部课程通用</view>
+            <view class="t-sys lp-help-group-title">全部课程通用</view>
             <view class="lp-help-topic" wx:for="{{helpTopics}}" wx:key="id">
               <view class="lp-help-topic-title">{{item.title}}</view>
               <view class="lp-help-topic-sub t-sys" wx:if="{{item.sub}}">{{item.sub}}</view>
@@ -211,7 +211,7 @@
                data-k="{{seg.url ? 'light' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
                 <view class="lp-help-card-tx">
                   <text class="lp-help-card-title">{{seg.name}}</text>
-                  <text class="lp-help-seg-dur {{seg.url ? 'mono' : ''}}">{{seg.url ? seg.dur : '整理中'}}</text>
+                  <text class="t-sys lp-help-seg-dur {{seg.url ? 'mono' : ''}}">{{seg.url ? seg.dur : '整理中'}}</text>
                 </view>
                 <px-i wx:if="{{seg.url}}" name="chev" tone="#62625c" />
               </view>

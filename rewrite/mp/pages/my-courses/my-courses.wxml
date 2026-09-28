@@ -8,13 +8,13 @@
   <view class="mc-state mc-fail" wx:if="{{!loading && loadFailed}}">
     <px-anim name="signal" size="4" />
     <text class="mc-state-t">网络开小差</text>
-    <text class="mc-state-h">课程没加载出来，请重试</text>
+    <text class="t-sys mc-state-h">课程没加载出来，请重试</text>
     <view class="k k-light mc-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
 
   <!-- 骨架占位（加载中，不写死假进度） -->
   <view class="mc-list mc-list-load" wx:elif="{{loading}}">
-    <view class="mc-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="t-sys mc-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
     <view class="mc-card mc-skel-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
       <view class="mc-skel-bar" style="width: 96px"></view>
       <view class="mc-row">
@@ -37,15 +37,15 @@
           <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。
                本页没有下拉刷新，点这一行走已有 onRetryLoad；catch 住，避免连课卡一起点进目录。 -->
           <view class="mc-meta" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100">
-            <text class="mc-left">学习进度暂时读不到，<text class="mc-retry-t">点此重试</text></text>
+            <text class="t-sys mc-left">学习进度暂时读不到，<text class="mc-retry-t">点此重试</text></text>
           </view>
           <block wx:elif="{{item.totalSegments}}">
             <!-- 像素分段进度（高 4·每格 4 间隔 2·直角）：已学墨色、未学凹槽灰；percent=0 不画填充 -->
             <view class="mc-track"><view wx:if="{{item.percent > 0}}" class="mc-fill" style="width: {{item.percent}}%"></view></view>
             <view class="mc-meta">
               <!-- 单位「段」对齐数据模型与目录页（章>课时>段落）：此处数的是 segments，别另起「集」之类叫法。 -->
-              <text class="mc-left">已学 {{item.doneCount}}/{{item.totalSegments}} 段</text>
-              <view class="mc-fin" wx:if="{{item.percent >= 100}}"><px-i name="led" tone="#3f9a5e" /><text>学完</text></view>
+              <text class="t-sys mc-left">已学 {{item.doneCount}}/{{item.totalSegments}} 段</text>
+              <view class="t-sys mc-fin" wx:if="{{item.percent >= 100}}"><px-i name="led" tone="#3f9a5e" /><text>学完</text></view>
               <text class="mono mc-pct" wx:else>{{item.percent}}%</text>
             </view>
           </block>
@@ -57,7 +57,7 @@
   <!-- 空态 -->
   <view class="mc-state mc-empty" wx:else>
     <text class="mc-state-t">还没有进行中的课程</text>
-    <text class="mc-state-h">扫包装盒内的二维码，就能开始学</text>
+    <text class="t-sys mc-state-h">扫包装盒内的二维码，就能开始学</text>
   </view>
 
 </view>

@@ -10,7 +10,7 @@
       <view class="ls-hit" catch:tap="onToggleAgree">
         <view class="ls-check"><px-i wx:if="{{agreed}}" name="check" tone="#8a5ae0" /></view>
       </view>
-      <view class="ls-agree-t">
+      <view class="t-sys ls-agree-t">
         <text class="ls-agree-s" catch:tap="onToggleAgree">已阅读并同意</text>
         <text class="ls-link" catch:tap="onUserAgreement">《用户协议》</text>
         <text class="ls-link" catch:tap="onPrivacy">《隐私政策》</text>

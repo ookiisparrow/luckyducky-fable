@@ -14,7 +14,7 @@
         <view class="ad-line1">
           <text class="t-sys ad-name">{{item.name}}</text>
           <text class="mono ad-phone">{{item.phone}}</text>
-          <text class="ad-def" wx:if="{{item.isDefault}}">默认</text>
+          <text class="t-sys ad-def" wx:if="{{item.isDefault}}">默认</text>
         </view>
         <text class="t-sys ad-where">{{item.region}} {{item.detail}}</text>
       </view>

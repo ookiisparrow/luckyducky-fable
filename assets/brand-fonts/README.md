@@ -3,19 +3,21 @@
 这里是**小程序按钮/标题/界面固定文案（`--ld-font-brand`）的分层子集 WebFont 产物**，经 `wx.loadFontFace` 远程
 分层加载（`rewrite/mp/utils/brandFont.ts`）——**不进 src、不打进小程序包**（守卫 `rw-mp-package-budget`）。
 
-## 文件（v4）
+## 文件（v5）
 
-| 层 | 覆盖 | CJK | 文件 | 体积 |
-|---|---|---|---|---|
-| tier1 | tab 首屏（home/cart/me 闭包+tabBar+splash+seed 商品/课程标题）+ASCII+标点 | ~330 | `wenyuan-tier1-{light,medium,bold,heavy}.v4.woff` | ~90KB ×4 |
-| tier2 | 其余二级页闭包 | ~230 | `wenyuan-tier2-{light,medium,bold,heavy}.v4.woff` | ~57KB ×4 |
+| 层 | 覆盖 | 文件 |
+|---|---|---|
+| tier1 | tab 首屏（home/cart/me 闭包+tabBar+splash+seed 商品/课程标题）+ASCII+标点 | `wenyuan-tier1-{medium,bold,heavy}.v5.woff` |
+| tier2 | 其余二级页闭包 | `wenyuan-tier2-{medium,bold,heavy}.v5.woff` |
 
-只收**真用圆体显示**的字（v5·老板 2026-09-28 拍板）：圆体只留给按钮、标题、界面固定文案；正文长段和用户内容
-（昵称/收件人/地址/评价/输入框）走黑体 `.t-sys`，系统弹窗/提示是系统字——这些字都不收，
-所以也不设 GB2312 兜底层（全套 ~0.6MB）。
+字数与体积以构建输出为准（`node scripts/build-brand-font.mjs` 会打印）。
 
-字重：Light 300（辅助小字）/ Medium 500（正文）/ Bold 700（标题）/ Heavy 900（首屏与结果页大标题），
-对应 v5「字重」设计稿，两层都出四档。
+只收**真用圆体显示**的字（v5·老板 2026-09-28 拍板）：圆体只留给按钮、标题、界面固定文案；正文长段、
+13px 及以下的辅助小字（按键除外）和用户内容（昵称/收件人/地址/评价/输入框）走黑体 `.t-sys`，系统弹窗/提示
+是系统字——这些字都不收，所以也不设 GB2312 兜底层。
+
+字重：Medium 500（正文）/ Bold 700（标题）/ Heavy 900（首屏与结果页大标题），两层都出三档。设计稿的 Light 300
+只用在辅助小字上，小字走黑体，圆体不出细体（按键上的小字用 500）。
 
 - `tier{1,2}.txt` — 各层字符集正本（构建产物·与 woff 同批出·**勿手改**——守卫
   `rw-mp-font-tier-subset-covers` 只读 txt，txt 新 woff 旧＝守卫绿但真机缺字）。
@@ -23,7 +25,7 @@
 
 > ⚠ 用 **woff** 不用 woff2：`wx.loadFontFace` 官方建议格式仅 TTF/WOFF，woff2 开发者工具能渲染（假绿）
 > 真机静默失败（根因#8）。
-> ⚠ 文件名带版本号（`.v4`）：字符集/分层变更＝版本 +1＝新文件名＝CDN 与本地缓存天然失效。
+> ⚠ 文件名带版本号（`.v5`）：字符集/分层变更＝版本 +1＝新文件名＝CDN 与本地缓存天然失效。
 > 版本常量在 `scripts/build-brand-font.mjs`（`V`），须与 `rewrite/mp/utils/brandFont.ts` 文件名同步改。
 
 子集外的字、字体到达前，自动回退：tier1 缺的字 → tier2 → 系统字（CSS 逐字回退·
@@ -44,7 +46,7 @@ BRAND_FONT_SRC=/path/to/otf-dir node scripts/build-brand-font.mjs
 
 ## 部署（靠人·控制台）
 
-1. 8 个 `.woff` 传到 CloudBase 静态托管 `/fonts/` 下（旧 v3 文件可删）（URL 单源 `rewrite/mp/utils/brandFont.ts`）。
+1. 全部 `.woff` 传到 CloudBase 静态托管 `/fonts/` 下。旧版本文件等线上小程序换到新版本后再删（线上版本读哪一版看 main 的 `brandFont.ts`）（URL 单源 `rewrite/mp/utils/brandFont.ts`）。
 2. 小程序后台「downloadFile 合法域名」须含该托管域名（已配·换域名时重核）。
 3. **建议**：托管控制台把 `/fonts/` 路径缓存策略调长（如 max-age=31536000）：文件名带版本号，长缓存无 stale 风险。不调也能用（客户端有本地缓存兜底）。
 

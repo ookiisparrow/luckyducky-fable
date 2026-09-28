@@ -27,19 +27,19 @@
   <view class="pd-rate" hover-start-time="20" hover-class="k-row-down" bind:tap="onViewReviews">
     <block wx:if="{{rating}}">
       <px-i name="star5" />
-      <text class="pd-rate-text">{{rating.scoreLabel}} · {{rating.count}} 条评价</text>
+      <text class="t-sys pd-rate-text">{{rating.scoreLabel}} · {{rating.count}} 条评价</text>
     </block>
-    <text wx:else class="pd-rate-text">看看钩友们怎么说</text>
+    <text wx:else class="t-sys pd-rate-text">看看钩友们怎么说</text>
     <px-i name="arrow" />
-    <text wx:if="{{vm.soldLabel}}" class="pd-sold">{{vm.soldLabel}}</text>
+    <text wx:if="{{vm.soldLabel}}" class="t-sys pd-sold">{{vm.soldLabel}}</text>
   </view>
   <!-- 顾客看见的运费/售后/退货口径（已拍板政策·shipping-returns-copy 测试钉）；结算算钱仍走 SHIP=0（不在本页改钱链）。
        不要写「满 ¥100 包邮」或「全场包邮」——都不是现政策。 -->
-  <text class="pd-policy">包邮到家·售后无忧 · 开课后不可退货</text>
+  <text class="t-sys pd-policy">包邮到家·售后无忧 · 开课后不可退货</text>
 
   <view class="pd-specs" wx:if="{{vm.params.length}}">
     <view class="pd-spec" wx:for="{{vm.params}}" wx:key="k">
-      <text class="pd-spec-k">{{item.k}}</text>
+      <text class="t-sys pd-spec-k">{{item.k}}</text>
       <text class="pd-spec-v">{{item.v}}</text>
     </view>
   </view>
@@ -61,7 +61,7 @@
       <text class="t-sys pd-body" wx:if="{{item.body}}">{{item.body}}</text>
     </block>
     <view class="pd-kit" wx:if="{{vm.kit.length}}">
-      <text class="pd-kit-title">套装包含</text>
+      <text class="t-sys pd-kit-title">套装包含</text>
       <!-- wx:key 刻意用 index：材料无 id 字段，name 作 key 同名不同规格必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
       <view class="pd-kit-row" wx:for="{{vm.kit}}" wx:key="index">
         <text class="pd-kit-name">{{item.name}}</text>
@@ -87,12 +87,12 @@
 
 <view class="pd-state" wx:elif="{{!loading && loadFailed}}">
   <text class="pd-state-title">网络开小差</text>
-  <text class="pd-state-hint">商品加载失败，请重试</text>
+  <text class="t-sys pd-state-hint">商品加载失败，请重试</text>
   <view class="k k-light pd-state-btn" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
 </view>
 <view class="pd-state" wx:elif="{{!loading}}">
   <text class="pd-state-title">商品不存在或已下架</text>
-  <text class="pd-state-hint">回首页看看别的吧</text>
+  <text class="t-sys pd-state-hint">回首页看看别的吧</text>
 </view>
 
 <!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->

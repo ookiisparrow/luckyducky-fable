@@ -9,8 +9,8 @@
     <text class="t-sys fn-sub">小鸭孵出来了，以后就在「我」页陪着你。</text>
   </view>
   <view class="fn-stats" wx:if="{{name}}">
-    <view class="fn-row"><text class="fn-k">学完</text><view class="fn-leader"></view><text class="mono fn-v">{{lessonsLabel}}</text></view>
-    <view class="fn-row" wx:if="{{durLabel}}"><text class="fn-k">视频时长</text><view class="fn-leader"></view><text class="mono fn-v">{{durLabel}}</text></view>
+    <view class="fn-row"><text class="t-sys fn-k">学完</text><view class="fn-leader"></view><text class="mono fn-v">{{lessonsLabel}}</text></view>
+    <view class="fn-row" wx:if="{{durLabel}}"><text class="t-sys fn-k">视频时长</text><view class="fn-leader"></view><text class="mono fn-v">{{durLabel}}</text></view>
   </view>
 </view>
 

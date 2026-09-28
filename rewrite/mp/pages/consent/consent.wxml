@@ -18,7 +18,7 @@
     <px-i name="arrow" tone="#62625c" />
   </view>
 
-  <text class="cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
+  <text class="t-sys cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
 </view>
 
 <view class="cs-dock-space"></view>

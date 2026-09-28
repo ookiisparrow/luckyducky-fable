@@ -75,7 +75,7 @@ page {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  font-weight: 300;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   color: var(--v5-ink); /* 未选中是凹键底，但字不置灰（设计稿 A3 标签一律 #111） */
 }
 .rv-tag-n {

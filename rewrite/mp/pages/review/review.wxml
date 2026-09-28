@@ -8,7 +8,7 @@
   <view class="rv-egg"><px-ground kind="egg" shell /></view>
 
   <view class="rv-main">
-    <text wx:if="{{name}}" class="rv-item">{{name}}</text>
+    <text wx:if="{{name}}" class="t-sys rv-item">{{name}}</text>
     <text class="rv-q">这次体验怎么样？</text>
 
     <view class="rv-stars">
@@ -20,7 +20,7 @@
     <text class="rv-label {{rating ? 'on' : ''}}">{{ratingLabel}}</text>
 
     <view class="rv-more">
-      <text class="rv-cap">补充一下 · 选填</text>
+      <text class="t-sys rv-cap">补充一下 · 选填</text>
       <view class="rv-tags">
         <view wx:for="{{tags}}" wx:key="t" class="k k-sm rv-tag {{item.on ? 'k-light' : 'k-flat'}}"
           hover-start-time="20" hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag" data-k="{{item.on ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.t}}</view>
@@ -44,7 +44,7 @@
       <view class="rv-anon" bind:tap="onAnon">
         <view class="k k-sm k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="#8A5AE0" /></view>
         <text class="rv-anon-t">匿名评价</text>
-        <text class="rv-anon-sub">隐藏你的昵称与头像</text>
+        <text class="t-sys rv-anon-sub">隐藏你的昵称与头像</text>
       </view>
     </view>
   </view>

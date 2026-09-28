@@ -29,8 +29,8 @@ page {
   --ld-radius-pill: 999rpx;
   /* 品牌字体（文源圆体 WenYuan Rounded SC）：分层子集 WebFont 远程加载（loadBrandFonts·utils/brandFont.ts）
      ——T1(tab首屏字·最先到) → T2(二级页字) 两族按 CSS 逐字回退补字，到达前/失败时回退系统字（FOUT 可接受）。
-     应用范围（v5·老板 2026-09-28 拍板）：page 默认圆体，但只有按钮、标题、界面固定文案真用它；正文长段和
-     用户内容挂 .t-sys 走黑体（app.wxss）。族名单源 utils/brandFont.ts。 */
+     应用范围（v5·老板 2026-09-28 拍板）：page 默认圆体，但只有按钮、标题、界面固定文案真用它；正文长段、
+     13px 及以下的辅助小字（按键除外）和用户内容挂 .t-sys 走黑体（app.wxss）。圆体只出 500/700/900。族名单源 utils/brandFont.ts。 */
   --ld-font-brand: 'WenYuan Rounded SC', 'WenYuan Rounded SC T2', 'PingFang SC',
     'SF Pro Rounded', ui-rounded, 'Hiragino Sans GB', system-ui, sans-serif;
 }

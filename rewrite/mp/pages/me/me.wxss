@@ -85,7 +85,7 @@ page {
 }
 .me-mini-weak {
   font-size: 13px;
-  font-weight: 300;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   color: var(--v5-ink-2);
 }
 

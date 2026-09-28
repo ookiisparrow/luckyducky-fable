@@ -28,7 +28,7 @@ page {
   padding: 0 8px;
 }
 .fb-cat-off {
-  font-weight: 300;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   color: var(--v5-ink-2);
 }
 .fb-area-wrap {

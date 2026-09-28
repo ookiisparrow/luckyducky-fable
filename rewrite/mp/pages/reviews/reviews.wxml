@@ -6,7 +6,7 @@
   <view class="rv-sum" wx:if="{{summary}}">
     <view class="rv-score">
       <text class="mono rv-num">{{summary.scoreLabel}}</text>
-      <text class="rv-count">{{summary.countLabel}}</text>
+      <text class="t-sys rv-count">{{summary.countLabel}}</text>
     </view>
     <view class="rv-bars">
       <view class="rv-bar" wx:for="{{summary.dist}}" wx:key="label">
@@ -21,7 +21,7 @@
     <view wx:for="{{summary.tags}}" wx:key="tag" class="k {{tag === item.tag ? 'k-light' : 'k-flat'}} rv-tag" hover-start-time="20"
       hover-class="{{tag === item.tag ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-tag="{{item.tag}}" bind:tap="onTag"
       data-k="{{tag === item.tag ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <px-i wx:if="{{tag === item.tag}}" name="led" tone="#8A5AE0" />{{item.tag}}<text class="rv-tag-n">{{item.n}}</text>
+      <px-i wx:if="{{tag === item.tag}}" name="led" tone="#8A5AE0" />{{item.tag}}<text class="t-sys rv-tag-n">{{item.n}}</text>
     </view>
   </view>
 
@@ -36,7 +36,7 @@
         </view>
         <text class="mono rv-date">{{item.timeLabel}}</text>
       </view>
-      <text class="rv-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
+      <text class="t-sys rv-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
       <text class="t-sys rv-text" wx:if="{{item.text}}">{{item.text}}</text>
       <view class="rv-pics" wx:if="{{item.photos.length}}">
         <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="*this" class="rv-pic" src="{{ph}}" mode="aspectFill"
@@ -57,15 +57,15 @@
   <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
   <view class="rv-state" wx:if="{{!loading && loadFailed}}">
     <text class="rv-state-title">网络开小差</text>
-    <text class="rv-state-hint">评价没加载出来，请重试</text>
+    <text class="t-sys rv-state-hint">评价没加载出来，请重试</text>
     <view class="k k-light rv-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
   <view class="rv-state" wx:elif="{{!loading && !list.length}}">
     <text class="rv-state-title">还没有评价</text>
-    <text class="rv-state-hint">买过的钩友完成订单后可以来写第一条</text>
+    <text class="t-sys rv-state-hint">买过的钩友完成订单后可以来写第一条</text>
   </view>
   <view class="rv-state" wx:elif="{{tag && !shown && !hasMore}}">
-    <text class="rv-state-hint">还没有带「{{tag}}」的评价</text>
+    <text class="t-sys rv-state-hint">还没有带「{{tag}}」的评价</text>
   </view>
-  <view class="rv-more" wx:if="{{hasMore}}">上拉加载更多</view>
+  <view class="t-sys rv-more" wx:if="{{hasMore}}">上拉加载更多</view>
 </view>

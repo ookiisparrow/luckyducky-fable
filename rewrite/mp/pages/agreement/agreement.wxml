@@ -15,7 +15,7 @@
     <text class="ag-p t-sys">{{item.body}}</text>
   </view>
 
-  <text class="ag-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</text>
+  <text class="t-sys ag-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</text>
 </view>
 
 <!-- 隐私政策：数据共享授权管理入口 -->

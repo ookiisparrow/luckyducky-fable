@@ -120,8 +120,8 @@ page {
 .well-focus {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1.5px var(--v5-violet);
 }
-/* 黑体（系统字）：正文长段、用户填的内容（昵称/收件人/地址/评价/输入框）一律用它（设计稿 PingFang）；
-   品牌圆体只留给按钮、标题、界面固定文案——字体子集只收这部分字（scripts/lib/brand-font-charset.mjs，
+/* 黑体（系统字）：正文长段、13px 及以下的辅助小字（按键除外）、用户填的内容（昵称/收件人/地址/评价/输入框）
+   一律用它（设计稿 PingFang）；品牌圆体只留给按钮、标题、界面固定文案——字体子集只收这部分字（scripts/lib/brand-font-charset.mjs，
    .t-sys 子树里的字不收），所以用户内容必须挂 .t-sys，否则生僻字会一个个掉成黑体、同一行里混两种字。 */
 .t-sys,
 input,

@@ -25,7 +25,7 @@
  *
  * 前置（一次性·非运行时依赖，不入 package.json）：
  *   · Python + fonttools（pip install fonttools brotli）→ 提供 pyftsubset。
- *   · 源 OTF：WenYuanRoundedSC-{Light,Medium,Bold,Heavy}.otf（不入仓·授权见上）。
+ *   · 源 OTF：WenYuanRoundedSC-{Medium,Bold,Heavy}.otf（不入仓·授权见上）。
  *
  * 用法：
  *   BRAND_FONT_SRC=/path/to/otf-dir [PYFTSUBSET=/path/to/pyftsubset] node scripts/build-brand-font.mjs
@@ -43,11 +43,11 @@ const ROOT = resolve(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'assets/brand-fonts')
 
 // 产物版本（进文件名·CDN 缓存失效靠改名）：字符集/分层口径变更时 +1，并同步 rewrite/mp/utils/brandFont.ts。
-const V = 'v4'
+const V = 'v5'
 
-// v5 视觉（Claude Design「字重」稿）：300 细字（辅助小字）/500 正文/700 标题/900 首屏大标题，两层都出四档。
+// v5 视觉（Claude Design「字重」稿）：500 正文/700 标题/900 首屏大标题，两层都出三档。稿里 300 细字只用在 13px 以下的
+// 辅助小字上，这类小字走黑体（老板 2026-09-28），圆体不出细体。
 const WEIGHTS = [
-  { src: 'WenYuanRoundedSC-Light.otf', tag: 'light', weight: 300 },
   { src: 'WenYuanRoundedSC-Medium.otf', tag: 'medium', weight: 500 },
   { src: 'WenYuanRoundedSC-Bold.otf', tag: 'bold', weight: 700 },
   { src: 'WenYuanRoundedSC-Heavy.otf', tag: 'heavy', weight: 900 },
@@ -103,7 +103,7 @@ function run() {
     }
   }
   console.log(`产物 → ${OUT_DIR}（不进 src·wx.loadFontFace 远程分层加载·守卫 rw-mp-package-budget + rw-mp-font-tier-subset-covers）`)
-  console.log('下一步（靠人·控制台）：8 个 woff 传 CloudBase 静态托管 /fonts/ 下（README 部署节·含 CDN 缓存建议）')
+  console.log('下一步（靠人·控制台）：6 个 woff 传 CloudBase 静态托管 /fonts/ 下（README 部署节·含 CDN 缓存建议）')
 }
 
 run()

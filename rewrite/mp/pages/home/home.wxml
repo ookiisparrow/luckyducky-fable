@@ -118,7 +118,7 @@
         <text class="t-sys hm-rv-quote">{{item.quote}}</text>
         <view class="hm-rv-meta">
           <text class="t-sys hm-rv-user">{{item.user}}</text>
-          <view class="hm-verified">
+          <view class="t-sys hm-verified">
             <px-i name="led" tone="#3f9a5e" />
             <text>已验证买家</text>
           </view>
@@ -134,7 +134,7 @@
       <view class="hm-faq-row" hover-start-time="20" hover-class="k-row-down" data-index="{{index}}" bind:tap="toggleFaq">
         <text class="mono hm-no {{openFaq === index ? 'hm-no-on' : ''}}">{{index < 9 ? '0' : ''}}{{index + 1}}</text>
         <text class="hm-faq-title">{{item.title}}</text>
-        <text class="hm-faq-act">{{openFaq === index ? '收起' : '展开'}}</text>
+        <text class="t-sys hm-faq-act">{{openFaq === index ? '收起' : '展开'}}</text>
       </view>
       <text wx:if="{{openFaq === index}}" class="t-sys hm-faq-body">{{item.body}}</text>
     </view>
@@ -161,8 +161,8 @@
     <image class="hm-footer-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
     <view class="hm-footer-links">
       <block wx:for="{{content.footer.links}}" wx:key="*this">
-        <text wx:if="{{index > 0}}" class="hm-footer-dot">·</text>
-        <text class="hm-footer-link" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
+        <text wx:if="{{index > 0}}" class="t-sys hm-footer-dot">·</text>
+        <text class="t-sys hm-footer-link" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
       </block>
     </view>
     <text class="mono hm-footer-copy">{{content.footer.copy}}</text>
