@@ -1,75 +1,62 @@
-<view class="co coas">
-  <view class="co-body">
-    <!-- 我的售后申请（数据源 getMyAfterSales·状态语义不变） -->
-    <view class="coas-sechead" wx:if="{{list.length}}">
-      <text class="coas-title">我的售后申请</text>
-    </view>
+<!-- 我的售后（v5「字重」稿 B4）：24 大标题 + 倒车进场的小货车 + 售后记录行（状态灯/金币 + 标题 + 状态 + 说明 + 查看订单）；底部 联系客服。
+     数据源 getMyAfterSales·状态语义不变；游标分页(onReachBottom)/失败重试(onRetryLoad)/查看订单(onTapOrder)/客服(onKefu) 承接 aftersales.ts。 -->
+<v5-nav title="我的售后" />
 
-    <view
-      class="co-card ldas-card"
-      wx:for="{{list}}"
-      wx:key="id"
-      data-id="{{item.orderId}}"
-      bind:tap="onTapOrder"
-    >
-      <view class="ldas-top">
-        <view class="coas-order-mid">
-          <text class="coas-order-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
-          <text class="coas-order-meta">申请于 {{item.appliedAtLabel}} · ×{{item.qty}}</text>
+<view class="as">
+  <text class="as-title">售后记录</text>
+
+  <block wx:if="{{list.length}}">
+    <view class="as-truck"><px-truck pose="reverse" arrive="160" cargo="1" /></view>
+    <view class="as-list">
+      <view class="as-row" wx:for="{{list}}" wx:key="id">
+        <view class="as-ico">
+          <px-anim wx:if="{{item.status === 'refunded'}}" class="as-coin" name="coin" size="2" />
+          <px-i wx:elif="{{item.status === 'applied'}}" name="led" tone="#f4bd3f" />
+          <px-i wx:elif="{{item.status === 'approved'}}" name="led" tone="#8a5ae0" />
+          <px-i wx:elif="{{item.status === 'rejected'}}" name="led" tone="#d9483b" />
+          <px-i wx:else name="led" tone="#9a9a92" />
         </view>
-        <view class="ldas-amt">
-          <text class="ldas-amt-num">{{item.refundAmountLabel}}</text>
-          <text class="ldas-amt-cap">退款金额</text>
-        </view>
-      </view>
-
-      <view class="ldas-reason" wx:if="{{item.reason}}">
-        <text>原因：{{item.reason}}</text>
-      </view>
-
-      <view class="ldas-foot">
-        <view class="ldas-status ldas-{{item.status}}">
-          <text class="ldas-dot"></text>
-          <text>{{item.statusLabel}}</text>
-        </view>
-        <view class="ldas-link">
-          <text>查看订单</text>
-          <image class="ldas-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-        </view>
-      </view>
-    </view>
-
-    <text class="coas-note" wx:if="{{list.length}}" bind:tap="onKefu">需要帮助？联系客服</text>
-    <view class="ldas-more" wx:if="{{hasMore}}">上拉加载更多</view>
-
-    <!-- 骨架占位（首次加载中间空白·根因#8）：对齐 order-list/reviews，不误报空态 -->
-    <block wx:if="{{loading && !list.length}}">
-      <view class="co-card ldas-card ldas-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-        <view class="ldas-top">
-          <view class="ldas-skel-block"></view>
-          <view class="coas-order-mid">
-            <view class="ldas-skel-bar" style="width: 240rpx"></view>
-            <view class="ldas-skel-bar" style="width: 160rpx"></view>
+        <view class="as-mid">
+          <view class="as-top">
+            <text class="as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
+            <text class="t-sys as-st as-st-{{item.status}}">{{item.statusLabel}}</text>
+          </view>
+          <text class="t-sys as-note">申请于 {{item.appliedAtLabel}} · ×{{item.qty}} · 退款 {{item.refundAmountLabel}}</text>
+          <text class="t-sys as-note" wx:if="{{item.reason}}">原因：{{item.reason}}</text>
+          <view class="t-sys as-link" hover-start-time="20" hover-class="k-row-down" data-id="{{item.orderId}}" bind:tap="onTapOrder">
+            <text>查看订单</text>
+            <px-i name="arrow" />
           </view>
         </view>
       </view>
-    </block>
-
-    <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
-    <view class="coas-empty" wx:if="{{!loading && loadFailed}}">
-      <text class="coas-empty-title">网络开小差</text>
-      <text class="coas-empty-hint">售后记录没加载出来，请重试</text>
-      <text class="coas-note" bind:tap="onRetryLoad">重试</text>
     </view>
+    <view class="t-sys as-more" wx:if="{{hasMore}}">上拉加载更多</view>
+  </block>
 
-    <!-- 空态 -->
-    <view class="coas-empty" wx:elif="{{!loading && !list.length}}">
-      <view class="coas-empty-ico">
-        <image class="coas-empty-img" src="/static/icons/package.svg" mode="aspectFit" />
-      </view>
-      <text class="coas-empty-title">还没有售后记录</text>
-      <text class="coas-empty-hint">需要退款时，从订单详情发起申请</text>
-      <text class="coas-note" bind:tap="onKefu">需要帮助？联系客服</text>
+  <!-- 骨架占位（首次加载中间空白·根因#8）：不误报空态 -->
+  <block wx:if="{{loading && !list.length}}">
+    <view class="t-sys as-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="as-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="as-skel-bar skel" style="width: 96px"></view>
+      <view class="as-skel-bar skel" style="width: 60%"></view>
     </view>
+  </block>
+
+  <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
+  <view class="as-state" wx:if="{{!loading && loadFailed}}">
+    <view class="as-signal"><px-anim name="signal" size="4" /></view>
+    <text class="as-state-t">网络开小差</text>
+    <text class="t-sys as-note">售后记录没加载出来，请重试</text>
+    <view class="k k-light as-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
+  <view class="as-state" wx:elif="{{!loading && !list.length}}">
+    <px-ground kind="box" />
+    <text class="as-state-t">还没有售后记录</text>
+    <text class="t-sys as-note">需要退款时，从订单详情发起申请</text>
+  </view>
+  <view class="as-dock-space"></view>
+</view>
+
+<view class="as-dock">
+  <view class="k k-light k-48 as-cs" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onKefu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
 </view>

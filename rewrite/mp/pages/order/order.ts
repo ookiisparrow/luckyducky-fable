@@ -2,11 +2,12 @@
 import { tapHaptic } from '../../lib/haptics'
 import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrder, type OrderVM } from '../../lib/mapOrders'
+import { mapOrder, orderSteps, type OrderVM, type StepState } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
 import { expressCode } from '../../lib/express'
-import { SHOP_FULL_NAME } from '../../lib/shop'
-import { navigateOrRedirect } from '../../lib/nav'
+import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
+import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxToast } from '../../lib/pxFx'
 
 // 状态横幅配置（纯展示派生·icon/tint/文案随订单态·不含业务判定）。
 interface BannerVM {
@@ -28,6 +29,8 @@ const BANNER: Record<string, BannerVM> = {
 }
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     loading: true,
     loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
@@ -36,7 +39,9 @@ Page({
     amountNum: '',
     canAfterSale: false,
     paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
-    shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
+    steps: [] as Array<{ label: string; state: StepState }>, // 进度四步（v5·纯展示派生）
+    truckPose: 'park', // 小货车姿态随订单态：已发货在路上、完成卸货，其余停着（纯展示）
+    cargo: 0,
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.id || '')
@@ -76,7 +81,14 @@ Page({
     const banner = vm ? BANNER[vm.status] || { icon: 'info', tint: 'muted', head: vm.statusLabel, sub: '' } : null
     const amountNum = vm ? (vm.amountLabel || '').replace(/[^0-9.]/g, '') : ''
     const canAfterSale = !!vm && ['paid', 'shipped', 'done'].includes(vm.status)
-    this.setData({ loading: false, loadFailed: false, vm, banner, amountNum, canAfterSale })
+    const steps = vm ? orderSteps(vm.status) : []
+    const truckPose = vm && vm.status === 'shipped' ? 'drive' : vm && vm.status === 'done' ? 'unload' : 'park'
+    const cargo = vm && vm.status !== 'closed' ? Math.min(3, vm.items.length) : 0
+    this.setData({ loading: false, loadFailed: false, vm, banner, amountNum, canAfterSale, steps, truckPose, cargo })
+  },
+  // 底部「返回」键（v5 底部操作区首位）：深链进来没上一页时回首页
+  onBack() {
+    goBackOrHome()
   },
   onRetryLoad() {
     tapHaptic()
@@ -147,7 +159,7 @@ Page({
       return
     }
     if (outcome.kind === 'paid') {
-      wx.showToast({ title: '已支付', icon: 'success' })
+      fxToast(this, '已支付')
       settle()
       return
     }
@@ -155,7 +167,7 @@ Page({
       wx.requestPayment({
         ...outcome.payment,
         success: () => {
-          wx.showToast({ title: '支付成功', icon: 'success' })
+          fxToast(this, '支付成功')
           settle()
         },
         fail: settle,
@@ -226,7 +238,7 @@ Page({
         const r = await applyRefund(orderId, lineId, String(m.content || ''))
         if (this.unloaded) return // await 恢复点复核：用户已退出详情页——申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
         if (r.ok) {
-          wx.showToast({ title: '已提交申请', icon: 'success' })
+          wx.showToast({ title: '已提交申请', icon: 'success' }) // 紧接着跳售后页：原生提示跨页不断
           navigateOrRedirect('/pages/aftersales/aftersales')
         } else {
           const e = String(r.error || '')

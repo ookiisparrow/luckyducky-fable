@@ -1,227 +1,152 @@
-/* 我的售后·重设计对齐 Checkout.jsx 的 AfterSales 版式（设计 402px 画板→rpx ×1.87）。
-   页浅灰底、白卡圆角+浅影；co-/coas- 前缀沿设计词汇（与 checkout/order 同族·本页自包含）；
-   ldas- 为「已申请记录」专属件（本页展示的是 getMyAfterSales 记录列表·非设计入口页的可申请订单，
-   故按设计 coas-order 横卡词汇承载真实售后单：状态徽/退款额/原因/查看订单）。token 见 styles/tokens.wxss。 */
-.co {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰·与 order 同族·tokens 无对应中性灰 */
-  color: var(--ld-content);
+/* 我的售后（v5「字重」稿 B4） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-.co image {
+.as-title {
   display: block;
+  padding: 4px 16px 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
-
-/* ---------- 内容容器（设计 co-body） ---------- */
-.co-body {
-  /* 底部安全区避让：下内边距太小时末行「需要帮助？联系客服」
-     会被 iPhone home indicator 横条压掉半截、点也不好点。本页无吸底栏，故直接给内容容器留白。 */
-  padding: 22rpx 26rpx calc(24rpx + env(safe-area-inset-bottom));
+/* 倒车进场的小货车：大标题下留出场景空间，地面线与其它带车页一致（顶栏下 120px 起算） */
+.as-truck {
+  padding: 84px 16px 12px;
+}
+.as-list {
+  margin: 0 16px 16px;
+  border-bottom: 1px solid var(--v5-hair);
+}
+.as-row {
+  padding: 12px 0;
   display: flex;
-  flex-direction: column;
-  gap: 22rpx;
+  align-items: flex-start;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
 }
-
-/* ---------- 通用白卡（设计 co-card） ---------- */
-.co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-
-/* ---------- 区段小标题（设计 coas-sechead·独立于卡上方） ---------- */
-.coas-sechead {
+.as-ico {
+  width: 26px;
+  flex: 0 0 auto;
+  padding-top: 4px;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 8rpx 8rpx 0;
+  justify-content: center;
 }
-.coas-title {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
+.as-coin {
+  margin-top: -7px;
 }
-
-/* ---------- 售后单卡（设计 coas-order 横卡 + 状态/原因扩展） ---------- */
-.ldas-card {
-  padding: 22rpx 26rpx;
-}
-.ldas-top {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-}
-.coas-order-mid {
-  flex: 1 1 auto;
+.as-mid {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 4px;
 }
-.coas-order-name {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  line-height: 1.3;
-  letter-spacing: -0.3rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.coas-order-meta {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  letter-spacing: 0.4rpx;
-}
-.ldas-amt {
-  flex: 0 0 auto;
+.as-top {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.15;
-}
-.ldas-amt-num {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
-  letter-spacing: 0.2rpx;
-}
-.ldas-amt-cap {
-  margin-top: 4rpx;
-  font-size: 20rpx;
-  color: var(--ld-content-2);
-}
-
-/* ---------- 原因（引用盒·设计明细盒同底） ---------- */
-.ldas-reason {
-  margin-top: 18rpx;
-  padding: 14rpx 18rpx;
-  background: #f7f7f8; /* 设计引用/明细盒浅灰底·tokens 无对应 */
-  border-radius: var(--ld-radius-sm);
-  font-size: 23rpx;
-  color: var(--ld-content-2);
-  line-height: 1.5;
-}
-
-/* ---------- 卡底：状态徽 + 查看订单 ---------- */
-.ldas-foot {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-top: 20rpx;
-  padding-top: 20rpx;
-  border-top: 1rpx solid var(--ld-line-soft);
+  gap: 8px;
 }
-.ldas-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10rpx;
-  padding: 8rpx 18rpx;
-  border-radius: var(--ld-radius-pill);
-  font-size: 24rpx;
-  font-weight: 600;
+.as-name {
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 500;
 }
-.ldas-dot {
-  width: 12rpx;
-  height: 12rpx;
-  border-radius: 50%;
-  background: currentColor;
-}
-/* 状态语义配色（映射 mapAftersales 的 status 键·语义不变） */
-.ldas-applied {
-  color: var(--ld-purple-tab);
-  background: var(--ld-bg-lilac);
-}
-.ldas-approved {
-  color: #e37318; /* 设计 duck-orange（喙/CTA 橙）·处理中提示·tokens 无对应 */
-  background: #fff7ec; /* 设计待处理浅橙底·tokens 无对应 */
-}
-.ldas-refunded {
-  color: var(--ld-content);
-  background: var(--ld-bg-sage); /* 已结算·中性沙色（无绿 token） */
-}
-.ldas-rejected {
-  color: var(--ld-content-2);
-  background: var(--ld-bg-grey);
-}
-.ldas-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4rpx;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ldas-chev {
-  width: 24rpx;
-  height: 24rpx;
-  opacity: 0.6;
-}
-
-/* ---------- 底部安心文案（设计 coas-note） ---------- */
-.coas-note {
-  display: block;
-  text-align: center;
-  margin: 8rpx 20rpx 4rpx;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-  line-height: 1.6;
-}
-.ldas-more {
-  text-align: center;
-  padding: 20rpx 0;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-
-/* ---------- 加载骨架（首次加载中间空白·根因#8·对齐 order-list coolist-skel） ---------- */
-.ldas-skel-block,
-.ldas-skel-bar {
-  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
-  background-size: 200% 100%;
-  animation: ld-shimmer 1500ms ease-in-out infinite;
-}
-.ldas-skel-block {
-  width: 120rpx;
-  height: 120rpx;
+.as-st {
   flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.ldas-skel-bar {
-  height: 24rpx;
-  border-radius: 8rpx;
+.as-st-applied {
+  color: var(--v5-warn-text);
 }
-
-/* ---------- 空态 ---------- */
-.coas-empty {
+.as-st-approved {
+  color: var(--v5-violet-text);
+}
+.as-st-refunded {
+  color: var(--v5-ok-text);
+}
+.as-st-rejected {
+  color: var(--v5-err-text);
+}
+.as-note {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.as-link {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 300;
+}
+.as-more {
+  padding: 8px 0 16px;
   text-align: center;
-  padding: 160rpx 40rpx;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.coas-empty-ico {
-  width: 120rpx;
-  height: 120rpx;
-  margin: 0 auto 24rpx;
-  border-radius: 50%;
-  background: var(--ld-bg-lilac);
+.as-loading {
+  padding: 12px 0 4px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.coas-empty-img {
-  width: 52rpx;
-  height: 52rpx;
-  opacity: 0.7;
+.as-skel {
+  margin: 8px 16px 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--v5-hair);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.coas-empty-title {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
+.as-skel-bar {
+  height: 12px;
 }
-.coas-empty-hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
+.as-state {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.as-signal {
+  padding-top: 88px;
+  display: flex;
+}
+.as-state-t {
+  font-size: 17px;
+  font-weight: 500;
+}
+.as-retry {
+  margin-top: 8px;
+  min-width: 120px;
+}
+.as-dock-space {
+  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
+}
+.as-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  background: var(--v5-canvas);
+}
+.as-cs {
+  flex: 1;
 }

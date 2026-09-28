@@ -1,153 +1,60 @@
-/* 支付成功页 · 设计 PaySuccess（cosuc）。设计稿 402px 画板 → rpx（×1.87）。
-   token 见 styles/tokens.wxss。白底、顶对齐可滚：英雄对勾 + 实付金额 + 订单信息盒 + 双动作 + 小尾巴。
-   业务逻辑（回首页/看订单）由 paysuccess.ts handler 承接，本文件只管视觉。 */
-.ld-paysuccess {
-  min-height: 100vh;
-  background: var(--ld-bg);
-  padding: 34rpx 38rpx calc(48rpx + env(safe-area-inset-bottom));
-  /* box-sizing 必写：min-height:100vh 与 padding 并存时，默认 content-box
-     会让页面总高 = 一屏 + padding，内容明明放得下却能多滚出一截空白（三页同病）。 */
-  box-sizing: border-box;
+/* 支付成功（v5「字重」稿 A8） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
+/* 金币：落在与小货车同一条地面线（顶栏下 120px）——结算页开走的车与这枚金币接得上 */
+.ps-coin {
+  padding: 120px 16px 12px;
+}
+.ps-body {
+  padding: 4px 16px 16px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
-
-/* ---------- 英雄区 ---------- */
-.ld-ps-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 56rpx 22rpx 48rpx;
-}
-.ld-ps-check {
-  width: 142rpx;
-  height: 142rpx;
-  border-radius: 50%;
-  background: var(--ld-purple);
+.ps-title-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 18rpx 52rpx rgba(123, 92, 175, 0.32); /* 紫投影·呼应 --ld-purple-tab #7b5caf */
+  gap: 8px;
 }
-.ld-ps-check-ico {
-  width: 74rpx;
-  height: 74rpx;
+.ps-title {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
 }
-.ld-ps-title {
-  margin-top: 38rpx;
-  font-size: 45rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-  letter-spacing: -0.4rpx;
+.ps-paid {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
-.ld-ps-amount {
-  margin-top: 18rpx;
-  font-size: 64rpx;
-  font-weight: 700;
-  color: var(--ld-ink);
-  letter-spacing: 0.4rpx;
-  line-height: 1;
+.ps-k,
+.ps-note {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.ld-ps-cny {
-  font-size: 38rpx;
+.ps-amount {
+  font-size: 22px;
   font-weight: 600;
-  margin-right: 4rpx;
 }
-.ld-ps-sub {
-  margin-top: 22rpx;
-  max-width: 486rpx;
-  font-size: 26rpx;
-  color: var(--ld-content-2);
-  line-height: 1.6;
+.ps-no {
+  font-size: 13px;
+  color: var(--v5-ink-2);
 }
-
-/* ---------- 订单信息盒 ---------- */
-.ld-ps-info {
-  margin-top: 12rpx;
-  padding: 12rpx 30rpx;
-  border-radius: var(--ld-radius-md);
-  background: #f7f7f8; /* 设计局部浅灰盒·token 无此值 */
-}
-.ld-ps-info-row {
+.ps-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  padding: 22rpx 0;
-  border-bottom: 1rpx solid var(--ld-line);
+  gap: 8px;
+  background: var(--v5-canvas);
 }
-.ld-ps-info-row:last-child {
-  border-bottom: none;
-}
-.ld-ps-info-k {
-  flex: 0 0 auto;
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-}
-.ld-ps-info-v {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: right;
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ld-ps-info-v.wrap {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
-}
-.ld-ps-info-v.mono {
-  letter-spacing: 0.4rpx;
-}
-
-/* ---------- 双动作 ---------- */
-.ld-ps-actions {
-  display: flex;
-  gap: 22rpx;
-  margin-top: 48rpx;
-}
-.ld-ps-btn {
+.ps-home {
   flex: 1;
-  height: 90rpx;
-  line-height: 90rpx;
-  text-align: center;
-  border-radius: var(--ld-radius-pill);
-  font-size: 30rpx;
-  font-weight: 600;
 }
-.ld-ps-btn.ghost {
-  background: var(--ld-bg);
-  border: 2rpx solid var(--ld-purple);
-  color: var(--ld-purple);
-  line-height: 86rpx; /* 抵边框 2rpx×2 保持垂直居中 */
-}
-.ld-ps-btn.solid {
-  background: var(--ld-purple);
-  color: #ffffff;
-}
-.ld-ps-btn-hover {
-  opacity: 0.88;
-}
-
-/* ---------- 幸运小尾巴 ---------- */
-.ld-ps-tip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14rpx;
-  margin: 42rpx auto 0;
-  max-width: 524rpx;
-  text-align: center;
-  font-size: 24rpx;
-  color: var(--ld-purple-meta);
-  line-height: 1.5;
-}
-.ld-ps-tip-ico {
-  width: 28rpx;
-  height: 28rpx;
-  flex: 0 0 auto;
+.ps-order {
+  flex: 1.6;
 }

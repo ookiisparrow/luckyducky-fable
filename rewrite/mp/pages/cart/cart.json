@@ -1,3 +1,8 @@
 {
-  "navigationStyle": "custom"
+  "navigationStyle": "custom",
+  "backgroundColor": "#fafaf8",
+  "usingComponents": {
+    "px-i": "/components/px-i/px-i",
+    "px-truck": "/components/px-truck/px-truck"
+  }
 }

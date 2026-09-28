@@ -1,10 +1,10 @@
 @import './styles/tokens.wxss';
 
 page {
-  background: var(--ld-bg);
-  color: var(--ld-ink);
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
   font-size: 28rpx;
-  font-family: var(--ld-font-brand); /* 品牌字体全局应用——见 tokens.wxss 注释 */
+  font-family: var(--v5-font-brand); /* 品牌字体全局应用——见 tokens.wxss 注释 */
   font-weight: 500; /* 注册字重只有 300/500/700/900（brandFont.ts BRAND_FONT_TIERS），默认 400 没有对应档——
     显式钉 500 使正文命中已注册字重、行为确定 */
   -webkit-font-smoothing: antialiased;

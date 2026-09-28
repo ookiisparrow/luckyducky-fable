@@ -3,8 +3,11 @@ import { getMyAfterSales } from '../../api/orders'
 import { mapAfterSales, mergeAfterSales, type AfterSaleVM } from '../../lib/mapAftersales'
 import { openCustomerService } from '../../utils/customerService'
 import { navigateOrRedirect } from '../../lib/nav'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     list: [] as AfterSaleVM[],
     loading: true,

@@ -9,9 +9,11 @@ import { mapPayResult } from '../../lib/payFlow'
 import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
 import { goHomeTab } from '../../lib/homeIntent'
-import { SHOP_FULL_NAME } from '../../lib/shop'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     address: null as ReturnType<typeof addr.defaultAddress>,
     items: [] as Array<checkout.DraftLine & { priceNum: string }>,
@@ -21,7 +23,7 @@ Page({
     amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
-    shopName: SHOP_FULL_NAME, // 店铺行恒引 lib/shop 单源（不硬编码·病根#5·守卫 brand-name-single-source）
+    cargo: 0, // 小货车车斗箱数（商品行数·最多 3）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   unloaded: false, // 页面已退出标记（守卫扩面统一不变量·同 review/profile-edit/feedback 范式）：本页 backTimer 赋值落在
@@ -75,6 +77,7 @@ Page({
     this.setData({
       address: addr.defaultAddress(),
       items: draft.items.map((l) => ({ ...l, cover: freshCover(l, allRaw), priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
+      cargo: Math.min(3, draft.items.length),
       addons: checkout.sellableAddons().map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
@@ -155,8 +158,13 @@ Page({
     }
     await this.startPay(String(order.id || ''), amountFen)
   },
+  // 付款成功：小货车开走不回来（设计稿转场），出画面再换到成功页；车没动（组件未就绪/测试桩）就直接换
   toSuccess(orderId: string, amountFen: number) {
-    wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
+    const go = () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
+    const truck = typeof this.selectComponent === 'function' ? (this.selectComponent('#truck') as { go?: (o: { back: boolean }) => number } | null) : null
+    const ms = truck && truck.go ? truck.go({ back: false }) : 0
+    if (ms) setTimeout(go, ms)
+    else go()
   },
   async startPay(orderId: string, amountFen: number) {
     const outcome = mapPayResult(await pay(orderId))

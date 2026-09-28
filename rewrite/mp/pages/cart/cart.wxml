@@ -1,85 +1,73 @@
-<!-- 购物车·设计「待选区」语言：标题头 + 虚线暂存区(已加购行·勾选/加减/删除) + 下方推荐(圆加号加购) + 信任小字 + 悬浮结算。
-     真实购物车逻辑（lib/cart 单源·结算走选中项）全保留；移出车的已知商品重回下方推荐（设计 qty→0 落 options）。 -->
-<!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
-     滚动须发生在 scroll-view 内部。固定「去结算」栏与 page-container 留在外层当兄弟（fixed 元素不随内容滚）。 -->
-<scroll-view class="ld-cart-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-<view class="ld-cart" style="padding-top: {{statusBarHeight}}px">
-  <view class="ld-cart-head">
-    <view class="ld-cart-title">购物车</view>
-    <view class="ld-cart-sub">挑好的小伙伴都在这儿，随时结算带走</view>
-  </view>
+<!-- 购物车（v5「字重」稿 A4）：标题 + 像素小货车（车斗箱数随行数）+ 行列表（勾选/加减/按住删）+ 小计 + 结算。
+     真实购物车逻辑（lib/cart 单源·结算走选中项）全保留。
+     列表在 <scroll-view> 里滚：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard）。 -->
+<view class="ca" style="padding-top: {{statusBarHeight}}px">
+  <view class="ca-head"><text class="ca-title">购物车</text></view>
+  <view class="ca-truck"><px-truck id="truck" cargo="{{cargo}}" /></view>
 
-  <!-- 待选区：虚线暂存·已加购商品 -->
-  <view wx:if="{{items.length}}" class="ld-cart-hold ld-cart-hold-list">
-    <view class="ld-cart-row" wx:for="{{items}}" wx:key="lineId">
-      <view class="ld-check {{item.selected ? 'on' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle"></view>
-      <view class="ld-cart-row-img" data-id="{{item.id}}" catch:tap="onOpen">
-        <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" lazy-load />
-      </view>
-      <view class="ld-cart-row-mid" data-id="{{item.id}}" catch:tap="onOpen">
-        <view class="ld-cart-row-name">{{item.name}}</view>
-        <view class="ld-cart-row-tag" wx:if="{{item.sku}}">{{item.sku}}</view>
-        <view class="ld-cart-row-price">
-          <text class="ld-cart-was" wx:if="{{item.was}}">¥{{item.was}}</text>
-          <text class="ld-cart-now">¥{{item.price}}</text>
+  <block wx:if="{{items.length}}">
+    <scroll-view class="ca-list" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
+      <view class="ca-rows">
+        <view class="ca-row" wx:for="{{items}}" wx:key="lineId">
+          <view class="ca-check-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle">
+            <view class="k k-sm k-light ca-check" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+              <px-i wx:if="{{item.selected}}" name="check" tone="#8a5ae0" />
+            </view>
+          </view>
+          <view class="ca-thumb" data-id="{{item.id}}" catch:tap="onOpen">
+            <image wx:if="{{item.cover}}" class="ca-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+          </view>
+          <view class="ca-mid" data-id="{{item.id}}" catch:tap="onOpen">
+            <text class="ca-name">{{item.name}}</text>
+            <text class="t-sys ca-sku" wx:if="{{item.sku}}">{{item.sku}}</text>
+          </view>
+          <view class="ca-right">
+            <text class="mono ca-price {{item.selected ? '' : 'ca-price-off'}}">¥{{item.price}}</text>
+            <view class="ca-step">
+              <!-- 数量 >1：减号；=1：红色 ×，按住 0.6s 删除（防误删·设计稿「危险操作用浅色键+红字+长按」） -->
+              <view wx:if="{{item.qty > 1}}" class="ca-step-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">
+                <view class="k k-sm k-light ca-step-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="minus" /></view>
+              </view>
+              <view wx:else class="ca-step-hit" data-line="{{item.lineId}}" data-id="{{item.id}}" data-sku="{{item.sku}}"
+                catch:touchstart="onHoldStart" catch:touchend="onHoldEnd" catch:touchcancel="onHoldEnd">
+                <view class="k k-sm k-light ca-step-key ca-del {{holding === item.lineId ? 'ca-del-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+                  <view class="ca-del-fill"></view>
+                  <px-i name="times" />
+                </view>
+              </view>
+              <text class="mono ca-qty">{{item.qty}}</text>
+              <view class="ca-step-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">
+                <view class="k k-sm k-light ca-step-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
+              </view>
+            </view>
+          </view>
         </view>
       </view>
-      <view class="ld-cart-row-act">
-        <view class="ld-stepper">
-          <view class="ld-step {{item.qty <= 1 ? 'dim' : ''}}" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">−</view>
-          <text class="ld-step-qty">{{item.qty}}</text>
-          <view class="ld-step" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">+</view>
-        </view>
-        <view class="ld-cart-row-del" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onRemove">删除</view>
+    </scroll-view>
+
+    <view class="ca-foot">
+      <view class="ca-sum">
+        <text class="t-sys ca-sum-k">小计</text>
+        <view class="ca-leader"></view>
+        <text class="mono ca-sum-v">{{totalLabel}}</text>
       </view>
+      <!-- tab 首屏只能用 tier1 字：完整政策写在详情/结算/协议。勿写七天无理由。 -->
+      <text class="t-sys ca-policy">包邮到家·售后无忧</text>
+      <view wx:if="{{selectedCount}}" class="k k-ink k-48" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onCheckout" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">结算（{{selectedCount}}）</view>
+      <view wx:else class="k k-flat k-48" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onCheckout" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">选择要结算的商品</view>
     </view>
-  </view>
-  <!-- 空车补出路：只有一行灰字的话，推荐拉取失败时整页就真没地方可去了。 -->
-  <view wx:else class="ld-cart-hold ld-cart-hold-empty">
-    <text class="ld-cart-hold-hint">这里还没有东西</text>
-    <view class="ld-cart-hold-cta" bind:tap="onGoHome" hover-class="ld-cart-hold-cta-h" hover-stay-time="80">去逛逛</view>
-  </view>
+  </block>
 
-  <!-- 下方推荐：未在袋中·圆加号加购 -->
-  <view wx:if="{{recs.length}}" class="ld-cart-recs">
-    <view class="ld-cart-recs-title">{{items.length ? '再加点别的' : '挑一只喜欢的小鸭'}}</view>
-    <view class="ld-cart-row" wx:for="{{recs}}" wx:key="id">
-      <view class="ld-cart-row-img" data-id="{{item.id}}" catch:tap="onOpen">
-        <image wx:if="{{item.cover}}" class="ld-cart-row-photo" src="{{item.cover}}" mode="aspectFill" lazy-load />
-      </view>
-      <view class="ld-cart-row-mid" data-id="{{item.id}}" catch:tap="onOpen">
-        <view class="ld-cart-row-name">{{item.name}}</view>
-        <view class="ld-cart-row-tag" wx:if="{{item.tag}}">{{item.tag}}</view>
-        <view class="ld-cart-row-price">
-          <text class="ld-cart-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
-          <text class="ld-cart-now">{{item.priceLabel}}</text>
-        </view>
-      </view>
-      <view class="ld-cart-row-act">
-        <view class="ld-cart-add" data-id="{{item.id}}" catch:tap="onAddRec">＋</view>
-      </view>
-    </view>
+  <!-- 空车补出路：只有一行灰字的话，整页就没地方可去了 -->
+  <view wx:else class="ca-empty">
+    <text class="ca-empty-t">购物车还是空的</text>
+    <view class="k k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去首页逛逛</view>
   </view>
-
-  <!-- tab 首屏只能用 tier1 字：「疆/蒙/确/课」不在子集，完整政策写在详情/结算/协议。勿写七天无理由。 -->
-  <view class="ld-cart-trust">包邮到家·售后无忧</view>
-
-  <!-- 底部占位：留在滚动流内，撑开最后一屏、避免内容被下方 fixed 结算栏压住 -->
-  <view class="ld-checkbar-space"></view>
+  <view class="ca-tab-space"></view>
 </view>
-</scroll-view>
 
-<view class="ld-checkbar {{selectedCount ? '' : 'empty'}}">
-  <view class="ld-selectall" catch:tap="onToggleAll">
-    <view class="ld-check {{allSelected ? 'on' : ''}}"></view>
-    <text>全选</text>
-  </view>
-  <view class="ld-checkbar-total">
-    <text class="ld-checkbar-label">合计</text>
-    <text class="ld-checkbar-num">{{totalLabel}}</text>
-  </view>
-  <view class="ld-checkout-btn {{selectedCount ? '' : 'dim'}}" catch:tap="onCheckout">去结算({{selectedCount}})</view>
-</view>
+<!-- 轻提示（按住删除没按够时） -->
+<view class="ld-toast {{toast ? 'show' : ''}}"><text>{{toast}}</text></view>
 
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />

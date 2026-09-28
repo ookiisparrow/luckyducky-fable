@@ -1,285 +1,199 @@
-/* 购物车·设计「待选区」语言。设计稿 402px 画板 → rpx（×1.87）。
-   token 见 styles/tokens.wxss；标题头 + 虚线暂存区(已加购行) + 下方推荐(圆加号) + 信任小字 + 悬浮结算 bar。
-   业务逻辑（勾选/加减/删除/全选/合计/结算·lib/cart）由 wxml handler 承接，本文件只管视觉。 */
-/* 滚动容器：退出提醒的 page-container 武装态冻结页面级滚动（决策§30），滚动改在 scroll-view 内发生。
-   须填满视口——height 而非 min-height（scroll-view 靠固定高度才产生内部滚动）。 */
-.ld-cart-scroll {
+/* 购物车（v5「字重」稿 A4）：头（标题+小货车）固定、列表滚、底（小计+结算）固定在 TabBar 上方 */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
+.ca {
+  box-sizing: border-box;
   height: 100vh;
-  background: var(--ld-bg-lilac);
+  display: flex;
+  flex-direction: column;
+}
+.ca-head {
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 104px 0 16px;
+  display: flex;
+  align-items: center;
+}
+.ca-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+/* 小货车：顶栏下 120px 处落地（全站同一条地面线） */
+.ca-truck {
+  flex: 0 0 auto;
+  padding: 120px 16px 12px;
 }
 
-.ld-cart {
-  min-height: 100vh;
-  background: var(--ld-bg-lilac);
-  padding: 24rpx 0 0;
+.ca-list {
+  flex: 1;
+  height: 0;
 }
-
-/* 标题头 */
-.ld-cart-head {
-  padding: 12rpx 36rpx 0;
+.ca-rows {
+  padding: 0 16px;
 }
-.ld-cart-title {
-  font-size: 52rpx;
-  font-weight: 500;
-  line-height: 1.2;
-  color: var(--ld-ink);
-  letter-spacing: -0.5rpx;
+.ca-row:last-child {
+  border-bottom: 1px solid var(--v5-hair);
 }
-.ld-cart-sub {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
+.ca-row {
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
 }
-
-/* 待选区（虚线暂存区） */
-.ld-cart-hold {
-  margin: 30rpx 36rpx 8rpx;
-}
-.ld-cart-hold-empty {
-  height: 400rpx;
-  border-top: 4rpx dashed var(--ld-purple);
-  border-bottom: 4rpx dashed var(--ld-purple);
+.ca-check-hit {
+  width: 44px;
+  height: 44px;
+  margin: 0 -11px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.ld-cart-hold-hint {
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-  letter-spacing: 2rpx;
+.ca-check {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
 }
-/* 空车出路按钮：药丸描边次级样式，与全站主按钮形体一致、但不抢主视觉 */
-.ld-cart-hold-cta {
-  margin-top: 20rpx;
-  padding: 14rpx 44rpx;
-  border-radius: 999rpx;
-  border: 2rpx solid var(--ld-purple);
-  color: var(--ld-purple);
-  font-size: 24rpx;
-  font-weight: 600;
-}
-.ld-cart-hold-cta-h {
-  background: var(--ld-bg-lilac);
-}
-.ld-cart-hold-list {
-  border-top: 4rpx dashed var(--ld-purple);
-  border-bottom: 4rpx dashed var(--ld-purple);
-  padding: 4rpx 0;
-  margin-bottom: 40rpx;
-}
-
-/* 行（待选区 + 推荐共用） */
-.ld-cart-row {
-  display: flex;
-  align-items: center;
-  gap: 26rpx;
-  padding: 26rpx 0;
-  border-bottom: 1rpx solid var(--ld-line-soft);
-}
-.ld-cart-row:last-child {
-  border-bottom: none;
-}
-.ld-check {
-  width: 38rpx;
-  height: 38rpx;
-  border-radius: 50%;
-  border: 3rpx solid var(--ld-purple-line);
+.ca-thumb {
+  width: 52px;
+  height: 52px;
   flex: 0 0 auto;
-}
-.ld-check.on {
-  background: var(--ld-purple-tab);
-  border-color: var(--ld-purple-tab);
-}
-.ld-cart-row-img {
-  width: 164rpx;
-  height: 164rpx;
-  flex: 0 0 auto;
-  border-radius: var(--ld-radius-md);
+  border-radius: 4px;
   overflow: hidden;
-  background: var(--ld-bg-sage);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
 }
-.ld-cart-hold-list .ld-cart-row-img {
-  width: 194rpx;
-  height: 194rpx;
-}
-.ld-cart-row-photo {
+.ca-thumb-img {
+  display: block;
   width: 100%;
   height: 100%;
 }
-.ld-cart-row-mid {
-  flex: 1 1 auto;
+.ca-mid {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 4px;
 }
-.ld-cart-row-name {
-  font-size: 28rpx;
-  line-height: 1.35;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
+.ca-name {
+  font-size: 17px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* 放开到两行：white-space:nowrap 单行截断的话，
-     「进阶套装 · 小伙伴们」只看得到前 6 个字，而同一件商品在下方推荐位却能显示全名。 */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
 }
-.ld-cart-hold-list .ld-cart-row-name {
-  font-size: 30rpx;
+.ca-sku {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.ld-cart-row-tag {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ld-cart-row-price {
-  display: flex;
-  align-items: baseline;
-  gap: 12rpx;
-  margin-top: 2rpx;
-}
-.ld-cart-was {
-  font-size: 20rpx;
-  color: var(--ld-content-2);
-  text-decoration: line-through;
-}
-.ld-cart-now {
-  font-size: 34rpx;
-  font-weight: 600;
-  color: #222222;
-  letter-spacing: 0.4rpx;
-}
-
-/* 动作列 */
-.ld-cart-row-act {
-  flex: 0 0 auto;
+.ca-right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 14rpx;
+  gap: 8px;
 }
-.ld-stepper {
+.ca-price {
+  font-size: 15px;
+  font-weight: 600;
+}
+.ca-price-off {
+  color: var(--v5-ink-3);
+}
+.ca-step {
   display: flex;
   align-items: center;
-  border: 2rpx solid var(--ld-purple-line);
-  border-radius: var(--ld-radius-pill);
-  overflow: hidden;
 }
-.ld-step {
-  width: 52rpx;
-  height: 52rpx;
-  line-height: 48rpx;
-  text-align: center;
-  background: #ffffff;
-  color: var(--ld-ink);
-  font-size: 32rpx;
-}
-.ld-step.dim {
-  color: var(--ld-purple-line);
-}
-.ld-step-qty {
-  min-width: 56rpx;
-  height: 52rpx;
-  line-height: 52rpx;
-  text-align: center;
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  background: #ffffff;
-}
-.ld-cart-row-del {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  padding: 4rpx 8rpx;
-}
-.ld-cart-add {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
-  background: var(--ld-purple);
-  color: #ffffff;
-  font-size: 40rpx;
+.ca-step-hit {
+  width: 34px;
+  height: 40px;
+  margin: -6px 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-/* 下方推荐 */
-.ld-cart-recs {
-  margin: 0 36rpx;
+.ca-step-key {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+  overflow: hidden;
 }
-.ld-cart-recs-title {
-  margin-bottom: 4rpx;
-  font-size: 28rpx;
-  font-weight: 500;
-  color: var(--ld-ink);
-}
-
-/* 信任小字 */
-.ld-cart-trust {
-  margin: 30rpx 36rpx 0;
-  padding-top: 26rpx;
-  border-top: 1rpx solid var(--ld-line-soft);
-  font-size: 22rpx;
-  color: var(--ld-content-2);
+.ca-qty {
+  width: 24px;
   text-align: center;
-  letter-spacing: 2rpx;
-}
-
-/* 悬浮结算 bar */
-.ld-checkbar-space {
-  height: 340rpx;
-}
-.ld-checkbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(140rpx + env(safe-area-inset-bottom)); /* 让开悬浮 TabBar（高度对齐去字前） */
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  margin: 0 24rpx;
-  padding: 18rpx 20rpx 18rpx 28rpx;
-  background: #ffffff;
-  border-radius: 40rpx;
-  box-shadow: 0 12rpx 44rpx rgba(28, 28, 32, 0.16), 0 2rpx 8rpx rgba(28, 28, 32, 0.1);
-}
-.ld-selectall {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-}
-.ld-checkbar-total {
-  margin-left: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.1;
-}
-.ld-checkbar-label {
-  font-size: 20rpx;
-  color: var(--ld-content-2);
-}
-.ld-checkbar-num {
-  font-size: 36rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
-  letter-spacing: 0.4rpx;
-}
-.ld-checkbar.empty .ld-checkbar-num {
-  color: #bdbdbd;
-}
-.ld-checkout-btn {
-  flex: 0 0 auto;
-  padding: 22rpx 40rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #ffffff;
-  font-size: 28rpx;
+  font-size: 15px;
   font-weight: 600;
 }
-.ld-checkout-btn.dim {
-  background: var(--ld-purple-line);
+/* 按住删除：红字 ×，按住时浅红从左往右填满（HOLD_MS 0.6s） */
+.ca-del {
+  color: var(--v5-err-text);
+}
+.ca-del-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: rgba(217, 72, 59, 0.18);
+}
+.ca-del-on .ca-del-fill {
+  transform: scaleX(1);
+  transition: transform 600ms linear;
+}
+
+/* 底部：小计（点线引导）+ 结算 */
+.ca-foot {
+  flex: 0 0 auto;
+  padding: 12px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ca-sum {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ca-sum-k {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.ca-leader {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+}
+.ca-sum-v {
+  font-size: 15px;
+}
+.ca-policy {
+  margin-top: -8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+
+.ca-empty {
+  padding: 24px 16px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.ca-empty-t {
+  font-size: 17px;
+  font-weight: 500;
+}
+/* TabBar 占高：上 8 + 键 44 + 下 max(24, 安全区)，再留 12 呼吸 */
+.ca-tab-space {
+  flex: 0 0 auto;
+  height: calc(64px + max(24px, env(safe-area-inset-bottom)));
 }

@@ -1,153 +1,140 @@
-<!-- 订单详情·重设计对齐 Checkout.jsx 的 OrderStatus 版式（设计 402px 画板→rpx ×1.87）。
-     业务逻辑一字不动：续付(onPay)/确认收货(onConfirm)/申请售后(onAfterSale)/写评价(onWriteReview·per-line)
-     全承接 order.ts；本文件只重排结构与视觉。banner/amountNum/canAfterSale 为 order.ts 派生视图。
-     订单行为历史快照·只读。有封面画缩略图，没有就灰底占位。token 见 styles/tokens.wxss。 -->
-<view class="co" wx:if="{{vm}}">
-  <view class="co-body">
+<!-- 订单详情（v5「字重」稿 B2）：小货车（姿态随订单态）+ 状态卡（四步进度）+ 物流卡 + 收货地址 + 商品与金额 + 订单信息；
+     底部按状态：返回 + 取消/去支付 | 返回 + 申请售后 + 确认收货 | 返回 + 申请售后。
+     业务逻辑一字不动：续付(onPay)/取消(onCancel·二次确认)/确认收货(onConfirm)/申请售后(onAfterSale)/写评价(onWriteReview·per-line)/
+     查看物流(onViewLogistics·快递100 插件)/复制(onCopyTracking/onCopyOrderNo) 全承接 order.ts。订单行为历史快照·只读。 -->
+<v5-nav title="订单详情" />
 
-    <!-- 状态横幅（按订单态换色·设计签名件） -->
-    <view class="coord-banner coord-{{banner.tint}}">
-      <view class="coord-banner-ico">
-        <image class="coord-banner-img" src="/static/icons/{{banner.icon}}.svg" mode="aspectFit" />
+<view class="od" wx:if="{{vm}}">
+  <view class="od-truck"><px-truck pose="{{truckPose}}" cargo="{{cargo}}" /></view>
+
+  <view class="od-body">
+    <!-- 状态卡 -->
+    <view class="od-card">
+      <view class="od-state">
+        <view class="od-state-l">
+          <px-anim wx:if="{{vm.status === 'pending'}}" name="hourglass" size="2" />
+          <text class="od-head">{{banner.head}}</text>
+        </view>
       </view>
-      <view class="coord-banner-text">
-        <view class="coord-banner-head">{{banner.head}}</view>
-        <view class="coord-banner-sub" wx:if="{{banner.sub}}">{{banner.sub}}</view>
+      <text class="t-sys od-sub" wx:if="{{banner.sub}}">{{banner.sub}}</text>
+      <view class="od-steps">
+        <view class="od-step" wx:for="{{steps}}" wx:key="label">
+          <view wx:if="{{index > 0}}" class="od-line {{item.state === 'todo' ? '' : 'od-line-on'}}"></view>
+          <view class="od-node">
+            <px-i wx:if="{{item.state === 'done'}}" name="node" tone="#111111" />
+            <px-i wx:elif="{{item.state === 'cur'}}" name="nodeCur" tone="#8a5ae0" />
+            <px-i wx:else name="ring" tone="#c9c9c2" />
+          </view>
+          <text class="t-sys od-step-t {{item.state === 'cur' ? 'od-step-cur' : ''}} {{item.state === 'todo' ? 'od-step-todo' : ''}}">{{item.label}}</text>
+        </view>
       </view>
     </view>
 
     <!-- 物流（有运单号时·真实数据仅运单号+公司，实时轨迹经快递100插件；插件打不开回退复制运单号） -->
-    <view class="co-card coord-logi" wx:if="{{vm.trackingNo}}">
-      <view class="coord-logi-ico">
-        <image class="coord-logi-img" src="/static/icons/truck.svg" mode="aspectFit" />
+    <view class="k-card od-card od-logi" wx:if="{{vm.trackingNo}}" hover-start-time="20" hover-class="k-card-down" bind:tap="onViewLogistics">
+      <view class="od-logi-top">
+        <view class="od-logi-no">
+          <text class="t-sys od-k" wx:if="{{vm.shipCompany}}">{{vm.shipCompany}}</text>
+          <text class="mono od-track">{{vm.trackingNo}}</text>
+        </view>
+        <view class="t-sys od-more"><text>查看物流</text><px-i name="arrow" /></view>
       </view>
-      <view class="coord-logi-text">
-        <view class="coord-logi-line"><text wx:if="{{vm.shipCompany}}">{{vm.shipCompany}} · </text>运单号 {{vm.trackingNo}}</view>
-        <view class="coord-logi-time">物流状态以承运方为准</view>
-      </view>
-      <view class="coord-logi-btn" catch:tap="onViewLogistics">查看物流</view>
-      <view class="coord-copy" catch:tap="onCopyTracking">
-        <image class="coord-copy-img" src="/static/icons/copy.svg" mode="aspectFit" />
+      <view class="od-logi-bot">
+        <text class="t-sys od-k">物流状态以承运方为准</text>
+        <view class="k k-sm k-flat od-mini" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onCopyTracking" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
       </view>
     </view>
 
-    <!-- 收货地址（历史快照·只读·含彩色针脚底边） -->
-    <view class="co-addr" wx:if="{{vm.address}}">
-      <view class="co-addr-main">
-        <view class="co-addr-pin">
-          <image class="co-ico co-ico-lg" src="/static/icons/map-pin.svg" mode="aspectFit" />
-        </view>
-        <view class="co-addr-text">
-          <view class="co-addr-line1">
-            <text class="co-addr-name">{{vm.address.name}}</text>
-            <text class="co-addr-phone">{{vm.address.phone}}</text>
-          </view>
-          <view class="co-addr-line2">{{vm.address.region}} {{vm.address.detail}}</view>
-        </view>
+    <!-- 收货地址（历史快照·只读） -->
+    <view class="od-card" wx:if="{{vm.address}}">
+      <text class="t-sys od-k">收货地址</text>
+      <view class="od-who">
+        <text class="t-sys">{{vm.address.name}}</text>
+        <text class="mono od-phone">{{vm.address.phone}}</text>
       </view>
-      <view class="co-stitch"></view>
+      <text class="t-sys od-where">{{vm.address.region}} {{vm.address.detail}}</text>
     </view>
 
-    <!-- 订单商品（只读 ×N） -->
-    <view class="co-card">
-      <!-- 纯展示行·无店铺详情页可跳（仅一家官方旗舰店）：不放 chevron 暗示可点，防误导用户 -->
-      <view class="co-shop">
-        <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
-        <text class="co-shop-name">{{shopName}}</text>
-      </view>
-      <view class="co-item" wx:for="{{vm.items}}" wx:key="lineId">
-        <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
-        <view wx:else class="co-item-img"></view>
-        <view class="co-item-mid">
-          <text class="co-item-name">{{item.name}}</text>
-          <text class="co-item-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
-          <view class="co-item-foot">
-            <text class="co-item-price co-price">{{item.priceLabel}}</text>
-            <view class="co-item-footright">
-              <text class="co-item-qty">×{{item.qty}}</text>
-              <view class="coord-review" wx:if="{{vm.status === 'done'}}"
-                data-lineid="{{item.lineId}}" data-name="{{item.name}}" catch:tap="onWriteReview">去评价</view>
-            </view>
-          </view>
+    <!-- 商品（只读 ×N）+ 金额 -->
+    <view class="od-card od-goods">
+      <view class="od-item" wx:for="{{vm.items}}" wx:key="lineId">
+        <view class="od-thumb">
+          <image wx:if="{{item.cover}}" class="od-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         </view>
+        <view class="od-item-mid">
+          <text class="od-item-name">{{item.name}}</text>
+          <text class="t-sys od-item-sub">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
+        </view>
+        <view class="od-item-r">
+          <text class="mono od-item-price">{{item.priceLabel}}</text>
+          <view wx:if="{{vm.status === 'done'}}" class="k k-sm k-light od-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+            data-lineid="{{item.lineId}}" data-name="{{item.name}}" catch:tap="onWriteReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
+        </view>
+      </view>
+      <view class="od-sum">
+        <view class="od-sum-row" wx:if="{{vm.goodsLabel}}"><text class="t-sys od-k">商品</text><view class="od-leader"></view><text class="mono od-v">{{vm.goodsLabel}}</text></view>
+        <view class="od-sum-row"><text class="t-sys od-k">运费</text><view class="od-leader"></view><text class="mono od-v">{{vm.shipLabel}}</text></view>
+        <view class="od-sum-row"><text class="od-total-k">{{vm.amountTitle}}</text><view class="od-leader"></view><text class="mono od-total-v">{{vm.amountLabel}}</text></view>
       </view>
     </view>
 
     <!-- 订单信息 -->
-    <view class="co-card co-rows">
-      <view class="co-row">
-        <text class="co-row-key">订单编号</text>
-        <text class="co-row-val co-row-mono">{{vm.id}}</text>
-        <view class="coord-copy" catch:tap="onCopyOrderNo">
-          <image class="coord-copy-img" src="/static/icons/copy.svg" mode="aspectFit" />
-        </view>
+    <view class="od-info">
+      <view class="od-info-row">
+        <text class="t-sys od-k">订单编号</text>
+        <text class="mono od-info-v">{{vm.id}}</text>
+        <view class="k k-sm k-flat od-mini" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onCopyOrderNo" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
       </view>
-      <view class="co-row" wx:if="{{vm.createdAtLabel}}">
-        <text class="co-row-key">下单时间</text>
-        <text class="co-row-val muted">{{vm.createdAtLabel}}</text>
+      <view class="od-info-row" wx:if="{{vm.createdAtLabel}}">
+        <text class="t-sys od-k">下单时间</text>
+        <text class="mono od-info-v">{{vm.createdAtLabel}}</text>
       </view>
     </view>
-
-    <!-- 金额明细（灰色内嵌盒） -->
-    <view class="co-card">
-      <view class="co-summary">
-        <view class="co-sum-row" wx:if="{{vm.goodsLabel}}"><text>商品金额</text><text class="co-sum-v">{{vm.goodsLabel}}</text></view>
-        <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{vm.shipLabel}}</text></view>
-        <view class="co-sum-div"></view>
-        <view class="co-sum-row total"><text>{{vm.amountTitle}}</text><text class="co-sum-v">{{vm.amountLabel}}</text></view>
-        <!-- 申请售后（金额明细下方独立小按钮·承接 onAfterSale） -->
-        <view class="coord-refund-wrap" wx:if="{{canAfterSale}}">
-          <view class="coord-refund" bind:tap="onAfterSale">
-            <image class="coord-refund-img" src="/static/icons/rotate-ccw.svg" mode="aspectFit" />申请售后
-          </view>
-        </view>
-      </view>
-    </view>
-
   </view>
 
-  <!-- 底部坞（金额行 + 状态操作·标题随付款态：付过=实付款 / 未付=订单金额） -->
-  <view class="co-dock-space"></view>
-  <view class="co-dock">
-    <view class="co-dockbar">
-      <view class="co-dock-total">
-        <text class="co-dock-small">{{vm.amountTitle}}</text>
-        <view class="co-dock-amount">
-          <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
-        </view>
+  <view class="od-dock-space"></view>
+  <view class="od-dock">
+    <view class="k k-light k-48 od-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">返回</view>
+    <block wx:if="{{vm.status === 'pending'}}">
+      <view class="k k-light k-48 od-side od-danger" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onCancel" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">取消订单</view>
+      <view class="k k-ink k-48 od-main {{paying ? 'od-busy' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <block wx:if="{{paying}}"><px-anim name="loader" size="2" dark /><text>支付中</text></block>
+        <text wx:else>去支付</text>
       </view>
-      <view class="co-cancel" wx:if="{{vm.status === 'pending'}}" bind:tap="onCancel">取消订单</view>
-      <view class="co-submit {{paying ? 'dim' : ''}}" wx:if="{{vm.status === 'pending'}}" bind:tap="onPay">继续支付</view>
-      <view class="co-submit" wx:if="{{vm.status === 'shipped'}}" bind:tap="onConfirm">确认收货</view>
-    </view>
+    </block>
+    <view wx:if="{{canAfterSale}}" class="k k-light k-48 od-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAfterSale" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">申请售后</view>
+    <view wx:if="{{vm.status === 'shipped'}}" class="k k-ink k-48 od-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onConfirm" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
   </view>
 </view>
 
-<!-- 加载骨架（根因#8·loading 且 vm 空时三分支曾全假→白屏）：对齐 detail pdp-skeleton / order-list coolist-skel -->
-<view class="co coord-skel" wx:elif="{{loading}}">
-  <view class="co-body">
-    <view class="coord-skel-banner"></view>
-    <view class="co-card">
-      <view class="co-item">
-        <view class="co-item-img coord-skel-block"></view>
-        <view class="co-item-mid">
-          <view class="coord-skel-bar" style="width: 300rpx"></view>
-          <view class="coord-skel-bar" style="width: 160rpx; margin-top: 18rpx"></view>
-        </view>
-      </view>
+<!-- 加载骨架（根因#8·loading 且 vm 空时三分支曾全假→白屏） -->
+<view class="od-skel" wx:elif="{{loading}}">
+  <view class="od-card">
+    <view class="od-skel-bar skel" style="width: 120px"></view>
+    <view class="od-skel-bar skel" style="width: 80%"></view>
+  </view>
+  <view class="od-card od-item">
+    <view class="od-thumb skel"></view>
+    <view class="od-item-mid">
+      <view class="od-skel-bar skel" style="width: 60%"></view>
+      <view class="od-skel-bar skel" style="width: 36%"></view>
     </view>
   </view>
 </view>
 
 <!-- 失败态与不存在分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败给重试，不误报「订单不存在」 -->
-<view class="co coord-empty" wx:elif="{{!loading && loadFailed}}">
-  <view class="coord-empty-title">网络开小差</view>
-  <view class="coord-empty-hint">订单没加载出来，请重试</view>
-  <view class="coord-retry" bind:tap="onRetryLoad">重试</view>
+<view class="od-state-page" wx:elif="{{!loading && loadFailed}}">
+  <px-anim name="signal" size="4" />
+  <text class="od-state-t">网络开小差</text>
+  <text class="t-sys od-k">订单没加载出来，请重试</text>
+  <view class="k k-light od-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
 </view>
 
 <!-- 订单不存在 -->
-<view class="co coord-empty" wx:elif="{{!loading}}">
-  <view class="coord-empty-title">订单不存在</view>
-  <view class="coord-empty-hint">可能已被删除或不属于当前账号</view>
+<view class="od-state-page" wx:elif="{{!loading}}">
+  <text class="od-state-t">订单不存在</text>
+  <text class="t-sys od-k">可能已被删除或不属于当前账号</text>
 </view>
+
+<!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

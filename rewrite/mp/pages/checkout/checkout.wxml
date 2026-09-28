@@ -1,113 +1,72 @@
-<!-- 结算·重设计对齐 Checkout.jsx co-* 版式（设计 402px 画板→rpx ×1.87）。
-     业务逻辑不动：地址(onPickAddress)/搭配购(onToggleAddon·data-id)/提交(onSubmit)/金额明细(*Label)
-     全部承接 checkout.ts；本文件只重排结构与视觉，token 见 styles/tokens.wxss。
-     商品/搭配购数量为只读（草稿单源·无 qty 改写 handler，遵设计只读 co-item-qty 变体）。 -->
-<view class="co">
-  <view class="co-body">
+<!-- 确认订单（v5「字重」稿 A5）：开进来的小货车 + 地址卡 + 商品卡 + 搭配购（设计稿未画·真实在卖保留）+ 点线明细；
+     底部 应付 + 提交（在途换像素 loader）。业务逻辑全在 checkout.ts：地址(onPickAddress)/搭配购(onToggleAddon)/提交(onSubmit)。
+     顾客页不展示券类折扣（已拍板·no-customer-coupon-ui 测试钉）。商品数量只读（草稿单源）。 -->
+<v5-nav title="确认订单" />
 
-    <!-- 收货地址卡（含彩色针脚底边） -->
-    <view class="co-addr">
-      <view class="co-addr-main" bind:tap="onPickAddress">
-        <view class="co-addr-pin">
-          <image class="co-ico co-ico-lg" src="/static/icons/map-pin.svg" mode="aspectFit" />
-        </view>
-        <view class="co-addr-text" wx:if="{{address}}">
-          <view class="co-addr-line1">
-            <text class="co-addr-name">{{address.name}}</text>
-            <text class="co-addr-phone">{{address.phone}}</text>
-          </view>
-          <view class="co-addr-line2">
-            <text class="co-addr-tag" wx:if="{{address.isDefault}}">默认</text>{{address.region}} {{address.detail}}
-          </view>
-        </view>
-        <view class="co-addr-text co-addr-empty" wx:else>
-          <text class="co-addr-empty-title">添加收货地址</text>
-          <text class="co-addr-empty-sub">请先填写收货人、手机号与详细地址</text>
-        </view>
-        <view class="co-addr-chev">
-          <image class="co-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-        </view>
+<view class="co">
+  <view class="co-truck"><px-truck id="truck" pose="drive" arrive="160" cargo="{{cargo}}" /></view>
+
+  <view class="co-body">
+    <!-- 收货地址 -->
+    <view wx:if="{{address}}" class="k-card co-card co-addr" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
+      <view class="co-addr-top">
+        <text class="t-sys co-k">收货地址</text>
+        <view class="t-sys co-change"><text>更换</text><px-i name="arrow" /></view>
       </view>
-      <view class="co-stitch"></view>
+      <view class="co-who">
+        <text class="t-sys">{{address.name}}</text>
+        <text class="mono co-phone">{{address.phone}}</text>
+      </view>
+      <text class="t-sys co-where">{{address.region}} {{address.detail}}</text>
+    </view>
+    <view wx:else class="k-card co-card co-addr-none" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
+      <px-i name="led" tone="#f4bd3f" />
+      <text class="co-addr-add">添加收货地址</text>
+      <px-i name="arrow" tone="#62625c" />
     </view>
 
-    <!-- 订单商品 -->
-    <view class="co-card">
-      <!-- 纯展示行·无店铺详情页可跳（仅一家官方旗舰店）：不放 chevron 暗示可点，防误导用户 -->
-      <view class="co-shop">
-        <image class="co-shop-ico" src="/static/icons/store.svg" mode="aspectFit" />
-        <text class="co-shop-name">{{shopName}}</text>
-      </view>
+    <!-- 商品 -->
+    <view class="co-card co-items">
       <view class="co-item" wx:for="{{items}}" wx:key="lineId">
-        <image wx:if="{{item.cover}}" class="co-item-img" src="{{item.cover}}" mode="aspectFill" />
-        <view wx:else class="co-item-img"></view>
+        <view class="co-thumb">
+          <image wx:if="{{item.cover}}" class="co-thumb-img" src="{{item.cover}}" mode="aspectFill" />
+        </view>
         <view class="co-item-mid">
           <text class="co-item-name">{{item.name}}</text>
-          <text class="co-item-spec" wx:if="{{item.sku || item.tag}}">{{item.sku || item.tag}}</text>
-          <view class="co-item-foot">
-            <text class="co-item-price co-price"><text class="cny">¥</text>{{item.priceNum}}</text>
-            <text class="co-item-qty">×{{item.qty}}</text>
-          </view>
+          <text class="t-sys co-item-sub">{{item.sku || item.tag}}{{item.sku || item.tag ? ' · ' : ''}}×{{item.qty}}</text>
         </view>
+        <text class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>
     </view>
 
     <!-- 搭配购买：只有真能卖的加项才露整块；checkoutConst 里 hook/yarn 是占位，空则整块不渲染。 -->
-    <view class="co-card" wx:if="{{addons.length}}">
-      <view class="co-addon-head">
-        <text class="co-addon-title">搭配购买</text>
-        <text class="co-addon-sub">一起买更划算</text>
-      </view>
-      <view class="co-addon" wx:for="{{addons}}" wx:key="id" data-id="{{item.id}}" bind:tap="onToggleAddon">
-        <view class="co-radio {{item.added ? 'on' : ''}}"></view>
-        <view class="co-addon-img"></view>
-        <view class="co-addon-mid">
-          <text class="co-addon-name">{{item.name}}</text>
-          <view class="co-addon-foot">
-            <text class="co-addon-price co-price"><text class="cny">¥</text>{{item.priceNum}}</text>
-          </view>
-        </view>
+    <view class="co-card co-items" wx:if="{{addons.length}}">
+      <text class="t-sys co-k co-addon-head">搭配购买</text>
+      <view class="co-item" wx:for="{{addons}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onToggleAddon">
+        <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="#8a5ae0" /></view>
+        <text class="co-item-name co-addon-name">{{item.name}}</text>
+        <text class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>
     </view>
 
-    <!-- 配送方式：金额行仍用 shipLabel（SHIP=0 显示「包邮」）；政策说明另起一行，不算钱。 -->
-    <view class="co-card co-rows">
-      <view class="co-row">
-        <text class="co-row-key">配送方式</text>
-        <text class="co-row-val">顺丰速运 · {{shipLabel}}</text>
-      </view>
-      <view class="co-ship-note">包邮到家·售后无忧</view>
+    <!-- 金额明细（点线引导）：运费行仍用 shipLabel（SHIP=0 显示「包邮」）；政策说明另起一行，不算钱 -->
+    <view class="co-sum">
+      <view class="co-sum-row"><text class="t-sys co-k">商品</text><view class="co-leader"></view><text class="mono co-v">{{goodsLabel}}</text></view>
+      <view class="co-sum-row"><text class="t-sys co-k">运费</text><view class="co-leader"></view><text class="mono co-v">顺丰速运 · {{shipLabel}}</text></view>
+      <text class="t-sys co-policy">包邮到家·售后无忧</text>
     </view>
-
-    <!-- 金额明细 -->
-    <view class="co-card">
-      <view class="co-summary">
-        <view class="co-sum-row"><text>商品金额</text><text class="co-sum-v">{{goodsLabel}}</text></view>
-        <view class="co-sum-row"><text>运费</text><text class="co-sum-v">{{shipLabel}}</text></view>
-        <view class="co-sum-div"></view>
-        <view class="co-sum-row total">
-          <text>实付款</text>
-          <text class="co-sum-v"><text class="cny">¥</text>{{amountNum}}</text>
-        </view>
-      </view>
-    </view>
-
   </view>
 
-  <!-- 底部提交坞 -->
   <view class="co-dock-space"></view>
   <view class="co-dock">
-    <view class="co-dockbar">
-      <view class="co-dock-total">
-        <text class="co-dock-small">合计</text>
-        <view class="co-dock-amount">
-          <text class="co-dock-num"><text class="cny">¥</text>{{amountNum}}</text>
-          <text class="co-dock-count">共 {{count}} 件</text>
-        </view>
-      </view>
-      <!-- 在途反馈：dim 只是变暗、弱网像卡死——文案切「提交中…」给明确进行时信号。
-           刻意不用 wx.showLoading：本链两段网络请求多分支 return，hideLoading 配对易漏→锁屏，文案方案零此风险。 -->
-      <view class="co-submit {{submitting ? 'dim' : ''}}" bind:tap="onSubmit">{{submitting ? '提交中…' : '提交订单'}}</view>
+    <view class="co-total">
+      <text class="t-sys co-k">应付 · 共 {{count}} 件</text>
+      <text class="mono co-amount">¥{{amountNum}}</text>
+    </view>
+    <!-- 在途反馈：像素 loader + 「提交中」（刻意不用 wx.showLoading：本链多分支 return，hideLoading 配对易漏→锁屏） -->
+    <view class="k k-ink k-48 co-submit" hover-start-time="20" hover-class="{{submitting ? '' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onSubmit" data-k="{{submitting ? '' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <block wx:if="{{submitting}}"><px-anim name="loader" size="2" dark /><text>提交中</text></block>
+      <text wx:else>提交订单</text>
     </view>
   </view>
 </view>

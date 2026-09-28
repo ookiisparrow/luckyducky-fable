@@ -4,6 +4,9 @@ import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
+import { goHomeTab } from '../../lib/homeIntent'
+import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxToast } from '../../lib/pxFx'
 
 const TABS = [
   { key: '', label: '全部' },
@@ -40,6 +43,8 @@ function decorate(o: OrderVM): OrderRow {
 }
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     tabs: TABS,
     tabKey: '',
@@ -150,6 +155,11 @@ Page({
     if (k === null) return
     this.switchTab(k)
   },
+  // 空态「去逛逛」：回首页从头逛起（同 cart/paysuccess 口径·lib/homeIntent）
+  onGoHome() {
+    tapHaptic()
+    goHomeTab()
+  },
   onTapOrder(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/order/order?id=' + String(e.currentTarget.dataset.id) })
   },
@@ -174,7 +184,7 @@ Page({
       return
     }
     if (outcome.kind === 'paid') {
-      wx.showToast({ title: '已支付', icon: 'success' })
+      fxToast(this, '已支付')
       settle()
       return
     }
@@ -182,7 +192,7 @@ Page({
       wx.requestPayment({
         ...outcome.payment,
         success: () => {
-          wx.showToast({ title: '支付成功', icon: 'success' })
+          fxToast(this, '支付成功')
           settle()
         },
         fail: settle, // 取消：订单保留·刷新即可

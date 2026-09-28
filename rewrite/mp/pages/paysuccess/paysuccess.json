@@ -1,3 +1,9 @@
 {
-  "navigationBarTitleText": "支付成功"
+  "navigationStyle": "custom",
+  "backgroundColor": "#fafaf8",
+  "usingComponents": {
+    "v5-nav": "/components/v5-nav/v5-nav",
+    "px-i": "/components/px-i/px-i",
+    "px-ground": "/components/px-ground/px-ground"
+  }
 }

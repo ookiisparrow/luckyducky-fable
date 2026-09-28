@@ -6,7 +6,7 @@
 //   tier1（首屏）→ tier2（二级页）。v5（老板 2026-09-28 拍板）：圆体只留给按钮/标题/界面固定文案，正文长段和
 //   用户内容（昵称/地址/评价）走黑体 .t-sys，所以只收真用圆体的字、不设 GB2312 兜底层。
 // 逐层接力加载（上层落定才起下层=带宽让给首屏）；每层一个字族，回退栈 T1→T2→系统字
-// （styles/tokens.wxss --ld-font-brand）按 CSS 逐字回退语义补字——T1 没有的字自动用 T2 渲染，
+// （styles/tokens.wxss --v5-font-brand）按 CSS 逐字回退语义补字——T1 没有的字自动用 T2 渲染，
 // 坏情况=个别字暂显系统圆体（与 FOUT 相同·无正确性悬崖）。刻意不用「同族多次 loadFontFace 增量合并」：
 // 官方未定义该语义（核查过·大概率覆盖或去重忽略），不拿未定义行为当地基。
 //
@@ -17,7 +17,7 @@
 //
 // 持久缓存（官方文件系统文档背书「本地用户文件清理时机跟代码包一样」=跨冷启动持久·上限 200MB）：
 //   首启 downloadFile → copyFile 落 USER_DATA_PATH/brand-fonts/ → 二次冷启动本地直读零网络（飞行模式也有
-//   品牌字）。文件名带版本号（v5）＝天然缓存失效：版本升级后旧文件名不再被引用，启动时顺手清理。
+//   品牌字）。文件名带版本号（v6）＝天然缓存失效：版本升级后旧文件名不再被引用，启动时顺手清理。
 //   CDN 侧 max-age 仅 120s 几乎次次回源（实测），本地缓存是把「每次冷启 1.9MB」降为零的主杠杆。
 //
 // 弱网加固：downloadFile 显式 timeout + 失败退避重试 2 次（3s/8s）——防「瞬断=整会话系统字」。
@@ -37,23 +37,23 @@ const FONT_HOST = 'https://cloudbase-d4gcssqbv06865479-1440904924.tcloudbaseapp.
 
 // 每层三字重（500 正文/700 标题/900 大标题·v5 字重稿）；300 细字只用在 13px 以下小字上，小字走黑体，圆体不出细体。
 // 600 就近落 700、400/300 就近落 500。500/700 排在前面＝同层先到正文字重。
-// 文件名与 scripts/build-brand-font.mjs 产物一致（版本号 v5 进文件名·CDN/本地缓存失效靠改名），
+// 文件名与 scripts/build-brand-font.mjs 产物一致（版本号 v6 进文件名·CDN/本地缓存失效靠改名），
 // tests/brand-font.test.ts 钉形状。tier 顺序即加载顺序（首屏最先）。
 export const BRAND_FONT_TIERS = [
   {
     family: BRAND_FONT_FAMILY,
     files: [
-      { weight: '500', name: 'wenyuan-tier1-medium.v5.woff' },
-      { weight: '700', name: 'wenyuan-tier1-bold.v5.woff' },
-      { weight: '900', name: 'wenyuan-tier1-heavy.v5.woff' },
+      { weight: '500', name: 'wenyuan-tier1-medium.v6.woff' },
+      { weight: '700', name: 'wenyuan-tier1-bold.v6.woff' },
+      { weight: '900', name: 'wenyuan-tier1-heavy.v6.woff' },
     ],
   },
   {
     family: BRAND_FONT_FAMILY_T2,
     files: [
-      { weight: '500', name: 'wenyuan-tier2-medium.v5.woff' },
-      { weight: '700', name: 'wenyuan-tier2-bold.v5.woff' },
-      { weight: '900', name: 'wenyuan-tier2-heavy.v5.woff' },
+      { weight: '500', name: 'wenyuan-tier2-medium.v6.woff' },
+      { weight: '700', name: 'wenyuan-tier2-bold.v6.woff' },
+      { weight: '900', name: 'wenyuan-tier2-heavy.v6.woff' },
     ],
   },
 ]
