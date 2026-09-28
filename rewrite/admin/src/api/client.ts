@@ -39,6 +39,12 @@ export function createClient(deps: ClientDeps) {
   // 会话失效集中回调（单源·根因#5 收口）：post 遇 401 清令牌后触发一次，壳层注册为「导登录」，
   // 各页不各写各的 SESSION_LOST 跳转（各写会漂成卡死「加载中…」/裸显合成码/导登录多种表现）。
   let sessionLostHandler: (() => void) | null = null
+  // 失效令牌只试一次（2026-09-28 真事故）：云端把每个带失效令牌的请求都记一次认证失败，每 IP 5 次锁 5 分钟；
+  // 看板一打开并发 5 个请求，令牌失效时一次打开就锁死本机。故令牌没被云端认过（verifiedToken）之前，
+  // 并发请求排在第一个（probe）后面；它回 401 → 令牌已清，排队的直接判 SESSION_LOST、不再打云端。
+  // 断网/超时（status 0）没拿到云端答复，不算认过。
+  let verifiedToken = ''
+  let probe: Promise<unknown> | null = null
 
   async function raw(action: string, key: string, data: Record<string, unknown>): Promise<ClientResult> {
     if (!deps.endpoint) return { ok: false, status: 0, error: 'NO_ENDPOINT' } // 未配后端·fail-closed 不假装
@@ -92,6 +98,7 @@ export function createClient(deps: ClientDeps) {
       const token = typeof r.sessionToken === 'string' ? r.sessionToken : ''
       if (r.ok && token) {
         storage.set(TOKEN_KEY, token) // 只存令牌·绝不存口令
+        verifiedToken = token // 刚签发的令牌不必再试
         const op = typeof r.operator === 'string' ? r.operator : ''
         if (op) storage.set(WHO_KEY, op)
       }
@@ -101,13 +108,25 @@ export function createClient(deps: ClientDeps) {
 
     /** 业务调用：带会话令牌；401 = 会话失效 → 清令牌·统一 SESSION_LOST（壳层导登录）。 */
     async post(action: string, data: Record<string, unknown> = {}): Promise<ClientResult> {
-      const token = storage.get(TOKEN_KEY) || ''
+      let token = storage.get(TOKEN_KEY) || ''
+      while (token && token !== verifiedToken && probe) {
+        await probe // 排在试令牌的那个请求后面，它落定后按最新令牌再判
+        token = storage.get(TOKEN_KEY) || ''
+      }
       if (!token) {
         if (sessionLostHandler) sessionLostHandler() // 无令牌调业务＝会话已丢·集中导登录
         return { ok: false, status: 401, error: 'SESSION_LOST' }
       }
-      const r = await raw(action, token, data)
+      const pending = raw(action, token, data)
+      if (token !== verifiedToken) {
+        probe = pending.then((res) => {
+          if (res.status !== 401 && res.status !== 0) verifiedToken = token
+        })
+        void probe.finally(() => (probe = null))
+      }
+      const r = await pending
       if (r.status === 401) {
+        if (verifiedToken === token) verifiedToken = ''
         storage.remove(TOKEN_KEY)
         if (sessionLostHandler) sessionLostHandler() // 401＝会话失效·清令牌后集中导登录（单源·各页不再各跳）
         return { ...r, ok: false, error: 'SESSION_LOST' }
