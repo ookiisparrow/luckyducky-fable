@@ -1,6 +1,6 @@
 <!-- 订单详情（v5「字重」稿 B2）：小货车（姿态随订单态）+ 状态卡（短状态名 + 右侧小字 + 四步进度 + 异常说明）+ 物流卡 + 收货地址 + 商品与金额 + 订单信息；
      底部按状态：返回 + 按住取消/去支付 | 返回 + 申请售后 (+ 确认收货) | 返回 + 联系客服（待退款/支付异常）；已关闭不出底部栏。
-     续付(onPay)/按住取消(onCancelStart/Move/End·拍板 7·挪开 10px 作废)/按住撤销售后(onWithdrawStart/Move/End·行内)/确认收货(onConfirm)/申请售后(onAfterSale·自绘半屏)/写评价(onWriteReview·per-line)/
+     续付(onPay)/按住取消(onCancelStart/Move/End·拍板 7·挪开 10px 作废)/按住撤回售后(onWithdrawStart/Move/End·行内)/确认收货(onConfirm)/申请售后(onAfterSale·自绘半屏)/写评价(onWriteReview·per-line)/
      物流页(onViewLogistics)/复制(onCopyTracking/onCopyOrderNo)/客服(onKefu) 全承接 order.ts。订单行为历史快照·只读。 -->
 <v5-nav title="订单详情" />
 
@@ -76,10 +76,10 @@
         </view>
         <view class="od-item-r">
           <text class="mono od-item-price">{{item.priceLabel}}</text>
-          <!-- 这件的售后还在申请中：按住 700ms 撤销（轻点提示「按住撤销申请」·挪开 10px 作废） -->
+          <!-- 这件的售后还在申请中：按住 700ms 撤回（轻点提示「按住撤回申请」·挪开 10px 作废） -->
           <view wx:if="{{lineWd[item.lineId]}}" class="od-wd" data-line="{{item.lineId}}" bind:touchstart="onWithdrawStart" bind:touchmove="onWithdrawMove" bind:touchend="onWithdrawEnd" bind:touchcancel="onWithdrawEnd">
             <view class="k k-sm k-light od-mini od-danger {{wdHold === item.lineId ? 'od-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-              data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill"></view><text class="od-danger-t">撤销申请</text></view>
+              data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill"></view><text class="od-danger-t">撤回申请</text></view>
           </view>
           <view wx:if="{{vm.status === 'done'}}" class="k k-sm k-light od-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
             data-i="{{index}}" catch:tap="onWriteReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>

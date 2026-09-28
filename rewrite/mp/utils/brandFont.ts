@@ -17,7 +17,7 @@
 //
 // 持久缓存（官方文件系统文档背书「本地用户文件清理时机跟代码包一样」=跨冷启动持久·上限 200MB）：
 //   首启 downloadFile → copyFile 落 USER_DATA_PATH/brand-fonts/ → 二次冷启动本地直读零网络（飞行模式也有
-//   品牌字）。文件名带版本号（v9）＝天然缓存失效：版本升级后旧文件名不再被引用，启动时顺手清理。
+//   品牌字）。文件名带版本号（v8）＝天然缓存失效：版本升级后旧文件名不再被引用，启动时顺手清理。
 //   CDN 侧 max-age 仅 120s 几乎次次回源（实测），本地缓存是把「每次冷启 1.9MB」降为零的主杠杆。
 //
 // 弱网加固：downloadFile 显式 timeout + 失败退避重试 2 次（3s/8s）——防「瞬断=整会话系统字」。
@@ -37,23 +37,23 @@ const FONT_HOST = 'https://cloudbase-d4gcssqbv06865479-1440904924.tcloudbaseapp.
 
 // 每层三字重（500 正文/700 标题/900 大标题·v5 字重稿）；300 细字只用在 13px 以下小字上，小字走黑体，圆体不出细体。
 // 600 就近落 700、400/300 就近落 500。500/700 排在前面＝同层先到正文字重。
-// 文件名与 scripts/build-brand-font.mjs 产物一致（版本号 v9 进文件名·CDN/本地缓存失效靠改名），
+// 文件名与 scripts/build-brand-font.mjs 产物一致（版本号 v8 进文件名·CDN/本地缓存失效靠改名），
 // tests/brand-font.test.ts 钉形状。tier 顺序即加载顺序（首屏最先）。
 export const BRAND_FONT_TIERS = [
   {
     family: BRAND_FONT_FAMILY,
     files: [
-      { weight: '500', name: 'wenyuan-tier1-medium.v9.woff' },
-      { weight: '700', name: 'wenyuan-tier1-bold.v9.woff' },
-      { weight: '900', name: 'wenyuan-tier1-heavy.v9.woff' },
+      { weight: '500', name: 'wenyuan-tier1-medium.v8.woff' },
+      { weight: '700', name: 'wenyuan-tier1-bold.v8.woff' },
+      { weight: '900', name: 'wenyuan-tier1-heavy.v8.woff' },
     ],
   },
   {
     family: BRAND_FONT_FAMILY_T2,
     files: [
-      { weight: '500', name: 'wenyuan-tier2-medium.v9.woff' },
-      { weight: '700', name: 'wenyuan-tier2-bold.v9.woff' },
-      { weight: '900', name: 'wenyuan-tier2-heavy.v9.woff' },
+      { weight: '500', name: 'wenyuan-tier2-medium.v8.woff' },
+      { weight: '700', name: 'wenyuan-tier2-bold.v8.woff' },
+      { weight: '900', name: 'wenyuan-tier2-heavy.v8.woff' },
     ],
   },
 ]

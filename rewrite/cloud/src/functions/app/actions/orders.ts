@@ -448,7 +448,7 @@ export const applyRefund = withOpenId(
       alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
       return err('REFUND_SCAN_CAP')
     }
-    // 该行已有售后：全是「顾客撤销」的才许重新申请（复用同一张单），有任何别的状态（含越规退款单）仍算申请过
+    // 该行已有售后：全是「顾客撤回」的才许重新申请（复用同一张单），有任何别的状态（含越规退款单）仍算申请过
     const mine = exist.data.filter((a) => (a.lineId || a.productId) === lineId)
     if (mine.some((a) => a.status !== 'withdrawn')) return err(ERR.ALREADY_APPLIED)
     const used = asFen(
@@ -481,7 +481,7 @@ export const applyRefund = withOpenId(
       appliedAt: now,
     }
     if (mine.length) {
-      // 撤销后重新申请：withdrawn→applied 条件更新原子复用同一 _id（并发重申只一路 moved）。金额/件数/原因/地址快照
+      // 撤回后重新申请：withdrawn→applied 条件更新原子复用同一 _id（并发重申只一路 moved）。金额/件数/原因/地址快照
       // 按此刻重算覆盖。outRefundNo 由 _id 派生、保持不变——复用单号安全的前提：withdrawn 只能来自「从没被批准过」
       // 的 applied（withdrawRefund 拒 approvedAt 在的单），即这个单号从没发给过微信。
       const { _id, _openid, status, ...patch } = rec
@@ -498,8 +498,8 @@ export const applyRefund = withOpenId(
 )
 
 /**
- * 顾客撤销售后申请：仅本人 + 仅申请中。applied→withdrawn 走 transition 条件更新，与 approveRefund/rejectRefund
- * 对 applied 的抢占天然互斥，谁先到算谁的；没抢到按此刻状态回 BAD_STATUS:<状态>。撤销后记录保留、不占退款额度，
+ * 顾客撤回售后申请：仅本人 + 仅申请中。applied→withdrawn 走 transition 条件更新，与 approveRefund/rejectRefund
+ * 对 applied 的抢占天然互斥，谁先到算谁的；没抢到按此刻状态回 BAD_STATUS:<状态>。撤回后记录保留、不占退款额度，
  * 同一行可经 applyRefund 重新申请。
  */
 export const withdrawRefund = withOpenId(

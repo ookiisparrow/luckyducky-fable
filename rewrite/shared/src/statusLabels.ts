@@ -47,7 +47,7 @@ export const AFTERSALE_STATUS_LABEL_OPS: Record<AfterSaleStatus, string> = {
   approved: '退款处理中',
   refunded: '已退款',
   rejected: '已拒绝',
-  withdrawn: '已撤销',
+  withdrawn: '已撤回',
 }
 
 /** 售后状态·客户向标签（mp 手落副本消费：rewrite/mp/lib/mapAftersales.ts，见该文件头注）。 */
@@ -56,7 +56,7 @@ export const AFTERSALE_STATUS_LABEL_CUSTOMER: Record<AfterSaleStatus, string> = 
   approved: '已同意 · 退款处理中',
   refunded: '已退款',
   rejected: '已拒绝',
-  withdrawn: '已撤销',
+  withdrawn: '已撤回',
 }
 
 /** 采购单状态标签（admin SCM 板块专属·无 mp 对应端，仍收口到此单源，防新增状态漏配标签）。 */

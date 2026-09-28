@@ -17,7 +17,7 @@ export interface AfterSaleVM {
   appliedAtLabel: string
   reason: string
   rejectReason: string // 已拒绝时运营写的拒绝理由（adminApi refunds 落 rejectReason·旧单无则空串）
-  canWithdraw: boolean // 顾客可撤销：申请中且没被商家批过（批过又回滚的单云端也拒·withdrawRefund 同口径）
+  canWithdraw: boolean // 顾客可撤回：申请中且没被商家批过（批过又回滚的单云端也拒·withdrawRefund 同口径）
 }
 
 // 状态中文·客户向措辞。canonical 单源在 rewrite/shared/src/statusLabels.ts 的 AFTERSALE_STATUS_LABEL_CUSTOMER
@@ -29,7 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
   approved: '已同意 · 退款处理中',
   refunded: '已退款',
   rejected: '已拒绝',
-  withdrawn: '已撤销',
+  withdrawn: '已撤回',
 }
 export const asStatusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
 
@@ -67,26 +67,26 @@ export function mergeAfterSales(existing: AfterSaleVM[], incoming: AfterSaleVM[]
   return [...existing, ...incoming.filter((a) => !seen.has(a.id))]
 }
 
-/** 本单「申请过」的行：顾客撤销（withdrawn）的不算，可重新申请（云端 applyRefund 同口径）。 */
+/** 本单「申请过」的行：顾客撤回（withdrawn）的不算，可重新申请（云端 applyRefund 同口径）。 */
 export function appliedLineIdsOf(list: AfterSaleVM[], orderId: string): string[] {
   return list.filter((a) => a.orderId === orderId && a.status !== 'withdrawn').map((a) => a.lineId)
 }
 
-/** 本单可撤销的行 lineId→true（订单详情行内撤销键）。 */
+/** 本单可撤回的行 lineId→true（订单详情行内撤回键）。 */
 export function withdrawableLines(list: AfterSaleVM[], orderId: string): Record<string, boolean> {
   const out: Record<string, boolean> = {}
   for (const a of list) if (a.orderId === orderId && a.canWithdraw) out[a.lineId] = true
   return out
 }
 
-// 撤销失败（云端 withdrawRefund 回 BAD_STATUS:<此刻状态>，前缀同 payFlow.ts 手抄口径）→ 人话
+// 撤回失败（云端 withdrawRefund 回 BAD_STATUS:<此刻状态>，前缀同 payFlow.ts 手抄口径）→ 人话
 const WITHDRAW_ERR: Record<string, string> = {
-  'BAD_STATUS:approved': '商家已同意退款，正在处理，不能撤销了',
-  'BAD_STATUS:refunded': '这条已经退款了，不能撤销',
-  'BAD_STATUS:rejected': '这条申请已被拒绝，不用撤销',
-  'BAD_STATUS:withdrawn': '这条申请已经撤销了',
+  'BAD_STATUS:approved': '商家已同意退款，正在处理，不能撤回了',
+  'BAD_STATUS:refunded': '这条已经退款了，不能撤回',
+  'BAD_STATUS:rejected': '这条申请已被拒绝，不用撤回',
+  'BAD_STATUS:withdrawn': '这条申请已经撤回了',
 }
-export const withdrawErrText = (e: unknown): string => WITHDRAW_ERR[String(e || '')] || '撤销没成功，稍后再试'
+export const withdrawErrText = (e: unknown): string => WITHDRAW_ERR[String(e || '')] || '撤回没成功，稍后再试'
 
 /** 可申请行（与云端 applyRefund 同口径的入口收窄）：订单态 ∈ 已付/已发/完成 且 行 refundable
  *  且剩余可退件（qty−enteredQty）>0 且该行未申请过。旧单无 enteredQty 视 0＝整行可退。 */
@@ -117,7 +117,7 @@ export interface OrderAfterSales {
   lines: Record<string, '退款中' | '已退款'> // 行标（rejected 不标）
 }
 
-/** 按订单汇总售后：出现在结果里＝该单有售后记录（含被拒/已撤销，这两种不叠加也不标行）。一行只有一张售后单（云端确定性 _id），无冲突。 */
+/** 按订单汇总售后：出现在结果里＝该单有售后记录（含被拒/已撤回，这两种不叠加也不标行）。一行只有一张售后单（云端确定性 _id），无冲突。 */
 export function afterSalesByOrder(list: AfterSaleVM[]): Record<string, OrderAfterSales> {
   const out: Record<string, OrderAfterSales> = {}
   for (const a of list) {

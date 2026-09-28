@@ -97,17 +97,17 @@ describe('订单叠加售后显示（订单状态不变·只改显示）', () =>
   })
 })
 
-describe('顾客撤销售后（已撤销＝不占行、不叠加、可重申）', () => {
+describe('顾客撤回售后（已撤回＝不占行、不叠加、可重申）', () => {
   const as = (lineId: string, status: string, over: Record<string, unknown> = {}) => ({ _id: 'o1__' + lineId, orderId: 'o1', lineId, status, appliedAt: 1, ...over })
 
-  it('大白话：已撤销显示「已撤销」；只有申请中且没被商家批过的能撤', () => {
-    expect(asStatusLabel('withdrawn')).toBe('已撤销')
+  it('大白话：已撤回显示「已撤回」；只有申请中且没被商家批过的能撤', () => {
+    expect(asStatusLabel('withdrawn')).toBe('已撤回')
     const [a, b, c, d] = mapAfterSales([as('L1', 'applied'), as('L2', 'approved'), as('L3', 'withdrawn'), as('L4', 'applied', { approvedAt: 9 })])
     expect([a.canWithdraw, b.canWithdraw, c.canWithdraw, d.canWithdraw]).toEqual([true, false, false, false])
     expect(withdrawableLines(mapAfterSales([as('L1', 'applied'), as('L2', 'rejected'), { ...as('L3', 'applied'), orderId: 'o2' }]), 'o1')).toEqual({ L1: true })
   })
 
-  it('大白话：已撤销的行不算「申请过」——退款段不置灰、可再选；订单不叠加售后中，但仍算有售后记录', () => {
+  it('大白话：已撤回的行不算「申请过」——退款段不置灰、可再选；订单不叠加售后中，但仍算有售后记录', () => {
     const list = mapAfterSales([as('L1', 'withdrawn'), as('L2', 'rejected'), { ...as('L3', 'applied'), orderId: 'o2' }])
     expect(appliedLineIdsOf(list, 'o1')).toEqual(['L2'])
     const items = [line({ lineId: 'L1' })]
@@ -118,11 +118,11 @@ describe('顾客撤销售后（已撤销＝不占行、不叠加、可重申）'
     expect(afterSaleOverlay(items, by.o1)).toBeNull()
   })
 
-  it('大白话：撤销失败按码说人话', () => {
-    expect(withdrawErrText('BAD_STATUS:approved')).toBe('商家已同意退款，正在处理，不能撤销了')
-    expect(withdrawErrText('BAD_STATUS:refunded')).toBe('这条已经退款了，不能撤销')
-    expect(withdrawErrText('BAD_STATUS:rejected')).toBe('这条申请已被拒绝，不用撤销')
-    expect(withdrawErrText('BAD_STATUS:withdrawn')).toBe('这条申请已经撤销了')
-    expect(withdrawErrText('RATE_LIMITED')).toBe('撤销没成功，稍后再试')
+  it('大白话：撤回失败按码说人话', () => {
+    expect(withdrawErrText('BAD_STATUS:approved')).toBe('商家已同意退款，正在处理，不能撤回了')
+    expect(withdrawErrText('BAD_STATUS:refunded')).toBe('这条已经退款了，不能撤回')
+    expect(withdrawErrText('BAD_STATUS:rejected')).toBe('这条申请已被拒绝，不用撤回')
+    expect(withdrawErrText('BAD_STATUS:withdrawn')).toBe('这条申请已经撤回了')
+    expect(withdrawErrText('RATE_LIMITED')).toBe('撤回没成功，稍后再试')
   })
 })

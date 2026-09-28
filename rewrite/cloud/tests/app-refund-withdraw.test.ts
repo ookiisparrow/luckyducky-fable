@@ -1,4 +1,4 @@
-// 顾客撤销售后申请（withdrawRefund）+ 撤销后重新申请（applyRefund 复用同 _id）。
+// 顾客撤回售后申请（withdrawRefund）+ 撤回后重新申请（applyRefund 复用同 _id）。
 // 规则：只有「申请中」且从没被批准过的售后能撤；撤了不占退款额度；同一行可再申请，金额按当时重算、退款单号不变。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
@@ -46,8 +46,8 @@ beforeEach(() => {
   control.seed('adminConfig', [{ _id: 'auth', keyHash: sha('super-secret-key'), role: 'superadmin' }])
 })
 
-describe('withdrawRefund 顾客撤销', () => {
-  it('大白话：本人撤销申请中的售后——变「已撤销」、记撤销时间，记录还在', async () => {
+describe('withdrawRefund 顾客撤回', () => {
+  it('大白话：本人撤回申请中的售后——变「已撤回」、记撤回时间，记录还在', async () => {
     seedOrder()
     seedAS()
     const r = await call('withdrawRefund', { orderId: 'o1', lineId: LINE })
@@ -69,7 +69,7 @@ describe('withdrawRefund 顾客撤销', () => {
     expect(asDocs()[0].status).toBe('applied')
   })
 
-  it('大白话：已同意/已退款/已拒绝/已撤销的不能撤，回对应状态码，状态不动', async () => {
+  it('大白话：已同意/已退款/已拒绝/已撤回的不能撤，回对应状态码，状态不动', async () => {
     for (const status of ['approved', 'refunded', 'rejected', 'withdrawn']) {
       control.reset()
       control.setOpenId('oME')
@@ -87,7 +87,7 @@ describe('withdrawRefund 顾客撤销', () => {
     expect(asDocs()[0].status).toBe('applied')
   })
 
-  it('大白话：撤销那一刻商家刚点了同意——撤销落空，回「已同意」，单子保持已同意', async () => {
+  it('大白话：撤回那一刻商家刚点了同意——撤回落空，回「已同意」，单子保持已同意', async () => {
     seedOrder()
     seedAS()
     control.setBeforeUpdate(async ({ coll }: any) => {
@@ -98,7 +98,7 @@ describe('withdrawRefund 顾客撤销', () => {
     expect(asDocs()[0].withdrawnAt).toBeUndefined()
   })
 
-  it('大白话：顾客撤销和商家同意同时发生——只有一边生效', async () => {
+  it('大白话：顾客撤回和商家同意同时发生——只有一边生效', async () => {
     seedOrder()
     seedAS()
     control.seed('config', [{ _id: 'pay', mode: 'real', refundFlowId: 'flow-refund' }])
@@ -106,18 +106,18 @@ describe('withdrawRefund 顾客撤销', () => {
     const [w, a] = await Promise.all([call('withdrawRefund', { orderId: 'o1', lineId: LINE }), post('approveRefund', { id: AS_ID })])
     expect([w.ok === true, a.ok === true].filter(Boolean)).toHaveLength(1)
     expect(asDocs()[0].status).toBe(w.ok ? 'withdrawn' : 'approved')
-    if (w.ok) expect(control.callFunctionCalls()).toHaveLength(0) // 撤销赢了：没发起退款
+    if (w.ok) expect(control.callFunctionCalls()).toHaveLength(0) // 撤回赢了：没发起退款
   })
 
-  it('大白话：一分钟内第 21 次撤销被限速', async () => {
+  it('大白话：一分钟内第 21 次撤回被限速', async () => {
     let last: any
     for (let i = 0; i < 21; i++) last = await call('withdrawRefund', { orderId: 'ghost', lineId: 'x' })
     expect(last.error).toBe('RATE_LIMITED')
   })
 })
 
-describe('已撤销对后台的影响', () => {
-  it('大白话：撤销后不挡发货；后台售后计数里单独算「已撤销」，不算待审核', async () => {
+describe('已撤回对后台的影响', () => {
+  it('大白话：撤回后不挡发货；后台售后计数里单独算「已撤回」，不算待审核', async () => {
     seedOrder()
     seedAS({ status: 'withdrawn', withdrawnAt: 2500 })
     const counts = await post('refundCounts')
@@ -126,13 +126,13 @@ describe('已撤销对后台的影响', () => {
   })
 })
 
-describe('撤销后重新申请（applyRefund 复用同一张售后单）', () => {
+describe('撤回后重新申请（applyRefund 复用同一张售后单）', () => {
   it('大白话：撤了能再申请——同一张单回到申请中，金额按现在重算，退款单号不变', async () => {
     seedOrder()
     const first = await call('applyRefund', { orderId: 'o1', lineId: LINE, reason: '少件' })
     expect(first.ok).toBe(true)
     expect((await call('withdrawRefund', { orderId: 'o1', lineId: LINE })).ok).toBe(true)
-    // 撤销期间又进了 1 件课：重申只退剩余 2 件
+    // 撤回期间又进了 1 件课：重申只退剩余 2 件
     store('orders')[0].items[0].enteredQty = 1
     const again = await call('applyRefund', { orderId: 'o1', lineId: LINE, reason: '做工问题' })
     expect(again.ok).toBe(true)
@@ -171,7 +171,7 @@ describe('撤销后重新申请（applyRefund 复用同一张售后单）', () =
     expect(asDocs().find((a) => a._id === AS_ID).status).toBe('withdrawn')
   })
 
-  it('大白话：已撤销的不占退款额度——别的行照样能按全额分摊退', async () => {
+  it('大白话：已撤回的不占退款额度——别的行照样能按全额分摊退', async () => {
     seedOrder({
       amount: 178,
       goods: 198,
@@ -180,7 +180,7 @@ describe('撤销后重新申请（applyRefund 复用同一张售后单）', () =
         { productId: 'p1', lineId: 'p1__蓝', spec: '蓝', name: '鸭', price: 99, qty: 1, refundable: true },
       ],
     })
-    // 红行撤销单金额写成全额实付：若被算进已用额度，蓝行就「没有可退金额」了
+    // 红行撤回单金额写成全额实付：若被算进已用额度，蓝行就「没有可退金额」了
     control.seed('afterSales', [{ _id: 'o1__p1__红', orderId: 'o1', _openid: 'oME', lineId: 'p1__红', productId: 'p1', refundAmount: 178, status: 'withdrawn', appliedAt: 1 }])
     const r = await call('applyRefund', { orderId: 'o1', lineId: 'p1__蓝' })
     expect(r.ok).toBe(true)

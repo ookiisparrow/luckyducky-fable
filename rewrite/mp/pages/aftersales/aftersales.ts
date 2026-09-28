@@ -1,4 +1,4 @@
-// 我的售后：列表 + 游标翻页（追加去重·失败不覆盖已有）+ 按住撤销申请中的售后。
+// 我的售后：列表 + 游标翻页（追加去重·失败不覆盖已有）+ 按住撤回申请中的售后。
 import { getMyAfterSales, withdrawRefund } from '../../api/orders'
 import { mapAfterSale, mapAfterSales, mergeAfterSales, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
 import { openCustomerService } from '../../utils/customerService'
@@ -8,7 +8,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { fxToast, fxHint } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 
-const HOLD_MS = 700 // 按住多久算撤销（同订单页按住取消·设计稿 data-ms=700）
+const HOLD_MS = 700 // 按住多久算撤回（同订单页按住取消·设计稿 data-ms=700）
 let hold: Hold | null = null
 
 Page({
@@ -21,11 +21,11 @@ Page({
     hasMore: false,
     cursor: null as unknown,
     paging: false, // 触底翻页在途（底部像素 loader 行·同时挡重复触底）
-    holdId: '', // 正在按住撤销的售后 id（驱动键内红色进度条）
+    holdId: '', // 正在按住撤回的售后 id（驱动键内红色进度条）
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onShow 多次触发（如售后详情返回）并发时丢弃过期回包
-  _busy: false, // 撤销在途锁：重复触发直接丢
-  unloaded: false, // 页面已退出：撤销迟到回包不再提示/刷新
+  _busy: false, // 撤回在途锁：重复触发直接丢
+  unloaded: false, // 页面已退出：撤回迟到回包不再提示/刷新
   onShow() {
     void this.reload()
   },
@@ -65,7 +65,7 @@ Page({
     }
     this.setData({ list: mergeAfterSales(this.data.list, mapAfterSales(r.list)), cursor: r.nextCursor, hasMore: !!r.hasMore })
   },
-  // 撤销申请（破坏性·按住 700ms 才撤，轻点提示；按下带触点坐标、挪开超 10px 作废——顺势滑列表不误撤·lib/hold）
+  // 撤回申请（破坏性·按住 700ms 才撤，轻点提示；按下带触点坐标、挪开超 10px 作废——顺势滑列表不误撤·lib/hold）
   onWithdrawStart(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.i)
     const a = this.data.list[i]
@@ -73,7 +73,7 @@ Page({
     const t = e.touches && e.touches[0]
     hold?.cancel()
     hold = createHold(HOLD_MS, () => void this.withdrawNow(i), {
-      onQuick: () => fxHint(this, '按住撤销申请'),
+      onQuick: () => fxHint(this, '按住撤回申请'),
       onChange: (v) => this.setData({ holdId: v ? a.id : '' }),
     })
     hold.start(t ? t.clientX : undefined, t ? t.clientY : undefined)
@@ -90,7 +90,7 @@ Page({
     if (!a || !a.canWithdraw || this._busy) return
     this._busy = true
     tapHaptic()
-    wx.showLoading({ title: '正在撤销', mask: true })
+    wx.showLoading({ title: '正在撤回', mask: true })
     let r
     try {
       r = await withdrawRefund(a.orderId, a.lineId)
@@ -100,10 +100,10 @@ Page({
     }
     if (this.unloaded) return
     if (r.ok) {
-      // 先就地换成「已撤销」（整表刷新没拉到也不回显申请中），再整表刷新
+      // 先就地换成「已撤回」（整表刷新没拉到也不回显申请中），再整表刷新
       const next = mapAfterSale(r.afterSale)
       if (next) this.setData({ list: this.data.list.map((x) => (x.id === next.id ? next : x)) })
-      fxToast(this, '已撤销')
+      fxToast(this, '已撤回')
     } else wx.showToast({ title: withdrawErrText(r.error), icon: 'none' }) // 没抢过商家等：刷新看最新状态
     await this.reload()
   },

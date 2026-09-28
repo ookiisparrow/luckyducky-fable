@@ -1,5 +1,5 @@
 <!-- 我的售后（v5「字重」稿 B4）：24 大标题 + 倒车进场的小货车 + 售后记录行（状态灯/金币 + 标题 + 状态 + 说明 + 查看订单）；底部 联系客服。
-     数据源 getMyAfterSales·状态语义不变；游标分页(onReachBottom)/失败重试(onRetryLoad)/查看订单(onTapOrder)/按住撤销(onWithdrawStart/Move/End)/客服(onKefu) 承接 aftersales.ts。 -->
+     数据源 getMyAfterSales·状态语义不变；游标分页(onReachBottom)/失败重试(onRetryLoad)/查看订单(onTapOrder)/按住撤回(onWithdrawStart/Move/End)/客服(onKefu) 承接 aftersales.ts。 -->
 <v5-nav title="我的售后" />
 
 <view class="as">
@@ -21,14 +21,14 @@
             <text class="as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
             <text class="t-sys as-st as-st-{{item.status}}">{{item.statusLabel}}</text>
           </view>
-          <!-- 已拒绝/已撤销没退钱：金额叫「申请金额」，不写「退款」免得像退了 -->
+          <!-- 已拒绝/已撤回没退钱：金额叫「申请金额」，不写「退款」免得像退了 -->
           <text class="t-sys as-note">申请于 {{item.appliedAtLabel}} · ×{{item.qty}} · {{item.status === 'rejected' || item.status === 'withdrawn' ? '申请金额' : '退款'}} {{item.refundAmountLabel}}</text>
           <text class="t-sys as-note" wx:if="{{item.reason}}">原因：{{item.reason}}</text>
           <text class="t-sys as-note" wx:if="{{item.status === 'rejected' && item.rejectReason}}">拒绝原因：{{item.rejectReason}}</text>
-          <!-- 申请中：按住 700ms 撤销（浅色键红字·轻点提示「按住撤销申请」·挪开 10px 作废，同订单页按住取消） -->
+          <!-- 申请中：按住 700ms 撤回（浅色键红字·轻点提示「按住撤回申请」·挪开 10px 作废，同订单页按住取消） -->
           <view wx:if="{{item.canWithdraw}}" class="as-wd" data-i="{{index}}" bind:touchstart="onWithdrawStart" bind:touchmove="onWithdrawMove" bind:touchend="onWithdrawEnd" bind:touchcancel="onWithdrawEnd">
             <view class="k k-sm k-light as-wd-k {{holdId === item.id ? 'as-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-              data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="as-fill"></view><text class="as-wd-t">撤销申请</text></view>
+              data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="as-fill"></view><text class="as-wd-t">撤回申请</text></view>
           </view>
           <view class="t-sys as-link" hover-start-time="20" hover-class="k-row-down" data-id="{{item.orderId}}" bind:tap="onTapOrder">
             <text>查看订单</text>

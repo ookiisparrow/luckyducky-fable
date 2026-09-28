@@ -78,7 +78,7 @@ page {
   font-size: 13px;
   font-weight: 300;
 }
-/* 撤销申请：浅色键红字，按住时浅红从左往右填满（HOLD_MS 700ms·同订单页按住取消写法）；外层补热区到 44 高 */
+/* 撤回申请：浅色键红字，按住时浅红从左往右填满（HOLD_MS 700ms·同订单页按住取消写法）；外层补热区到 44 高 */
 .as-wd {
   align-self: flex-start;
   margin: 0 0 -8px;
