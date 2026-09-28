@@ -63,7 +63,7 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(d.closing.cta).toBeTruthy()
     expect(d.footer.links.length).toBeGreaterThan(0)
     expect(d.footer.copy).toBeTruthy()
-    // 每条 trust/reassure 项都带图标 + 文案（模板 <image> 引 static/icons/<icon>.svg）
+    // 每条 trust/reassure 项都带图标名 + 文案（图标名只用来挑像素动画）
     expect(d.trust.every((t) => t.icon && t.label)).toBe(true)
     expect(d.reassure.items.every((r) => r.icon && r.title && r.body)).toBe(true)
     expect(JSON.stringify(d)).not.toContain('undefined')

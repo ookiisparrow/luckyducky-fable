@@ -10,7 +10,6 @@ vi.mock('../lib/homeIntent', () => ({ goHomeTab: vi.fn() }))
 vi.mock('../utils/exitGuard', () => ({ armExitGuard: vi.fn(), releaseExitGuard: vi.fn(), onExitGuardBeforeLeave: vi.fn() }))
 vi.mock('../lib/cart', () => ({
   getItems: () => [{ id: 'p1', sku: '', name: '小鸭', price: 128, qty: 2, selected: true, cover: '' }],
-  allSelected: () => true,
   selectedCount: () => 2,
   selectedTotalLabel: () => '¥256.00',
   freshCover: (it: { cover: string }) => it.cover,

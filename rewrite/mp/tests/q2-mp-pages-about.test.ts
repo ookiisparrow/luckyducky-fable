@@ -28,4 +28,11 @@ describe('关于我们页', () => {
       '/pages/agreement/agreement?type=user',
     ])
   })
+
+  it('大白话：页底版本行照设计稿 D5 是「版本号 · 更新 日期」一行，更新日期不能丢', async () => {
+    vi.resetModules()
+    await import('../pages/about/about')
+    const { currentAppVersionLine, DEV_UPDATE_DATE } = await import('../lib/appVersion')
+    expect(pageOpts.data.version).toBe(currentAppVersionLine() + ' · 更新 ' + DEV_UPDATE_DATE)
+  })
 })

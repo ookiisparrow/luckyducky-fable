@@ -56,11 +56,6 @@ page {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.wl-sub {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 
 /* 激活码凹槽（输入 / 结果屏回显） */
 .wl-code {
@@ -75,12 +70,6 @@ page {
   letter-spacing: 0.08em;
   text-align: center;
   color: var(--v5-ink);
-}
-.wl-ph {
-  color: var(--v5-ink-4);
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: 0;
 }
 .wl-code-ro {
   margin-top: 16px;
