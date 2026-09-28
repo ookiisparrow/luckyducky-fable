@@ -22,11 +22,24 @@ export function createPrivacyGate(): PrivacyGate {
     shown = v
     listeners.forEach((fn) => fn(v))
   }
+  // 「不同意」——中止本次涉隐私接口（不影响无关功能）
+  const disagree = () => {
+    setShown(false)
+    if (pending) {
+      pending({ event: 'disagree' })
+      pending = null
+    }
+  }
   return {
     visible: () => shown,
     subscribe(fn) {
       listeners.add(fn)
-      return () => listeners.delete(fn)
+      return () => {
+        listeners.delete(fn)
+        // 最后一个弹窗随页面走了而用户没选：按「不同意」收场——否则 shown 卡在 true、本次接口永远挂着，
+        // 下个页面一挂弹窗就莫名弹出。别的页还挂着（能看见）就留给它选。
+        if (shown && !listeners.size) disagree()
+      }
     },
     open(resolve) {
       pending = typeof resolve === 'function' ? (resolve as PrivacyResolve) : null
@@ -40,14 +53,7 @@ export function createPrivacyGate(): PrivacyGate {
         pending = null // 只回一次：同意后再拒绝不再回调
       }
     },
-    // 「不同意」——中止本次涉隐私接口（不影响无关功能）
-    disagree() {
-      setShown(false)
-      if (pending) {
-        pending({ event: 'disagree' })
-        pending = null
-      }
-    },
+    disagree,
     // App 启动时注册；wx 缺该 API（基础库过旧/测试环境）安全空转
     register(w = (globalThis as { wx?: Parameters<PrivacyGate['register']>[0] }).wx) {
       if (w && typeof w.onNeedPrivacyAuthorization === 'function') {

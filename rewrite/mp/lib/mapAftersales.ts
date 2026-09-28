@@ -16,6 +16,7 @@ export interface AfterSaleVM {
   statusLabel: string
   appliedAtLabel: string
   reason: string
+  rejectReason: string // 已拒绝时运营写的拒绝理由（adminApi refunds 落 rejectReason·旧单无则空串）
 }
 
 // 状态中文·客户向措辞。canonical 单源在 rewrite/shared/src/statusLabels.ts 的 AFTERSALE_STATUS_LABEL_CUSTOMER
@@ -48,6 +49,7 @@ export function mapAfterSale(raw: unknown): AfterSaleVM | null {
     statusLabel: asStatusLabel(a.status),
     appliedAtLabel: dateTime(a.appliedAt),
     reason: String(a.reason || ''),
+    rejectReason: String(a.rejectReason || ''),
   }
 }
 
@@ -68,4 +70,16 @@ export function applicableLines(orderStatus: string, items: OrderLineVM[], appli
   if (!['paid', 'shipped', 'done'].includes(orderStatus)) return []
   const applied = new Set(appliedLineIds)
   return items.filter((it) => it.refundable && it.qty - it.enteredQty > 0 && !applied.has(it.lineId))
+}
+
+/** 「退款」段置灰原因（售后半屏）：还有可退行回空串；否则按不可退的来由说人话——
+ *  不可退/剩余可退件为 0＝已开课（进课即失效退货权·云端 learning 同口径），已申请过＝这件已申请过，两种都有给合并句。 */
+export function refundBlock(orderStatus: string, items: OrderLineVM[], appliedLineIds: string[]): string {
+  if (applicableLines(orderStatus, items, appliedLineIds).length) return ''
+  const applied = new Set(appliedLineIds)
+  const started = items.some((it) => !applied.has(it.lineId) && (!it.refundable || it.qty - it.enteredQty <= 0))
+  const hasApplied = items.some((it) => applied.has(it.lineId))
+  if (started && hasApplied) return '已开课或已申请过的商品不能再退款'
+  if (hasApplied) return '这件已申请过'
+  return '已开课的商品不支持退款'
 }

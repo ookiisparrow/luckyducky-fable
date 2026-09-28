@@ -110,17 +110,34 @@ page {
 }
 .ca-step-hit {
   width: 34px;
-  height: 40px;
+  height: 44px; /* 热区 ≥44px（键帽本身 28px 不变） */
   display: flex;
   align-items: center;
   justify-content: center;
 }
 /* 热区往外让 3px（设计稿）：减/删键左让、加键右让——加键右边与上面价格右边对齐 */
 .ca-step-l {
-  margin: -6px 0 -6px -3px;
+  margin: -8px 0 -8px -3px;
 }
 .ca-step-r {
-  margin: -6px -3px -6px 0;
+  margin: -8px -3px -8px 0;
+}
+/* 宽度往外再让 10px（伪元素扩热区·视觉不动）：减/删向左让进行间空隙，加向右让进页边距——合计 44×44 */
+.ca-step-hit {
+  position: relative;
+}
+.ca-step-hit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+}
+.ca-step-l::after {
+  left: -10px;
+}
+.ca-step-r::after {
+  right: -10px;
 }
 .ca-step-key {
   position: relative;

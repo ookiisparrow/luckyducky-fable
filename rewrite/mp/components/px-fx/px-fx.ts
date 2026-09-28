@@ -37,7 +37,8 @@ function paint(x: Ctx, runs: Runs) {
   }
 }
 
-let toastTimer: ReturnType<typeof setTimeout> | null = null
+// 提示定时器每实例一份（页面栈里多页各挂一个·共用一个会被别页的提示清掉，本页提示就卡住不消失）
+const toastTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 
 Component({
   data: { busy: false, toastShow: false, toastOk: false, toastText: '', cover: '', coverOut: false },
@@ -58,6 +59,7 @@ Component({
         s.cv.cancelAnimationFrame(s.fxRaf)
       }
       S.delete(this)
+      clearTimeout(toastTimers.get(this))
     },
   },
   pageLifetimes: {
@@ -84,12 +86,15 @@ Component({
     },
     /** 系统层轻提示（设计稿 toast：深色半透明框，成功带像素 ✓，1.5 秒后 180ms 淡出）。 */
     toast(text: string, ok = false) {
-      if (toastTimer) clearTimeout(toastTimer)
+      clearTimeout(toastTimers.get(this))
       this.setData({ toastText: text, toastOk: ok, toastShow: true })
-      toastTimer = setTimeout(() => {
-        toastTimer = null
-        this.setData({ toastShow: false })
-      }, 1500)
+      toastTimers.set(
+        this,
+        setTimeout(() => {
+          toastTimers.delete(this)
+          this.setData({ toastShow: false })
+        }, 1500)
+      )
     },
     canvas(): Promise<St | null> {
       const s = S.get(this)

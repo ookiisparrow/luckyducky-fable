@@ -31,10 +31,9 @@ beforeEach(() => {
 
 describe('写评价提交失败提示', () => {
   const cases: [unknown, string][] = [
-    ['REVIEWED', '这条已经评过了'],
     ['NOT_DONE', '订单完成后才能评价'],
     ['IMG_RISKY', '图片没通过审核，换一张再试'],
-    ['SEC_CHECK_FAIL', '图片没检查成功，稍后再试'],
+    ['SEC_CHECK_FAIL', '内容没通过审核，改一改再试'], // 云端文字违规/图片校不了都回这个码，分不开，统一说内容
     ['NETWORK', '提交没成功，稍后再试'],
     ['constructor', '提交没成功，稍后再试'],
     [undefined, '提交没成功，稍后再试'],
@@ -49,4 +48,21 @@ describe('写评价提交失败提示', () => {
       expect(page.data.busy).toBe(false)
     })
   }
+
+  it('大白话：云端说「已评过」——提示后撤掉放弃拦截（dirty 清掉），1 秒后自动返回，期间不能再点发布', async () => {
+    vi.useFakeTimers()
+    submitMock.mockResolvedValue({ ok: false, error: 'REVIEWED' })
+    const page = await mount()
+    page.data.dirty = true
+    await page.onSubmit()
+    expect(toast).toHaveBeenCalledWith({ title: '这条已经评过了', icon: 'none' })
+    expect(page.data.dirty).toBe(false)
+    expect(page.data.busy).toBe(true)
+    const back = (globalThis as any).wx.navigateBack
+    vi.advanceTimersByTime(999)
+    expect(back).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(back).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
 })

@@ -1,7 +1,7 @@
 // 黄金 orders-money 售后节前端半边（可申请口径与云端 applyRefund 一致）+ frontend-store §八
 // （翻页去重·申请成功列表即时收窄由 applicableLines 排除已申请实现·非独立插头部函数）。
 import { describe, it, expect } from 'vitest'
-import { mapAfterSale, mapAfterSales, mergeAfterSales, applicableLines, asStatusLabel } from '../lib/mapAftersales'
+import { mapAfterSale, mapAfterSales, mergeAfterSales, applicableLines, asStatusLabel, refundBlock } from '../lib/mapAftersales'
 import type { OrderLineVM } from '../lib/mapOrders'
 
 const line = (over: Partial<OrderLineVM>): OrderLineVM => ({
@@ -52,5 +52,22 @@ describe('售后单映射与列表语义（黄金 §八）', () => {
     const p2 = mapAfterSales([{ ...REC, _id: 'a2', orderId: 'o2' }, { ...REC, _id: 'a3', orderId: 'o3' }]) // 游标边界重复 a2
     const merged = mergeAfterSales(p1, p2)
     expect(merged.map((a) => a.id)).toEqual(['o1__p1__', 'a2', 'a3']) // 去重·顺序稳定
+  })
+})
+
+describe('退款段置灰原因（激活课程后售后不再死路）', () => {
+  it('大白话：有可退的行不置灰；全开课写「已开课的商品不支持退款」、全申请过写「已申请过」、两种都有写合并句', () => {
+    expect(refundBlock('done', [line({})], [])).toBe('')
+    expect(refundBlock('done', [line({ refundable: false }), line({ lineId: 'p2__', qty: 1, enteredQty: 1 })], [])).toBe('已开课的商品不支持退款')
+    expect(refundBlock('done', [line({})], ['p1__'])).toBe('这件已申请过')
+    expect(refundBlock('done', [line({ refundable: false }), line({ lineId: 'p2__' })], ['p2__'])).toBe('已开课或已申请过的商品不能再退款')
+  })
+})
+
+describe('已拒绝的售后带拒绝理由', () => {
+  it('大白话：云端下发 rejectReason 就映射出来；没有给空串', () => {
+    const base = { _id: 'a1', orderId: 'o1', status: 'rejected' }
+    expect(mapAfterSale({ ...base, rejectReason: '已超过售后期' })!.rejectReason).toBe('已超过售后期')
+    expect(mapAfterSale(base)!.rejectReason).toBe('')
   })
 })

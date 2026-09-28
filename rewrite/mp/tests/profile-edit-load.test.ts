@@ -2,9 +2,10 @@
 // #272 只挡退页后迟到回包；本页加载中/失败仍会露出空表单+小鸭子，点保存才说没加载好。
 // Page 桩同 me-cont-failed.test.ts；wxml 走 ?raw（E34·mp 测试不进 node:fs）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import peWxml from '../pages/profile-edit/profile-edit.wxml?raw'
 
-const { loginMock } = vi.hoisted(() => ({ loginMock: vi.fn() }))
-vi.mock('../api/user', () => ({ login: loginMock, updateProfile: vi.fn() }))
+const { loginMock, updateMock } = vi.hoisted(() => ({ loginMock: vi.fn(), updateMock: vi.fn() }))
+vi.mock('../api/user', () => ({ login: loginMock, updateProfile: updateMock }))
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
 
 let pageOpts: Record<string, any> = {}
@@ -29,6 +30,7 @@ async function mount(): Promise<Record<string, any>> {
 
 beforeEach(() => {
   loginMock.mockReset()
+  updateMock.mockReset()
   ;(globalThis as any).wx = { showToast: vi.fn(), navigateBack: vi.fn(), getWindowInfo: () => ({ statusBarHeight: 20 }) }
   ;(globalThis as any).getCurrentPages = () => [{}, {}]
 })
@@ -117,5 +119,44 @@ describe('编辑资料保存提示', () => {
     page.onNickname({ detail: { value: '   ' } })
     await page.onSave()
     expect((globalThis as any).wx.showToast).toHaveBeenCalledWith({ title: '昵称不能为空', icon: 'none' })
+    expect(updateMock).not.toHaveBeenCalled()
+  })
+
+  it('大白话：从没设过昵称——昵称留空也能只存手机号（云端空昵称＝不改），不拦「昵称不能为空」', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '', phone: '' } })
+    updateMock.mockResolvedValue({ ok: true })
+    const page = await mount()
+    await page.onLoad()
+    page.onPhone({ detail: { value: '13800138000' } })
+    await page.onSave()
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ nickname: '', phone: '13800138000' }))
+    expect((globalThis as any).wx.showToast).not.toHaveBeenCalledWith({ title: '昵称不能为空', icon: 'none' })
+  })
+
+  it('大白话：审核被拒按原因说——头像违规说换头像、昵称没过说换昵称、带了新头像又不知道哪个没过就两样都提、其他照旧', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉' } })
+    const titles = () => (globalThis as any).wx.showToast.mock.calls.map((c: any[]) => c[0].title)
+    const cases: [string, boolean, string][] = [
+      ['IMG_RISKY', true, '这张头像不能用，换一张'],
+      ['SEC_CHECK_FAIL', false, '昵称没通过审核，换一个'],
+      ['SEC_CHECK_FAIL', true, '昵称或头像没通过审核，换一个再试'],
+      ['CALL_TIMEOUT', false, '保存没成功，稍后再试'],
+    ]
+    for (const [code, withAvatar, tip] of cases) {
+      ;(globalThis as any).wx.showToast = vi.fn()
+      ;(globalThis as any).wx.cloud = { uploadFile: vi.fn().mockResolvedValue({ fileID: 'cloud://new' }) }
+      updateMock.mockResolvedValueOnce({ ok: false, error: code })
+      const page = await mount()
+      await page.onLoad()
+      page.onNickname({ detail: { value: '棉花' } })
+      if (withAvatar) page.onChooseAvatar({ detail: { avatarUrl: 'wxfile://a.png' } })
+      await page.onSave()
+      expect(titles(), code).toEqual([tip])
+      expect(page.data.busy).toBe(false)
+    }
+  })
+
+  it('大白话：保存在途，按键写「保存中」', () => {
+    expect(peWxml).toMatch(/wx:elif="\{\{busy\}\}"[^>]*>保存中</)
   })
 })

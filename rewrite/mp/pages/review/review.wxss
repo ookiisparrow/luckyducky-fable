@@ -157,22 +157,33 @@ page {
   flex-wrap: wrap;
   gap: 8px;
 }
+/* 不再 overflow:hidden：删除角标的 44 热区要伸出图外；圆角改由图片自己裁 */
 .rv-photo {
   position: relative;
   width: 56px;
   height: 56px;
   border-radius: 6px;
-  overflow: hidden;
   background: var(--v5-sunk);
 }
 .rv-photo-img {
+  display: block;
   width: 100%;
   height: 100%;
+  border-radius: 6px;
 }
+/* 44×44 透明热区：向上伸 12px、向右伸 6px（右侧只 8px 间距，少伸免得压到下一张） */
 .rv-photo-del {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -12px;
+  right: -6px;
+  width: 44px;
+  height: 44px;
+}
+/* 看得见的角标：仍贴图片右上角 20×20（右上圆角跟图片走） */
+.rv-photo-x {
+  position: absolute;
+  top: 12px;
+  right: 6px;
   width: 20px;
   height: 20px;
   display: flex;
@@ -180,6 +191,7 @@ page {
   justify-content: center;
   background: rgba(17, 17, 17, 0.55);
   border-bottom-left-radius: 6px;
+  border-top-right-radius: 6px;
 }
 .rv-add {
   width: 56px;

@@ -122,6 +122,31 @@ export function __resetForTest(): void {
   items = null
 }
 
+/** 这一行的现价（元）：从「当前商品原档」取——有规格按规格名找规格价，无规格用商品价（同云端 createOrder priceItems 口径）。
+ *  商品不在货架（停售/删档/原档未加载）、规格没了、价不合法 → null：调用方不动这一行，
+ *  交给下单时云端拒单（UNLISTED_ITEM/UNKNOWN_ITEM/UNKNOWN_SKU）+ checkout.dropRejectedLine 点名移出，不静默丢。 */
+export function latestPrice(line: { id: string; sku: string }, allRaw: Record<string, unknown>[]): number | null {
+  const p = allRaw.find((x) => String(x.id || x._id || '') === line.id) as Record<string, any> | undefined
+  if (!p) return null
+  const src = line.sku ? (Array.isArray(p.skus) ? p.skus : []).find((s: any) => s && s.name === line.sku) : p
+  const n = Number(src && src.price)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** 用现价覆盖车里各行并写回本地；返回有没有哪行价变了（页面据此提示「价格有变动」）。 */
+export function syncPrices(allRaw: Record<string, unknown>[]): boolean {
+  let changed = false
+  for (const it of load()) {
+    const n = latestPrice(it, allRaw)
+    if (n !== null && Math.round(n * 100) !== Math.round(it.price * 100)) {
+      it.price = n
+      changed = true
+    }
+  }
+  if (changed) save()
+  return changed
+}
+
 /** 展示层覆盖：云端 getProducts 下发的 cover 是约 2h 时效的 https 临时址
  *  （非持久 cloud:// fileID·见云端 catalog.ts），而购物车行的 cover 会持久化进
  *  wx.storage——隔天回灌旧址早已过期，缩略图会挂。按行 id 从「当前商品原档」（页面已拉取的全量列表）

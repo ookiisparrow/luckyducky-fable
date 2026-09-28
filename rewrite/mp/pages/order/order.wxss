@@ -146,11 +146,21 @@ page {
   font-weight: 300;
 }
 .od-mini {
+  position: relative;
   height: 28px;
   padding: 0 10px;
   font-size: 13px;
   font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   flex: 0 0 auto;
+}
+/* 热区补到 44 高（上下各让 8px·看不见，视觉仍 28 高） */
+.od-mini::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8px;
+  bottom: -8px;
 }
 
 /* 地址 */
@@ -424,6 +434,16 @@ page {
 .as-seg-k.as-on {
   color: var(--v5-ink);
 }
+/* 没有可退商品：「退款」段置灰（点了提示原因，不切过去） */
+.as-seg-k.as-seg-off {
+  color: var(--v5-ink-4);
+}
+.as-block {
+  margin-top: -8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
 .as-group {
   display: flex;
   flex-direction: column;
@@ -438,17 +458,30 @@ page {
   gap: 8px;
 }
 .as-chip {
-  height: 36px;
-  padding: 0 12px;
+  height: auto;
+  min-height: 36px;
+  padding: 4px 12px;
 }
 .as-chip.k-flat {
   color: var(--v5-ink-2);
 }
-.as-chip-t {
+/* 商品名一行 + 规格单独一行：名字再长也只截名字，同款不同色靠规格行分得清 */
+.as-chip-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.as-chip-t,
+.as-chip-spec {
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 15px;
+}
+.as-chip-spec {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 .as-ks {
   display: flex;

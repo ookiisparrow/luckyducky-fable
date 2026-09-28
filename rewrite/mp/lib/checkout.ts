@@ -64,6 +64,19 @@ export function toggleAddon(addonId: string): void {
   else draftItems.push({ id: a.id, sku: '', name: a.name, tag: '搭配购', price: a.price, qty: 1, cover: '', lineId: cart.lineIdOf(a.id, '') })
 }
 
+/** 草稿按现价同步（同 cart.syncPrices 口径·搭配购不在商品档里、原样不动）；返回有没有哪行价变了。 */
+export function syncDraftPrices(allRaw: Record<string, unknown>[]): boolean {
+  let changed = false
+  for (const l of draftItems) {
+    const n = cart.latestPrice(l, allRaw)
+    if (n !== null && Math.round(n * 100) !== Math.round(l.price * 100)) {
+      l.price = n
+      changed = true
+    }
+  }
+  return changed
+}
+
 /** 金额汇总（分整数·与云端 createOrder 同式：应付 = max(0, 商品 + 运费 − 券)；主线券恒 0）。 */
 export function summaryFen(): { goodsFen: number; shipFen: number; couponFen: number; amountFen: number } {
   const goodsFen = draftItems.reduce((n, l) => n + Math.round(l.price * 100) * l.qty, 0)
@@ -102,10 +115,13 @@ export const CREATE_ORDER_ERR_COPY: Record<string, string> = {
   UNLISTED_ITEM: '有商品已下架',
   UNKNOWN_ITEM: '有商品已不存在',
   UNKNOWN_SKU: '有商品的这一款已下架',
-  TOO_MANY_PENDING: '待付款的订单太多了，先到「我的订单」里处理',
+  TOO_MANY_PENDING: '待支付的订单太多了，先到「我 → 我的订单」里处理',
   BAD_ADDRESS: '收货地址不完整，请检查',
   BAD_QTY: '有商品数量太多了，请调整数量',
   TOO_MANY_ITEMS: '商品太多了，请分开下单',
+  // 后台把商品/某一款的价格配坏了（云端 priceItems 价格校验不过·整单拒）：用户自己解决不了，指去客服
+  BAD_SKU_PRICE: '有商品价格异常，暂时买不了，请联系客服',
+  BAD_PRICE: '有商品价格异常，暂时买不了，请联系客服',
   COUPON_EXCEEDS_GOODS: '优惠券暂不支持抵扣这单，请调整商品数量',
   RATE_LIMITED: '点太快了，稍后再试',
   CALL_TIMEOUT: '网络不好，稍后再试',

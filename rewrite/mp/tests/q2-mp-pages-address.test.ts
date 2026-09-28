@@ -176,11 +176,11 @@ describe('地址编辑：保存', () => {
     expect(page.data.valid).toBe(true)
   })
 
-  it('大白话：四项都填了但手机号是 11 位却夹着别的符号（旧数据）——提示「电话号码不太对」，不存', async () => {
+  it('大白话：四项都填了但手机号是 11 位却夹着别的符号（旧数据）——提示「手机号不太对」，不存', async () => {
     const page = await mount('address-edit')
     fillNew(page, { phone: '137-0000-00' })
     page.onSave()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '电话号码不太对', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '手机号不太对', icon: 'none' })
     expect(saved()).toHaveLength(2)
   })
 
@@ -209,6 +209,46 @@ describe('地址编辑：保存', () => {
   })
 })
 
+describe('从结算页选址时新增地址（UX 修复）', () => {
+  const fill = (page: Record<string, any>) => {
+    for (const [field, value] of [['name', '鸡'], ['phone', '13700000000'], ['detail', '3 号']]) page.onInput({ currentTarget: { dataset: { field } }, detail: { value } })
+    page.onRegionChange({ detail: { value: ['北京市', '北京市', '朝阳区'] } })
+  }
+
+  it('大白话：选址列表里点「新增」——带上回退层数进新增页（新增完直接回结算页）', async () => {
+    const page = await mount('address', { pick: '1' })
+    page.onAdd()
+    expect(wxMock.navigateTo).toHaveBeenCalledWith({ url: '/pages/address-edit/address-edit?pick=2' })
+  })
+
+  it('大白话：选址时新增保存——没拨默认开关也自动设为默认，一口气退两页直接回到结算页', async () => {
+    const page = await mount('address-edit', { pick: '2' })
+    expect(page.data.pick).toBe(2)
+    fill(page)
+    page.onSave()
+    expect(saved().find((a) => a.isDefault)?.id).toBe(3)
+    expect(saved().filter((a) => a.isDefault)).toHaveLength(1)
+    expect(wxMock.navigateBack).toHaveBeenCalledWith({ delta: 2 })
+  })
+
+  it('大白话：地址簿空时从结算页直接进新增（pick=1）——保存后设默认、退一页回结算页', async () => {
+    storage = {}
+    const page = await mount('address-edit', { pick: '1' })
+    fill(page)
+    page.onSave()
+    expect(saved()).toEqual([expect.objectContaining({ id: 1, isDefault: true })])
+    expect(wxMock.navigateBack).toHaveBeenCalledWith({ delta: 1 })
+  })
+
+  it('大白话：管理态新增照旧退一页，不改默认', async () => {
+    const page = await mount('address-edit')
+    fill(page)
+    page.onSave()
+    expect(saved().find((a) => a.isDefault)?.id).toBe(1)
+    expect(wxMock.navigateBack).toHaveBeenCalledWith({ delta: 1 })
+  })
+})
+
 describe('地址编辑：按住删除', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
@@ -229,6 +269,16 @@ describe('地址编辑：按住删除', () => {
     expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
     expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '已删除', icon: 'none' })
     expect(page.data.dirty).toBe(false)
+  })
+
+  it('大白话：按住时手指滑开超过 10px——作废，不删', async () => {
+    const page = await mount('address-edit', { id: '2' })
+    const t = (x: number, y: number) => ({ touches: [{ clientX: x, clientY: y }] })
+    page.onDelHoldStart(t(100, 100))
+    page.onDelHoldMove(t(100, 130))
+    vi.advanceTimersByTime(1000)
+    expect(saved()).toHaveLength(2)
+    expect(wxMock.navigateBack).not.toHaveBeenCalled()
   })
 
   it('大白话：新增态没有东西可删，按住无反应', async () => {

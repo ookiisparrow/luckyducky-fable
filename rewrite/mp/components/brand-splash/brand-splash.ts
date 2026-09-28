@@ -35,7 +35,13 @@ Component({
       const hardCap = setTimeout(() => this.leave(), HARD_CAP_MS) // 无条件兜底撤场
       timers.set(this, [minHold, hardCap])
     },
+    // 开屏期间让底部 TabBar 让位（自定义 TabBar 是框架独立层、z-index 盖不住·同 px-fx 转场做法）。
+    // ready 才调：attached 时 TabBar 可能还没挂上。⚠ 真机待验：TabBar 是否真在开屏期间露出、此处能否压住。
+    ready() {
+      this.tabBar(true)
+    },
     detached() {
+      this.tabBar(false)
       for (const t of timers.get(this) || []) clearTimeout(t)
       timers.delete(this)
       starts.delete(this)
@@ -47,10 +53,17 @@ Component({
       if (t0 == null) return // attached 尚未记 t0（property observer 早于 attached 的保险）
       if (shouldLeave(Date.now(), t0, this.properties.ready)) this.leave()
     },
+    tabBar(covered: boolean) {
+      const owner = this.selectOwnerComponent() as unknown as { getTabBar?: () => { setCovered?: (v: boolean) => void } | null } | null
+      owner?.getTabBar?.()?.setCovered?.(covered)
+    },
     leave() {
       if (this.data.leaving) return // 幂等：淡出已启动不重入（min-hold/ready/hard-cap 三处都可能触发）
       this.setData({ leaving: true })
-      const fade = setTimeout(() => this.triggerEvent('done'), FADE_MS) // 淡出动画结束请父级撤下
+      const fade = setTimeout(() => {
+        this.tabBar(false) // 淡出完 TabBar 回来
+        this.triggerEvent('done') // 淡出动画结束请父级撤下
+      }, FADE_MS)
       const arr = timers.get(this)
       if (arr) arr.push(fade)
       else timers.set(this, [fade])

@@ -4,6 +4,7 @@
 // loginGate 单例（镜像 lib/privacyGate 广播范式）：各页 <login-sheet/> 订阅同一开关；
 // 已同意真值本地 hint（服务端 users 为准可后续加·镜像 lib/consent「本地 hint·非真值」范式）。
 import { readStorage, writeStorage } from '../utils/storage'
+import { setExitGuardOverlay } from '../utils/exitGuard'
 
 const LOGIN_HINT_KEY = 'ld_login_hint'
 
@@ -81,3 +82,10 @@ export function createLoginGate() {
 }
 
 export const loginGate = createLoginGate()
+
+// tab 页安卓返回键：登录半屏开着就只关半屏，不提示「再点一次退出」（utils/exitGuard 调）
+setExitGuardOverlay(() => {
+  if (!loginGate.visible()) return false
+  loginGate.close()
+  return true
+})

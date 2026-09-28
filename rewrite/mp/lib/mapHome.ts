@@ -2,6 +2,7 @@
 // 钱链纪律：price 云端存「元」（订单链的分整数在云函数内·展示层不做算术、原样标价）。
 // 内容纪律：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
+//   例外：买家秀没有默认评论（拍板 B·不造假评论），缺了整块不显示。
 
 import { BRAND_NAME, BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
 
@@ -110,14 +111,8 @@ const REASSURE_DEFAULT: ReassureVM = {
     { icon: 'sparkles', title: '幸运随行', body: '每只小棉鸭都附赠一张幸运卡，做完带在身边，把这份手作的幸运一直带着走。', img: '' },
   ],
 }
-const REVIEWS_DEFAULT: ReviewsVM = {
-  heading: '真实买家秀',
-  items: [
-    { quote: '第一次钩织就成功了，教程很细，小鸭子超级可爱，朋友都问在哪买的～', user: '小满', img: '' },
-    { quote: '材料齐全，包邮很快，新手也能做出来，做完很有成就感。', user: '阿橙', img: '' },
-    { quote: '送给闺蜜的生日礼物，她超喜欢，包装也很用心。', user: '柚子', img: '' },
-  ],
-}
+// 买家秀不给默认条目（拍板 B）：「已验证买家」只挂真实评论——没配/拉取失败时 items 为空，首页整块不显示
+const REVIEWS_DEFAULT: ReviewsVM = { heading: '真实买家秀', items: [] }
 const FAQ_DEFAULT: FaqVM[] = [
   { title: '完全没有基础可以做吗？', body: '可以。套装专为零基础设计，附带分步视频，跟着做就能完成第一只小棉鸭。' },
   { title: '材料包里都有什么？', body: '棉线、钩针、填充棉、安全眼、说明卡与幸运卡一应俱全，开盒即可开始。' },
@@ -150,7 +145,7 @@ function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] 
 
 const priceText = (v: unknown): string => {
   const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
+  return Number.isFinite(n) && n > 0 ? '¥' + n.toFixed(2) : '' // 老板拍板 1：金额一律两位小数
 }
 
 /** 首页「购买」/收尾键：货架上第一件名字带「小棉鸭」的套装。

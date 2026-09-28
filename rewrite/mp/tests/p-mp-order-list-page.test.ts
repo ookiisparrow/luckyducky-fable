@@ -20,8 +20,9 @@ async function mount(query: Record<string, string> = {}): Promise<Record<string,
   page._all = []
   page.setData = function (patch: Record<string, unknown>) {
     for (const [k, v] of Object.entries(patch)) {
-      const m = k.match(/^(\w+)\[(\d+)\]$/)
-      if (m) (this.data as any)[m[1]][Number(m[2])] = v
+      const m = k.match(/^(\w+)\[(\d+)\](?:\.(\w+))?$/) // 也认 shown[N].field（倒计时按字段局部刷新）
+      if (m && m[3]) (this.data as any)[m[1]][Number(m[2])][m[3]] = v
+      else if (m) (this.data as any)[m[1]][Number(m[2])] = v
       else (this.data as any)[k] = v
     }
   }
@@ -251,7 +252,7 @@ describe('订单列表：继续支付', () => {
     release({ ok: true, payment: PAYMENT })
     await p
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '可到订单详情继续支付', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已保留，可在订单详情继续支付', icon: 'none' })
   })
 })
 
@@ -372,6 +373,84 @@ describe('订单列表：卡片（v5 B1）', () => {
       '/pages/review/review?orderId=o1&lineId=' + encodeURIComponent('L&1') + '&name=' + encodeURIComponent('小鸭') + '&spec=' + encodeURIComponent('黄') + '&cover='
     )
     page.onReview(tap('o2'))
-    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/order/order?id=o2' })
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/order/order?id=o2&pick=review' }) // 详情页据此提示「选一件来评价」
+  })
+})
+
+describe('订单列表：UX 修复轮', () => {
+  afterEach(() => vi.useRealTimers())
+  const touch = (id: string, x: number, y: number) => ({ currentTarget: { dataset: { id } }, touches: [{ clientX: x, clientY: y }] })
+  const calls = (action: string) => callAppMock.mock.calls.filter((c: unknown[]) => c[0] === action)
+
+  it('大白话：确认收货在途连点——只发一次请求，期间显示加载中', async () => {
+    let release!: (v: unknown) => void
+    handlers.confirmReceive = () => new Promise((r) => (release = r))
+    const page = await mount()
+    page.onConfirm(tap('o1'))
+    const a = modal().success({ confirm: true })
+    const b = modal().success({ confirm: true })
+    release({ ok: true })
+    await Promise.all([a, b])
+    expect(calls('confirmReceive')).toHaveLength(1)
+    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '正在确认', mask: true })
+    expect(wxMock.hideLoading).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：取消订单在途再触发——只发一次请求', async () => {
+    let release!: (v: unknown) => void
+    handlers.cancelOrder = () => new Promise((r) => (release = r))
+    const page = await mount()
+    const a = page.cancelNow('o1')
+    const b = page.cancelNow('o1')
+    release({ ok: true })
+    await Promise.all([a, b])
+    expect(calls('cancelOrder')).toHaveLength(1)
+    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '正在取消', mask: true })
+  })
+
+  it('大白话：按住取消时手指挪开超过 10px（顺势滑列表）——作废，不取消', async () => {
+    vi.useFakeTimers()
+    handlers.cancelOrder = () => ({ ok: true })
+    const page = await mount()
+    page.onCancelStart(touch('o1', 50, 50))
+    page.onCancelMove(touch('o1', 50, 80))
+    await vi.advanceTimersByTimeAsync(800)
+    expect(calls('cancelOrder')).toHaveLength(0)
+    expect(page.data.holding).toBe('')
+  })
+
+  it('大白话：倒计时走到 0——卡片写「已超时」、藏「去支付」，自动刷新一次（只一次）', async () => {
+    vi.useFakeTimers()
+    const T = Date.now()
+    handlers.getMyOrders = () => ({ ok: true, list: [{ ...order('o1'), createdAt: T - 15 * 60_000 + 1500 }], nextCursor: null, hasMore: false })
+    const page = await mount()
+    await page.reload()
+    expect(page.data.shown[0].expired).toBe(false)
+    callAppMock.mockClear()
+    vi.setSystemTime(T + 2000)
+    page.tick()
+    expect(page.data.shown[0]).toMatchObject({ expired: true, cd: '', right: '已超时' })
+    await flush()
+    expect(calls('getMyOrders')).toHaveLength(1)
+    expect(page.data.shown[0].expired).toBe(true)
+    page.tick()
+    page.tick()
+    await flush()
+    expect(calls('getMyOrders')).toHaveLength(1)
+  })
+
+  it('大白话：翻页在途显示加载行（再触底不重复拉）；翻到底有数据就能显示「没有更多了」', async () => {
+    const page = await mount()
+    await page.reload()
+    let release!: (v: unknown) => void
+    handlers.getMyOrders = () => new Promise((r) => (release = r))
+    const more = page.onReachBottom()
+    expect(page.data.paging).toBe(true)
+    await page.onReachBottom()
+    release({ ok: true, list: [order('o3')], nextCursor: null, hasMore: false })
+    await more
+    expect(calls('getMyOrders')).toHaveLength(2) // 首载 1 + 翻页 1
+    expect(page.data).toMatchObject({ paging: false, hasMore: false })
+    expect(ids(page)).toEqual(['o1', 'o2', 'o3'])
   })
 })

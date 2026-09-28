@@ -23,11 +23,11 @@ describe('brandFont 分层常量（两层×三字重·首屏最先）', () => {
     })
   })
 
-  it('大白话：每层三字重（500 正文/700 标题/900 大标题·细字 300 的小字已走黑体，圆体不出细体）；文件名 .woff 结尾（不是 .woff2）且带版本号 v7（口径变了＝改名让旧缓存失效）', () => {
+  it('大白话：每层三字重（500 正文/700 标题/900 大标题·细字 300 的小字已走黑体，圆体不出细体）；文件名 .woff 结尾（不是 .woff2）且带版本号 v8（口径变了＝改名让旧缓存失效）', () => {
     for (const t of BRAND_FONT_TIERS) {
       expect(t.files.map((f) => f.weight).sort()).toEqual(['500', '700', '900'])
       for (const { name } of t.files) {
-        expect(name).toMatch(/\.v7\.woff$/)
+        expect(name).toMatch(/\.v8\.woff$/)
         expect(name.endsWith('.woff2')).toBe(false)
       }
     }

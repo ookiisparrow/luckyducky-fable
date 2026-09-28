@@ -2,7 +2,7 @@
 import { tapHaptic } from '../../lib/haptics'
 import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrders, cardLabel, orderLed, listRight, reviewUrl, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
+import { mapOrders, cardLabel, orderLed, listRight, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
@@ -43,11 +43,13 @@ type OrderRow = Omit<OrderVM, 'items'> & {
   led: { tone: string; halo: string }
   cd: string
   right: string
+  expired: boolean // 待支付倒计时已归零：藏「去支付」、右上角写「已超时」（云端关单前）
 }
 
 // 视图装饰：附 tint + 拆分货币符号 + 卡片状态名/状态灯/右上角（设计稿 B1 oview·不动 mapOrders 单源）。
 function decorate(o: OrderVM): OrderRow {
-  const r = listRight(o, Date.now())
+  const now = Date.now()
+  const r = listRight(o, now)
   return {
     ...o,
     tint: TINT[o.status] || 'purple',
@@ -58,6 +60,7 @@ function decorate(o: OrderVM): OrderRow {
     led: orderLed(o.status),
     cd: r.cd,
     right: r.text,
+    expired: o.status === 'pending' && payLeftMs(o, now) === 0,
   }
 }
 
@@ -75,7 +78,9 @@ Page({
     holding: '', // 正在按住取消的订单 id（驱动键内红色进度条）
     payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
+    paging: false, // 触底翻页在途（底部像素 loader 行·同时挡重复触底）
   },
+  _busy: false, // 网络动作在途锁（确认收货/取消）：重复点直接丢
   _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
@@ -100,16 +105,37 @@ Page({
     if (this._ticker) clearInterval(this._ticker)
     this._ticker = null
   },
-  // 待支付倒计时：只按路径键刷新待支付卡的 cd（不整表重发）；过点停在 00:00，真正关单以云端为准
+  // 待支付倒计时：只按路径键刷新待支付卡的 cd（不整表重发）；过点改写「已超时」、藏「去支付」，
+  // 首次归零自动刷新一次（真正关单以云端为准）
   tick() {
     const now = Date.now()
-    const patch: Record<string, string> = {}
+    const patch: Record<string, unknown> = {}
+    let zeroHit = false
     this.data.shown.forEach((o, i) => {
       if (o.status !== 'pending') return
-      const cd = listRight(o as unknown as OrderVM, now).cd
-      if (cd !== o.cd) patch['shown[' + i + '].cd'] = cd
+      const r = listRight(o as unknown as OrderVM, now)
+      if (r.cd !== o.cd) patch['shown[' + i + '].cd'] = r.cd
+      if (r.text !== o.right) patch['shown[' + i + '].right'] = r.text
+      // 只在「未超时→超时」那一下触发刷新：刷回来仍待支付时 decorate 按时间重算 expired 仍为真，不会再刷
+      if (!o.expired && payLeftMs(o as unknown as OrderVM, now) === 0) {
+        patch['shown[' + i + '].expired'] = true
+        zeroHit = true
+      }
     })
     if (Object.keys(patch).length) this.setData(patch)
+    if (zeroHit) void this.reload()
+  },
+  // 网络动作统一：在途锁 + 加载遮罩，回包后解锁；在途重复触发回 undefined（调用方直接收手）
+  async withLoading<T>(title: string, fn: () => Promise<T>): Promise<T | undefined> {
+    if (this._busy) return undefined
+    this._busy = true
+    wx.showLoading({ title, mask: true })
+    try {
+      return await fn()
+    } finally {
+      wx.hideLoading()
+      this._busy = false
+    }
   },
   async reload() {
     // 状态筛选下推服务端（分页与过滤同源）：tabKey 作 status 传下去·从该 tab 重新分页。
@@ -139,10 +165,12 @@ Page({
     void this.reload()
   },
   async onReachBottom() {
-    if (!this.data.hasMore || this.data.cursor == null) return
+    if (!this.data.hasMore || this.data.cursor == null || this.data.paging) return // 在途重复触底：丢弃
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
+    this.setData({ paging: true })
     const r = await getMyOrders(this.data.cursor, 20, tab)
+    this.setData({ paging: false })
     if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
@@ -219,7 +247,7 @@ Page({
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次进详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
     if (this.unloaded) {
-      wx.showToast({ title: '可到订单详情继续支付', icon: 'none' })
+      wx.showToast({ title: '订单已保留，可在订单详情继续支付', icon: 'none' })
       return
     }
     if (outcome.kind === 'paid') {
@@ -242,14 +270,15 @@ Page({
     settle() // 超时关单等状态变化如实刷出来
   },
   onConfirm(e: WechatMiniprogram.TouchEvent) {
+    if (this._busy) return
     const id = String(e.currentTarget.dataset.id)
     wx.showModal({
       title: '确认收货',
       content: '确认已收到宝贝了吗？',
       success: async (res) => {
         if (!res.confirm) return
-        const r = await confirmReceive(id)
-        if (this.unloaded) return // await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
+        const r = await this.withLoading('正在确认', () => confirmReceive(id))
+        if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
@@ -258,31 +287,37 @@ Page({
   onLogistics(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/logistics/logistics?id=' + String(e.currentTarget.dataset.id) })
   },
-  // 写评价：单件单直达评价页；多件单进详情逐件评（评价按行记·一行一评）
+  // 写评价：单件单直达评价页；多件单进详情逐件评（评价按行记·一行一评），带 pick=review 让详情提示「选一件来评价」
   onReview(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
     const o = this._all.find((x) => x.id === id)
     if (o && o.items.length === 1) wx.navigateTo({ url: reviewUrl(id, o.items[0]) })
-    else wx.navigateTo({ url: '/pages/order/order?id=' + id })
+    else wx.navigateTo({ url: '/pages/order/order?id=' + id + '&pick=review' })
   },
   noop() {},
-  // 取消待支付单（破坏性·按住 700ms 才取消，设计稿 data-hold；仅 pending 出此入口·最终裁决在云端）
+  // 取消待支付单（破坏性·按住 700ms 才取消，设计稿 data-hold；仅 pending 出此入口·最终裁决在云端）。
+  // 按下带触点坐标、touchmove 挪开超 10px 作废（lib/hold）——顺势滑列表不误取消
   onCancelStart(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
+    const t = e.touches && e.touches[0]
     hold?.cancel()
     hold = createHold(HOLD_MS, () => void this.cancelNow(id), {
       onQuick: () => fxHint(this, '按住取消订单'),
       onChange: (v) => this.setData({ holding: v ? id : '' }),
     })
-    hold.start()
+    hold.start(t ? t.clientX : undefined, t ? t.clientY : undefined)
+  },
+  onCancelMove(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches && e.touches[0]
+    if (t) hold?.move(t.clientX, t.clientY)
   },
   onCancelEnd() {
     hold?.end()
   },
   async cancelNow(id: string) {
     tapHaptic()
-    const r = await cancelOrder(id)
-    if (this.unloaded) return // await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
+    const r = await this.withLoading('正在取消', () => cancelOrder(id))
+    if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
     wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
     void this.reload()
   },

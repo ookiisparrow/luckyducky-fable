@@ -14,6 +14,7 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「还没有售后记录」分治
     hasMore: false,
     cursor: null as unknown,
+    paging: false, // 触底翻页在途（底部像素 loader 行·同时挡重复触底）
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onShow 多次触发（如售后详情返回）并发时丢弃过期回包
   onShow() {
@@ -36,9 +37,11 @@ Page({
     void this.reload()
   },
   async onReachBottom() {
-    if (!this.data.hasMore || this.data.cursor == null) return
+    if (!this.data.hasMore || this.data.cursor == null || this.data.paging) return // 在途重复触底：丢弃
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废
+    this.setData({ paging: true })
     const r = await getMyAfterSales(this.data.cursor)
+    this.setData({ paging: false })
     if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标（失败的过期回包也静默丢弃，不误弹 toast）
     if (!r.ok) {
       wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）

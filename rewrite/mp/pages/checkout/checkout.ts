@@ -16,6 +16,8 @@ const SUBMITTED_MS = 600 // 设计稿 submitOrder：建单成功后按键打勾�
 // 取消支付提示（老板拍板 4·设计稿 payClose）。15 分钟＝云端付款时限 shared PAY_WINDOW_MS（小程序进不了 shared，
 // 手抄一份；u-mp-checkout-pay.test 读云端源码对数，改一边那里就红）
 const PAY_CANCEL_TIP = '订单已保存，请在 15 分钟内支付'
+// 已退页/订单已生成时的去处指引（文案口径：订单入口说「我 → 我的订单」）
+const ORDER_KEPT_TIP = '订单已生成，可到「我 → 我的订单」继续支付'
 
 type Addr = NonNullable<ReturnType<typeof addr.defaultAddress>>
 /** 地址卡展示（设计稿 co.who / co.where）：姓名 · 打码手机号一行；省市区去空格直接接详址。下单仍用原始字段。 */
@@ -34,6 +36,7 @@ Page({
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
     submitted: false, // 建单成功：按键打勾「已提交」（拉起支付前的 600ms 展示·锁仍由 submitting 管）
+    paying: false, // 调支付参数在途：按键转圈「正在拉起支付」（只是展示·锁仍由 submitting 管）
     cargo: 0, // 小货车车斗箱数（商品行数·最多 3）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
@@ -80,6 +83,8 @@ Page({
     // allRaw 命中会话缓存零云调用（miss 兜底重拉一次，同 cart.ts onLoad 写法）。
     const allRaw = (await getAllProducts()) || []
     if (this.data.submitting || this.unloaded) return // 恢复点复核：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
+    // 草稿里是加购/进页时的价，云端按现价扣：按最新商品档覆盖后再算应付（不在货架的行不动，提交时云端拒单点名移出）
+    if (checkout.syncDraftPrices(allRaw)) fxHint(this, '价格有变动，已按最新价计算')
     // draft 在 await 之后读：与 summaryFen() 取同一时刻的快照——
     // 若在前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
     // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。
@@ -99,7 +104,8 @@ Page({
   },
   onPickAddress() {
     if (this.data.submitting) return // 提交在途禁止跳地址页：否则地址页压栈后·下单成功的 redirectTo/switchTab 打到栈顶地址页、劫持返回
-    wx.navigateTo({ url: '/pages/address/address?pick=1' })
+    // 地址簿空：直接进新增页（pick=1＝存完设默认、退 1 页回本页）；有地址进选址列表
+    wx.navigateTo({ url: this.data.address ? '/pages/address/address?pick=1' : '/pages/address-edit/address-edit?pick=1' })
   },
   onToggleAddon(e: WechatMiniprogram.TouchEvent) {
     if (this.data.submitting) return // 提交在途禁止改搭配购：否则下单用 await 前草稿快照·成功页金额 await 后重算，二者分叉展示不一致
@@ -128,7 +134,7 @@ Page({
     if (this.unloaded) {
       if (!r.ok) return
       checkout.finishSubmitted() // 已退页不进成功页·金额无消费方不再算（不留丢弃返回值的死调用）
-      wx.showToast({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+      wx.showToast({ title: ORDER_KEPT_TIP, icon: 'none' })
       return
     }
     if (!r.ok) {
@@ -155,7 +161,7 @@ Page({
       wx.showToast({ title: checkout.mapCreateOrderError(errCode), icon: 'none' })
       return
     }
-    // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消→redirectTo 订单详情、失败→弹窗后 switchTab 首页），
+    // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消→redirectTo 订单详情、失败→弹窗后 redirectTo 订单详情（订单已关闭才回首页）），
     // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
     // 成功页金额用回包权威值（order.amount）：前端 summaryFen 是本地估算，缺货重试/搭配购变化等场景可能与云端现算分叉；
     // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用。
@@ -182,15 +188,23 @@ Page({
     else go()
   },
   async startPay(orderId: string, amountFen: number) {
+    this.setData({ submitted: false, paying: true }) // 「已提交」换成转圈「正在拉起支付」，等支付参数回来
     const outcome = mapPayResult(await pay(orderId))
+    this.setData({ paying: false })
     // 拉起支付请求在途用户手动退出结算页：不再对无关页面 redirectTo/requestPayment（真实支付授权框）/showModal
     // （同 onSubmit 建单分支范式）——订单已建，轻提示即可，导航/授权框留给用户主动回到订单列表时发起。
     if (this.unloaded) {
-      wx.showToast({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+      wx.showToast({ title: ORDER_KEPT_TIP, icon: 'none' })
       return
     }
-    // 回首页从头逛起：防 tab 实例旧滚动位置残留（收敛见 lib/homeIntent.ts）
-    const failModal = (title: string, content: string) => wx.showModal({ title, content, showCancel: false, success: () => goHomeTab() })
+    // 支付出错（拍板 A）：订单还在、可继续付——弹窗说明后换到这张订单的详情页（先弹窗再换页：弹窗期间本页还在，最稳）
+    const toOrder = (reason: string) =>
+      wx.showModal({
+        title: '支付没成功',
+        content: (reason ? reason + '。' : '') + '订单已保留，可在订单详情里继续支付。',
+        showCancel: false,
+        success: () => wx.redirectTo({ url: '/pages/order/order?id=' + orderId }),
+      })
     if (outcome.kind === 'paid') {
       this.toSuccess(orderId, amountFen)
       return
@@ -200,18 +214,23 @@ Page({
         ...outcome.payment,
         success: () => this.toSuccess(orderId, amountFen),
         // 取消：订单保留待支付——提示时限并换到这张订单的详情页（老板拍板 4·设计稿 payClose），在那里可继续支付；
-        // 换页后本页没了，用原生提示（跨页还在）。失败（非取消）：弹窗说明后回首页（订单同样保留）
+        // 换页后本页没了，用原生提示（跨页还在）。失败（非取消）：弹窗说明后同样换到订单详情（拍板 A）
         fail: (res) => {
           if (String(res.errMsg || '').includes('cancel')) {
             wx.showToast({ title: PAY_CANCEL_TIP, icon: 'none', duration: 2500 })
             wx.redirectTo({ url: '/pages/order/order?id=' + orderId })
             return
           }
-          failModal('支付没成功', '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。')
+          toOrder('')
         },
       })
       return
     }
-    failModal(outcome.kind === 'closed' ? '订单已关闭' : '支付没成功', outcome.message)
+    if (outcome.kind === 'closed') {
+      // 订单已超时关闭（付不了了）：弹窗后回首页从头逛起（goHomeTab 防 tab 实例旧滚动位置残留）
+      wx.showModal({ title: '订单已关闭', content: outcome.message, showCancel: false, success: () => goHomeTab() })
+      return
+    }
+    toOrder(outcome.message)
   },
 })

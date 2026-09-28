@@ -45,3 +45,31 @@ describe('createHold', () => {
     expect(fire).not.toHaveBeenCalled()
   })
 })
+
+// UX 审查（2026-09-28）：手指落在按住键上顺势滑动列表，计时照走会误删/误取消订单——手指移动超过 10px 即作废。
+describe('按住中手指移动', () => {
+  it('大白话：按住后手指挪开超过 10px——作废，不触发；只抖几像素（≤10px）——照常触发', () => {
+    const fire = vi.fn()
+    const states: boolean[] = []
+    const h = createHold(700, fire, { onChange: (v) => states.push(v) })
+    h.start(100, 300)
+    h.move(100, 288) // 上滑 12px
+    vi.advanceTimersByTime(1000)
+    expect(fire).not.toHaveBeenCalled()
+    expect(states).toEqual([true, false])
+
+    h.start(100, 300)
+    h.move(106, 306) // 抖了约 8.5px
+    vi.advanceTimersByTime(700)
+    expect(fire).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：没记起点（只调 start()）时 move 不误伤', () => {
+    const fire = vi.fn()
+    const h = createHold(700, fire)
+    h.start()
+    h.move(0, 500)
+    vi.advanceTimersByTime(700)
+    expect(fire).toHaveBeenCalledTimes(1)
+  })
+})

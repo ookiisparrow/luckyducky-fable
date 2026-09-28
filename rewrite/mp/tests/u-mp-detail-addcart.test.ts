@@ -77,6 +77,16 @@ describe('详情页加购：划线价不高于现价不透传', () => {
   })
 })
 
+describe('详情页立即购买防连点（UX 修复）', () => {
+  it('大白话：连点两下「立即购买」——只进一次确认订单页', async () => {
+    const page = await mount(VM, 0)
+    page.onBuyNow()
+    page.onBuyNow()
+    expect(buyNowMock).toHaveBeenCalledTimes(1)
+    expect((globalThis as any).wx.navigateTo).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('详情页切款式', () => {
   it('大白话：翻到第 2 张图再换款式——价格跟着变，图集回到第 1 张（swiper current 绑 galleryIndex，平滑滑回）', async () => {
     const page = await mount(VM, 0)
@@ -86,7 +96,7 @@ describe('详情页切款式', () => {
     }
     page.onSelectSku({ currentTarget: { dataset: { index: 1 } } })
     expect(page.data.skuIndex).toBe(1)
-    expect(page.data.currentPriceNum).toBe(98)
+    expect(page.data.currentPriceNum).toBe('98.00') // 两位小数（老板拍板 1）
     expect(page.data.galleryIndex).toBe(0)
     expect(page.data.galleryWindow).toEqual([true, true])
   })

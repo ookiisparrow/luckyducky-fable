@@ -75,7 +75,7 @@ describe('写评价页', () => {
     expect(submitMock).not.toHaveBeenCalled()
   })
 
-  it('大白话：发布——先转「发布中」，成功提示「已发布 ✓」（原生提示跨页不断）、撤掉放弃拦截，再返回上一页', async () => {
+  it('大白话：发布——先转「发布中」，成功提示「已提交，精选后展示」（原生提示跨页不断）、撤掉放弃拦截，再返回上一页', async () => {
     submitMock.mockResolvedValue({ ok: true })
     const page = await mount({ orderId: 'o1', lineId: 'L1' })
     page.onStar(star(5))
@@ -83,7 +83,8 @@ describe('写评价页', () => {
     await page.onSubmit()
     expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '发布中', mask: true })
     expect(wxMock.hideLoading).toHaveBeenCalled()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已发布', icon: 'success', mask: true })
+    // 用 icon none：带 success 图标时标题最多显示 7 个字，这句会被截
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已提交，精选后展示', icon: 'none', mask: true })
     expect(page.data.dirty).toBe(false)
     expect(wxMock.navigateBack).not.toHaveBeenCalled()
     vi.advanceTimersByTime(800)

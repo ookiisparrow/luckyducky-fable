@@ -75,6 +75,52 @@ describe('首页「+」加购提示', () => {
   })
 })
 
+describe('首页「+」连点（UX 修复）', () => {
+  it('大白话：冷启动时连点两下「+」（商品数据还在路上）——两下都加进购物车，只提示一次', async () => {
+    let release!: (v: unknown) => void
+    const pending = new Promise((r) => (release = r))
+    byIdMock.mockReturnValue(pending)
+    const page = await mount()
+    const a = page.onAddProduct(tapId('p1'))
+    const b = page.onAddProduct(tapId('p1'))
+    release({ id: 'p1', name: '小鸭', price: 128 })
+    await Promise.all([a, b])
+    expect(addMock).toHaveBeenCalledTimes(2)
+    expect(fx.toast).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('首页跳转防连点（UX 修复）', () => {
+  it('大白话：收尾大键撒花期间连点——只进一次详情', async () => {
+    vi.useFakeTimers()
+    try {
+      const page = await mount(false)
+      page.data.products = [{ id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }]
+      page.toProducts()
+      page.toProducts()
+      vi.advanceTimersByTime(300)
+      expect((globalThis as any).wx.navigateTo).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：商品卡连点两下——只进一次详情；过一会儿（或从详情回来）能再点', async () => {
+    vi.useFakeTimers()
+    try {
+      const page = await mount()
+      page.onTapProduct(tapId('p1'))
+      page.onTapProduct(tapId('p1'))
+      expect((globalThis as any).wx.navigateTo).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(900)
+      page.onTapProduct(tapId('p1'))
+      expect((globalThis as any).wx.navigateTo).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('首页跳转', () => {
   it('大白话：tab bar 上再点一次「首页」——平滑滚回顶部', async () => {
     const page = await mount()

@@ -79,9 +79,19 @@ page {
 }
 /* 小键（高 32）：编辑 / 登录 / 重试 / 扫码激活 */
 .me-mini {
+  position: relative;
   height: 32px;
   padding: 0 12px;
   flex: 0 0 auto;
+}
+/* 热区扩到 44px（上下各 6px·左右同扩）：透明伪元素随键接住点按，键本身视觉不变 */
+.me-mini::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -6px;
+  right: -6px;
 }
 .me-mini-weak {
   font-size: 13px;

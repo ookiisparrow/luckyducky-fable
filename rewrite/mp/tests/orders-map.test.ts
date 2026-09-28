@@ -166,10 +166,11 @@ describe('订单卡右上角 / 详情状态卡小字（v5 B1·B2）', () => {
   it('大白话：支付窗口副本与 shared 同值（15 分钟）', () => {
     expect(PAY_WINDOW_MS).toBe(SHARED_PAY_WINDOW_MS)
   })
-  it('大白话：待支付显示「mm:ss」倒计时（下单时间 + 15 分钟），过点停在 00:00 不倒负', () => {
+  it('大白话：待支付显示「mm:ss」倒计时（下单时间 + 15 分钟），过点不倒负、改写「已超时」', () => {
     expect(listRight(vmOf({ status: 'pending' }), T0 + 60_000)).toEqual({ cd: '14:00', text: '' })
     expect(listRight(vmOf({ status: 'pending' }), T0 + 14 * 60_000 + 55_500)).toEqual({ cd: '00:04', text: '' })
-    expect(listRight(vmOf({ status: 'pending' }), T0 + 99 * 60_000)).toEqual({ cd: '00:00', text: '' })
+    expect(listRight(vmOf({ status: 'pending' }), T0 + 99 * 60_000)).toEqual({ cd: '', text: '已超时' })
+    expect(detailSub(vmOf({ status: 'pending' }), T0 + 15 * 60_000)).toEqual({ text: '已超时', tone: 'err' })
   })
   it('大白话：待发货「48 小时内发货」；待收货「承运方 · 派送中」（没填承运方只写派送中）；完成写完成日期，旧单没完成时间退回下单时间', () => {
     expect(listRight(vmOf({ status: 'paid' }), T0).text).toBe('48 小时内发货')

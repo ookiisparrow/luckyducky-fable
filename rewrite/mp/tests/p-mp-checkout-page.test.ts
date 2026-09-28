@@ -66,6 +66,31 @@ async function mount(seed: Seed = 'cart', withAddress = true): Promise<Record<st
   return page
 }
 
+describe('结算页：旧价与空地址簿（UX 修复）', () => {
+  it('大白话：加购后商品降价了——结算页按最新价算应付，并提示「价格有变动，已按最新价计算」', async () => {
+    getAllProductsMock.mockImplementation(async () => [{ id: 'p1', price: 99 }, { id: 'p2', price: 22 }])
+    const page = await mount()
+    await page.refresh()
+    expect(page.data.items.map((l: any) => l.priceNum)).toEqual(['99.00', '22.00'])
+    expect(page.data.amountNum).toBe('220.00')
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '价格有变动，已按最新价计算', icon: 'none' })
+    wxMock.showToast.mockReset()
+    await page.refresh()
+    expect(wxMock.showToast).not.toHaveBeenCalled() // 已是最新：不重复提示
+  })
+
+  it('大白话：地址簿是空的——点「添加收货地址」直接进新增页（存完退一页回来）；有地址时照旧去选址列表', async () => {
+    const none = await mount('cart', false)
+    await none.refresh()
+    none.onPickAddress()
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/address-edit/address-edit?pick=1' })
+    const has = await mount()
+    await has.refresh()
+    has.onPickAddress()
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/address/address?pick=1' })
+  })
+})
+
 describe('结算页：渲染', () => {
   it('大白话：进页画出默认地址、条目两位小数单价、合计件数与实付；包邮', async () => {
     const page = await mount()
@@ -247,7 +272,7 @@ describe('结算页：提交', () => {
     await p
     expect(cart.getItems()).toEqual([])
     expect(ck.getDraft().items).toEqual([])
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到「我 → 我的订单」继续支付', icon: 'none' })
     expect(payMock).not.toHaveBeenCalled()
     expect(wxMock.redirectTo).not.toHaveBeenCalled()
   })
@@ -266,7 +291,7 @@ describe('结算页：提交', () => {
     expect(wxMock.showToast).not.toHaveBeenCalled()
   })
 
-  it('大白话：拉支付在途时退出了结算页——不拉收银台，只提示去订单列表继续支付', async () => {
+  it('大白话：拉支付在途时退出了结算页——不拉收银台，只提示去「我的订单」继续支付', async () => {
     const page = await mount()
     let release!: (v: unknown) => void
     payMock.mockReturnValue(new Promise((r) => (release = r)))
@@ -275,6 +300,6 @@ describe('结算页：提交', () => {
     release({ ok: true, payment: { timeStamp: '1', nonceStr: 'n', package: 'prepay_id=x', signType: 'RSA', paySign: 's' } })
     await p
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到「我 → 我的订单」继续支付', icon: 'none' })
   })
 })

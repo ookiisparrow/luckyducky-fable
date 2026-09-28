@@ -46,5 +46,5 @@ export function mapPayResult(r: unknown): PayOutcome {
   if (e === 'ORDER_CLOSED') return { kind: 'closed', message: '订单已超时关闭，请重新下单' }
   if (e === 'PAY_NOT_ENABLED') return { kind: 'error', message: '支付暂未开通' }
   if (e === 'UNIFIED_ORDER_FAIL') return { kind: 'error', message: '支付通道繁忙，稍后再试' }
-  return { kind: 'error', message: '支付没成功，稍后再试' }
+  return { kind: 'error', message: '暂时付不了，稍后再试' } // 弹窗标题已是「支付没成功」，正文不再重复
 }

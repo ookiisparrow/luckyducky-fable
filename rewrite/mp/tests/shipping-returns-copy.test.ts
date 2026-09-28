@@ -17,9 +17,9 @@ const checkout = live(checkoutRaw)
 const paysuccess = live(paysuccessRaw)
 
 describe('详情/购物车/结算运费与退货话术', () => {
-  it('大白话：详情、结算和支付成功页顾客短句都是「包邮到家·售后无忧」，不再写满额包邮、全场包邮或疆蒙藏长句', () => {
+  it('大白话：详情、结算和支付成功页顾客短句都是「包邮到家 · 售后无忧」，不再写满额包邮、全场包邮或疆蒙藏长句', () => {
     for (const src of [detail, checkout, paysuccess]) {
-      expect(src).toContain('包邮到家·售后无忧')
+      expect(src).toContain('包邮到家 · 售后无忧')
       expect(src).not.toContain('除新疆、内蒙古、西藏外包邮')
       expect(src).not.toContain('除疆蒙藏外')
       expect(src).not.toMatch(/满\s*¥?\s*100\s*包邮/)
@@ -51,7 +51,7 @@ describe('详情/购物车/结算运费与退货话术', () => {
     expect(cart).not.toContain('七天无理由')
     expect(cart).not.toMatch(/满\s*¥?\s*100\s*包邮/)
     expect(cart).not.toContain('全场包邮')
-    expect(cart).toContain('包邮到家·售后无忧')
+    expect(cart).toContain('包邮到家 · 售后无忧')
     expect(cart).not.toContain('官方正品保障')
     expect(cart).not.toContain('除新疆、内蒙古、西藏外包邮')
     expect(cart).not.toContain('次日达')

@@ -52,7 +52,7 @@
     <view class="co-sum">
       <view class="co-sum-row"><text class="t-sys co-k">商品</text><view class="co-leader"></view><text class="mono co-v">{{goodsLabel}}</text></view>
       <view class="co-sum-row"><text class="t-sys co-k">运费</text><view class="co-leader"></view><text class="mono co-v">顺丰速运 · {{shipLabel}}</text></view>
-      <text class="t-sys co-policy">包邮到家·售后无忧</text>
+      <text class="t-sys co-policy">包邮到家 · 售后无忧</text>
     </view>
   </view>
   </scroll-view>
@@ -62,10 +62,11 @@
       <text class="t-sys co-k">应付</text>
       <text class="mono co-amount">¥{{amountNum}}</text>
     </view>
-    <!-- 在途反馈：像素 loader + 「提交中」→ 建单成功打勾「已提交」（停 600ms 再拉支付）
+    <!-- 在途反馈：像素 loader + 「提交中」→ 建单成功打勾「已提交」（停 600ms）→ 调支付参数期间转圈「正在拉起支付」
          （刻意不用 wx.showLoading：本链多分支 return，hideLoading 配对易漏→锁屏） -->
     <view class="k k-ink k-48 co-submit" hover-start-time="20" hover-class="{{submitting ? '' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onSubmit" data-k="{{submitting ? '' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <block wx:if="{{submitted}}"><px-anim name="checkin" size="2" dark hold="700" /><text>已提交</text></block>
+      <block wx:elif="{{paying}}"><px-anim name="loader" size="2" dark /><text>正在拉起支付</text></block>
       <block wx:elif="{{submitting}}"><px-anim name="loader" size="2" dark /><text>提交中</text></block>
       <text wx:else>提交订单</text>
     </view>

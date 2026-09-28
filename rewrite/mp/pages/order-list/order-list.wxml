@@ -46,7 +46,7 @@
         <px-anim wx:if="{{item.status === 'shipped'}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
         <text class="ol-status">{{item.label}}</text>
-        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后取消</text></view>
+        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后自动取消</text></view>
         <text wx:elif="{{item.right}}" class="t-sys ol-time">{{item.right}}</text>
       </view>
       <view class="ol-row">
@@ -64,11 +64,12 @@
            ponytail: 云端订单没有「已评价」字段，灰底「已评价」标签暂不出；云端给行级 reviewed 后按它二选一 -->
       <view class="ol-acts" wx:if="{{item.status === 'pending'}}">
         <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条）：外层接按住手势 + 吞掉 tap 不进详情，内层是键帽 -->
-        <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
+        <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
           <view class="k k-sm k-light ol-act ol-danger {{holding === item.id ? 'ol-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
             data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="ol-fill"></view><text class="ol-act-t">取消订单</text></view>
         </view>
-        <view class="k k-sm k-ink ol-act {{payingId === item.id ? 'ol-act-busy' : ''}}"
+        <!-- 倒计时归零（expired）：藏「去支付」，右上角写「已超时」并自动刷新一次 -->
+        <view wx:if="{{!item.expired}}" class="k k-sm k-ink ol-act {{payingId === item.id ? 'ol-act-busy' : ''}}"
           hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去支付</view>
       </view>
       <view class="ol-acts" wx:elif="{{item.status === 'shipped'}}">
@@ -83,7 +84,9 @@
       </view>
     </view>
 
-    <view class="t-sys ol-more" wx:if="{{hasMore}}">上拉加载更多</view>
+    <view class="t-sys ol-loading ol-more" wx:if="{{paging}}"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="t-sys ol-more" wx:elif="{{hasMore}}">上拉加载更多</view>
+    <view class="t-sys ol-more" wx:elif="{{shown.length && !loading}}">没有更多了</view>
   </view>
 </view>
 

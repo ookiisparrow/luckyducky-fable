@@ -9,6 +9,7 @@ import { writeStoredCont } from '../../lib/meCont'
 import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 import { fxHint } from '../../lib/pxFx'
+import { clearConsentHint } from '../../lib/consent'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
 // 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
@@ -104,9 +105,14 @@ Page({
   onBlur() {
     this.setData({ focus: '' })
   },
-  onLogoutStart() {
+  onLogoutStart(e: WechatMiniprogram.TouchEvent) {
     keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
-    this._holdOut?.start()
+    const t = e.touches[0]
+    this._holdOut?.start(t?.clientX, t?.clientY)
+  },
+  onLogoutMove(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches[0]
+    if (t) this._holdOut?.move(t.clientX, t.clientY) // 手指滑开超 10px 作废（顺势滚动不误退出）
   },
   onLogoutEnd() {
     this._holdOut?.end()
@@ -114,10 +120,15 @@ Page({
   onLogoutCancel() {
     this._holdOut?.cancel()
   },
-  onDeleteStart() {
+  onDeleteStart(e: WechatMiniprogram.TouchEvent) {
     if (this._deleting) return
     keyPress('light')
-    this._holdDel?.start()
+    const t = e.touches[0]
+    this._holdDel?.start(t?.clientX, t?.clientY)
+  },
+  onDeleteMove(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches[0]
+    if (t) this._holdDel?.move(t.clientX, t.clientY)
   },
   onDeleteEnd() {
     this._holdDel?.end()
@@ -138,6 +149,7 @@ Page({
       title: '删除资料',
       content: '删除后这个微信不能再回到你的个人资料。学习记录和地址都会没有。订单还在。',
       confirmText: '删除',
+      confirmColor: '#D9483B', // 不可恢复操作：确认键警示红（= tokens --v5-err）
       success: (r) => {
         if (r.confirm) void this.runDeleteAccount()
       },
@@ -146,13 +158,20 @@ Page({
   async runDeleteAccount() {
     if (this._deleting) return
     this._deleting = true
-    const r = await deleteAccount()
-    this._deleting = false
+    wx.showLoading({ title: '删除中', mask: true }) // 遮罩挡住在途连点/返回（删除要跑好几步服务端批删）
+    let r: { ok: boolean }
+    try {
+      r = await deleteAccount()
+    } finally {
+      wx.hideLoading()
+      this._deleting = false
+    }
     if (!r.ok) {
       fxHint(this, '没删成请稍后再试')
       return
     }
     clearAddresses()
+    clearConsentHint() // 服务端已把数据共享授权重置；本机旧提示别再显示「已同意」
     loginGate.logout()
     writeStoredCont(null) // 「我」页继续学习旧卡一并清掉（回去不再先画已删的课）
     wx.showToast({ title: '已删除', icon: 'none' }) // 随即退回上一页：原生提示跨页不断
@@ -173,7 +192,9 @@ Page({
       fxHint(this, '资料没加载好，返回重进一下')
       return
     }
-    if (!this.data.nickname.trim()) {
+    // 从没设过昵称（原值空）允许留空：云端空昵称＝不改，照样能只存手机号/头像。
+    // 设过再清空才拦——云端不会清掉旧昵称，放过去会「提示已保存、其实没改」（根因#14）。
+    if (!this.data.nickname.trim() && this.orig.nickname) {
       fxHint(this, '昵称不能为空')
       return
     }
@@ -215,8 +236,20 @@ Page({
     this.sync({ busy: false })
     if (r.ok && avatarFailed) {
       fxHint(this, '资料已存，头像上传没成功')
-    } else {
-      fxHint(this, '保存没成功，稍后再试')
+      return
     }
+    // 审核被拒按码说人话（云端 actions/user.ts updateProfile）：IMG_RISKY＝头像违规；SEC_CHECK_FAIL＝昵称没过，
+    // 带了新头像时也可能是头像没校成（云端同码），那就两样都提。
+    const err = String(r.error)
+    fxHint(
+      this,
+      err === 'IMG_RISKY'
+        ? '这张头像不能用，换一张'
+        : err === 'SEC_CHECK_FAIL'
+          ? patch.avatar
+            ? '昵称或头像没通过审核，换一个再试'
+            : '昵称没通过审核，换一个'
+          : '保存没成功，稍后再试'
+    )
   },
 })

@@ -6,7 +6,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('../api/learning', () => ({ trackEvent: vi.fn() }))
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn(), keyHaptic: vi.fn() }))
 vi.mock('../lib/checkout', () => ({ prepareFromCart: vi.fn() }))
-vi.mock('../lib/catalog', () => ({ getAllProducts: vi.fn(async () => []) }))
+const { getAllMock } = vi.hoisted(() => ({ getAllMock: vi.fn() }))
+vi.mock('../lib/catalog', () => ({ getAllProducts: getAllMock }))
 vi.mock('../lib/homeIntent', () => ({ goHomeTab: vi.fn() }))
 vi.mock('../utils/exitGuard', () => ({ armExitGuard: vi.fn(), releaseExitGuard: vi.fn(), onExitGuardBeforeLeave: vi.fn() }))
 
@@ -35,6 +36,7 @@ async function mount(): Promise<Record<string, any>> {
 const row = (id: string) => ({ currentTarget: { dataset: { id, sku: '', line: id + '__' } } })
 
 beforeEach(() => {
+  getAllMock.mockReset().mockResolvedValue([])
   storage = {}
   wxMock = {
     getStorageSync: (k: string) => storage[k],
@@ -72,6 +74,46 @@ describe('购物车：按住删除', () => {
     vi.advanceTimersByTime(600)
     expect(page.data.items.map((it: any) => it.id)).toEqual(['p1', 'p3', 'p4'])
     expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '已删除', icon: 'none' })
+  })
+})
+
+describe('购物车：按住时滑开', () => {
+  it('大白话：按下后手指滑开超过 10px（顺势滑列表）——作废，不删', async () => {
+    vi.useFakeTimers()
+    const page = await mount()
+    const ev = (x: number, y: number) => ({ ...row('p2'), touches: [{ clientX: x, clientY: y }] })
+    page.onHoldStart(ev(50, 50))
+    page.onHoldMove(ev(50, 70))
+    vi.advanceTimersByTime(1000)
+    expect(page.data.items).toHaveLength(4)
+  })
+})
+
+describe('购物车：旧价（UX 修复）', () => {
+  it('大白话：加购时 10 元、现在涨到 12——购物车拿到最新商品档后按 12 显示小计、写回本地，并提示价格有变动', async () => {
+    getAllMock.mockResolvedValue([{ id: 'p1', price: 12 }])
+    const page = await mount()
+    await page.onLoad()
+    expect(page.data.items[0].priceNum).toBe('12.00')
+    expect(page.data.totalLabel).toBe('¥22.00')
+    expect(cart.getItems()[0].price).toBe(12)
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '价格有变动，已按最新价计算', icon: 'none' })
+  })
+})
+
+describe('购物车：结算连点', () => {
+  it('大白话：小货车开走的时候连点结算——只进一次确认订单页；离开本页（onHide）后才能再点', async () => {
+    vi.useFakeTimers()
+    const page = await mount()
+    let n = 0
+    page.selectComponent = () => ({ go: () => (n++ ? 0 : 500) }) // 第一次开走 500ms，开走中再调返回 0
+    page.onCheckout()
+    page.onCheckout()
+    vi.advanceTimersByTime(600)
+    expect(wxMock.navigateTo).toHaveBeenCalledTimes(1)
+    page.onHide()
+    page.onCheckout()
+    expect(wxMock.navigateTo).toHaveBeenCalledTimes(2)
   })
 })
 

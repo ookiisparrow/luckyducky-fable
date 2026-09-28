@@ -33,8 +33,8 @@ describe('商品网格映射（展示面 fail-closed：脏行不上首页）', (
       null, // 脏元素不崩
     ])
     expect(vm.map((p) => p.id)).toEqual(['p1', 'p2'])
-    expect(vm[0]).toEqual({ id: 'p1', name: '小棉鸭礼盒', tag: '送礼首选', priceLabel: '¥198', wasLabel: '¥258', cover: 'cloud://x/cover.png' })
-    expect(vm[1].priceLabel).toBe('¥98')
+    expect(vm[0]).toEqual({ id: 'p1', name: '小棉鸭礼盒', tag: '送礼首选', priceLabel: '¥198.00', wasLabel: '¥258.00', cover: 'cloud://x/cover.png' })
+    expect(vm[1].priceLabel).toBe('¥98.00') // 老板拍板 1：金额一律两位小数
     expect(vm[1].wasLabel).toBe('') // 无划线价→空串·模板按空隐藏
     expect(JSON.stringify(vm)).not.toContain('undefined')
     expect(mapProducts(undefined)).toEqual([]) // 非数组入参安全
@@ -57,7 +57,7 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(d.reassure.heading).toBeTruthy()
     expect(d.reassure.items.length).toBe(3) // 放心开始/难以失败/幸运随行
     expect(d.reviews.heading).toBeTruthy()
-    expect(d.reviews.items.length).toBe(3)
+    expect(d.reviews.items).toEqual([]) // 拍板 B：没有后台真评论就没有买家秀（不写死示例）
     expect(d.faq.length).toBe(4)
     expect(d.closing.title).toBeTruthy()
     expect(d.closing.cta).toBeTruthy()
@@ -109,7 +109,7 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     const def = mapHomeContent(null)
     // trust 缺 label、review 缺 quote、faq 缺 title、footer link 缺 label → 全脏
     expect(mapHomeContent({ trust: [{ icon: 'truck' }] }).trust).toEqual(def.trust)
-    expect(mapHomeContent({ reviews: { items: [{ user: '小明' }] } }).reviews.items).toEqual(def.reviews.items)
+    expect(mapHomeContent({ reviews: { items: [{ user: '小明' }] } }).reviews.items).toEqual([])
     expect(mapHomeContent({ faq: [{ body: '只有答案没问题' }] }).faq).toEqual(def.faq)
     // 部分脏：干净的留下、脏的剔除
     const mixed = mapHomeContent({ faq: [{ title: 'Q1', body: 'A1' }, { body: '无题剔除' }] })
@@ -163,6 +163,14 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(d.footer.links).toEqual([BRAND_NAME])
     expect(mapHomeContent({ footer: { links: ['Lucky Ducky小棉鸭'] } }).footer.links).toEqual([BRAND_NAME]) // 旧稿没空格也补上
     expect(d.faq[0].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
+  })
+})
+
+describe('买家秀（拍板 B）', () => {
+  it('大白话：没配真评论/拉取失败——一条示例评论都不给（整块不显示）；配了真评论就用它', () => {
+    expect(JSON.stringify(mapHomeContent(null))).not.toMatch(/小满|阿橙|柚子/)
+    expect(mapHomeContent({ reviews: { items: [] } }).reviews.items).toEqual([])
+    expect(mapHomeContent({ reviews: { items: [{ quote: '好看', user: '阿木' }] } }).reviews.items).toEqual([{ quote: '好看', user: '阿木', img: '' }])
   })
 })
 

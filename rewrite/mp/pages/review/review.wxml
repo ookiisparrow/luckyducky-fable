@@ -40,11 +40,13 @@
           </view>
         </view>
 
-        <!-- 晒图：最多 maxPhotos 张，点缩略图预览、角标删除 -->
+        <text class="t-sys rv-cap">晒图最多 {{maxPhotos}} 张</text>
+
+        <!-- 晒图：最多 maxPhotos 张，点缩略图预览、角标删除（角标外层 44×44 透明热区，看得见的仍是 20×20） -->
         <view class="rv-photos" wx:if="{{photos.length}}">
           <view class="rv-photo" wx:for="{{photos}}" wx:key="*this">
             <image class="rv-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
-            <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><px-i name="times" tone="#ffffff" /></view>
+            <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><view class="rv-photo-x"><px-i name="times" tone="#ffffff" /></view></view>
           </view>
         </view>
 

@@ -30,6 +30,7 @@ Page({
     focus: '', // 正在输入的框（驱动 .well-focus 紫描边）
     dirty: false, // 与进页时相比有改动（驱动 <leave-sheet> 拦返回/侧滑）
     deleting: false, // 正在按住删除（驱动红色填充进度）
+    pick: 0, // 从结算页选址来新增（?pick=N）：存完自动设默认、退 N 页直接回结算页；0＝管理态
   },
   orig: { name: '', phone: '', region: '', detail: '', isDefault: false } as Form, // 进页时的原值（判 dirty）
   onLoad(query: Record<string, string | undefined>) {
@@ -45,7 +46,8 @@ Page({
         })
       }
     } else {
-      this.setData({ title: '新增收货地址' }) // 新增态页名不误显「编辑」
+      // 新增态页名不误显「编辑」；pick 只认新增（结算页空簿直进=1，选址列表进=2）
+      this.setData({ title: '新增收货地址', pick: Math.max(0, Math.floor(Number(query.pick) || 0)) })
     }
     this._sync()
   },
@@ -81,8 +83,8 @@ Page({
     ;(this.selectComponent('#leave') as unknown as { ask(): void } | null)?.ask()
   },
   // 先撤掉「放弃修改」拦截再退回（拦截武装时退回会被 page-container 拦下弹确认）
-  _leave() {
-    this.setData({ dirty: false }, () => wx.navigateBack())
+  _leave(delta = 1) {
+    this.setData({ dirty: false }, () => wx.navigateBack({ delta }))
   },
   onSave() {
     if (this.data.saving) return // 提交在途·丢弃二次点击（navigateBack 前页面未销毁·新增态双击会落两条重复地址）
@@ -90,14 +92,16 @@ Page({
     if (!this.data.valid) {
       // 点灰键（设计稿 aeHint）：手机号不够位 → 框下提示 + 黄框；否则提示缺项 / 号码不对
       if (addr.phoneShort(phone)) return this.setData({ phoneWarn: true }, () => this._sync())
-      fxHint(this, name.trim() && region.trim() && detail.trim() && phone ? '电话号码不太对' : '四项都要填哦')
+      fxHint(this, name.trim() && region.trim() && detail.trim() && phone ? '手机号不太对' : '四项都要填哦')
       return
     }
     tapHaptic()
     this.setData({ saving: true }) // 校验过关·锁定后再落库+返回（锁贯穿到页面销毁）
-    addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone, region: region.trim(), detail: detail.trim(), isDefault })
+    const pick = this.data.pick
+    // 从结算页来新增：选址＝设默认（拍板 5），结算页 onShow 取默认，存完直接回去
+    addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone, region: region.trim(), detail: detail.trim(), isDefault: pick ? true : isDefault })
     wx.showToast({ title: '已保存', icon: 'success' }) // 马上退回：自绘提示会随本页消失，用原生（跨页还在）
-    this._leave()
+    this._leave(pick || 1)
   },
   // 删除既有地址（仅编辑态·复用簿逻辑 removeAddress）：按住 0.7s 才删，松手太快提示按住——替代原二次确认弹窗（lib/hold）
   _delHold: null as Hold | null,
@@ -120,10 +124,16 @@ Page({
       )
     return this._delHold
   },
-  onDelHoldStart() {
+  onDelHoldStart(e?: WechatMiniprogram.TouchEvent) {
     if (this.data.id == null) return
     keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
-    this.delHold().start()
+    const t = e && e.touches && e.touches[0]
+    this.delHold().start(t ? t.clientX : undefined, t ? t.clientY : undefined)
+  },
+  // 按住时手指滑开超过 10px 作废（lib/hold）
+  onDelHoldMove(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches[0]
+    if (t) this._delHold?.move(t.clientX, t.clientY)
   },
   onDelHoldEnd() {
     this.delHold().end()

@@ -21,8 +21,10 @@
             <text class="as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
             <text class="t-sys as-st as-st-{{item.status}}">{{item.statusLabel}}</text>
           </view>
-          <text class="t-sys as-note">申请于 {{item.appliedAtLabel}} · ×{{item.qty}} · 退款 {{item.refundAmountLabel}}</text>
+          <!-- 已拒绝没退钱：金额叫「申请金额」，不写「退款」免得像退了 -->
+          <text class="t-sys as-note">申请于 {{item.appliedAtLabel}} · ×{{item.qty}} · {{item.status === 'rejected' ? '申请金额' : '退款'}} {{item.refundAmountLabel}}</text>
           <text class="t-sys as-note" wx:if="{{item.reason}}">原因：{{item.reason}}</text>
+          <text class="t-sys as-note" wx:if="{{item.status === 'rejected' && item.rejectReason}}">拒绝原因：{{item.rejectReason}}</text>
           <view class="t-sys as-link" hover-start-time="20" hover-class="k-row-down" data-id="{{item.orderId}}" bind:tap="onTapOrder">
             <text>查看订单</text>
             <px-i name="arrow" />
@@ -30,7 +32,9 @@
         </view>
       </view>
     </view>
-    <view class="t-sys as-more" wx:if="{{hasMore}}">上拉加载更多</view>
+    <view class="t-sys as-loading as-more" wx:if="{{paging}}"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="t-sys as-more" wx:elif="{{hasMore}}">上拉加载更多</view>
+    <view class="t-sys as-more" wx:else>没有更多了</view>
   </block>
 
   <!-- 骨架占位（首次加载中间空白·根因#8）：不误报空态 -->

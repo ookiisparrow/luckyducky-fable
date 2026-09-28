@@ -41,8 +41,16 @@ page {
   gap: 8px;
 }
 .ad-name {
+  min-width: 0;
   font-size: 17px;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ad-phone,
+.ad-def {
+  flex: 0 0 auto; /* 姓名过长时只截姓名，手机号和「默认」不被挤 */
 }
 .ad-phone {
   font-size: 15px;
@@ -65,12 +73,22 @@ page {
   color: var(--v5-ink-2);
 }
 .ad-edit {
+  position: relative;
   flex: 0 0 auto;
   height: 32px;
   padding: 0 12px;
   font-size: 13px;
   font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   color: var(--v5-ink-2);
+}
+/* 「编辑」键热区扩到 ≥44px 高（伪元素·视觉不变） */
+.ad-edit::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  top: -6px;
+  bottom: -6px;
 }
 .ad-empty {
   padding: 0 0 24px;

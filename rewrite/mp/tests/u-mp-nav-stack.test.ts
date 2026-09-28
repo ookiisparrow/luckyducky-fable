@@ -29,7 +29,7 @@ beforeEach(() => {
   callAppMock.mockReset()
   depth = 1
   ;(globalThis as any).getCurrentPages = () => Array.from({ length: depth })
-  wxMock = { redirectTo: vi.fn(), navigateTo: vi.fn(), showToast: vi.fn(), showActionSheet: vi.fn(), showModal: vi.fn() }
+  wxMock = { redirectTo: vi.fn(), navigateTo: vi.fn(), showToast: vi.fn(), showActionSheet: vi.fn(), showModal: vi.fn(), showLoading: vi.fn(), hideLoading: vi.fn() }
   ;(globalThis as any).wx = wxMock
 })
 

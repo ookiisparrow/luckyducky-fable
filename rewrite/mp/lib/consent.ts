@@ -23,3 +23,8 @@ export function readConsentHint(): boolean | null {
 export function writeConsentHint(v: boolean) {
   writeStorage(CONSENT_HINT_KEY, v)
 }
+
+// 删除资料后清掉（服务端已重置 csDataShare）：下次进页回到「尚未选择」，不再显示旧的「已同意」
+export function clearConsentHint() {
+  writeStorage(CONSENT_HINT_KEY, null)
+}

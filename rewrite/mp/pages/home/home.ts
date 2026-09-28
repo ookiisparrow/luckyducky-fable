@@ -18,6 +18,8 @@ import { reportColdStart } from '../../lib/coldStart'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint, fxParty, fxToast, fxTransit } from '../../lib/pxFx'
 
+const NAV_LOCK_MS = 800 // 跳转类按钮防连点：跳转发起后 800ms 内不再响应（连点会叠两个详情页）
+
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
@@ -148,13 +150,20 @@ Page({
     const i = Number(e.currentTarget.dataset.index)
     this.setData({ openFaq: this.data.openFaq === i ? -1 : i })
   },
+  _navAt: 0, // 上次发起跳转的时刻（防连点短时锁·NAV_LOCK_MS）
+  /** 防连点短时锁：锁住中返回 false；放行时记下时刻。 */
+  _navOk(): boolean {
+    if (Date.now() - this._navAt < NAV_LOCK_MS) return false
+    this._navAt = Date.now()
+    return true
+  },
   onTapProduct(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
-    if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
+    if (id && this._navOk()) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
-  _addSeq: 0, // onAddProduct 代次（同 reload._seq 范式）：本页是 tabBar 页（onUnload 正常导航
-  // 基本不触发，不适用 checkout 那套 this.unloaded 家族），连点不同商品「+」可并发在途——不设代际复核则更晚一次
-  // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段。
+  _addSeq: 0, // onAddProduct 代次（同 reload._seq 范式）：连点「+」可并发在途（冷启动快照期共享同一次目录拉取）——
+  // 每次点击的加购都照做（每下独立生效），代次只管提示：过期回包不弹提示/不弹角标，只最后一次提示。
+  // 切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段。
   // 首页「+」快速加购（用户拍板：「+」统一加入购物车，多规格默认加
   // 首个规格·不跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
   // ——决策纯函数见 lib/quickAdd（取不到出 null）。
@@ -163,21 +172,22 @@ Page({
     if (!id) return
     const seq = ++this._addSeq
     const raw = await getProductById(id)
-    if (seq !== this._addSeq) return // 过期回包（被更晚一次 onAddProduct 取代）：丢弃·不提示
+    const stale = seq !== this._addSeq // 过期回包（被更晚一次点击取代）：加购照做，只跳过提示/动画
     const payload = decideQuickAdd(raw)
     if (payload) {
-      cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
+      cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：连点每下都算、即便已切走本 tab 也不该丢单
       trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
       if (this.hidden) return // 已切走 home tab：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (typeof this.getTabBar === 'function') {
         const bar = this.getTabBar() as unknown as LdTabBar
-        bar.setActive('home') // 角标随动（同 cart.ts refresh() 范式）
-        bar.bump?.() // 设计稿：加购后购物车角标弹一下（scale 1→1.5→1·320ms·动画在 custom-tab-bar 里）
+        bar.setActive('home') // 角标随动（同 cart.ts refresh() 范式·重数一遍，过期回包也要同步，否则乱序回来时角标少算）
+        if (!stale) bar.bump?.() // 设计稿：加购后购物车角标弹一下（scale 1→1.5→1·320ms·动画在 custom-tab-bar 里）
       }
+      if (stale) return
       // 多规格被默认加了首规格时把规格名亮给用户（px-fx 自绘提示不受原生 toast 字数限制）——静默替选规格必须可见
       fxToast(this, payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
     } else {
-      if (this.hidden) return
+      if (this.hidden || stale) return
       fxHint(this, '商品信息获取失败，请稍后重试')
     }
   },
@@ -186,6 +196,7 @@ Page({
     tapHaptic()
     const duck = pickDuckKit(this.data.products) // 没上小棉鸭时是第一件商品占位（拍板 18·占位＝将来小棉鸭的位置）
     if (!duck) return this.scrollTo('friends') // 货架空（还没拉到商品）：退回商品轨，不瞎跳旧 id
+    if (!this._navOk()) return // 撒花 260ms 期间连点会叠两个详情页
     void fxParty(this, '.hm-closing-btn')
     setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }), 260)
   },
@@ -194,6 +205,7 @@ Page({
     tapHaptic()
     const duck = pickDuckKit(this.data.products) // 同上：占位＝将来小棉鸭的位置
     if (!duck) return this.scrollTo('friends')
+    if (!this._navOk()) return // 同上：彩虹转场期间连点
     void fxTransit(this, 'rainbow', '.hm-buy', () => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }))
   },
   toIntro() {

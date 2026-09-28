@@ -3,12 +3,12 @@
 这里是**小程序按钮/标题/界面固定文案（`--v5-font-brand`）的分层子集 WebFont 产物**，经 `wx.loadFontFace` 远程
 分层加载（`rewrite/mp/utils/brandFont.ts`）——**不进 src、不打进小程序包**（守卫 `rw-mp-package-budget`）。
 
-## 文件（v7）
+## 文件（v8）
 
 | 层 | 覆盖 | 文件 |
 |---|---|---|
-| tier1 | tab 首屏（home/cart/me 闭包+tabBar+splash+seed 商品/课程标题）+ASCII+标点 | `wenyuan-tier1-{medium,bold,heavy}.v7.woff` |
-| tier2 | 其余二级页闭包 | `wenyuan-tier2-{medium,bold,heavy}.v7.woff` |
+| tier1 | tab 首屏（home/cart/me 闭包+tabBar+splash+seed 商品/课程标题）+ASCII+标点 | `wenyuan-tier1-{medium,bold,heavy}.v8.woff` |
+| tier2 | 其余二级页闭包 | `wenyuan-tier2-{medium,bold,heavy}.v8.woff` |
 
 字数与体积以构建输出为准（`node scripts/build-brand-font.mjs` 会打印）。
 
@@ -25,7 +25,7 @@
 
 > ⚠ 用 **woff** 不用 woff2：`wx.loadFontFace` 官方建议格式仅 TTF/WOFF，woff2 开发者工具能渲染（假绿）
 > 真机静默失败（根因#8）。
-> ⚠ 文件名带版本号（`.v7`）：字符集/分层变更＝版本 +1＝新文件名＝CDN 与本地缓存天然失效。
+> ⚠ 文件名带版本号（`.v8`）：字符集/分层变更＝版本 +1＝新文件名＝CDN 与本地缓存天然失效。
 > 版本常量在 `scripts/build-brand-font.mjs`（`V`），须与 `rewrite/mp/utils/brandFont.ts` 文件名同步改。
 
 子集外的字、字体到达前，自动回退：tier1 缺的字 → tier2 → 系统字（CSS 逐字回退·

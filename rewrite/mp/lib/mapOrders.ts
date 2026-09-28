@@ -184,6 +184,7 @@ export function orderLed(status: string): { tone: string; halo: string } {
 export function listRight(vm: OrderVM, now: number): { cd: string; text: string } {
   if (vm.status === 'pending') {
     const left = payLeftMs(vm, now)
+    if (left === 0) return { cd: '', text: '已超时' } // 过点：云端关单前先说超时，不停在 00:00
     return { cd: left < 0 ? '' : mmss(left), text: '' }
   }
   const text: Record<string, string> = {
@@ -202,6 +203,7 @@ export function detailSub(vm: OrderVM, now: number): { text: string; tone: '' | 
     case 'pending': {
       const left = payLeftMs(vm, now)
       if (left < 0) return { text: '', tone: '' }
+      if (left === 0) return { text: '已超时', tone: 'err' }
       return { text: mmss(left) + ' 后自动取消', tone: left < 60_000 ? 'err' : 'warn' }
     }
     case 'paid':

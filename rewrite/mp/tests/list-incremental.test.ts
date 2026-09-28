@@ -122,3 +122,27 @@ describe('列表翻页增量 setData（根因#7·翻页只追加新行·不整�
     expect(page.data.list.length).toBe(3)
   })
 })
+
+describe('评价列表：找不到商品 / 翻页加载行（UX 修复轮）', () => {
+  it('大白话：云端回 NO_PRODUCT——落「找不到这个商品」，不当成网络失败亮重试', async () => {
+    getReviewsMock.mockResolvedValueOnce({ ok: false, error: 'NO_PRODUCT' })
+    const page = await mountReviews()
+    await page.reload()
+    expect(page.data).toMatchObject({ loading: false, loadFailed: false, notFound: true })
+  })
+
+  it('大白话：翻页在途亮加载行、再触底不重复拉；回包后收起', async () => {
+    getReviewsMock.mockResolvedValueOnce({ ok: true, list: [{ id: 'r1' }], summary: null, nextCursor: 'c1', hasMore: true })
+    const page = await mountReviews()
+    await page.reload()
+    let release!: (v: unknown) => void
+    getReviewsMock.mockImplementationOnce(() => new Promise((r) => (release = r)))
+    const more = page.onReachBottom()
+    expect(page.data.paging).toBe(true)
+    await page.onReachBottom()
+    release({ ok: true, list: [{ id: 'r2' }], summary: null, nextCursor: null, hasMore: false })
+    await more
+    expect(getReviewsMock).toHaveBeenCalledTimes(2)
+    expect(page.data).toMatchObject({ paging: false, hasMore: false })
+  })
+})

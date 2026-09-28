@@ -102,6 +102,7 @@ Page({
   },
   // 登录半屏「微信一键登录」成功回调：刷新资料（hint 已由组件写·此处回灌头像昵称/入口可见性）
   onLoggedIn() {
+    this.setData({ loggedIn: true }) // 先切到登录态（头部/继续学习卡立刻换），资料随后回灌
     void this.refresh()
   },
   _freshAt: 0, // 上次完整拉成功的时刻（没拉全不记·失败不缓存）；置 0 = 下次 onShow 必拉
@@ -124,12 +125,18 @@ Page({
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     const me = mapMe(meContent)
     const agreed = loginGate.hasAgreed()
+    // 已登录但资料没拉到：保留已显示的名字/头像（失败≠空态·不把真昵称刷回默认名）
+    const keep = agreed && !u.ok
     this.setData({
       loggedIn: agreed,
-      nickname: (agreed && user && String(user.nickname || '')) || me.defaultNickname,
-      avatar: (agreed && user && String(user.avatar || '')) || '',
-      bio: (agreed && user && String(user.bio || '')) || '',
       entries: me.entries,
+      ...(keep
+        ? {}
+        : {
+            nickname: (agreed && user && String(user.nickname || '')) || me.defaultNickname,
+            avatar: (agreed && user && String(user.avatar || '')) || '',
+            bio: (agreed && user && String(user.bio || '')) || '',
+          }),
     })
     if ((await contP) && u.ok && seq === this._seq) {
       this._freshAt = Date.now()
@@ -206,9 +213,11 @@ Page({
   // 三格（待付款/待发货/待收货）带 data-tab 直落对应分栏；「全部订单」无 dataset 不带 tab（order-list.ts query.tab 契约）。
   onOrders(e?: WechatMiniprogram.TouchEvent) {
     const tab = (e && e.currentTarget && e.currentTarget.dataset && String(e.currentTarget.dataset.tab || '')) || ''
+    this._expireFresh() // 回来订单格数字可能变了（付款/取消/收货）
     wx.navigateTo({ url: '/pages/order-list/order-list' + (tab ? '?tab=' + tab : '') })
   },
   onAfterSales() {
+    this._expireFresh() // 售后改了订单状态，回来重数
     wx.navigateTo({ url: '/pages/aftersales/aftersales' })
   },
   onAddress() {

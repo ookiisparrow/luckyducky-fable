@@ -21,6 +21,15 @@
 //   scroll-view 内部（page-container 锁不到）。页面级下拉刷新（enablePullDownRefresh）同理失效，
 //   须改用 <scroll-view refresher-enabled>。
 const REARM_MS = 2000
+// 返回键先让浮层吃掉（登录半屏开着就只关它）：由 lib/loginGate 注册——utils 是叶层，不反向 import lib。
+let overlayBack: (() => boolean) | null = null
+/** 注册「返回键先关浮层」：fn 关掉了浮层就回 true（这次返回不算退出）。 */
+export function setExitGuardOverlay(fn: (() => boolean) | null): void {
+  overlayBack = fn
+}
+// 浮层开着时返回键只关浮层：马上重新武装（留一拍给 page-container 走完离场，否则 show 真→真不重挂）。
+// ponytail: 这一拍内再点返回会直接退出；真机若嫌敏感再调小/改用 setData 回调
+const REARM_SHEET_MS = 100
 // 用「点」不用「按」：本文件在 tab 首屏字体闭包内，「按」不在 tier1 子集（改回去会咬红 rw-mp-font-tier-subset-covers，
 // 且不重建 woff 的话真机该字掉系统字体）。语义无损——原生 toast 本就由客户端用系统字体渲染。
 const EXIT_TOAST = '再点一次退出'
@@ -48,10 +57,12 @@ export function releaseExitGuard(page: ExitGuardHost): void {
 /** <page-container bindbeforeleave> 回调：解武装放行「再按一次」，提示后 2s 自动重新武装。 */
 export function onExitGuardBeforeLeave(page: ExitGuardHost): void {
   page.setData({ exitGuardArmed: false }) // 本次返回已被消费 → 2s 内再按返回不拦、直接退出
-  wx.showToast({ title: EXIT_TOAST, icon: 'none', duration: REARM_MS })
+  // 登录半屏开着：这次返回＝关掉半屏（安卓返回键收浮层的习惯），不提示退出、立刻恢复保护
+  const sheet = !!overlayBack && overlayBack()
+  if (!sheet) wx.showToast({ title: EXIT_TOAST, icon: 'none', duration: REARM_MS })
   releaseExitGuard(page)
   page._exitGuardTimer = setTimeout(() => {
     page._exitGuardTimer = null
     page.setData({ exitGuardArmed: true }) // 没等到第二次返回＝误触，保护恢复
-  }, REARM_MS)
+  }, sheet ? REARM_SHEET_MS : REARM_MS)
 }

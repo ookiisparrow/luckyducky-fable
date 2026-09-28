@@ -160,4 +160,34 @@ describe('隐私授权半屏', () => {
     vi.advanceTimersByTime(240)
     expect(c.data.visible).toBe(false)
   })
+
+  it('大白话：弹着没选就离开了页面——按「不同意」收场，不再挂着、下个页面也不会莫名弹出；别的页还挂着就留给它', async () => {
+    const c = await mountComp('../components/privacy-sheet/privacy-sheet')
+    const { privacyGate } = await import('../lib/privacyGate')
+    const resolve = vi.fn()
+    privacyGate.open(resolve)
+    const other = { ...c, data: { ...c.data } }
+    opts.lifetimes.attached.call(other)
+    opts.lifetimes.detached.call(c)
+    expect(privacyGate.visible()).toBe(true) // 另一页还挂着能看见
+    opts.lifetimes.detached.call(other)
+    expect(privacyGate.visible()).toBe(false)
+    expect(resolve).toHaveBeenCalledWith({ event: 'disagree' })
+  })
+})
+
+describe('开屏', () => {
+  it('大白话：开屏显示时让底部 TabBar 让位，淡出完再回来（真机待验）', async () => {
+    const setCovered = vi.fn()
+    const c = await mountComp('../components/brand-splash/brand-splash')
+    c.properties = { ready: false }
+    c.selectOwnerComponent = () => ({ getTabBar: () => ({ setCovered }) })
+    c.triggerEvent = vi.fn()
+    opts.lifetimes.ready.call(c)
+    expect(setCovered).toHaveBeenLastCalledWith(true)
+    c.leave()
+    vi.advanceTimersByTime(500)
+    expect(setCovered).toHaveBeenLastCalledWith(false)
+    expect(c.triggerEvent).toHaveBeenCalledWith('done')
+  })
 })

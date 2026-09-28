@@ -15,7 +15,7 @@ import meRaw from '../pages/me/me.ts?raw'
 import homeWxml from '../pages/home/home.wxml?raw'
 import cartWxml from '../pages/cart/cart.wxml?raw'
 import meWxml from '../pages/me/me.wxml?raw'
-import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave } from '../utils/exitGuard'
+import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave, setExitGuardOverlay } from '../utils/exitGuard'
 
 // 挂载三个 tab 页：云调用一律挂起（onShow 触发的刷新不落地），登录闸桩成未同意，其余依赖用真的。
 vi.mock('../utils/cloud', () => ({ callApp: () => new Promise(() => undefined) }))
@@ -57,6 +57,7 @@ function fakePage() {
 }
 
 afterEach(() => {
+  setExitGuardOverlay(null)
   vi.useRealTimers()
   delete (globalThis as any).wx
 })
@@ -79,6 +80,21 @@ describe('tabBar 栈底页误触退出提醒（page-container「再点一次退�
     vi.advanceTimersByTime(2000)
     expect(lastPatch(page.patches)).toEqual({ exitGuardArmed: true }) // 没等到第二次返回＝误触，保护恢复
     expect(page._exitGuardTimer).toBeNull()
+  })
+
+  it('大白话：登录半屏开着按返回——只关半屏，不提示「再点一次退出」，马上恢复保护（再按返回不会直接退出）', () => {
+    vi.useFakeTimers()
+    const toast = vi.fn()
+    ;(globalThis as any).wx = { showToast: toast }
+    const page = fakePage()
+    armExitGuard(page)
+    const closeSheet = vi.fn(() => true) // lib/loginGate 注册的真实口径见下一条
+    setExitGuardOverlay(closeSheet)
+    onExitGuardBeforeLeave(page)
+    expect(closeSheet).toHaveBeenCalledTimes(1)
+    expect(toast).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(100)
+    expect(lastPatch(page.patches)).toEqual({ exitGuardArmed: true })
   })
 
   it('大白话：切走页面后不再有延时回调打到已隐藏的页面上（定时器被清干净）', () => {

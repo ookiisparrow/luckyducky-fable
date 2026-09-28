@@ -81,7 +81,13 @@ describe('协议页', () => {
 
   it('大白话：「管理数据共享授权」进授权页', async () => {
     const page = await mount({ type: 'privacy' })
+    ;(globalThis as any).getCurrentPages = () => [{}, {}]
     page.onConsent()
-    expect(wxMock.navigateTo).toHaveBeenCalledWith({ url: '/pages/consent/consent' })
+    expect(wxMock.navigateTo).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/consent/consent' }))
+    // 协议↔授权反复互跳叠到快满栈：改成替换本页，不再点了没反应
+    wxMock.redirectTo = vi.fn()
+    ;(globalThis as any).getCurrentPages = () => Array(8).fill({})
+    page.onConsent()
+    expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: '/pages/consent/consent' })
   })
 })

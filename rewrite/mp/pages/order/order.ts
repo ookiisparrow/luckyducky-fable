@@ -2,8 +2,8 @@
 import { tapHaptic } from '../../lib/haptics'
 import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, type OrderVM, type StepState } from '../../lib/mapOrders'
-import { applicableLines, mapAfterSales } from '../../lib/mapAftersales'
+import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
+import { applicableLines, mapAfterSales, refundBlock } from '../../lib/mapAftersales'
 import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxToast, fxHint } from '../../lib/pxFx'
@@ -15,6 +15,9 @@ const SHEET_OUT_MS = 240 // 半屏关：面板 240ms 下滑后撤节点（app.wx
 const AS_TYPES = ['退款', '换货', '补发'] // 售后类型（设计稿 asf.types）：后台只有退款接口，换货/补发走客服（拍板 7）
 const AS_REASONS = ['线材缺色', '少件', '做工问题', '其他']
 let hold: Hold | null = null
+type AsLine = { lineId: string; name: string; spec: string }
+const asLineOf = (l: OrderLineVM): AsLine => ({ lineId: l.lineId, name: l.name, spec: l.spec })
+const lineText = (l: { name: string; spec: string }): string => l.name + (l.spec ? ' · ' + l.spec : '')
 
 // 待退款 / 支付异常：状态卡内说明行（设计稿 WARN·文案与 admin 同口径，不承诺不存在的自动化流程）
 const WARN: Record<string, { text: string; tone: string }> = {
@@ -40,6 +43,7 @@ Page({
     canAfterSale: false,
     paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     holding: false, // 按住取消进行中（驱动键内红色进度条）
+    expired: false, // 待支付倒计时已归零（藏「去支付」·云端关单前先按超时展示）
     steps: [] as Array<{ label: string; state: StepState }>, // 进度四步（v5·纯展示派生）
     truckPose: 'park',
     cargo: 0,
@@ -51,13 +55,19 @@ Page({
     asReasons: AS_REASONS,
     asType: '退款',
     asReason: '线材缺色',
-    asLines: [] as Array<{ lineId: string; label: string }>,
+    asLines: [] as AsLine[], // 当前类型可选的商品（退款＝可退行；换货/补发＝全部商品）·规格单列，同款不同色分得清
     asLine: '',
+    asBlock: '', // 「退款」段置灰原因（没有可退行时·lib/mapAftersales refundBlock），空＝可退
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.id || '')
+    this.pickHint = query.pick === 'review' // 订单列表多件单点「写评价」落到这里：加载后提示选一件
   },
   orderId: '',
+  pickHint: false,
+  _busy: false, // 网络动作在途锁（确认收货/取消/售后前置拉取）：重复点直接丢
+  _asOk: [] as AsLine[], // 售后半屏：可退行
+  _asAll: [] as AsLine[], // 售后半屏：全部商品（换货/补发转客服用）
   _seq: 0, // reload 代次·丢弃过期回包（onShow/取消/支付/确认收货多触发点并发·慢回包别把状态卡盖回过期态）
   _ticker: null as ReturnType<typeof setInterval> | null, // 待支付倒计时每秒刷新
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay/售后回包在途用户退出详情页，迟到回包不再对已退页 toast/reload/导航
@@ -77,8 +87,26 @@ Page({
   tick() {
     const vm = this.data.vm
     if (!vm || vm.status !== 'pending') return
-    const sub = detailSub(vm, Date.now())
+    const now = Date.now()
+    const sub = detailSub(vm, now)
     if (sub.text !== this.data.sub.text || sub.tone !== this.data.sub.tone) this.setData({ sub })
+    // 首次归零：先藏「去支付」，再自动刷新一次看云端是否已关单（刷回来仍待支付时 reload 按时间重算 expired 仍为真，不会再触发）
+    if (payLeftMs(vm, now) === 0 && !this.data.expired) {
+      this.setData({ expired: true })
+      void this.reload()
+    }
+  },
+  // 网络动作统一：在途锁 + 加载遮罩，回包后解锁；在途重复触发回 undefined（调用方直接收手）
+  async withLoading<T>(title: string, fn: () => Promise<T>): Promise<T | undefined> {
+    if (this._busy) return undefined
+    this._busy = true
+    wx.showLoading({ title, mask: true })
+    try {
+      return await fn()
+    } finally {
+      wx.hideLoading()
+      this._busy = false
+    }
   },
   async reload() {
     // 订单状态/钱路径页：多 reload 触发点（onShow + 取消/支付/确认收货各自 reload）并发时，慢回包迟到落地会把
@@ -122,14 +150,25 @@ Page({
       steps: orderSteps(s),
       truckPose: POSE[s] || 'park',
       cargo: s !== 'closed' ? Math.min(3, vm.items.length) : 0,
+      expired: s === 'pending' && payLeftMs(vm, Date.now()) === 0,
     })
+    if (this.pickHint && s === 'done') {
+      this.pickHint = false
+      fxHint(this, '选一件来评价')
+    }
   },
   // 底部「返回」键（v5 底部操作区首位）：深链进来没上一页时回首页
   onBack() {
     goBackOrHome()
   },
+  // 待退款/支付异常「联系客服」：先把订单号 + 商品 + 状态复制好，客服那边直接粘贴
   onKefu() {
-    openCustomerService()
+    const vm = this.data.vm
+    const copy = vm ? `订单号：${vm.id}\n商品：${vm.items.map(lineText).join('、')}\n状态：${vm.statusLabel}` : ''
+    openCustomerService(copy, () => this.copiedHint())
+  },
+  copiedHint() {
+    fxHint(this, '已复制订单信息，粘贴给客服')
   },
   onRetryLoad() {
     tapHaptic()
@@ -141,6 +180,7 @@ Page({
     wx.setClipboardData({
       data: this.orderId,
       success: () => wx.showToast({ title: '已复制单号', icon: 'none' }),
+      fail: () => wx.showToast({ title: '复制没成功，长按单号手动复制', icon: 'none' }),
     })
   },
   onCopyTracking() {
@@ -149,6 +189,7 @@ Page({
     wx.setClipboardData({
       data: no,
       success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
+      fail: () => wx.showToast({ title: '复制没成功，长按运单号手动复制', icon: 'none' }),
     })
   },
   // 物流卡 → 物流页壳（运单号大字 + 快递100 插件入口·pages/logistics）
@@ -157,13 +198,19 @@ Page({
     wx.navigateTo({ url: '/pages/logistics/logistics?id=' + this.orderId })
   },
   // 取消待支付单（破坏性·按住 700ms 才取消，设计稿 data-hold；仅 pending 出此入口·最终裁决在云端）
-  onCancelStart() {
+  // 按下带触点坐标、touchmove 挪开超 10px 作废（lib/hold）——顺势滑页不误取消
+  onCancelStart(e?: WechatMiniprogram.TouchEvent) {
+    const t = e && e.touches && e.touches[0]
     hold?.cancel()
     hold = createHold(HOLD_MS, () => void this.cancelNow(), {
       onQuick: () => fxHint(this, '按住取消订单'),
       onChange: (v) => this.setData({ holding: v }),
     })
-    hold.start()
+    hold.start(t ? t.clientX : undefined, t ? t.clientY : undefined)
+  },
+  onCancelMove(e: WechatMiniprogram.TouchEvent) {
+    const t = e.touches && e.touches[0]
+    if (t) hold?.move(t.clientX, t.clientY)
   },
   onCancelEnd() {
     hold?.end()
@@ -172,8 +219,8 @@ Page({
     const vm = this.data.vm
     if (!vm || vm.status !== 'pending') return
     tapHaptic()
-    const r = await cancelOrder(this.orderId)
-    if (this.unloaded) return // await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
+    const r = await this.withLoading('正在取消', () => cancelOrder(this.orderId))
+    if (!r || this.unloaded) return // 在途重复触发 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
     wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
     void this.reload() // 状态卡按映射自动翻「已关闭」
   },
@@ -193,7 +240,7 @@ Page({
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次重新打开详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
     if (this.unloaded) {
-      wx.showToast({ title: '订单已保留，可到订单列表继续支付', icon: 'none' })
+      wx.showToast({ title: '订单已保留，可在订单详情继续支付', icon: 'none' })
       return
     }
     if (outcome.kind === 'paid') {
@@ -216,14 +263,15 @@ Page({
     settle()
   },
   onConfirm() {
+    if (this._busy) return
     tapHaptic()
     wx.showModal({
       title: '确认收货',
       content: '确认已收到宝贝了吗？',
       success: async (res) => {
         if (!res.confirm) return
-        const r = await confirmReceive(this.orderId)
-        if (this.unloaded) return // await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
+        const r = await this.withLoading('正在确认', () => confirmReceive(this.orderId))
+        if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
         wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
         void this.reload()
       },
@@ -234,6 +282,7 @@ Page({
     if (line) wx.navigateTo({ url: reviewUrl(this.orderId, line) })
   },
   // 申请售后：先算可申请行（入口收窄·最终裁决在云端），再开自绘半屏选 类型/原因/商品（多件单在半屏里点选商品）。
+  // 没有可退行（如激活过课程）也照开：「退款」段置灰写原因，换货/补发照常走联系客服——不留死路。
   async onAfterSale() {
     const vm = this.data.vm
     if (!vm) return
@@ -241,24 +290,39 @@ Page({
     // 页长取云端默认 100（api 默认 20 会把本单较早的申请截掉，用户选了才被 ALREADY_APPLIED 拒）。
     // ponytail: 只取首页·不看 hasMore——本人售后超 100 条时本单更早的申请仍会被截掉（云端 ALREADY_APPLIED 兜底）；
     // 根治=云端 getMyAfterSales 接 orderId 过滤后改传 vm.id、删下方客户端 filter。
-    const asRes = await getMyAfterSales(undefined, 100)
-    if (this.unloaded) return // await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
+    const asRes = await this.withLoading('正在加载', () => getMyAfterSales(undefined, 100))
+    if (!asRes || this.unloaded) return // 在途重复点 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
     if (!asRes.ok) {
       wx.showToast({ title: '售后记录没加载出来，稍后再试', icon: 'none' }) // 失败≠一条都没申请过
       return
     }
     const appliedIds = mapAfterSales(asRes.list).filter((a) => a.orderId === vm.id).map((a) => a.lineId)
-    const eligible = applicableLines(vm.status, vm.items, appliedIds)
-    if (!eligible.length) {
-      wx.showToast({ title: '没有可申请售后的条目', icon: 'none' })
-      return
-    }
-    const asLines = eligible.map((l) => ({ lineId: l.lineId, label: `${l.name}${l.spec ? '（' + l.spec + '）' : ''}` }))
-    this.setData({ asOpen: true, asOut: false, asBusy: false, asType: AS_TYPES[0], asReason: AS_REASONS[0], asLines, asLine: asLines[0].lineId })
+    this._asOk = applicableLines(vm.status, vm.items, appliedIds).map(asLineOf)
+    this._asAll = vm.items.map(asLineOf)
+    const asBlock = refundBlock(vm.status, vm.items, appliedIds)
+    const asLines = asBlock ? this._asAll : this._asOk
+    if (!asLines.length) return // 脏单无条目：没东西可选
+    this.setData({
+      asOpen: true,
+      asOut: false,
+      asBusy: false,
+      asType: asBlock ? AS_TYPES[1] : AS_TYPES[0],
+      asReason: AS_REASONS[0],
+      asBlock,
+      asLines,
+      asLine: asLines[0].lineId,
+    })
   },
   onAsType(e: WechatMiniprogram.TouchEvent) {
     const v = String(e.currentTarget.dataset.v)
-    if (AS_TYPES.includes(v)) this.setData({ asType: v })
+    if (!AS_TYPES.includes(v)) return
+    if (v === '退款' && this.data.asBlock) {
+      fxHint(this, this.data.asBlock) // 置灰段点了说原因，不切过去
+      return
+    }
+    const asLines = v === '退款' ? this._asOk : this._asAll
+    const asLine = asLines.some((l) => l.lineId === this.data.asLine) ? this.data.asLine : asLines[0].lineId
+    this.setData({ asType: v, asLines, asLine })
   },
   onAsReason(e: WechatMiniprogram.TouchEvent) {
     const v = String(e.currentTarget.dataset.v)
@@ -279,8 +343,15 @@ Page({
     const vm = this.data.vm
     if (this.data.asBusy || !this.data.asLine || !vm) return
     if (this.data.asType !== '退款') {
+      // 换货/补发：订单号 + 商品 + 类型原因先复制，客服那边直接粘贴（复制失败不挡打开客服）
+      const l = this.data.asLines.find((x) => x.lineId === this.data.asLine)
+      const copy = `订单号：${vm.id}\n商品：${l ? lineText(l) : ''}\n售后：${this.data.asType} · ${this.data.asReason}`
       this.onAsClose()
-      openCustomerService()
+      openCustomerService(copy, () => this.copiedHint())
+      return
+    }
+    if (this.data.asBlock) {
+      fxHint(this, this.data.asBlock) // 没有可退行：退款不可提交（最终裁决仍在云端）
       return
     }
     tapHaptic()

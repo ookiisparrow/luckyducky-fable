@@ -16,6 +16,10 @@
   </view>
 
   <text class="t-sys ag-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</text>
+  <view class="ag-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">
+    <text class="ag-row-t">联系客服</text>
+    <px-i name="arrow" tone="#62625c" />
+  </view>
 </view>
 
 <!-- 隐私政策：数据共享授权管理入口 -->

@@ -66,3 +66,30 @@ describe('像素撒花', () => {
     expect(big.length).toBe(0)
   })
 })
+
+describe('自绘提示定时器', () => {
+  it('大白话：两个页面各弹一次提示——互不打断，各自 1.5 秒后都消失（不再有一条卡住不走）', async () => {
+    vi.useFakeTimers()
+    let opts: Record<string, any> = {}
+    ;(globalThis as any).Component = (o: unknown) => (opts = o as Record<string, any>)
+    ;(globalThis as any).wx = { getWindowInfo: () => ({ windowWidth: 390, windowHeight: 800 }) }
+    vi.resetModules()
+    await import('../components/px-fx/px-fx')
+    const make = () => {
+      const c: Record<string, any> = { data: { ...opts.data }, ...opts.methods }
+      c.setData = function (p: Record<string, unknown>) {
+        Object.assign(this.data, p)
+      }
+      opts.lifetimes.attached.call(c)
+      return c
+    }
+    const a = make()
+    const b = make()
+    a.toast('一')
+    b.toast('二')
+    vi.advanceTimersByTime(1500)
+    expect(a.data.toastShow).toBe(false)
+    expect(b.data.toastShow).toBe(false)
+    vi.useRealTimers()
+  })
+})

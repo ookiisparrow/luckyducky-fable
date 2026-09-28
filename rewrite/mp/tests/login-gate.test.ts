@@ -1,7 +1,7 @@
 // 登录软门槛 loginGate（R1）——旧线 packages/miniapp/tests/auth.test.js 原生 mp 移植。
 // ensureLogin：已同意（本地 hint=true）放行返回 true 不弹；未同意拦截返回 false 并打开半屏。
 // hint sanitize：storage 不可信只认字面 true。markAgreed 写 hint + 关闭 + 广播订阅者。
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 let store: Record<string, unknown> = {}
 beforeEach(() => {
@@ -79,5 +79,22 @@ describe('loginGate · 登录软门槛（半屏弹窗·R1）', () => {
     expect(sanitizeLoginHint(1)).toBe(false)
     expect(sanitizeLoginHint(undefined)).toBe(false)
     expect(sanitizeLoginHint(null)).toBe(false)
+  })
+})
+
+describe('loginGate · 安卓返回键', () => {
+  it('大白话：tab 页登录半屏开着按返回——只关半屏、不提示退出；半屏没开照常提示「再点一次退出」', async () => {
+    const { loginGate } = await import('../lib/loginGate')
+    const { onExitGuardBeforeLeave } = await import('../utils/exitGuard')
+    const toast = vi.fn()
+    ;(globalThis as any).wx.showToast = toast
+    const page = { setData: () => {}, _exitGuardTimer: null as ReturnType<typeof setTimeout> | null }
+    loginGate.open()
+    onExitGuardBeforeLeave(page)
+    expect(loginGate.visible()).toBe(false)
+    expect(toast).not.toHaveBeenCalled()
+    onExitGuardBeforeLeave(page)
+    expect(toast).toHaveBeenCalledTimes(1)
+    clearTimeout(page._exitGuardTimer!)
   })
 })

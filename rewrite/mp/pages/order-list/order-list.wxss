@@ -90,7 +90,7 @@ page {
   font-weight: 300;
   color: var(--v5-ink-2);
 }
-/* 待支付倒计时（设计稿：等宽 600 15px 琥珀 + 13/300「后取消」） */
+/* 待支付倒计时（设计稿：等宽 600 15px 琥珀 + 13/300「后自动取消」·与详情同口径） */
 .ol-cd {
   display: flex;
   align-items: baseline;
@@ -146,8 +146,22 @@ page {
   gap: 8px;
 }
 .ol-act {
+  position: relative;
   height: 32px;
   padding: 0 12px;
+}
+/* 热区补到 44 高（上下各让 6px·看不见，视觉仍 32 高）；取消键 overflow:hidden 裁掉伪元素，改由外层 .ol-hold 让位 */
+.ol-act::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -6px;
+  bottom: -6px;
+}
+.ol-hold {
+  padding: 6px 0;
+  margin: -6px 0;
 }
 .ol-danger {
   position: relative;

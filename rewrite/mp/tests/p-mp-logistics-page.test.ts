@@ -64,6 +64,10 @@ describe('物流页壳', () => {
     expect(opts.url).toBe('plugin://kuaidi100/index?num=SF123&appName=' + encodeURIComponent('小棉鸭') + '&com=shunfeng')
     opts.fail()
     expect(wxMock.setClipboardData).toHaveBeenCalledTimes(2)
+    wxMock.setClipboardData.mock.calls[1][0].success()
+    expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '物流详情暂时打不开，运单号已复制，可到快递官网查询', icon: 'none' })
+    wxMock.setClipboardData.mock.calls[1][0].fail()
+    expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '复制没成功，长按运单号手动复制', icon: 'none' })
 
     page.data.company = '不认识的快递'
     page.onOpen()
@@ -79,6 +83,18 @@ describe('物流页壳', () => {
     page.onOpen()
     expect(wxMock.setClipboardData).not.toHaveBeenCalled()
     expect(wxMock.navigateTo).not.toHaveBeenCalled()
+  })
+
+  it('大白话：没带单号进来不发请求、直接「找不到这个订单」；查无此单（NOT_FOUND）同样落这个态，不亮重试', async () => {
+    const page = await mount('')
+    await page.reload()
+    expect(callAppMock).not.toHaveBeenCalled()
+    expect(page.data).toMatchObject({ loading: false, loadFailed: false, notFound: true })
+
+    callAppMock.mockResolvedValue({ ok: false, error: 'NOT_FOUND' })
+    const p2 = await mount()
+    await p2.reload()
+    expect(p2.data).toMatchObject({ loading: false, loadFailed: false, notFound: true })
   })
 
   it('大白话：网络失败亮重试（不误报没有运单）；点重试重新拉取', async () => {

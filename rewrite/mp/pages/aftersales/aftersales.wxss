@@ -67,10 +67,11 @@ page {
   font-weight: 300;
   color: var(--v5-ink-2);
 }
+/* 热区 ≥44 高：上下内边距加到 13px、再用负外边距吃回去（视觉位置与原 margin-top 2 + padding 4 一致） */
 .as-link {
   align-self: flex-start;
-  margin-top: 2px;
-  padding: 4px 0;
+  margin: -7px -12px -9px 0;
+  padding: 13px 12px 13px 0;
   display: flex;
   align-items: center;
   gap: 8px;

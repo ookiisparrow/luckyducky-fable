@@ -17,8 +17,10 @@ const REV_ERR = new Map([
   ['REVIEWED', '这条已经评过了'],
   ['NOT_DONE', '订单完成后才能评价'],
   ['IMG_RISKY', '图片没通过审核，换一张再试'],
-  ['SEC_CHECK_FAIL', '图片没检查成功，稍后再试'],
+  // 云端文字违规 / 文字校不了 / 图片校不了都回 SEC_CHECK_FAIL（只有图片违规单独回 IMG_RISKY），分不开，统一说内容
+  ['SEC_CHECK_FAIL', '内容没通过审核，改一改再试'],
 ])
+const BACK_AFTER_REVIEWED_MS = 1000 // 已评过：提示后自动返回
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -157,13 +159,21 @@ Page({
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交（撞主键回 REVIEWED 的矛盾 toast）；toast 加 mask·定时器存实例待清。
-      // 「已发布 ✓」用原生提示：随后退回上一页，原生提示跨页不断，自绘的会随本页消失。先撤 dirty 让放弃拦截卸下再返回。
-      wx.showToast({ title: '已发布', icon: 'success', mask: true })
+      // 成功提示用原生：随后退回上一页，原生提示跨页不断，自绘的会随本页消失。先撤 dirty 让放弃拦截卸下再返回。
+      // icon none：带 success 图标时标题最多显示 7 个字，这句会被截。评价要精选后才对外展示，文案照实说。
+      wx.showToast({ title: '已提交，精选后展示', icon: 'none', mask: true })
       this.setData({ dirty: false })
       this.backTimer = setTimeout(() => wx.navigateBack(), 800)
       return
     }
+    const code = String(r.error || '')
+    wx.showToast({ title: REV_ERR.get(code) || '提交没成功，稍后再试', icon: 'none' })
+    if (code === 'REVIEWED') {
+      // 已评过：这页没什么可做了——撤 dirty 卸下放弃拦截，busy 保持锁住，1 秒后自动返回
+      this.setData({ dirty: false })
+      this.backTimer = setTimeout(() => wx.navigateBack(), BACK_AFTER_REVIEWED_MS)
+      return
+    }
     this.setData({ busy: false })
-    wx.showToast({ title: REV_ERR.get(String(r.error || '')) || '提交没成功，稍后再试', icon: 'none' })
   },
 })

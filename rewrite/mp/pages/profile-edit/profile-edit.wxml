@@ -49,12 +49,12 @@
   <!-- 账号操作（v5 D3）：按住确认——退出 0.6s（灰填充）、删除 0.9s（红填充·按满后再弹一次后果确认） -->
   <view class="pe-acct">
     <view class="k k-light pe-acct-k {{holdOut ? 'pe-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-      catch:touchstart="onLogoutStart" catch:touchend="onLogoutEnd" catch:touchcancel="onLogoutCancel">
+      catch:touchstart="onLogoutStart" bind:touchmove="onLogoutMove" catch:touchend="onLogoutEnd" catch:touchcancel="onLogoutCancel">
       <view class="pe-fill pe-fill-out"></view>
       <text class="pe-acct-t">退出登录</text>
     </view>
     <view class="k k-light pe-acct-k {{holdDel ? 'pe-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-      catch:touchstart="onDeleteStart" catch:touchend="onDeleteEnd" catch:touchcancel="onDeleteCancel">
+      catch:touchstart="onDeleteStart" bind:touchmove="onDeleteMove" catch:touchend="onDeleteEnd" catch:touchcancel="onDeleteCancel">
       <view class="pe-fill pe-fill-del"></view>
       <text class="pe-acct-t pe-danger">删除资料</text>
     </view>
@@ -65,7 +65,7 @@
 
 <view wx:if="{{!loading}}" class="pe-dock">
   <view wx:if="{{!loaded}}" class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
-  <view wx:elif="{{busy}}" class="k k-flat k-48 pe-save">保存</view>
+  <view wx:elif="{{busy}}" class="k k-flat k-48 pe-save">保存中</view>
   <view wx:else class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
 </view>
 </view>

@@ -93,7 +93,7 @@
       </view>
     </view>
   </view>
-  <view wx:else class="t-sys hm-empty">{{loadFailed ? '货架暂时没连上云端，下拉重试' : '上新在路上，先逛逛别处吧'}}</view>
+  <view wx:else class="t-sys hm-empty">{{loadFailed ? '网络不太好，下拉重试' : '上新在路上，先逛逛别处吧'}}</view>
 
   <!-- ④ 信任条：三格像素动画 -->
   <view class="hm-trust">
@@ -121,7 +121,8 @@
     </view>
   </view>
 
-  <!-- ⑥ 真实买家秀 -->
+  <!-- ⑥ 真实买家秀：没有后台配置的真实评论（或拉取失败）整块连标题都不显示（拍板 B·不放写死示例） -->
+  <block wx:if="{{content.reviews.items.length}}">
   <view class="hm-sec"><text class="hm-h2">{{content.reviews.heading}}</text></view>
   <scroll-view class="hm-rail hm-rail-reviews" scroll-x enhanced show-scrollbar="{{false}}">
     <view class="hm-rail-row">
@@ -143,6 +144,7 @@
       </view>
     </view>
   </scroll-view>
+  </block>
 
   <!-- ⑦ 大家都在问：编号行，点开/收起 -->
   <view class="hm-sec"><text class="hm-h2">大家都在问</text></view>

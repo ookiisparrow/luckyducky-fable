@@ -1,4 +1,5 @@
-<!-- 商品详情（v5「字重」稿 A2）：1:1 图集 + 方格页码 + 名称/价格 + 评分 + 规格格 + 款式凹槽 + 图文，底部 客服/加购/直买 -->
+<!-- 商品详情（v5「字重」稿 A2）：1:1 图集 + 方格页码 + 名称/价格 + 评分 + 规格格 + 款式凹槽 + 图文，底部 客服/加购/直买
+     「客服」键是 48px 方键，放不下「联系客服」四个字，保持「客服」。 -->
 <v5-nav />
 
 <view class="pd" wx:if="{{vm}}">
@@ -40,7 +41,7 @@
   </view>
   <!-- 顾客看见的运费/售后/退货口径（已拍板政策·shipping-returns-copy 测试钉）；结算算钱仍走 SHIP=0（不在本页改钱链）。
        不要写「满 ¥100 包邮」或「全场包邮」——都不是现政策。 -->
-  <text class="t-sys pd-policy">包邮到家·售后无忧 · 开课后不可退货</text>
+  <text class="t-sys pd-policy">包邮到家 · 售后无忧 · 开课后不可退货</text>
 
   <view class="pd-specs" wx:if="{{vm.params.length}}">
     <view class="pd-spec" wx:for="{{vm.params}}" wx:key="k">
@@ -100,6 +101,7 @@
 <view class="pd-state" wx:elif="{{!loading}}">
   <text class="pd-state-title">商品不存在或已下架</text>
   <text class="t-sys pd-state-hint">回首页看看别的吧</text>
+  <view class="k k-light pd-state-btn" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">回首页</view>
 </view>
 
 <!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->

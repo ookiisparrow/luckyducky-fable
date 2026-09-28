@@ -34,7 +34,7 @@ const ME_ENTRY_LABELS: Record<MeEntryKey, string> = {
   address: '收货地址',
   activate: '扫码激活课程',
   feedback: '反馈',
-  kefu: '客服',
+  kefu: '联系客服',
   consent: '数据共享授权',
   about: '关于',
 }
