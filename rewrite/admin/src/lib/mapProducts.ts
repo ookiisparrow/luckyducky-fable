@@ -19,7 +19,7 @@ export function productState(id: string, listedMap: unknown): ProductState {
   return m[id] === false ? 'unlisted' : 'onsale'
 }
 
-export interface StepMark {
+interface StepMark {
   key: string
   label: string
   done: boolean

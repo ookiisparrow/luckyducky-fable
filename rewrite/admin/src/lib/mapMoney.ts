@@ -48,7 +48,7 @@ export function orderErrorText(e: unknown): string {
   return ORDER_ERR[s as keyof typeof ORDER_ERR] || transportErrorText(s) || `操作失败（${s}）`
 }
 
-export interface StatCard {
+interface StatCard {
   label: string
   value: string
   note?: string
@@ -56,16 +56,16 @@ export interface StatCard {
   pct?: number // 进度条百分比（激活率）
 }
 
-export interface SegStat {
+interface SegStat {
   name: string
   count: number
 }
-export interface ActivityItem {
+interface ActivityItem {
   type: string
   text: string
   at: number
 }
-export interface DashboardVM {
+interface DashboardVM {
   cards: StatCard[]
   funnel: StatCard[]
   alerts: Array<{ label: string; ids: string[] }>
@@ -170,7 +170,7 @@ export function maskPhone(p: unknown): string {
   return s.length >= 7 ? s.slice(0, 3) + '****' + s.slice(-4) : s
 }
 
-export interface OrderItemVM {
+interface OrderItemVM {
   productId: string
   lineKey: string // 与后端 refundedQty 同一行键：新单 lineId，旧单回退 productId
   name: string
@@ -358,7 +358,7 @@ export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; re
 // 后端 overrideRefund 只收 { orderId, lineId, reason }，金额/退货资格一律云端裁决（不越权在前端伪造金额）；
 // 这里只提供「按订单号查订单→选行」的查找态 VM + 提交按钮门控纯函数，售后行选择走 listOrders(q=orderId)。
 
-export interface OverrideLineVM {
+interface OverrideLineVM {
   lineId: string
   label: string // 商品名（规格）×数量 · 单价，供选择时辨认——不是退款额（退款额=服务端分摊结果，前端不算）
 }

@@ -3,7 +3,7 @@
 // 工厂式依赖注入（fetcher/now）——缓存命中/过期/去重最易在边界出错，纯函数化单测钉死。
 import { createInflight } from './inflight'
 
-export interface SegmentPub {
+interface SegmentPub {
   id: string
   name?: string
   dur?: number
