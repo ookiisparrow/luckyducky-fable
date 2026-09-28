@@ -1,7 +1,10 @@
 // 全屏像素特效层 <px-fx id="fx" />：撒花 / 彩虹转场 / 暗场转场（算法见 lib/pxFx，调用走 lib/pxFx 的 runFx）。
 // 页面级 position:fixed 的 2d canvas，放在页面根下、不进 scroll-view（canvas 进滚动容器会漂·见 lib/pixelView 注）。
 // 转场进行中盖一层透明挡板吃掉点按，防连点二次跳转。
-import { ditherRuns, distField, party, rainbowRuns, stepConfetti, RAINBOW_DUR, type Bit, type Rect, type Runs } from '../../lib/pxFx'
+// 跨页接力（60fps 录屏逐帧核过的错乱）：navigateTo 自带系统滑入动画关不掉，旧页画布在跳页那一刻会丢——
+// 旧页内容闪回 ~130ms，再滑入一张没盖底的新页。所以铺满后旧页换成纯色遮罩 view（不会丢），新页一出生就盖同色
+// 遮罩（同色盖同色，滑入看不出来），滑完再照设计稿 fxEnter 淡出（280ms ease-out）。
+import { ditherRuns, distField, ease, party, rainbowRuns, stepConfetti, RAINBOW_DUR, PAPER, DARK, type Bit, type Rect, type Runs } from '../../lib/pxFx'
 import { burstHaptic } from '../../lib/haptics'
 
 type Ctx = {
@@ -19,6 +22,10 @@ type St = { cv?: Cv; x?: Ctx; w: number; h: number; bits: Bit[]; cfRaf: number; 
 
 const S = new WeakMap<object, St>()
 const DITHER_DUR = 800
+const SLIDE_MS = 300 // 系统 navigateTo 滑入时长（工具 60fps 录屏实测 ~250ms·留余量）：新页遮罩等滑完再淡出
+const FADE_MS = 280
+// 铺满那一刻记下底色，新页的 px-fx attached 时认领；1.5s 内有效（跳到没挂 px-fx 的页就作废，不串到以后的页）
+let entering: { color: string; at: number } | null = null
 
 function paint(x: Ctx, runs: Runs) {
   for (const c in runs) {
@@ -33,11 +40,16 @@ function paint(x: Ctx, runs: Runs) {
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 Component({
-  data: { busy: false, toastShow: false, toastOk: false, toastText: '' },
+  data: { busy: false, toastShow: false, toastOk: false, toastText: '', cover: '', coverOut: false },
   lifetimes: {
     attached() {
       const wi = wx.getWindowInfo()
       S.set(this, { w: wi.windowWidth, h: wi.windowHeight, bits: [], cfRaf: 0, cfLast: 0, fxRaf: 0 })
+      if (entering && Date.now() - entering.at < 1500) this.setData({ cover: entering.color, coverOut: false })
+      entering = null
+    },
+    ready() {
+      if (this.data.cover) setTimeout(() => this.uncover(), SLIDE_MS + 60)
     },
     detached() {
       const s = S.get(this)
@@ -49,14 +61,27 @@ Component({
     },
   },
   pageLifetimes: {
-    show() {
-      // 转场跳走后铺满的纸色/深色留在本页；回到本页时擦掉（跳走那一刻不能擦，新页还在滑入）
-      const s = S.get(this)
-      if (s?.x && !this.data.busy) s.x.clearRect(0, 0, s.w, s.h)
+    hide() {
+      // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
+      if (this.data.cover) setTimeout(() => this.clearCover(), SLIDE_MS + 140)
     },
   },
   methods: {
     noop() {},
+    clearCover() {
+      this.setData({ cover: '', coverOut: false })
+      this.tabBar(false)
+    },
+    uncover() {
+      if (!this.data.cover || this.data.coverOut) return
+      this.setData({ coverOut: true })
+      setTimeout(() => this.clearCover(), FADE_MS)
+    },
+    // 自定义 TabBar 是框架独立层、页面内 z-index 盖不住：转场铺到底部那一刻让它让位（tab 页才有·非 tab 页 getTabBar 为空）
+    tabBar(covered: boolean) {
+      const owner = this.selectOwnerComponent() as unknown as { getTabBar?: () => { setCovered?: (v: boolean) => void } | null }
+      owner?.getTabBar?.()?.setCovered?.(covered)
+    },
     /** 系统层轻提示（设计稿 toast：深色半透明框，成功带像素 ✓，1.5 秒后 180ms 淡出）。 */
     toast(text: string, ok = false) {
       if (toastTimer) clearTimeout(toastTimer)
@@ -121,6 +146,9 @@ Component({
       const st: { rev?: number } = {}
       const delay = kind === 'rainbow' ? 150 : 90
       const dur = kind === 'rainbow' ? RAINBOW_DUR : DITHER_DUR
+      // 底部 TabBar 中心离键的距离占全程的比例：扩散前沿过了这里就让 TabBar 让位
+      const tabAt = F.D[Math.floor((s.h - 40) / 4) * F.cols + Math.floor(s.w / 8)] / F.maxD
+      let tabHidden = false
       let t0 = 0
       const frame = (now: number) => {
         if (!t0) t0 = now + delay
@@ -128,12 +156,23 @@ Component({
         const x = s.x!
         x.clearRect(0, 0, s.w, s.h)
         if (t >= dur) {
-          x.fillStyle = kind === 'rainbow' ? '#fafaf8' : '#121212'
+          const color = kind === 'rainbow' ? PAPER : DARK
+          x.fillStyle = color
           x.fillRect(0, 0, s.w, s.h)
           s.fxRaf = 0
-          this.setData({ busy: false })
-          go()
+          // 遮罩上屏后再擦画布、再跳页（画布跨页会丢·见文件头）
+          this.setData({ busy: false, cover: color, coverOut: false }, () => {
+            x.clearRect(0, 0, s.w, s.h)
+            entering = { color, at: Date.now() }
+            go()
+            // 跳页失败（页栈满/路径错）本页不会 hide：2s 后淡出遮罩兜底，不把人困在一块纯色里
+            setTimeout(() => this.uncover(), 2000)
+          })
           return
+        }
+        if (!tabHidden && ease(Math.max(0, t) / dur) >= tabAt) {
+          tabHidden = true
+          this.tabBar(true)
         }
         paint(x, kind === 'rainbow' ? rainbowRuns(F, t, st) : ditherRuns(F, Math.max(0, t) / dur))
         s.fxRaf = s.cv!.requestAnimationFrame(frame)

@@ -9,6 +9,11 @@ page {
     显式钉 500 使正文命中已注册字重、行为确定 */
   -webkit-font-smoothing: antialiased;
 }
+/* custom-tab-bar 渲染在 page 节点之外，继承不到上面的字体（真机/工具里 TabBar 字是系统黑体）——.v5-scope 根节点再钉一遍 */
+.v5-scope {
+  font-family: var(--v5-font-brand);
+  font-weight: 500;
+}
 
 /* ── v5 按键（键帽）三档 + 暗色两档 ──
    用法：<view class="k k-ink" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100">。高 44（.k）/ 48（.k.k-48）；

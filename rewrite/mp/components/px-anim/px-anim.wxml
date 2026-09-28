@@ -1,3 +1,1 @@
-<view class="pxc" style="width:{{size * 13}}px;height:{{size * 13}}px">
-  <view wx:for="{{pxRows}}" wx:key="t" wx:if="{{item.g}}" class="pxr" style="top:{{item.t}}px;height:{{pxCell}}px;background:{{item.g}}"></view>
-</view>
+<view class="pxc" style="width:{{size * 13}}px;height:{{size * 13}}px;background:{{pxBg}}"></view>

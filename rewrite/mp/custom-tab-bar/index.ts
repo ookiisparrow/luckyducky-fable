@@ -37,6 +37,10 @@ Component({
   methods: {
     onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
     onKeyUp: keyUp,
+    /** 转场铺到底部时让位（px-fx 调·同登录半屏的理由：页面内 z-index 盖不住本层），跳走后恢复。 */
+    setCovered(v: boolean) {
+      this.setData({ hidden: v || loginGate.visible() })
+    },
     setActive(id: string) {
       this.setData({ active: id, cartCount: cartCount() })
     },
