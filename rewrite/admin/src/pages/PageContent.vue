@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 页面内容工作台（照 design/控制台.pen y:31200–35360 五屏）：五页签统管小程序各页可编辑文案/图，
+// 页面内容工作台：五页签统管小程序各页可编辑文案/图，
 // 每签右侧 375 手机实时预览 + 自动保存。切签用 v-if 卸载/挂载——进签 onMounted 拉取、离签 onBeforeUnmount 补存
 // （各 tab 组件自带 usePageContent 生命周期）。首页签内嵌 HomeContentForm（存 content/home 档·背景图三态在此）。
 import { ref, computed } from 'vue'
