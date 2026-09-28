@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // 我的与关于页签：跨两份 content 档——mePage（默认昵称 + 九入口 label 改名/visible 开关·key 只读固定顺序）
 // 与 about（关于我们 lead + 段落 ≤10）。两档各一条独立保存生命周期（usePageContent），工具条合并展示、保存一并触发。
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import { usePageContent } from '../../lib/usePageContent'
-import { normalizeMePage, mePagePayload, normalizeAbout, aboutPayload, combineSaveMessages } from '../../lib/mapPageContent'
+import { normalizeMePage, mePagePayload, normalizeAbout, aboutPayload, combineSaveMessages, SAVE_OK_MESSAGE } from '../../lib/mapPageContent'
 import UiButton from '../ui/Button.vue'
 import SaveToolbar from './SaveToolbar.vue'
 import Card from '../ui/Card.vue'
@@ -42,6 +42,16 @@ async function saveBoth() {
   saveBothError.value = result.error
   saveBothMessage.value = result.message
 }
+
+// 手工保存失败后 save() 会把两边 autoState 复位成空，失败只留在上面两个标记里。
+// 之后只要两边自动保存都不再是失败，就撤掉标记和旧句子，否则成功了仍显示「自动保存失败」。
+watch([() => me.autoState.value, () => about.autoState.value], ([a, b]) => {
+  if (a === 'error' || b === 'error' || !saveBothError.value) return
+  saveBothError.value = false
+  saveBothMessage.value = ''
+  if (me.message.value !== SAVE_OK_MESSAGE) me.message.value = ''
+  if (about.message.value !== SAVE_OK_MESSAGE) about.message.value = ''
+})
 
 function addSection() {
   if (about.model.value && about.model.value.sections.length < 10) about.model.value.sections.push({ title: '', body: '' })

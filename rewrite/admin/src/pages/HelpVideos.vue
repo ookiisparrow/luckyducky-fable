@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 帮助视频：播放页「遇到问题了」求助面板内容源（主题→小段两级·全课程共用一份）。
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Upload, Check, Trash2, Plus, Video } from 'lucide-vue-next'
 import { listHelpVideos, saveHelpVideos, uploadVideo } from '../api/content'
 import { normalizeHelpItems, type HelpItem } from '../lib/mapContent'
@@ -15,6 +15,8 @@ import UiButton from '../components/ui/Button.vue'
 
 const items = ref<HelpItem[]>([])
 const message = ref('')
+// 成功绿、其余红。只认现有句子，不改文案。
+const ok = computed(() => message.value.startsWith('已保存（'))
 const busy = ref(false)
 const progress = ref('')
 const confirmKey = ref('') // no-alert 两步删除确认（直接 splice 的话误删即丢）
@@ -178,7 +180,7 @@ onMounted(reload)
       <UiButton :disabled="busy || !items.length" @click="save">{{ busy ? '保存中…' : '保存全部' }}</UiButton>
     </PageHeader>
 
-    <p v-if="message" class="status">
+    <p v-if="message" class="status" :class="{ ok }">
       {{ message }}
       <UiButton v-if="conflicted" variant="ghost" size="sm" @click="reload">重新载入</UiButton>
     </p>
@@ -224,6 +226,9 @@ onMounted(reload)
 .status {
   font-size: 13px;
   color: var(--ld-red);
+}
+.status.ok {
+  color: var(--ld-green);
 }
 /* 主题头（外框由 Card 提供）：徽章 + 标题/副题 + ↑ ↓ 删 */
 .topic-head {
