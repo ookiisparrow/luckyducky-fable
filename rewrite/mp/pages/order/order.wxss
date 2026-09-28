@@ -355,11 +355,6 @@ page {
 .od-danger-t {
   position: relative;
 }
-/* 行内「撤回申请」：外层透明热区补到 44 高（键自身 overflow:hidden 裁掉了 .od-mini 的 ::after 热区） */
-.od-wd {
-  padding: 8px 0;
-  margin: -8px 0;
-}
 .od-busy {
   opacity: 0.8;
 }

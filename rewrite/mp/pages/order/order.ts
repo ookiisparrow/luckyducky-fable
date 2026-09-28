@@ -39,8 +39,10 @@ Page({
     asLed: null as { tone: string; halo: string } | null, // 售后叠加状态灯（售后中紫 / 已退款绿），null＝不出灯
     asHas: false, // 该单有任何售后记录：出「查看售后进度」入口
     lineTags: {} as Record<string, string>, // 行标 lineId→「退款中 / 已退款」
-    lineWd: {} as Record<string, boolean>, // 行内「撤回申请」键：该行售后申请中且可撤（lib/mapAftersales withdrawableLines）
-    wdHold: '', // 正在按住撤回的行 lineId（驱动键内红色进度条）
+    // 可撤回的售后行（申请中且没被商家批过·lib/mapAftersales withdrawableLines）：非空时底部「撤回申请」代替「申请售后」
+    // （老板 2026-09-29）；按住一次撤回本单全部申请中的售后
+    wdLines: [] as string[],
+    wdHold: false, // 正在按住撤回（驱动键内红色进度条）
     sub: { text: '', tone: '' } as { text: string; tone: string }, // 状态卡右侧小字（倒计时/签收日期…）
     warn: null as { text: string; tone: string } | null,
     help: false, // 待退款/支付异常：底部「返回 + 联系客服」
@@ -152,6 +154,7 @@ Page({
     const s = vm.status
     const asOf = this._asList ? afterSalesByOrder(this._asList)[vm.id] : undefined
     const ov = afterSaleOverlay(vm.items, asOf)
+    const wd = this._asList ? withdrawableLines(this._asList, vm.id) : {}
     this.setData({
       loading: false,
       loadFailed: false,
@@ -161,7 +164,7 @@ Page({
       asLed: ov ? ov.led : null,
       asHas: !!asOf,
       lineTags: asOf ? asOf.lines : {},
-      lineWd: this._asList ? withdrawableLines(this._asList, vm.id) : {},
+      wdLines: vm.items.map((it) => it.lineId).filter((id) => wd[id]),
       sub: ov ? { text: ov.sub, tone: '' } : detailSub(vm, Date.now()),
       warn: WARN[s] || null,
       help: !!WARN[s],
@@ -240,15 +243,14 @@ Page({
   onCancelEnd() {
     hold?.end()
   },
-  // 撤回申请中的售后（行内键·按住 700ms，同按住取消手感；最终裁决在云端）
+  // 撤回申请中的售后（底部键·代替「申请售后」·按住 700ms，同按住取消手感；最终裁决在云端）
   onWithdrawStart(e: WechatMiniprogram.TouchEvent) {
-    const lineId = String(e.currentTarget.dataset.line || '')
-    if (!this.data.lineWd[lineId]) return
+    if (!this.data.wdLines.length) return
     const t = e.touches && e.touches[0]
     hold?.cancel()
-    hold = createHold(HOLD_MS, () => void this.withdrawNow(lineId), {
+    hold = createHold(HOLD_MS, () => void this.withdrawNow(), {
       onQuick: () => fxHint(this, '按住撤回申请'),
-      onChange: (v) => this.setData({ wdHold: v ? lineId : '' }),
+      onChange: (v) => this.setData({ wdHold: v }),
     })
     hold.start(t ? t.clientX : undefined, t ? t.clientY : undefined)
   },
@@ -258,17 +260,25 @@ Page({
   onWithdrawEnd() {
     hold?.end()
   },
-  async withdrawNow(lineId: string) {
+  async withdrawNow() {
     const vm = this.data.vm
-    if (!vm || !this.data.lineWd[lineId]) return
+    const lines = this.data.wdLines
+    if (!vm || !lines.length) return
     tapHaptic()
-    const r = await this.withLoading('正在撤回', () => withdrawRefund(vm.id, lineId))
+    // 逐行撤回（一行一售后·云端逐单裁决）；任一行失败即停，提示原因后刷新看最新状态
+    const r = await this.withLoading('正在撤回', async () => {
+      let last: any = null
+      for (const lineId of lines) {
+        last = await withdrawRefund(vm.id, lineId)
+        if (!last.ok) break
+        // 撤回结果先并进本地售后：刷新时售后没拉到也能去掉「售后中」叠加
+        if (this._asList) this._asList = mergeAfterSales(mapAfterSales([last.afterSale]), this._asList)
+      }
+      return last
+    })
     if (!r || this.unloaded) return
-    if (r.ok) {
-      // 撤回结果先并进本地售后：刷新时售后没拉到也能去掉「售后中」叠加
-      if (this._asList) this._asList = mergeAfterSales(mapAfterSales([r.afterSale]), this._asList)
-      fxToast(this, '已撤回')
-    } else wx.showToast({ title: withdrawErrText(r.error), icon: 'none' }) // 没抢过商家等：下面刷新看最新状态
+    if (r.ok) fxToast(this, '已撤回')
+    else wx.showToast({ title: withdrawErrText(r.error), icon: 'none' }) // 没抢过商家等：下面刷新看最新状态
     await this.reload()
   },
   async cancelNow() {

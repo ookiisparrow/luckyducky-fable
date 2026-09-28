@@ -115,34 +115,34 @@ describe('我的售后：撤回申请', () => {
   })
 })
 
-describe('订单详情：撤回申请', () => {
+describe('订单详情：撤回申请（老板 2026-09-29：申请售后后，底部「撤回申请」代替「申请售后」）', () => {
   const page = async () => {
     const p = await mount('../pages/order/order', { id: 'o1' })
     await p.reload()
     return p
   }
 
-  it('大白话：申请中的那一行出撤回键；按满 700ms 撤回后订单叠加消失、回到原状态，那一行又能申请退款', async () => {
+  it('大白话：有申请中的售后——底部出撤回键代替申请售后；按满 700ms 撤回后订单叠加消失、底部变回申请售后，那一行又能申请退款', async () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('L1', 'applied')] })
     const p = await page()
     expect(p.data.head).toBe('售后中')
-    expect(p.data.lineWd).toEqual({ L1: true })
+    expect(p.data.wdLines).toEqual(['L1'])
 
-    p.onWithdrawStart({ ...touch(), currentTarget: { dataset: { line: 'L1' } } })
-    expect(p.data.wdHold).toBe('L1')
+    p.onWithdrawStart(touch())
+    expect(p.data.wdHold).toBe(true)
     vi.advanceTimersByTime(100)
     p.onWithdrawEnd()
     expect(withdrawCalls()).toHaveLength(0)
     expect(toasts().at(-1)).toEqual({ title: '按住撤回申请', icon: 'none' })
 
     handlers.getMyAfterSales = () => ({ ok: false, error: 'NET' }) // 刷新售后没拉到：也要靠本地并入的结果去掉叠加
-    p.onWithdrawStart({ ...touch(), currentTarget: { dataset: { line: 'L1' } } })
+    p.onWithdrawStart(touch())
     await vi.advanceTimersByTimeAsync(700)
     expect(withdrawCalls()).toEqual([['withdrawRefund', { orderId: 'o1', lineId: 'L1' }]])
     expect(p.data.head).toBe('正在发货')
     expect(p.data.asLed).toBeNull()
     expect(p.data.lineTags).toEqual({})
-    expect(p.data.lineWd).toEqual({})
+    expect(p.data.wdLines).toEqual([])
     expect(p.data.asHas).toBe(true) // 仍有售后记录：「查看售后进度」照出
     expect(toasts().at(-1)).toEqual({ title: '已撤回', icon: 'success' })
 
@@ -151,15 +151,27 @@ describe('订单详情：撤回申请', () => {
     expect(p.data.asLines.map((l: any) => l.lineId)).toEqual(['L1', 'L2'])
   })
 
+  it('大白话：两件都在申请中——按住一次两件一起撤回', async () => {
+    handlers.getMyAfterSales = () => ({ ok: true, list: [AS('L1', 'applied'), AS('L2', 'applied')] })
+    const p = await page()
+    expect(p.data.wdLines).toEqual(['L1', 'L2'])
+    handlers.withdrawRefund = (d: any) => ({ ok: true, afterSale: AS(d.lineId, 'withdrawn') })
+    handlers.getMyAfterSales = () => ({ ok: false, error: 'NET' }) // 刷新没拉到：靠本地并入的两条撤回结果
+    p.onWithdrawStart(touch())
+    await vi.advanceTimersByTimeAsync(700)
+    expect(withdrawCalls().map((c: any) => c[1].lineId)).toEqual(['L1', 'L2'])
+    expect(p.data.wdLines).toEqual([])
+  })
+
   it('大白话：没抢过商家（已同意）——提示并刷新', async () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('L1', 'applied')] })
     const p = await page()
     handlers.withdrawRefund = () => ({ ok: false, error: 'BAD_STATUS:approved' })
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('L1', 'approved')] })
-    p.onWithdrawStart({ ...touch(), currentTarget: { dataset: { line: 'L1' } } })
+    p.onWithdrawStart(touch())
     await vi.advanceTimersByTimeAsync(700)
     expect(toasts().at(-1)).toEqual({ title: '商家已同意退款，正在处理，不能撤回了', icon: 'none' })
     expect(p.data.sub.text).toBe('退款处理中')
-    expect(p.data.lineWd).toEqual({})
+    expect(p.data.wdLines).toEqual([])
   })
 })
