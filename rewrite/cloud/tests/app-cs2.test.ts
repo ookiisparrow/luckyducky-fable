@@ -171,7 +171,8 @@ describe('转人工与队列（黄金 §五）', () => {
 
   it('大白话：人工接管期间 bot 不抢话；但顾客再点「找人工」不许装死——回当前状态、不重复入队不重置', async () => {
     control.seed('csSession', [
-      { _id: 'wxkf:kf1:euA', status: 'active', agentId: 'agent-1', externalUserId: 'euA', openKfId: 'kf1', createdAt: 100 },
+      // updatedAt＝刚刚还在聊（15 分钟闲置自动回机器人的规则见下方 describe）
+      { _id: 'wxkf:kf1:euA', status: 'active', agentId: 'agent-1', externalUserId: 'euA', openKfId: 'kf1', createdAt: 100, updatedAt: Date.now() },
     ])
     const { sent, ctx } = sendCollector()
     await handleMessage(ctx, { externalUserId: 'euA', menuId: '', text: '在吗' })
@@ -181,6 +182,44 @@ describe('转人工与队列（黄金 §五）', () => {
     expect(sent[0].text.content).toContain('服务中')
     expect(control.dump('csSession')[0].agentId).toBe('agent-1') // 未被重置
     expect(await heldStatus(db(), 'kf1', 'euA')).toBe('active')
+  })
+})
+
+describe('人工接待闲置 15 分钟自动回机器人（老板 2026-09-28：默认机器人接待）', () => {
+  const MIN = 60_000
+  const seedHeld = (status: string, idleMin: number) =>
+    control.seed('csSession', [
+      { _id: 'wxkf:kf1:euA', status, agentId: 'agent-1', externalUserId: 'euA', openKfId: 'kf1', createdAt: 100, updatedAt: Date.now() - idleMin * MIN },
+    ])
+
+  it('大白话：坐席接待中但双方已停 16 分钟——会话自动结束（记闲置原因），这句交给机器人回', async () => {
+    seedHeld('active', 16)
+    const { sent, ctx } = sendCollector()
+    await handleMessage(ctx, { externalUserId: 'euA', menuId: '', text: '在吗' })
+    expect(sent.length).toBeGreaterThan(0) // 机器人开口了
+    const s = control.dump('csSession')[0]
+    expect(s.status).toBe('closed')
+    expect(s.closedBy).toBe('idle')
+  })
+
+  it('大白话：才停 14 分钟——仍是人工接待、机器人不抢话；顾客这句话把闲置计时重新拉回到现在', async () => {
+    seedHeld('active', 14)
+    const { sent, ctx } = sendCollector()
+    const before = Date.now()
+    await handleMessage(ctx, { externalUserId: 'euA', menuId: '', text: '还在吗' })
+    expect(sent.length).toBe(0)
+    const s = control.dump('csSession')[0]
+    expect(s.status).toBe('active')
+    expect(s.updatedAt).toBeGreaterThanOrEqual(before)
+  })
+
+  it('大白话：排队没人接、待商户处理的会话同样适用——闲置满 15 分钟不再算「人工接待中」', async () => {
+    for (const st of ['pending', 'escalated']) {
+      control.reset()
+      seedHeld(st, 15)
+      expect(await heldStatus(db(), 'kf1', 'euA')).toBeNull()
+      expect(control.dump('csSession')[0].status).toBe('closed')
+    }
   })
 })
 
