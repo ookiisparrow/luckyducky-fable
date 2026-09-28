@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1790586087415,
+  "updatedAt": 1790586890189,
   "functions": {
     "adminApi": "7dbe6d635917",
     "app": "a9658fa28a98",
@@ -9,7 +9,7 @@
     "feedbackNotify": "e15496353150",
     "initDb": "951dd9d00eeb",
     "inspect": "a14aa902845e",
-    "kfCallback": "08c7f9f9e0ae",
+    "kfCallback": "a6220b1798d2",
     "kfHealthProbe": "03bc82710b8b",
     "payCallback": "7d241dc68a38",
     "recallScan": "d558782c95f6",
