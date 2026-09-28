@@ -3,6 +3,16 @@ page {
   background: var(--v5-canvas);
   color: var(--v5-ink);
 }
+/* 整页一列：顶栏 + 滚动内容 + 底坞（同 checkout·放弃确认武装时页面级滚动被冻，只让中间 scroll-view 滚） */
+.fb-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.fb-scroll {
+  flex: 1;
+  height: 0;
+}
 .fb {
   padding: 4px 16px 16px;
   display: flex;
@@ -74,14 +84,8 @@ page {
 .fb-ph {
   color: var(--v5-ink-4);
 }
-.fb-dock-space {
-  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
-}
 .fb-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 0 0 auto;
   padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   gap: 8px;

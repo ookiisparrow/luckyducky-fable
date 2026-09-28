@@ -47,8 +47,9 @@ async function mountLoggedIn() {
   await import('../pages/profile-edit/profile-edit')
   const page = Object.create(pageOpts) as Record<string, any>
   page.data = { ...pageOpts.data }
-  page.setData = function (patch: Record<string, unknown>) {
+  page.setData = function (patch: Record<string, unknown>, cb?: () => void) {
     Object.assign(this.data as Record<string, unknown>, patch)
+    cb?.() // 真运行时渲染落地后回调（退出/删除先撤放弃确认拦截再返回）
   }
   await page.onLoad()
   return { page, loginGate, address }

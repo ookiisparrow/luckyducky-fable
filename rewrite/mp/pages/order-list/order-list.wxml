@@ -1,6 +1,6 @@
 <!-- 我的订单（v5「字重」稿 B1 / E2 加载失败 / E3 订单空）：凹槽分段筛选 + 订单卡（状态灯/像素小货车 + 缩略图 + 等宽金额 + 操作键）。
-     业务逻辑不动：状态筛选(onTab)/左右滑换 tab(onSwipeStart/End)/点单进详情(onTapOrder)/继续支付(onPay)/确认收货(onConfirm)/
-     取消（onCancel·钱链沿用二次确认弹窗）/游标分页(onReachBottom) 全部承接 order-list.ts。
+     状态筛选(onTab)/左右滑换 tab(onSwipeStart/End)/点单进详情(onTapOrder)/继续支付(onPay)/确认收货(onConfirm)/查看物流(onLogistics)/
+     写评价(onReview)/取消（按住 700ms·onCancelStart/End·拍板 7）/游标分页(onReachBottom) 全部承接 order-list.ts。
      手势滑动换 tab 绑在全高根容器上（订单少时下半屏也能滑·真机实测）；bind 不 catch，不影响纵向滚动与卡片点按。 -->
 <v5-nav title="我的订单" />
 
@@ -44,16 +44,14 @@
     <view class="k-card ol-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
       <view class="ol-head">
         <px-anim wx:if="{{item.status === 'shipped'}}" class="ol-truck" name="truck" size="2" />
-        <px-i wx:elif="{{item.status === 'pending'}}" name="led" tone="#f4bd3f" />
-        <px-i wx:elif="{{item.status === 'paid'}}" name="led" tone="#8a5ae0" />
-        <px-i wx:elif="{{item.status === 'done'}}" name="led" tone="#3f9a5e" />
-        <px-i wx:else name="led" tone="#9a9a92" />
-        <text class="ol-status">{{item.statusLabel}}</text>
-        <text class="t-sys ol-time">{{item.createdAtLabel}}</text>
+        <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
+        <text class="ol-status">{{item.label}}</text>
+        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后取消</text></view>
+        <text wx:elif="{{item.right}}" class="t-sys ol-time">{{item.right}}</text>
       </view>
       <view class="ol-row">
         <view class="ol-thumbs">
-          <view class="ol-thumb" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId" wx:if="{{index < 4}}">
+          <view class="ol-thumb" wx:for="{{item.thumbs}}" wx:for-item="line" wx:key="lineId">
             <image wx:if="{{line.cover}}" class="ol-thumb-img" src="{{line.cover}}" mode="aspectFill" lazy-load />
           </view>
         </view>
@@ -62,13 +60,26 @@
           <text class="t-sys ol-amt-t">{{item.amountTitle}} · 共 {{item.count}} 件</text>
         </view>
       </view>
-      <view class="ol-acts" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
-        <view wx:if="{{item.status === 'pending'}}" class="k k-sm k-light ol-act ol-danger" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-          data-id="{{item.id}}" catch:tap="onCancel" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">取消订单</view>
-        <view wx:if="{{item.status === 'pending'}}" class="k k-sm k-ink ol-act {{payingId === item.id ? 'ol-act-busy' : ''}}"
+      <!-- 操作键：待支付＝按住取消 + 去支付；待收货＝查看物流 + 确认收货；已完成＝写评价（浅色键）。
+           ponytail: 云端订单没有「已评价」字段，灰底「已评价」标签暂不出；云端给行级 reviewed 后按它二选一 -->
+      <view class="ol-acts" wx:if="{{item.status === 'pending'}}">
+        <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条）：外层接按住手势 + 吞掉 tap 不进详情，内层是键帽 -->
+        <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
+          <view class="k k-sm k-light ol-act ol-danger {{holding === item.id ? 'ol-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+            data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="ol-fill"></view><text class="ol-act-t">取消订单</text></view>
+        </view>
+        <view class="k k-sm k-ink ol-act {{payingId === item.id ? 'ol-act-busy' : ''}}"
           hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去支付</view>
-        <view wx:if="{{item.status === 'shipped'}}" class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+      </view>
+      <view class="ol-acts" wx:elif="{{item.status === 'shipped'}}">
+        <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-id="{{item.id}}" catch:tap="onLogistics" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看物流</view>
+        <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
           data-id="{{item.id}}" catch:tap="onConfirm" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
+      </view>
+      <view class="ol-acts" wx:elif="{{item.status === 'done'}}">
+        <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-id="{{item.id}}" catch:tap="onReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
       </view>
     </view>
 

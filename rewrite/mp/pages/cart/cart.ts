@@ -1,4 +1,4 @@
-// 购物车页（v5「字重」稿 A4）：像素小货车（车斗箱数＝行数·最多 3）+ 已加购行（勾选/加减/按住删除）+ 小计 + 结算。
+// 购物车页（v5「字重」稿 A4）：像素小货车（车斗箱数＝已勾选行数·最多 3）+ 已加购行（勾选/加减/按住删除）+ 小计 + 结算。
 //   核心逻辑在 lib/cart 单源（结算走选中项）；结算时小货车先开走、等它出画面再跳确认订单。
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
@@ -10,11 +10,12 @@ import { getAllProducts } from '../../lib/catalog'
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint } from '../../lib/pxFx'
 
 let allRaw: Record<string, any>[] = [] // 全商品原档（刷新封面临时址·onLoad 拉一次）
 let hold: Hold | null = null // 当前按住删除的那一行（lib/hold）
-let toastTimer: ReturnType<typeof setTimeout> | null = null
 const HOLD_MS = 600 // 按住多久算删除（设计稿 data-ms=600）
+const cargoOf = (items: Array<{ selected: boolean }>) => Math.min(3, items.filter((it) => it.selected).length)
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -24,9 +25,8 @@ Page({
     items: cart.getItems(), // 首帧走本地车，不等云目录（有货时不闪「这里还没有东西」）
     selectedCount: cart.selectedCount(),
     totalLabel: cart.selectedTotalLabel(),
-    cargo: Math.min(3, cart.getItems().length), // 小货车车斗箱数（设计稿：行数·最多 3 箱）
+    cargo: cargoOf(cart.getItems()), // 小货车车斗箱数（设计稿 ca.cargo：已勾选行数·最多 3 箱）
     holding: '', // 正在按住删除的行 lineId（驱动红色填充进度）
-    toast: '',
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
   },
   ready: false, // 云目录首拉完成前 onShow 不重复 refresh（onLoad 已先本地刷一屏，避免与二次 refresh 互踩）
@@ -62,7 +62,7 @@ Page({
       items,
       selectedCount: cart.selectedCount(),
       totalLabel: cart.selectedTotalLabel(),
-      cargo: Math.min(3, items.length),
+      cargo: cargoOf(items),
     })
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart') // 角标随动
   },
@@ -81,7 +81,7 @@ Page({
     cart.bump(id, -1, sku) // 相对减·钳位 ≥1（减到 1 时减号换成「按住删除」）
     this.refresh()
   },
-  // 数量为 1 的行：按住 0.6s 删除；松手太快提示「按住删除」（设计稿：危险操作＝浅色键+红字+长按）
+  // 数量为 1 的行：按住 0.6s 删除并提示「已删除」；松手太快提示「按住删除」（设计稿：危险操作＝浅色键+红字+长按）
   onHoldStart(e: WechatMiniprogram.TouchEvent) {
     const { line, id, sku } = e.currentTarget.dataset as { line: string; id: string; sku: string }
     this.cancelHold()
@@ -91,8 +91,9 @@ Page({
         tapHaptic()
         cart.remove(id, sku)
         this.refresh()
+        fxHint(this, '已删除')
       },
-      { onQuick: () => this.ping('按住删除'), onChange: (v) => this.setData({ holding: v ? line : '' }) }
+      { onQuick: () => fxHint(this, '按住删除'), onChange: (v) => this.setData({ holding: v ? line : '' }) }
     )
     hold.start()
   },
@@ -101,14 +102,6 @@ Page({
   },
   cancelHold() {
     hold?.cancel()
-  },
-  ping(text: string) {
-    if (toastTimer) clearTimeout(toastTimer)
-    this.setData({ toast: text })
-    toastTimer = setTimeout(() => {
-      toastTimer = null
-      this.setData({ toast: '' })
-    }, 1400)
   },
   onOpen(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
@@ -124,7 +117,7 @@ Page({
     if (!this.data.selectedCount) {
       // 提示按「车里有没有东西」分流：空车时说「先勾选」是句废话——
       // 根本没有可勾的东西，用户会去找那个不存在的勾选框。
-      wx.showToast({ title: this.data.items.length ? '先勾选要买的宝贝' : '先挑一只喜欢的小鸭吧', icon: 'none' })
+      fxHint(this, this.data.items.length ? '先勾选要买的宝贝' : '先挑一只喜欢的小鸭吧')
       return
     }
     tapHaptic()

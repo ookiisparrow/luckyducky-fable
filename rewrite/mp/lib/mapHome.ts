@@ -3,7 +3,7 @@
 // 内容纪律：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
 
-import { BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
+import { BRAND_NAME, BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
 
 export interface ProductVM {
   id: string
@@ -125,7 +125,7 @@ const FAQ_DEFAULT: FaqVM[] = [
   { title: '大概需要多久完成？', body: '新手平均 3–4 小时即可完成一只，可分多次进行，随时暂停继续。' },
 ]
 const CLOSING_DEFAULT: ClosingVM = { title: '创造幸运', cta: BRAND_SLOGAN_EN, img: '' }
-const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky Ducky小棉鸭'], copy: 'Copyright © 2026 Lucky Ducky · All Rights Reserved.' }
+const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', BRAND_NAME], copy: 'Copyright © 2026 Lucky Ducky · All Rights Reserved.' }
 
 // ── 小工具 ──
 type Dict = Record<string, unknown>
@@ -153,12 +153,10 @@ const priceText = (v: unknown): string => {
   return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
 }
 
-/** 首页「购买」：货架上第一件名字带「小棉鸭」的套装；没有就不瞎跳旧 id。 */
+/** 首页「购买」/收尾键：货架上第一件名字带「小棉鸭」的套装。
+ *  线上还没上小棉鸭时先拿第一件商品占位（老板拍板 18）——占位＝将来小棉鸭的位置，上架后自动换成它；货架空才给 null。 */
 export function pickDuckKit(products: ProductVM[]): ProductVM | null {
-  for (const p of products) {
-    if (p.id && p.name.includes('小棉鸭')) return p
-  }
-  return null
+  return products.find((p) => p.id && p.name.includes('小棉鸭')) || products[0] || null
 }
 
 /** 商品列表 → 网格视图模型：无名/无价的脏行不进首页（fail-closed 展示面）；cover 空串由模板落占位块。 */
@@ -224,7 +222,7 @@ const footerLink = (x: unknown): string | null => {
   if (typeof x !== 'string' && typeof x !== 'number') return null
   const s = String(x).trim()
   if (!s) return null
-  return s === 'Lucky 鸭' ? 'Lucky Ducky小棉鸭' : s
+  return s === 'Lucky 鸭' || s === 'Lucky Ducky小棉鸭' ? BRAND_NAME : s // CMS 旧稿（旧名/没空格）按店名单源显示
 }
 
 /** 首页全板块内容 → 视图模型：整档 / 逐块 / 逐字段缺失都回退设计默认；脏项 fail-closed 剔除。 */

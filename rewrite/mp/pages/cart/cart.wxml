@@ -15,7 +15,8 @@
             </view>
           </view>
           <view class="ca-thumb" data-id="{{item.id}}" catch:tap="onOpen">
-            <image wx:if="{{item.cover}}" class="ca-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
+            <!-- 焦点 50% 40%（设计稿 object-position）：<image> 的 aspectFill 只能居中，改背景图定焦点 -->
+            <view wx:if="{{item.cover}}" class="ca-thumb-img" style="background-image: url('{{item.cover}}')"></view>
           </view>
           <view class="ca-mid" data-id="{{item.id}}" catch:tap="onOpen">
             <text class="ca-name">{{item.name}}</text>
@@ -25,10 +26,10 @@
             <text class="mono ca-price {{item.selected ? '' : 'ca-price-off'}}">¥{{item.price}}</text>
             <view class="ca-step">
               <!-- 数量 >1：减号；=1：红色 ×，按住 0.6s 删除（防误删·设计稿「危险操作用浅色键+红字+长按」） -->
-              <view wx:if="{{item.qty > 1}}" class="ca-step-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">
+              <view wx:if="{{item.qty > 1}}" class="ca-step-hit ca-step-l" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">
                 <view class="k k-sm k-light ca-step-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="minus" /></view>
               </view>
-              <view wx:else class="ca-step-hit" data-line="{{item.lineId}}" data-id="{{item.id}}" data-sku="{{item.sku}}"
+              <view wx:else class="ca-step-hit ca-step-l" data-line="{{item.lineId}}" data-id="{{item.id}}" data-sku="{{item.sku}}"
                 catch:touchstart="onHoldStart" catch:touchend="onHoldEnd" catch:touchcancel="onHoldEnd">
                 <view class="k k-sm k-light ca-step-key ca-del {{holding === item.lineId ? 'ca-del-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
                   <view class="ca-del-fill"></view>
@@ -36,7 +37,7 @@
                 </view>
               </view>
               <text class="mono ca-qty">{{item.qty}}</text>
-              <view class="ca-step-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">
+              <view class="ca-step-hit ca-step-r" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">
                 <view class="k k-sm k-light ca-step-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
               </view>
             </view>
@@ -66,8 +67,8 @@
   <view class="ca-tab-space"></view>
 </view>
 
-<!-- 轻提示（按住删除没按够时） -->
-<view class="ld-toast {{toast ? 'show' : ''}}"><text>{{toast}}</text></view>
+<!-- 自绘轻提示（按住删除/已删除/先勾选·lib/pxFx fxHint） -->
+<px-fx id="fx" />
 
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />

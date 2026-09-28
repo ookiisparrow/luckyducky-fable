@@ -1,7 +1,7 @@
 // 黄金 learning-content §九「首页内容公开读·无记录前端回退默认文案·空块仍用默认防误清空」
 // + 展示面 fail-closed（防「¥undefined」类真机事故·根因#8 展示层半边）。
 import { describe, it, expect } from 'vitest'
-import { BRAND_SLOGAN_CN, HOME_SHARE_TITLE, LEARNER_KIT } from '../lib/brand'
+import { BRAND_NAME, BRAND_SLOGAN_CN, HOME_SHARE_TITLE, LEARNER_KIT } from '../lib/brand'
 import { mapHero, mapProducts, mapHomeContent, pickDuckKit } from '../lib/mapHome'
 
 describe('首页 hero 映射（黄金 §九：缺档回退默认文案·不空屏不半空）', () => {
@@ -149,7 +149,7 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(d.faq[1].title).toBe('材料包里都有什么？')
     expect(d.faq[2].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
     expect(d.faq[2].body).not.toContain('七天')
-    expect(d.footer.links).toEqual(['关于我们', 'Lucky Ducky小棉鸭'])
+    expect(d.footer.links).toEqual(['关于我们', BRAND_NAME]) // 设计稿页脚「Lucky Ducky 小棉鸭」中间带空格＝店名单源
     expect(JSON.stringify(d)).not.toContain('七天无理由')
   })
 
@@ -160,17 +160,18 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
       faq: [{ title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，七天内不满意还可无理由退货。' }],
     })
     expect(d.trust[0].label).toBe('售后无忧')
-    expect(d.footer.links).toEqual(['Lucky Ducky小棉鸭'])
+    expect(d.footer.links).toEqual([BRAND_NAME])
+    expect(mapHomeContent({ footer: { links: ['Lucky Ducky小棉鸭'] } }).footer.links).toEqual([BRAND_NAME]) // 旧稿没空格也补上
     expect(d.faq[0].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
   })
 })
 
 describe('首页购买跳小棉鸭详情 pickDuckKit', () => {
-  it('大白话：货架上第一件名字带小棉鸭的就用它；没有就不瞎给旧 id', () => {
+  it('大白话：货架上第一件名字带小棉鸭的就用它；还没上小棉鸭就先拿第一件商品占位（拍板 18）；货架空才给 null', () => {
     const duck = { id: 'kit-2', name: '小棉鸭入门套装', tag: '', priceLabel: '¥128', wasLabel: '', cover: '' }
     const other = { id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }
     expect(pickDuckKit([other, duck])).toEqual(duck)
-    expect(pickDuckKit([other])).toBeNull()
+    expect(pickDuckKit([other])).toEqual(other)
     expect(pickDuckKit([])).toBeNull()
   })
 })

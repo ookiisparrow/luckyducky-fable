@@ -20,7 +20,9 @@ export interface OrderVM {
   items: OrderLineVM[]
   count: number
   amountLabel: string
+  createdAt: number // 下单时间戳（ms·脏/缺 0）：待支付倒计时起点（+ PAY_WINDOW_MS）
   createdAtLabel: string
+  doneDateLabel: string // 确认收货日期 YYYY-MM-DD（云端 confirmReceive 写 doneAt·旧单无则空串）
   trackingNo: string
   shipCompany: string
   shippedAtLabel: string
@@ -116,7 +118,9 @@ export function mapOrder(raw: unknown): OrderVM | null {
       o.status === 'payment_exception' && Number.isInteger(Number(o.paidFee)) && Number(o.paidFee) > 0
         ? money(Number(o.paidFee) / 100) || '¥0.00'
         : money(o.amount) || '¥0.00',
+    createdAt: Number.isFinite(Number(o.createdAt)) && Number(o.createdAt) > 0 ? Number(o.createdAt) : 0,
     createdAtLabel: dateTime(o.createdAt),
+    doneDateLabel: dateTime(o.doneAt).slice(0, 10),
     trackingNo: String(s.trackingNo || ''),
     shipCompany: String(s.company || ''),
     shippedAtLabel: dateTime(o.shippedAt),
@@ -143,20 +147,81 @@ export function countBadge(r: { ok?: boolean; list?: unknown; hasMore?: unknown 
 
 export type StepState = 'done' | 'cur' | 'todo'
 const STEP_LABELS = ['下单', '付款', '发货', '收货']
-// 各状态走到第几步（0 起）以及当前步是否已完成：done 状态四步全亮；关闭/未知只亮「下单」
-const STEP_AT: Record<string, { at: number; finished: boolean }> = {
-  pending: { at: 1, finished: false },
-  paid: { at: 2, finished: false },
-  shipped: { at: 3, finished: false },
-  done: { at: 3, finished: true },
+// 各状态「已走到的最后一步」下标（设计稿 logic sN）：进行中（待支付/待发货/待收货）那一步亮紫＝当前，
+// 其余走过的实心黑；完成四步全黑；待退款/支付异常钱付过→前两步黑、不亮紫；关闭/未知只亮「下单」。
+const STEP_AT: Record<string, number> = { pending: 0, paid: 1, shipped: 2, done: 3, closed: 0, refund_required: 1, payment_exception: 1 }
+const LIVE = ['pending', 'paid', 'shipped']
+
+/** 订单进度四步（v5 订单详情）：完成＝墨、当前＝紫、未到＝灰（设计稿 B2 steps）。 */
+export function orderSteps(status: string): Array<{ label: string; state: StepState }> {
+  const at = STEP_AT[status] ?? 0
+  const live = LIVE.includes(status)
+  return STEP_LABELS.map((label, i) => ({ label, state: live && i === at ? 'cur' : i <= at ? 'done' : 'todo' }))
 }
 
-/** 订单进度四步（v5 订单详情）：完成＝墨、当前＝紫、未到＝灰（设计规范「进度/等级」）。 */
-export function orderSteps(status: string): Array<{ label: string; state: StepState }> {
-  const s = STEP_AT[status]
-  return STEP_LABELS.map((label, i) => {
-    if (!s) return { label, state: i === 0 ? 'done' : 'todo' }
-    if (i < s.at || (i === s.at && s.finished)) return { label, state: 'done' }
-    return { label, state: i === s.at ? 'cur' : 'todo' }
-  })
+// 支付窗口（镜像 rewrite/shared/src/limits.ts PAY_WINDOW_MS·mp 进不了 @ldrw/shared；测试 orders-map 核同值）。
+// 只用于展示倒计时，真正关单由云端 closeExpiredOrders / pay 惰性关单裁决。
+export const PAY_WINDOW_MS = 15 * 60 * 1000
+const pad2 = (n: number) => String(n).padStart(2, '0')
+/** 待支付剩余 ms（缺下单时间回 -1＝不显示倒计时）；过点钳 0，不倒负。 */
+export const payLeftMs = (vm: OrderVM, now: number): number => (vm.createdAt ? Math.max(0, vm.createdAt + PAY_WINDOW_MS - now) : -1)
+export const mmss = (ms: number): string => {
+  const s = Math.floor(ms / 1000)
+  return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60)
+}
+
+/** 卡片/状态卡上的短状态名（设计稿 ST）：待发货在卡上叫「正在发货」，筛选标签仍用 statusLabel。 */
+export const cardLabel = (s: string): string => (s === 'paid' ? '正在发货' : statusLabel(s))
+
+// 状态灯（设计稿 LED）：灰点无光晕；其余带同色光晕（px-i halo 默认）
+const LED: Record<string, string> = { pending: '#F4BD3F', paid: '#8A5AE0', shipped: '#8A5AE0', refund_required: '#F4BD3F', payment_exception: '#D9483B' }
+export function orderLed(status: string): { tone: string; halo: string } {
+  const tone = LED[status]
+  return tone ? { tone, halo: '' } : { tone: 'rgba(17,17,17,.28)', halo: 'none' }
+}
+
+/** 订单卡右上角（设计稿 oview.right）：待支付给倒计时 cd，其余给小字 text。 */
+export function listRight(vm: OrderVM, now: number): { cd: string; text: string } {
+  if (vm.status === 'pending') {
+    const left = payLeftMs(vm, now)
+    return { cd: left < 0 ? '' : mmss(left), text: '' }
+  }
+  const text: Record<string, string> = {
+    paid: '48 小时内发货',
+    shipped: vm.shipCompany ? vm.shipCompany + ' · 派送中' : '派送中',
+    done: vm.doneDateLabel || vm.createdAtLabel,
+    refund_required: '待人工处理',
+    payment_exception: '待人工处理',
+  }
+  return { cd: '', text: text[vm.status] ?? vm.createdAtLabel }
+}
+
+/** 详情状态卡右侧小字（设计稿 logic subMap/subC）：tone err＝红、warn＝琥珀、''＝次要灰。 */
+export function detailSub(vm: OrderVM, now: number): { text: string; tone: '' | 'warn' | 'err' } {
+  switch (vm.status) {
+    case 'pending': {
+      const left = payLeftMs(vm, now)
+      if (left < 0) return { text: '', tone: '' }
+      return { text: mmss(left) + ' 后自动取消', tone: left < 60_000 ? 'err' : 'warn' }
+    }
+    case 'paid':
+      return { text: '商家会在 48 小时内发货', tone: '' }
+    case 'done':
+      return { text: vm.doneDateLabel ? vm.doneDateLabel + ' 已签收' : '', tone: '' }
+    case 'closed':
+      return { text: '订单已取消或超时未支付', tone: '' }
+    case 'refund_required':
+      return { text: '需人工退款', tone: 'warn' }
+    case 'payment_exception':
+      return { text: '待人工处理', tone: 'err' }
+    default:
+      return { text: '', tone: '' } // 待收货：预计送达时间没有数据源，留空不编
+  }
+}
+
+/** 写评价页地址（订单列表单件直达 / 详情逐件）：每段都 URL 编码（review.ts onLoad 逐个 decode）——
+ *  lineId 可能含 &/#（productId 拼规格），未编码会截断查询串。 */
+export function reviewUrl(orderId: string, line: { lineId: string; name: string; spec: string; cover: string }): string {
+  const q = (v: string) => encodeURIComponent(v || '')
+  return `/pages/review/review?orderId=${q(orderId)}&lineId=${q(line.lineId)}&name=${q(line.name)}&spec=${q(line.spec)}&cover=${q(line.cover)}`
 }

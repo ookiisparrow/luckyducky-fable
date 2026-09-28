@@ -3,8 +3,19 @@ page {
   background: var(--v5-canvas);
   color: var(--v5-ink);
 }
+/* 整页纵向三段：顶栏占位 / 滚动内容 / 底部发布栏（放弃拦截武装会冻结页面级滚动，滚动放 scroll-view 里） */
+.rv-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.rv-scroll {
+  flex: 1;
+  min-height: 0;
+}
+/* 蛋壳地面：顶栏下 120px 处落地（与其它地面场景同一条地面线） */
 .rv-egg {
-  padding: 0 16px 12px;
+  padding: 120px 16px 12px;
 }
 .rv-main {
   padding: 0 16px 16px;
@@ -12,9 +23,31 @@ page {
   flex-direction: column;
 }
 .rv-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rv-thumb {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  overflow: hidden;
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+}
+.rv-thumb-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.rv-item-t {
+  min-width: 0;
   font-size: 13px;
   font-weight: 300;
   color: var(--v5-ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rv-q {
   margin-top: 24px;
@@ -33,12 +66,40 @@ page {
   height: 56px;
   padding: 0;
 }
+/* 选中星键＝按下态（设计稿 stars：底 #f0f0ed、内阴影、下沉 1px） */
+.rv-star-on {
+  transform: translateY(1px);
+  background: #f0f0ed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
+}
+/* 没打分点发布：星排左右抖 360ms（设计稿 shake -6,6,-4,3,0） */
+.rv-shake {
+  animation: rv-shake 360ms linear;
+}
+@keyframes rv-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
 .rv-label {
   margin-top: 12px;
   text-align: center;
   font-size: 17px;
   font-weight: 500;
-  color: var(--v5-ink-3);
+  color: var(--v5-ink-2);
 }
 .rv-label.on {
   color: var(--v5-ink);
@@ -67,10 +128,21 @@ page {
   padding: 0 12px;
   font-size: 13px;
   font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
+  color: var(--v5-ink-2); /* 未选灰字（设计稿 chip off） */
+}
+.rv-tag-on {
+  color: var(--v5-ink);
+}
+/* 文字框固定 56 高 + 右侧 56×56「+」晒图键同一行 */
+.rv-write {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 .rv-text {
-  width: 100%;
-  min-height: 56px;
+  flex: 1;
+  min-width: 0;
+  height: 56px;
   padding: 12px;
   font-size: 17px;
   font-weight: 500;
@@ -112,6 +184,7 @@ page {
 .rv-add {
   width: 56px;
   height: 56px;
+  flex: 0 0 auto;
   padding: 0;
   color: var(--v5-ink-2);
 }
@@ -132,20 +205,9 @@ page {
   font-size: 17px;
   font-weight: 500;
 }
-.rv-anon-sub {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 
-.rv-dock-space {
-  height: calc(60px + max(28px, env(safe-area-inset-bottom)));
-}
 .rv-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 0 0 auto;
   padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   background: var(--v5-canvas);

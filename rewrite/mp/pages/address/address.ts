@@ -8,21 +8,32 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
-    list: [] as ReturnType<typeof addr.getList>,
+    list: [] as Array<ReturnType<typeof addr.getList>[number] & { phoneMasked: string }>,
     picking: false,
+  },
+  leaving: false, // 选中后等 140ms 才退回：期间连点不再退第二次（否则连退两页）
+  backTimer: null as ReturnType<typeof setTimeout> | null,
+  onUnload() {
+    if (this.backTimer) clearTimeout(this.backTimer) // 140ms 内用户自己退了：别再替他多退一页
   },
   onLoad(query: Record<string, string | undefined>) {
     this.setData({ picking: query.pick === '1' })
   },
   onShow() {
-    this.setData({ list: addr.getList() })
+    this.draw()
+  },
+  draw() {
+    this.setData({ list: addr.getList().map((a) => ({ ...a, phoneMasked: addr.maskPhone(a.phone) })) })
   },
   // 主区点选：结算态选中即默认并返回；管理态进编辑页（原语义不变）。
   onTapRow(e: WechatMiniprogram.TouchEvent) {
     const id = Number(e.currentTarget.dataset.id)
     if (this.data.picking) {
+      if (this.leaving) return
+      this.leaving = true
       addr.setDefault(id) // 选中即默认·结算页 onShow 取默认
-      wx.navigateBack()
+      this.draw() // 紫点先跳到这行
+      this.backTimer = setTimeout(() => wx.navigateBack(), 140) // 设计稿 addrPick：停 140ms 让人看见选中再退回
       return
     }
     wx.navigateTo({ url: '/pages/address-edit/address-edit?id=' + id })

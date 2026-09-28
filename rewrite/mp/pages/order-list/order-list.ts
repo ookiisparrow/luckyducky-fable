@@ -1,12 +1,16 @@
-// 我的订单：状态分栏 + 游标分页 + 待支付续付 + 确认收货。列表从云端拉取、无本地回退单。
+// 我的订单：状态分栏 + 游标分页 + 待支付续付（倒计时）+ 按住取消 + 查看物流 + 确认收货 + 写评价。列表从云端拉取、无本地回退单。
 import { tapHaptic } from '../../lib/haptics'
 import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrders, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
+import { mapOrders, cardLabel, orderLed, listRight, reviewUrl, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxToast } from '../../lib/pxFx'
+import { fxToast, fxHint } from '../../lib/pxFx'
+import { createHold, type Hold } from '../../lib/hold'
+
+const HOLD_MS = 700 // 按住多久算取消（设计稿 data-ms=700·拍板 7）
+let hold: Hold | null = null // 当前按住取消的那张卡（lib/hold）
 
 const TABS = [
   { key: '', label: '全部' },
@@ -30,15 +34,30 @@ const TINT: Record<string, string> = {
 const stripCny = (s: string): string => (s || '').replace(/^¥/, '')
 
 type LineRow = OrderLineVM & { priceNum: string }
-type OrderRow = Omit<OrderVM, 'items'> & { items: LineRow[]; tint: string; amountNum: string }
+type OrderRow = Omit<OrderVM, 'items'> & {
+  items: LineRow[]
+  thumbs: OrderLineVM[]
+  tint: string
+  amountNum: string
+  label: string
+  led: { tone: string; halo: string }
+  cd: string
+  right: string
+}
 
-// 视图装饰：附 tint + 拆分货币符号（不动 mapOrders 单源）。
+// 视图装饰：附 tint + 拆分货币符号 + 卡片状态名/状态灯/右上角（设计稿 B1 oview·不动 mapOrders 单源）。
 function decorate(o: OrderVM): OrderRow {
+  const r = listRight(o, Date.now())
   return {
     ...o,
     tint: TINT[o.status] || 'purple',
     amountNum: stripCny(o.amountLabel),
     items: o.items.map((l) => ({ ...l, priceNum: stripCny(l.priceLabel) })),
+    thumbs: o.items.slice(0, 3), // 缩略图最多 3 张（设计稿 thumbs.slice(0,3)）
+    label: cardLabel(o.status),
+    led: orderLed(o.status),
+    cd: r.cd,
+    right: r.text,
   }
 }
 
@@ -53,6 +72,7 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：一无所有时的网络失败态，与「暂无订单」分治
     hasMore: false,
     cursor: null as unknown,
+    holding: '', // 正在按住取消的订单 id（驱动键内红色进度条）
     payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
   },
@@ -62,15 +82,34 @@ Page({
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
   _swY: 0, // 手势起点 clientY
   _swT: 0, // 手势起点 timeStamp（ms）——一律用事件 timeStamp，不引 Date.now
+  _ticker: null as ReturnType<typeof setInterval> | null, // 待支付倒计时每秒刷新（onShow 起、onHide/onUnload 停）
   _animDir: '', // 待应用的滑入方向类（非渲染态）：switchTab 置、reload 成功落数据时消费一次；onShow/翻页 reload 读到空＝不动画
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
   },
   onUnload() {
     this.unloaded = true
+    this.onHide()
   },
   onShow() {
     void this.reload()
+    if (!this._ticker) this._ticker = setInterval(() => this.tick(), 1000)
+  },
+  onHide() {
+    hold?.cancel()
+    if (this._ticker) clearInterval(this._ticker)
+    this._ticker = null
+  },
+  // 待支付倒计时：只按路径键刷新待支付卡的 cd（不整表重发）；过点停在 00:00，真正关单以云端为准
+  tick() {
+    const now = Date.now()
+    const patch: Record<string, string> = {}
+    this.data.shown.forEach((o, i) => {
+      if (o.status !== 'pending') return
+      const cd = listRight(o as unknown as OrderVM, now).cd
+      if (cd !== o.cd) patch['shown[' + i + '].cd'] = cd
+    })
+    if (Object.keys(patch).length) this.setData(patch)
   },
   async reload() {
     // 状态筛选下推服务端（分页与过滤同源）：tabKey 作 status 传下去·从该 tab 重新分页。
@@ -216,19 +255,35 @@ Page({
       },
     })
   },
-  // 取消待支付单（破坏性·二次确认；仅 pending 出此入口·最终裁决在云端）
-  onCancel(e: WechatMiniprogram.TouchEvent) {
+  onLogistics(e: WechatMiniprogram.TouchEvent) {
+    wx.navigateTo({ url: '/pages/logistics/logistics?id=' + String(e.currentTarget.dataset.id) })
+  },
+  // 写评价：单件单直达评价页；多件单进详情逐件评（评价按行记·一行一评）
+  onReview(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
-    wx.showModal({
-      title: '取消订单',
-      content: '确定取消这笔待支付订单吗？取消后不可恢复。',
-      success: async (res) => {
-        if (!res.confirm) return
-        const r = await cancelOrder(id)
-        if (this.unloaded) return // await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
-        wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
-        void this.reload()
-      },
+    const o = this._all.find((x) => x.id === id)
+    if (o && o.items.length === 1) wx.navigateTo({ url: reviewUrl(id, o.items[0]) })
+    else wx.navigateTo({ url: '/pages/order/order?id=' + id })
+  },
+  noop() {},
+  // 取消待支付单（破坏性·按住 700ms 才取消，设计稿 data-hold；仅 pending 出此入口·最终裁决在云端）
+  onCancelStart(e: WechatMiniprogram.TouchEvent) {
+    const id = String(e.currentTarget.dataset.id)
+    hold?.cancel()
+    hold = createHold(HOLD_MS, () => void this.cancelNow(id), {
+      onQuick: () => fxHint(this, '按住取消订单'),
+      onChange: (v) => this.setData({ holding: v ? id : '' }),
     })
+    hold.start()
+  },
+  onCancelEnd() {
+    hold?.end()
+  },
+  async cancelNow(id: string) {
+    tapHaptic()
+    const r = await cancelOrder(id)
+    if (this.unloaded) return // await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
+    wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
+    void this.reload()
   },
 })

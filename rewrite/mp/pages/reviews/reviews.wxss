@@ -22,7 +22,7 @@ page {
 .rv-num {
   font-size: 43px;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: normal; /* 设计稿 A3 未设行高 */
 }
 .rv-count {
   font-size: 13px;
@@ -47,8 +47,8 @@ page {
 /* 分段条：高 4、每段 4 间隔 2、直角（设计规范·像素小元素） */
 .rv-track {
   position: relative;
-  flex: 1;
-  max-width: 142px;
+  flex: 0 0 auto;
+  width: 142px; /* 24 格 × 6px − 2（亮条宽按格取整，见 mapReviews mapSummary） */
   height: 4px;
   background: repeating-linear-gradient(90deg, #e0e1d9 0 4px, transparent 4px 6px);
 }
@@ -126,16 +126,36 @@ page {
   font-weight: 500;
   line-height: 1.55;
 }
-.rv-pics {
+.rv-pics-row {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
+  width: max-content;
 }
 .rv-pic {
+  flex: 0 0 auto;
   width: 56px;
   height: 56px;
   border-radius: 4px;
-  background: var(--v5-sunk);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px); /* 设计稿 A3 占位斜纹 */
+}
+/* 标签筛选后为空（设计稿 A3） */
+.rv-none {
+  padding: 32px 0;
+  border-top: 1px solid var(--v5-hair);
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
+}
+.rv-loading {
+  padding: 2px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 .rv-skel-bar {
   height: 17px;
@@ -162,6 +182,16 @@ page {
 }
 .rv-retry {
   margin-top: 8px;
+  width: 120px;
+}
+/* 失败态（设计稿 E2）：上边距落在信号动画上＝88，间距 12 */
+.rv-fail {
+  padding-top: 0;
+  gap: 12px;
+}
+.rv-signal {
+  padding-top: 88px;
+  display: flex;
 }
 .rv-more {
   padding: 16px 0;

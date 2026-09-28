@@ -3,6 +3,16 @@ page {
   background: var(--v5-canvas);
   color: var(--v5-ink);
 }
+/* 整页一列：顶栏 + 表单（scroll-view 自己滚·leave-sheet 武装时页面级滚动被冻结）+ 底部键 */
+.ae-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.ae-scroll {
+  flex: 1;
+  height: 0;
+}
 .ae {
   padding: 4px 16px 16px;
   display: flex;
@@ -27,6 +37,18 @@ page {
   font-weight: 500;
   color: var(--v5-ink);
 }
+/* 详细地址（设计稿 L261）：最小高 64、内边距 16、行高 1.5、随内容长高。
+   auto-height 由组件按内容写高度，用 content-box 让内边距加在外面不被吃掉（总高仍 ≥64） */
+.ae-area {
+  box-sizing: content-box;
+  width: calc(100% - 32px);
+  min-height: 32px;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--v5-ink);
+}
 .ae-mono {
   font-family: var(--v5-font-mono);
   font-size: 15px;
@@ -46,7 +68,10 @@ page {
   font-weight: 300;
   color: var(--v5-warn-text);
 }
+/* 地区框：平面键手感（按下沉 2px·松手回弹·同 .k） */
 .ae-region {
+  transition: transform 260ms cubic-bezier(0.2, 2.6, 0.5, 1), box-shadow 260ms cubic-bezier(0.25, 0.8, 0.35, 1),
+    background-color 180ms ease-out;
   height: 44px;
   padding: 0 16px;
   display: flex;
@@ -99,14 +124,8 @@ page {
   left: 25px;
 }
 
-.ae-dock-space {
-  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
-}
 .ae-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 0 0 auto;
   padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   gap: 8px;

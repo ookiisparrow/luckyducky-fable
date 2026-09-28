@@ -27,12 +27,15 @@
     <view wx:else class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLoginTap" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">登录</view>
   </view>
 
-  <!-- 继续学习：有卡 / 取数失败（失败≠没进度，不显假空态）/ 真无课（contLoaded 后）/ 加载中骨架 -->
-  <view wx:if="{{cont}}" class="me-card" hover-start-time="20" hover-class="k-row-down" bind:tap="onContinue">
+  <!-- 继续学习（只给已登录的人看·设计稿 me.cont 以 loggedIn 为前提）：有卡 / 取数失败（失败≠没进度，不显假空态）/ 真无课（contLoaded 后）/ 加载中骨架。
+       按卡片＝右侧播放键下沉（设计稿按卡时下沉卡内的 data-k 键，整卡不变灰）。
+       缩略图：课程数据（publicCourse）不带封面图，这里一直是斜纹占位。 -->
+  <block wx:if="{{loggedIn}}">
+  <view wx:if="{{cont}}" class="me-card" hover-start-time="20" hover-class="me-card-down" hover-stay-time="100" bind:tap="onContinue">
     <view class="me-thumb"></view>
     <view class="me-card-t">
-      <text class="t-sys me-card-sub">{{cont.courseTitle}}</text>
-      <text class="me-card-main">{{cont.lessonName}}</text>
+      <text class="t-sys me-card-sub">继续学习 · {{cont.courseTitle}}</text>
+      <text class="me-card-main">{{contMain || cont.lessonName}}</text>
     </view>
     <view class="k k-ink me-play"><px-i name="play" /></view>
   </view>
@@ -52,8 +55,9 @@
       <view class="skel me-skel-s"></view>
     </view>
   </view>
+  </block>
 
-  <!-- 订单四格（v5 D1）：数字 + 标签；待支付有单亮紫灯；「全部」格换箭头。三格带 data-tab 直落分栏（order-list.ts query.tab 契约） -->
+  <!-- 订单四格（v5 D1）：数字 + 标签；三格有单都亮紫灯；「全部」格换箭头。三格带 data-tab 直落分栏（order-list.ts query.tab 契约） -->
   <view class="me-grid">
     <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top">
@@ -63,11 +67,17 @@
       <text class="t-sys me-cell-l">待支付</text>
     </view>
     <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <view class="me-cell-top"><text class="me-cell-n {{counts.paid && counts.paid !== '0' ? '' : 'me-cell-zero'}}">{{counts.paid || '-'}}</text></view>
+      <view class="me-cell-top">
+        <text class="me-cell-n {{counts.paid && counts.paid !== '0' ? '' : 'me-cell-zero'}}">{{counts.paid || '-'}}</text>
+        <px-i wx:if="{{counts.paid && counts.paid !== '0'}}" name="led" tone="#8a5ae0" />
+      </view>
       <text class="t-sys me-cell-l">待发货</text>
     </view>
     <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <view class="me-cell-top"><text class="me-cell-n {{counts.shipped && counts.shipped !== '0' ? '' : 'me-cell-zero'}}">{{counts.shipped || '-'}}</text></view>
+      <view class="me-cell-top">
+        <text class="me-cell-n {{counts.shipped && counts.shipped !== '0' ? '' : 'me-cell-zero'}}">{{counts.shipped || '-'}}</text>
+        <px-i wx:if="{{counts.shipped && counts.shipped !== '0'}}" name="led" tone="#8a5ae0" />
+      </view>
       <text class="t-sys me-cell-l">待收货</text>
     </view>
     <view wx:if="{{entries.orders.visible}}" class="k k-flat me-cell" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">

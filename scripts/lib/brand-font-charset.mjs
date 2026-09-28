@@ -56,9 +56,9 @@ function wxmlCJK(src, into) {
 }
 
 // ---------- ts/js 字符串字面量抽取（跳过注释；' " ` 三种；模板字面量跳 ${…}） ----------
-// dropNativeUi：系统弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast）括号里的
+// dropNativeUi：系统弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast、fxHint）括号里的
 // 字面量不收——原生界面或系统字，不用圆体。
-const NATIVE_UI_AT = /(?:wx\.(?:showToast|showModal|showLoading|showActionSheet)|ping|fxToast)\(/y
+const NATIVE_UI_AT = /(?:wx\.(?:showToast|showModal|showLoading|showActionSheet)|ping|fxToast|fxHint)\(/y
 function extractStringLiterals(src, { dropNativeUi = false } = {}) {
   const out = []
   let i = 0

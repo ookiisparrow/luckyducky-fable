@@ -79,6 +79,7 @@
         "checkout",
         "order",
         "order-list",
+        "logistics",
         "paysuccess",
         "aftersales",
         "address",

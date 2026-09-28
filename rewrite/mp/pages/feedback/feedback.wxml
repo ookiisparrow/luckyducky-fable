@@ -1,7 +1,10 @@
 <!-- 意见反馈（v5「字重」稿 D4）：分类分段（凹槽底 + 选中浅色键亮紫灯）→ 正文凹槽 + 字数 → 联系方式 → 底部提交。
-     业务全承接 feedback.ts：cats/cat→onCat、content→onContent、contact→onContact、busy/onSubmit 提交。 -->
-<v5-nav title="意见反馈" />
+     业务全承接 feedback.ts：cats/cat→onCat、content→onContent、contact→onContact、busy/ok/onSubmit 提交。
+     写了东西（dirty）就由 <leave-sheet> 拦返回先问；拦截武装会冻页面级滚动，所以内容套 <scroll-view>。 -->
+<view class="fb-page">
+<v5-nav title="意见反馈" guard="{{true}}" bind:back="onBack" />
 
+<scroll-view class="fb-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
 <view class="fb">
   <text class="fb-title">说说你的想法</text>
 
@@ -16,20 +19,26 @@
 
   <!-- 提示语不写字数上限（窄屏折行会把「500」拆开）；右下计数已在说 -->
   <view class="fb-area-wrap">
-    <textarea class="well fb-area" value="{{content}}" bind:input="onContent" maxlength="500"
+    <textarea class="well fb-area {{focus === 'content' ? 'well-focus' : ''}}" value="{{content}}" bind:input="onContent" maxlength="500"
+      data-f="content" bind:focus="onFocus" bind:blur="onBlur"
       placeholder="遇到的问题，或者希望我们改进的地方…" placeholder-class="fb-ph" />
-    <text class="mono fb-count">{{content.length}}/500</text>
+    <text class="mono fb-count">{{content.length}} / 500</text>
   </view>
 
   <view class="fb-field">
     <text class="t-sys fb-label">联系方式 · 选填</text>
-    <input class="well fb-input" value="{{contact}}" bind:input="onContact" maxlength="100"
+    <input class="well fb-input {{focus === 'contact' ? 'well-focus' : ''}}" value="{{contact}}" bind:input="onContact" maxlength="100"
+      data-f="contact" bind:focus="onFocus" bind:blur="onBlur"
       placeholder="微信号或手机号，方便回复你" placeholder-class="fb-ph" />
   </view>
 </view>
+</scroll-view>
 
-<view class="fb-dock-space"></view>
 <view class="fb-dock">
-  <view wx:if="{{content && !busy}}" class="k k-ink k-48 fb-submit" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">提交</view>
+  <view wx:if="{{ok && !busy}}" class="k k-ink k-48 fb-submit" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">提交</view>
   <view wx:else class="k k-flat k-48 fb-submit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">提交</view>
 </view>
+</view>
+
+<leave-sheet id="leave" dirty="{{dirty}}" title="放弃这条反馈？" sub="写的内容不会保存。" />
+<px-fx id="fx" />

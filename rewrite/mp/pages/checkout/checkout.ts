@@ -10,12 +10,22 @@ import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint } from '../../lib/pxFx'
+
+const SUBMITTED_MS = 600 // 设计稿 submitOrder：建单成功后按键打勾「已提交」停 600ms 再拉起支付
+// 取消支付提示（老板拍板 4·设计稿 payClose）。15 分钟＝云端付款时限 shared PAY_WINDOW_MS（小程序进不了 shared，
+// 手抄一份；u-mp-checkout-pay.test 读云端源码对数，改一边那里就红）
+const PAY_CANCEL_TIP = '订单已保存，请在 15 分钟内支付'
+
+type Addr = NonNullable<ReturnType<typeof addr.defaultAddress>>
+/** 地址卡展示（设计稿 co.who / co.where）：姓名 · 打码手机号一行；省市区去空格直接接详址。下单仍用原始字段。 */
+const view = (a: Addr) => ({ ...a, who: a.name + ' · ' + addr.maskPhone(a.phone), where: a.region.replace(/ /g, '') + a.detail })
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
-    address: null as ReturnType<typeof addr.defaultAddress>,
+    address: null as (Addr & { who: string; where: string }) | null,
     items: [] as Array<checkout.DraftLine & { priceNum: string }>,
     addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
@@ -23,6 +33,7 @@ Page({
     amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
     count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
+    submitted: false, // 建单成功：按键打勾「已提交」（拉起支付前的 600ms 展示·锁仍由 submitting 管）
     cargo: 0, // 小货车车斗箱数（商品行数·最多 3）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
@@ -74,8 +85,9 @@ Page({
     // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。
     const draft = checkout.getDraft()
     const s = checkout.summaryFen()
+    const a = addr.defaultAddress()
     this.setData({
-      address: addr.defaultAddress(),
+      address: a && view(a),
       items: draft.items.map((l) => ({ ...l, cover: freshCover(l, allRaw), priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
       cargo: Math.min(3, draft.items.length),
       addons: checkout.sellableAddons().map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
@@ -98,7 +110,7 @@ Page({
     if (this.data.submitting) return
     const a = this.data.address
     if (!a) {
-      wx.showToast({ title: '请先添加收货地址', icon: 'none' })
+      fxHint(this, '先添加收货地址')
       return
     }
     tapHaptic()
@@ -143,7 +155,7 @@ Page({
       wx.showToast({ title: checkout.mapCreateOrderError(errCode), icon: 'none' })
       return
     }
-    // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消/失败→switchTab 首页），
+    // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消→redirectTo 订单详情、失败→弹窗后 switchTab 首页），
     // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
     // 成功页金额用回包权威值（order.amount）：前端 summaryFen 是本地估算，缺货重试/搭配购变化等场景可能与云端现算分叉；
     // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用。
@@ -156,6 +168,9 @@ Page({
       this.toSuccess(order.id, amountFen) // mock 模式建单即付（开发环境）——直接进成功页
       return
     }
+    // 按键先打勾「已提交」停一下再拉支付（设计稿）；只是展示延时，建单/幂等/支付各仍只发一次
+    this.setData({ submitted: true })
+    await new Promise((r) => setTimeout(r, SUBMITTED_MS))
     await this.startPay(String(order.id || ''), amountFen)
   },
   // 付款成功：小货车开走不回来（设计稿转场），出画面再换到成功页；车没动（组件未就绪/测试桩）就直接换
@@ -184,9 +199,16 @@ Page({
       wx.requestPayment({
         ...outcome.payment,
         success: () => this.toSuccess(orderId, amountFen),
-        // 取消/失败：订单保留待支付（支付窗口内可续付·订单列表/详情页见 me.ts onOrders 入口）
-        fail: (res) =>
-          failModal(String(res.errMsg || '').includes('cancel') ? '支付已取消' : '支付没成功', '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。'),
+        // 取消：订单保留待支付——提示时限并换到这张订单的详情页（老板拍板 4·设计稿 payClose），在那里可继续支付；
+        // 换页后本页没了，用原生提示（跨页还在）。失败（非取消）：弹窗说明后回首页（订单同样保留）
+        fail: (res) => {
+          if (String(res.errMsg || '').includes('cancel')) {
+            wx.showToast({ title: PAY_CANCEL_TIP, icon: 'none', duration: 2500 })
+            wx.redirectTo({ url: '/pages/order/order?id=' + orderId })
+            return
+          }
+          failModal('支付没成功', '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。')
+        },
       })
       return
     }

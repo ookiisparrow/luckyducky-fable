@@ -32,6 +32,7 @@ beforeAll(() => {
 wx.showToast({ title: '网络异常', icon: 'none' })
 wx.showModal({ title: '确认删除', content: '删除后不能恢复' })
 this.ping('收藏成功')
+fxHint(this, '敬请期待')
 const BODY = '我们希望每个人都能亲手创造自己的随身幸运物件这是一段长长的正文说明'`
   )
   w('rewrite/mp/pages/doc/doc.wxml', '<view class="doc-h">协议</view>')
@@ -50,7 +51,7 @@ describe('品牌字体挑字口径（只收真用圆体显示的字）', () => {
 
   it('大白话：黑体正文（含嵌套）、等宽数字、输入框、系统弹窗/提示、长段正文、云端报错文案都不收', () => {
     const all = new Set([...tiers.tier1, ...tiers.tier2])
-    for (const t of ['正文段落嵌套', '单号', '请输入昵称写点什么', '网络异常确认删除后不能恢复收藏成功', '我们希望每个人都能亲手', '库存不足请稍后']) {
+    for (const t of ['正文段落嵌套', '单号', '请输入昵称写点什么', '网络异常确认删除后不能恢复收藏成功敬请期待', '我们希望每个人都能亲手', '库存不足请稍后']) {
       expect([...t].filter((c) => all.has(c)).join(''), t).toBe('')
     }
   })

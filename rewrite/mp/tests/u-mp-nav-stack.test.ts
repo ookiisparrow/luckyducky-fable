@@ -54,8 +54,7 @@ const ENTRIES: Array<[string, () => Promise<string>]> = [
       const page = await mount('../pages/order/order')
       page.data.vm = { id: 'o1', status: 'done', items: [{ lineId: 'L1', name: '小鸭', spec: '', qty: 1, enteredQty: 0, refundable: true }] }
       await page.onAfterSale()
-      wxMock.showActionSheet.mock.calls[0][0].success({ tapIndex: 0 })
-      await wxMock.showModal.mock.calls[0][0].success({ confirm: true, content: '' })
+      await page.onAsSubmit()
       return '/pages/aftersales/aftersales'
     },
   ],

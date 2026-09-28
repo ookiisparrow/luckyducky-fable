@@ -76,3 +76,18 @@ describe('详情页加购：划线价不高于现价不透传', () => {
     expect(buyNowMock.mock.calls[0][0]).toMatchObject({ id: 'p1', sku: '大号', name: '小鸭', tag: '热卖', price: 198, cover: 'cloud://c1' })
   })
 })
+
+describe('详情页切款式', () => {
+  it('大白话：翻到第 2 张图再换款式——价格跟着变，图集回到第 1 张（swiper current 绑 galleryIndex，平滑滑回）', async () => {
+    const page = await mount(VM, 0)
+    page.data.galleryIndex = 1
+    page.setData = function (patch: Record<string, unknown>) {
+      Object.assign(this.data as Record<string, unknown>, patch)
+    }
+    page.onSelectSku({ currentTarget: { dataset: { index: 1 } } })
+    expect(page.data.skuIndex).toBe(1)
+    expect(page.data.currentPriceNum).toBe(98)
+    expect(page.data.galleryIndex).toBe(0)
+    expect(page.data.galleryWindow).toEqual([true, true])
+  })
+})

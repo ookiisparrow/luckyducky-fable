@@ -33,7 +33,7 @@ const fill = (page: Record<string, any>, content: string, contact = '', cat = ''
 
 beforeEach(() => {
   callAppMock.mockReset().mockResolvedValue({ ok: true })
-  wxMock = { showToast: vi.fn(), navigateBack: vi.fn() }
+  wxMock = { showToast: vi.fn(), showLoading: vi.fn(), hideLoading: vi.fn(), navigateBack: vi.fn() }
   ;(globalThis as any).wx = wxMock
 })
 afterEach(() => {
@@ -41,12 +41,12 @@ afterEach(() => {
 })
 
 describe('意见反馈：提交', () => {
-  it('大白话：什么都没写或只打了空格——提示「说点什么吧」，不发请求', async () => {
+  it('大白话：什么都没写或只打了空格——提示「写点什么吧」，不发请求', async () => {
     const page = await mount()
     await page.onSubmit()
     fill(page, '   ')
     await page.onSubmit()
-    expect(toastTitles()).toEqual(['说点什么吧', '说点什么吧'])
+    expect(toastTitles()).toEqual(['写点什么吧', '写点什么吧'])
     expect(callAppMock).not.toHaveBeenCalled()
   })
 
@@ -65,12 +65,12 @@ describe('意见反馈：提交', () => {
     })
   })
 
-  it('大白话：提交成功——提示「收到，谢谢你」并挡住点击，0.8 秒后退回；这期间再点提交不会重发', async () => {
+  it('大白话：提交成功——提示「已收到，谢谢你」并挡住点击，0.8 秒后退回；这期间再点提交不会重发', async () => {
     vi.useFakeTimers()
     const page = await mount()
     fill(page, '好用')
     await page.onSubmit()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '收到，谢谢你', icon: 'success', mask: true })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已收到，谢谢你', icon: 'success', mask: true })
     expect(page.data.busy).toBe(true)
     await page.onSubmit()
     expect(callAppMock).toHaveBeenCalledTimes(1)
@@ -102,6 +102,51 @@ describe('意见反馈：提交', () => {
     expect(callAppMock).toHaveBeenCalledTimes(1)
     release({ ok: false, error: 'X' })
     await first
+  })
+})
+
+describe('意见反馈：v5 设计稿对齐', () => {
+  it('大白话：提交中挂「提交中」加载框，回包后先收加载框再提示', async () => {
+    const page = await mount()
+    fill(page, '内容')
+    callAppMock.mockResolvedValueOnce({ ok: false, error: 'X' })
+    await page.onSubmit()
+    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '提交中', mask: true })
+    expect(wxMock.hideLoading).toHaveBeenCalledTimes(1)
+    expect(wxMock.hideLoading.mock.invocationCallOrder[0]).toBeLessThan(wxMock.showToast.mock.invocationCallOrder[0])
+  })
+
+  it('大白话：只打空格——提交键不亮、也不算写了东西；正文或联系方式真有字才算「有改动」', async () => {
+    const page = await mount()
+    fill(page, '   ', '  ')
+    expect(page.data.ok).toBe(false)
+    expect(page.data.dirty).toBe(false)
+    fill(page, '  ', 'wx1')
+    expect(page.data.ok).toBe(false)
+    expect(page.data.dirty).toBe(true)
+    fill(page, '好用')
+    expect(page.data.ok).toBe(true)
+    expect(page.data.dirty).toBe(true)
+  })
+
+  it('大白话：提交成功后不再算「有改动」（随后自动返回不被放弃确认拦）', async () => {
+    const page = await mount()
+    fill(page, '好用')
+    await page.onSubmit()
+    expect(page.data.dirty).toBe(false)
+  })
+
+  it('大白话：顶栏返回交给放弃确认半屏（有改动先问，没改动它自己直接走）', async () => {
+    const page = await mount()
+    const ask = vi.fn()
+    page.selectComponent = (sel: string) => (sel === '#leave' ? { ask } : null)
+    page.onBack()
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：计数写成「0 / 500」', async () => {
+    const { default: wxml } = await import('../pages/feedback/feedback.wxml?raw')
+    expect(wxml).toContain('{{content.length}} / 500')
   })
 })
 

@@ -1,0 +1,33 @@
+<!-- 物流页壳（v5 设计稿「物流轨迹」341-350·拍板 8）：小货车 → 承运方 13/300 + 22px 等宽运单号 + 平面「复制」键 →
+     「查看物流详情」进快递100 插件（打不开复制运单号兜底）。不做假时间轴；逻辑承接 logistics.ts。 -->
+<v5-nav title="物流轨迹" />
+
+<view class="lg-truck"><px-truck pose="{{pose}}" cargo="{{cargo}}" /></view>
+
+<block wx:if="{{trackingNo}}">
+  <view class="lg-no">
+    <view class="lg-no-l">
+      <text class="t-sys lg-co" wx:if="{{company}}">{{company}}</text>
+      <text class="mono lg-track">{{trackingNo}}</text>
+    </view>
+    <view class="k k-sm k-flat lg-copy" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onCopy" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
+  </view>
+  <view class="lg-more">
+    <view class="k k-light k-48" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onOpen" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看物流详情</view>
+    <text class="t-sys lg-note">物流状态以承运方为准</text>
+  </view>
+</block>
+
+<view class="lg-skel" wx:elif="{{loading}}">
+  <view class="lg-skel-bar skel" style="width: 72px"></view>
+  <view class="lg-skel-bar lg-skel-big skel" style="width: 70%"></view>
+</view>
+
+<!-- 失败态与「还没有运单」分治（根因#14）：弱网给重试，不误报没发货 -->
+<view class="lg-state" wx:elif="{{loadFailed}}">
+  <text class="lg-state-t">网络开小差</text>
+  <view class="k k-light lg-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
+</view>
+<view class="lg-state" wx:else>
+  <text class="t-sys lg-note">商家发货后这里会显示运单号</text>
+</view>

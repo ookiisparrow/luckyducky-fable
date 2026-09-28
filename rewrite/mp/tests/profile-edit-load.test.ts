@@ -73,27 +73,49 @@ describe('编辑资料加载中/登录失败不画空白档案', () => {
   })
 })
 
-describe('编辑资料放弃确认（v5「放弃编辑确认」半屏）', () => {
-  it('大白话：没改动点返回直接走；改了昵称/手机号/选了新头像点返回先弹确认，点「放弃」才走', async () => {
+describe('编辑资料放弃确认（共用 <leave-sheet>·连侧滑/安卓返回一起拦）', () => {
+  it('大白话：「有改动」＝载入后改了昵称/手机号/选了新头像；改回原样不算；保存在途不算', async () => {
     loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉', phone: '' } })
     const page = await mount()
     await page.onLoad()
-    page.onBack()
-    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledTimes(1)
-
+    expect(page.data.dirty).toBe(false)
     page.onNickname({ detail: { value: '棉花' } })
-    page.onBack()
-    expect(page.data.leaveOpen).toBe(true)
-    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledTimes(1)
-    page.onLeaveStay()
-    expect(page.data.leaveOpen).toBe(false)
-
+    expect(page.data.dirty).toBe(true)
     page.onNickname({ detail: { value: '棉棉' } }) // 改回原样＝没改动
+    expect(page.data.dirty).toBe(false)
+    page.onPhone({ detail: { value: '138' } })
+    expect(page.data.dirty).toBe(true)
+    page.onPhone({ detail: { value: '' } })
     page.onChooseAvatar({ detail: { avatarUrl: 'wxfile://tmp.png' } })
+    expect(page.data.dirty).toBe(true)
+  })
+
+  it('大白话：资料没载入（登录失败）时怎么都不算有改动', async () => {
+    loginMock.mockResolvedValue({ ok: false })
+    const page = await mount()
+    await page.onLoad()
+    page.onNickname({ detail: { value: '棉花' } })
+    expect(page.data.dirty).toBe(false)
+  })
+
+  it('大白话：顶栏返回交给放弃确认半屏（它按有无改动决定先问还是直接走）', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉' } })
+    const page = await mount()
+    await page.onLoad()
+    const ask = vi.fn()
+    page.selectComponent = (sel: string) => (sel === '#leave' ? { ask } : null)
     page.onBack()
-    expect(page.data.leaveOpen).toBe(true)
-    page.onLeaveGo()
-    expect(page.data.leaveOpen).toBe(false)
-    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledTimes(2)
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('编辑资料保存提示', () => {
+  it('大白话：昵称清空点保存——提示「昵称不能为空」，不发请求', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉' } })
+    const page = await mount()
+    await page.onLoad()
+    page.onNickname({ detail: { value: '   ' } })
+    await page.onSave()
+    expect((globalThis as any).wx.showToast).toHaveBeenCalledWith({ title: '昵称不能为空', icon: 'none' })
   })
 })

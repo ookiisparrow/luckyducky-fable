@@ -17,6 +17,17 @@ page {
   width: 100%;
   height: 100%;
 }
+.pd-slide {
+  overflow: hidden;
+}
+/* 裁切焦点 50% 40%（设计稿 object-position）：widthFix 图按宽铺满，top 40% + translateY(-40%)＝上移（图高−框高）×40%。
+   横图不挂本类（detail.ts onImgLoad）。同 home.wxss .focus-img。 */
+.focus-img {
+  position: absolute;
+  left: 0;
+  top: 40%;
+  transform: translateY(-40%);
+}
 .pd-fade-top {
   position: absolute;
   left: 0;
@@ -54,7 +65,7 @@ page {
 }
 .pd-dot.on {
   width: 12px;
-  background: var(--v5-ink);
+  background: var(--v5-violet);
 }
 .pd-gi {
   font-size: 13px;
@@ -210,9 +221,10 @@ page {
   color: var(--v5-ink-2);
 }
 
-/* 底部操作区：客服 48 方键 + 加购 1 : 直买 1.25 */
+/* 底部操作区：客服 48 方键 + 加购 1 : 直买 1.25
+   垫高＝操作栏高（上 12 + 键 48 + 底 max(28,安全区)）+ 16 留白 = 76 + max(28,安全区) */
 .pd-dock-space {
-  height: calc(88px + max(28px, env(safe-area-inset-bottom)));
+  height: calc(76px + max(28px, env(safe-area-inset-bottom)));
 }
 .pd-dock {
   position: fixed;
@@ -274,4 +286,13 @@ page {
 }
 .pd-state-btn {
   margin-top: 8px;
+  width: 120px;
+}
+/* 失败态（设计稿 E2）：上边距落在信号动画上＝88 */
+.pd-fail {
+  padding-top: 0;
+}
+.pd-signal {
+  padding-top: 88px;
+  display: flex;
 }

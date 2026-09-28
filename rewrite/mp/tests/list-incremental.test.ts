@@ -17,7 +17,8 @@ vi.mock('../api/orders', () => ({
   cancelOrder: vi.fn(),
 }))
 vi.mock('../lib/payFlow', () => ({ mapPayResult: vi.fn() }))
-vi.mock('../lib/mapOrders', () => ({
+vi.mock('../lib/mapOrders', async (orig) => ({
+  ...(await orig<typeof import('../lib/mapOrders')>()), // 卡片装饰（状态名/状态灯/右上角）用真的
   mapOrders: (list: Array<{ id: string }>) =>
     list.map((o) => ({ id: o.id, status: 'pending', amountLabel: '¥1', items: [], createdAtLabel: '', statusLabel: '', count: 1 })),
 }))

@@ -1,11 +1,12 @@
 <!-- 确认订单（v5「字重」稿 A5）：开进来的小货车 + 地址卡 + 商品卡 + 搭配购（设计稿未画·真实在卖保留）+ 点线明细；
      底部 应付 + 提交（在途换像素 loader）。业务逻辑全在 checkout.ts：地址(onPickAddress)/搭配购(onToggleAddon)/提交(onSubmit)。
-     顾客页不展示券类折扣（已拍板·no-customer-coupon-ui 测试钉）。商品数量只读（草稿单源）。 -->
-<v5-nav title="确认订单" />
-
+     顾客页不展示券类折扣（已拍板·no-customer-coupon-ui 测试钉）。商品数量只读（草稿单源）。
+     整页一列（设计稿 L212-213）：顶栏 + 小货车固定在滚动区外，只有中间内容滚，底部应付/提交也不动。 -->
 <view class="co">
+  <v5-nav title="确认订单" />
   <view class="co-truck"><px-truck id="truck" pose="drive" arrive="160" cargo="{{cargo}}" /></view>
 
+  <scroll-view class="co-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
   <view class="co-body">
     <!-- 收货地址 -->
     <view wx:if="{{address}}" class="k-card co-card co-addr" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
@@ -13,11 +14,8 @@
         <text class="t-sys co-k">收货地址</text>
         <view class="t-sys co-change"><text>更换</text><px-i name="arrow" /></view>
       </view>
-      <view class="co-who">
-        <text class="t-sys">{{address.name}}</text>
-        <text class="mono co-phone">{{address.phone}}</text>
-      </view>
-      <text class="t-sys co-where">{{address.region}} {{address.detail}}</text>
+      <text class="t-sys co-who">{{address.who}}</text>
+      <text class="t-sys co-where">{{address.where}}</text>
     </view>
     <view wx:else class="k-card co-card co-addr-none" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
       <px-i name="led" tone="#f4bd3f" />
@@ -29,7 +27,8 @@
     <view class="co-card co-items">
       <view class="co-item" wx:for="{{items}}" wx:key="lineId">
         <view class="co-thumb">
-          <image wx:if="{{item.cover}}" class="co-thumb-img" src="{{item.cover}}" mode="aspectFill" />
+          <!-- 焦点 50% 40%（设计稿 object-position）：<image> 的 aspectFill 只能居中，改背景图定焦点 -->
+          <view wx:if="{{item.cover}}" class="co-thumb-img" style="background-image: url('{{item.cover}}')"></view>
         </view>
         <view class="co-item-mid">
           <text class="co-item-name">{{item.name}}</text>
@@ -56,17 +55,21 @@
       <text class="t-sys co-policy">包邮到家·售后无忧</text>
     </view>
   </view>
+  </scroll-view>
 
-  <view class="co-dock-space"></view>
   <view class="co-dock">
     <view class="co-total">
-      <text class="t-sys co-k">应付 · 共 {{count}} 件</text>
+      <text class="t-sys co-k">应付</text>
       <text class="mono co-amount">¥{{amountNum}}</text>
     </view>
-    <!-- 在途反馈：像素 loader + 「提交中」（刻意不用 wx.showLoading：本链多分支 return，hideLoading 配对易漏→锁屏） -->
+    <!-- 在途反馈：像素 loader + 「提交中」→ 建单成功打勾「已提交」（停 600ms 再拉支付）
+         （刻意不用 wx.showLoading：本链多分支 return，hideLoading 配对易漏→锁屏） -->
     <view class="k k-ink k-48 co-submit" hover-start-time="20" hover-class="{{submitting ? '' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onSubmit" data-k="{{submitting ? '' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <block wx:if="{{submitting}}"><px-anim name="loader" size="2" dark /><text>提交中</text></block>
+      <block wx:if="{{submitted}}"><px-anim name="checkin" size="2" dark hold="700" /><text>已提交</text></block>
+      <block wx:elif="{{submitting}}"><px-anim name="loader" size="2" dark /><text>提交中</text></block>
       <text wx:else>提交订单</text>
     </view>
   </view>
 </view>
+
+<px-fx id="fx" />

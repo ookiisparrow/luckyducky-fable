@@ -1,27 +1,35 @@
-/* v5 半屏（同 login-sheet / 稿 D2）：遮罩 rgba(17,17,17,.42) 淡入 + 面板自底滑入。 */
-.ps-mask {
+/* v5 半屏（设计稿 723-731·同 login-sheet）：遮罩/面板动效走 app.wxss .sh-mask/.sh-panel；这里只管摆位与版式。 */
+.ps-root {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 300;
-  background: rgba(17, 17, 17, 0.42);
-  display: flex;
-  align-items: flex-end;
-  animation: ps-fade 200ms ease-out both;
 }
+.ps-mask {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+/* 设计稿 min-height = 登录半屏实测高（--lgh）。
+   ponytail: 按登录半屏版式算死（12+把手4+字标22+标题28+协议行34+键48+间距16×4=212，再加底部安全区），登录半屏改版式要同步这里 */
 .ps-sheet {
-  width: 100%;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   box-sizing: border-box;
+  min-height: calc(212px + max(28px, env(safe-area-inset-bottom)));
   border-radius: 12px 12px 0 0;
   background: var(--v5-canvas);
   color: var(--v5-ink);
   padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  animation: ps-up 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  gap: 12px;
 }
 .ps-grab {
   align-self: center;
@@ -35,16 +43,19 @@
   font-weight: 700;
 }
 .ps-body {
-  font-size: 15px;
-  font-weight: 400;
-  line-height: 1.6;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.65;
   color: var(--v5-ink-2);
 }
 .ps-link {
   font-weight: 700;
   color: var(--v5-ink);
 }
+/* 按键行贴底（面板被 min-height 撑高时） */
 .ps-row {
+  margin-top: auto;
+  padding-top: 4px;
   display: flex;
   gap: 8px;
 }
@@ -70,20 +81,4 @@
 }
 .ps-btn::after {
   border: none;
-}
-@keyframes ps-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes ps-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
 }

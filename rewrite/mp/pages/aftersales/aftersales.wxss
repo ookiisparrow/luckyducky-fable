@@ -58,17 +58,9 @@ page {
   font-weight: 300;
   color: var(--v5-ink-2);
 }
-.as-st-applied {
-  color: var(--v5-warn-text);
-}
-.as-st-approved {
-  color: var(--v5-violet-text);
-}
+/* 状态字：只有已退款绿，其余次要灰（设计稿 AS_ST） */
 .as-st-refunded {
   color: var(--v5-ok-text);
-}
-.as-st-rejected {
-  color: var(--v5-err-text);
 }
 .as-note {
   font-size: 13px;
@@ -115,6 +107,23 @@ page {
 .as-skel-bar {
   height: 12px;
 }
+.as-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.as-skel-thumb {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+}
+.as-skel-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .as-state {
   padding: 0 16px;
   display: flex;
@@ -122,6 +131,11 @@ page {
   align-items: center;
   gap: 12px;
   text-align: center;
+}
+/* 空态纸箱：与有记录时的小货车同一条地面线（.as-truck 同样下移 84px） */
+.as-box {
+  align-self: stretch;
+  padding-top: 84px;
 }
 .as-signal {
   padding-top: 88px;

@@ -8,6 +8,7 @@ import { loginGate } from '../../lib/loginGate'
 import { writeStoredCont } from '../../lib/meCont'
 import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
+import { fxHint } from '../../lib/pxFx'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
 // 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
@@ -18,8 +19,8 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
-    sb: 20, // 状态栏高（自绘顶栏：返回键要先问「放弃修改？」，v5-nav 的返回拦不住）
-    leaveOpen: false, // 「放弃编辑确认」半屏
+    dirty: false, // 有没保存的改动（载入后·非保存在途）：<leave-sheet> 据此拦返回键/侧滑先问
+    focus: '', // 正在输入的框（nickname/phone）：凹槽亮紫描边
     nickname: '',
     bio: '', // 个性签名：v5 稿不再展示/编辑，原值照载照回传（不把云端已存签名覆盖清空）
     phone: '', // 账户联系电话（手动输入·供客服 360 检索·与地址电话独立）
@@ -45,13 +46,12 @@ Page({
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   async onLoad() {
-    this.setData({ sb: wx.getWindowInfo().statusBarHeight || 20 })
     this._holdOut = createHold(600, () => this.doLogout(), {
-      onQuick: () => wx.showToast({ title: '按住退出登录', icon: 'none' }),
+      onQuick: () => fxHint(this, '按住退出登录'),
       onChange: (v) => this.setData({ holdOut: v }),
     })
     this._holdDel = createHold(900, () => this.confirmDelete(), {
-      onQuick: () => wx.showToast({ title: '按住删除资料', icon: 'none' }),
+      onQuick: () => fxHint(this, '按住删除资料'),
       onChange: (v) => this.setData({ holdDel: v }),
     })
     let user: Record<string, any> | null = null
@@ -71,6 +71,7 @@ Page({
         avatar: String(user.avatar || ''),
         loaded: true,
         loading: false,
+        dirty: false,
       })
       return
     }
@@ -81,15 +82,27 @@ Page({
     this.setData({ loading: true })
     return this.onLoad()
   },
+  /** 改字段/保存在途变了就重算 dirty（口径：资料已载入 && 非保存在途 && 昵称/手机号与原值不同或选了新头像）。 */
+  sync(patch: { nickname?: string; phone?: string; avatarTemp?: string; busy?: boolean }) {
+    const d = { ...this.data, ...patch }
+    const changed = d.nickname !== this.orig.nickname || d.phone !== this.orig.phone || !!d.avatarTemp
+    this.setData({ ...patch, dirty: d.loaded && !d.busy && changed })
+  },
   onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
     if (this.data.busy) return // 保存在途禁止重选头像：否则 onSave 已捕获的 avatarTemp 与此刻新选的分叉、上传的是旧图
-    this.setData({ avatarTemp: e.detail.avatarUrl })
+    this.sync({ avatarTemp: e.detail.avatarUrl })
   },
   onNickname(e: WechatMiniprogram.Input) {
-    this.setData({ nickname: e.detail.value })
+    this.sync({ nickname: e.detail.value })
   },
   onPhone(e: WechatMiniprogram.Input) {
-    this.setData({ phone: e.detail.value })
+    this.sync({ phone: e.detail.value })
+  },
+  onFocus(e: WechatMiniprogram.TouchEvent) {
+    this.setData({ focus: String(e.currentTarget.dataset.f || '') })
+  },
+  onBlur() {
+    this.setData({ focus: '' })
   },
   onLogoutStart() {
     keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
@@ -116,8 +129,8 @@ Page({
   doLogout() {
     tapHaptic()
     loginGate.logout()
-    wx.showToast({ title: '已退出登录', icon: 'none' })
-    goBackOrHome()
+    wx.showToast({ title: '已退出登录', icon: 'none' }) // 随即退回上一页：原生提示跨页不断，自绘的会随本页消失
+    this.leaveNow()
   },
   confirmDelete() {
     tapHaptic()
@@ -136,42 +149,32 @@ Page({
     const r = await deleteAccount()
     this._deleting = false
     if (!r.ok) {
-      wx.showToast({ title: '没删成请稍后再试', icon: 'none' })
+      fxHint(this, '没删成请稍后再试')
       return
     }
     clearAddresses()
     loginGate.logout()
     writeStoredCont(null) // 「我」页继续学习旧卡一并清掉（回去不再先画已删的课）
-    wx.showToast({ title: '已删除', icon: 'none' })
-    if (!this.unloaded) goBackOrHome()
+    wx.showToast({ title: '已删除', icon: 'none' }) // 随即退回上一页：原生提示跨页不断
+    if (!this.unloaded) this.leaveNow()
   },
-  // 返回：资料载入后有改动（昵称/手机号/新选头像）先弹「放弃编辑确认」；保存在途不拦（成功会自己返回）
-  // ponytail: 只拦自绘返回键；侧滑/安卓返回键不拦（要拦得挂 page-container，会冻页面级滚动）
+  /** 退出/删除后直接走：先撤放弃确认的拦截（有改动也不再问），渲染落地后再返回。 */
+  leaveNow() {
+    this.setData({ dirty: false }, () => goBackOrHome())
+  },
+  // 顶栏返回（v5-nav guard）：有改动先弹放弃确认，没改动直接走；侧滑/安卓返回由 <leave-sheet> 自己拦
   onBack() {
-    const d = this.data
-    const dirty = d.nickname !== this.orig.nickname || d.phone !== this.orig.phone || !!d.avatarTemp
-    if (d.loaded && !d.busy && dirty) {
-      this.setData({ leaveOpen: true })
-      return
-    }
-    goBackOrHome()
-  },
-  onLeaveStay() {
-    this.setData({ leaveOpen: false })
-  },
-  onLeaveGo() {
-    this.setData({ leaveOpen: false })
-    goBackOrHome()
+    ;(this.selectComponent('#leave') as unknown as { ask(): void }).ask()
   },
   async onSave() {
     if (this.data.busy) return
     // fail-closed：资料没载入成功（login 失败→字段空）时禁存——否则空 phone/bio 会把云端已存值静默覆盖清空（读故障不该触发破坏性写）
     if (!this.data.loaded) {
-      wx.showToast({ title: '资料没加载好，返回重进一下', icon: 'none' })
+      fxHint(this, '资料没加载好，返回重进一下')
       return
     }
     if (!this.data.nickname.trim()) {
-      wx.showToast({ title: '起个昵称吧', icon: 'none' })
+      fxHint(this, '昵称不能为空')
       return
     }
     // 手机号位数校验（根因#14「写入说假话」）：云端 updateProfile 对 phone 走白名单
@@ -181,11 +184,11 @@ Page({
     // 两侧一致由守卫 rw-mp-list-loadfailed-state 焊死（同 lib/checkoutConst.ts 副本范式）。
     const phoneDigits = this.data.phone.trim().replace(/\D/g, '')
     if (this.data.phone.trim() && (phoneDigits.length < PHONE_MIN_DIGITS || phoneDigits.length > PHONE_MAX_DIGITS)) {
-      wx.showToast({ title: '手机号填得不对，检查一下', icon: 'none' })
+      fxHint(this, '手机号填得不对，检查一下')
       return
     }
     tapHaptic()
-    this.setData({ busy: true })
+    this.sync({ busy: true })
     // phone 一并同步（空串=清空·非法号云端白名单会静默剔除·不覆盖旧号）
     const patch: { nickname: string; bio: string; phone: string; avatar?: string } = { nickname: this.data.nickname.trim(), bio: this.data.bio.trim(), phone: this.data.phone.trim() }
     let avatarFailed = false
@@ -209,11 +212,11 @@ Page({
       this.backTimer = setTimeout(() => wx.navigateBack(), 600)
       return
     }
-    this.setData({ busy: false })
+    this.sync({ busy: false })
     if (r.ok && avatarFailed) {
-      wx.showToast({ title: '资料已存，头像上传没成功', icon: 'none' })
+      fxHint(this, '资料已存，头像上传没成功')
     } else {
-      wx.showToast({ title: '保存没成功，稍后再试', icon: 'none' })
+      fxHint(this, '保存没成功，稍后再试')
     }
   },
 })

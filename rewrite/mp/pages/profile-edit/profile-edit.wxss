@@ -3,42 +3,15 @@ page {
   background: var(--v5-canvas);
   color: var(--v5-ink);
 }
-/* 自绘顶栏（同 components/v5-nav 版式） */
-.pe-nav-space {
-  flex: 0 0 auto;
-}
-.pe-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: 20;
-  height: 44px;
-  padding-left: 10px;
-  padding-right: 104px;
+/* 整页一列：顶栏 + 滚动内容 + 底坞（同 checkout·放弃确认武装时页面级滚动被冻，只让中间 scroll-view 滚） */
+.pe-page {
+  height: 100vh;
   display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--v5-canvas);
-  box-sizing: content-box;
+  flex-direction: column;
 }
-.pe-hit {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pe-back {
-  width: 32px;
-  height: 30px;
-  padding: 0;
-}
-.pe-nav-t {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
+.pe-scroll {
+  flex: 1;
+  height: 0;
 }
 
 /* 头像：84 方块 + 右下角「换」小键；整块是 chooseAvatar 能力按钮（去掉 button 默认样式） */
@@ -81,6 +54,13 @@ page {
   padding: 0;
   font-size: 13px;
   font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
+}
+/* 按住头像：「换」键下沉（同 app.wxss .k-sm.k-light-down） */
+.pe-av-down .pe-av-k {
+  transform: translateY(1px);
+  background: #f0f0ed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
 }
 
 .pe-form {
@@ -127,14 +107,8 @@ page {
   color: var(--v5-ink-2);
 }
 
-.pe-dock-space {
-  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
-}
 .pe-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 0 0 auto;
   padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   gap: 8px;
@@ -142,83 +116,6 @@ page {
 }
 .pe-save {
   flex: 1;
-}
-
-/* 放弃编辑确认半屏 */
-.pe-sheet {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 140;
-}
-.pe-mask {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: rgba(17, 17, 17, 0.42);
-  animation: pe-fade 180ms ease-out;
-}
-.pe-panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border-radius: 12px 12px 0 0;
-  background: var(--v5-canvas);
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  animation: pe-up 220ms cubic-bezier(0.2, 0.9, 0.3, 1);
-}
-.pe-grip {
-  align-self: center;
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(17, 17, 17, 0.2);
-}
-.pe-sheet-t {
-  padding-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pe-sheet-h {
-  font-size: 20px;
-  font-weight: 700;
-}
-.pe-sheet-sub {
-  font-size: 17px;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--v5-ink-2);
-}
-.pe-sheet-ks {
-  padding-top: 8px;
-  display: flex;
-  gap: 8px;
-}
-.pe-leave {
-  flex: 1;
-  color: var(--v5-err-text);
-}
-.pe-stay {
-  flex: 1.6;
-}
-@keyframes pe-fade {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes pe-up {
-  from {
-    transform: translateY(100%);
-  }
 }
 
 /* 账号操作：按住确认，填充从左往右走满 */
@@ -261,4 +158,9 @@ page {
 }
 .pe-danger {
   color: var(--v5-err-text);
+}
+.pe-acct-note {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }

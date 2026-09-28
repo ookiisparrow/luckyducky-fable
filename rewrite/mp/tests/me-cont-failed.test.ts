@@ -262,3 +262,20 @@ describe('订单格数字（v5 D1）', () => {
     expect(getMyOrdersMock.mock.calls.map((c: unknown[]) => c[2])).toEqual(['pending', 'paid', 'shipped'])
   })
 })
+
+describe('继续学习卡下行（v5 D1）', () => {
+  it('大白话：刷新落卡后下行带节号「1.1 起针」；这门课每段都看完了改写「全部学完 · 可以重看」', async () => {
+    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    const page = await mountMe()
+    await page.refresh()
+    await flush()
+    expect(page.data.contMain).toBe('1.1 起针')
+
+    const segs = [{ id: 'c1', title: '小棉鸭', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true }] }] }] }]
+    getCoursesByIdsMock.mockResolvedValue(segs)
+    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, done: { s1: true }, updatedAt: 100 }] })
+    await page.refresh()
+    await flush()
+    expect(page.data.contMain).toBe('全部学完 · 可以重看')
+  })
+})

@@ -202,6 +202,13 @@ export function fxToast(page: Host, text: string): void {
   wx.showToast({ title: text, icon: 'success' })
 }
 
+/** 普通轻提示（设计稿 toast 不带图标）：同 fxToast，只是不画 ✓；没挂 px-fx 退回原生无图标提示。 */
+export function fxHint(page: Host, text: string): void {
+  const fx = layer(page)
+  if (fx) return fx.toast(text, false)
+  wx.showToast({ title: text, icon: 'none' })
+}
+
 function keyRect(page: Host, sel: string): Promise<Rect | null> {
   return new Promise((resolve) => {
     page

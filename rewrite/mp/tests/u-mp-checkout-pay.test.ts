@@ -1,6 +1,14 @@
 // 结算页建单/拉起支付后的去向：成功都进成功页（带订单号与实付分），取消/失败/关闭都弹不可取消的弹窗、
 // 点确定回首页。mapPayResult 用真的（纯函数），其余依赖桩掉。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import limitsSrc from '../../shared/src/limits.ts?raw'
+
+// 「15 分钟」是云端付款时限 PAY_WINDOW_MS（小程序进不了 shared，文案手抄）：云端改时限这里就红
+const PAY_WINDOW_MIN = (() => {
+  const m = limitsSrc.match(/PAY_WINDOW_MS = (\d+) \* 60 \* 1000/)
+  if (!m) throw new Error('shared/limits 找不到 PAY_WINDOW_MS')
+  return Number(m[1])
+})()
 
 const { createOrderMock, payMock, goHomeMock } = vi.hoisted(() => ({ createOrderMock: vi.fn(), payMock: vi.fn(), goHomeMock: vi.fn() }))
 vi.mock('../api/orders', () => ({ createOrder: createOrderMock, pay: payMock }))
@@ -90,12 +98,15 @@ describe('结算页 startPay：每种支付结果的去向', () => {
     expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: SUCCESS_URL })
   })
 
-  it('大白话：收银台里点了取消——弹「支付已取消」，订单保留，点确定回首页', async () => {
+  it('大白话：收银台里点了取消（老板拍板 4）——提示「订单已保存，请在 15 分钟内支付」并换到这张订单的详情页，不弹窗不回首页', async () => {
     payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
     const page = await mount()
     await page.startPay('o1', 12800)
     wxMock.requestPayment.mock.calls[0][0].fail({ errMsg: 'requestPayment:fail cancel' })
-    expect(modalShown()).toEqual({ title: '支付已取消', content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。' })
+    expect(wxMock.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: `订单已保存，请在 ${PAY_WINDOW_MIN} 分钟内支付`, icon: 'none' }))
+    expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: '/pages/order/order?id=o1' })
+    expect(wxMock.showModal).not.toHaveBeenCalled()
+    expect(goHomeMock).not.toHaveBeenCalled()
   })
 
   it('大白话：收银台里付失败（非取消）——弹「支付没成功」，同样保留订单、点确定回首页', async () => {

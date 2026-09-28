@@ -4,6 +4,8 @@
   "usingComponents": {
     "v5-nav": "/components/v5-nav/v5-nav",
     "px-i": "/components/px-i/px-i",
-    "px-anim": "/components/px-anim/px-anim"
+    "px-anim": "/components/px-anim/px-anim",
+    "leave-sheet": "/components/leave-sheet/leave-sheet",
+    "px-fx": "/components/px-fx/px-fx"
   }
 }

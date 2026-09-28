@@ -166,8 +166,71 @@ textarea {
   pointer-events: none;
   transition: opacity 180ms ease-out;
 }
+/* 出场照设计稿 ENTER.toast：0.94 → 1 放大 + 淡入 180ms；退场只淡出 180ms（不缩） */
 .ld-toast.show {
   opacity: 1;
+  animation: ld-toast-in 180ms ease-out;
+}
+@keyframes ld-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* v5 半屏（设计稿 openSheet/closeSheet·ENTER.sheet）：遮罩 .sh-mask 淡入 200ms、面板 .sh-panel 上滑 320ms；
+   关：两者加 .out ——面板 240ms cubic-bezier(.4,0,1,1) 下滑、遮罩 200ms 淡出，JS 等 240ms 再撤节点。 */
+.sh-mask {
+  background: rgba(17, 17, 17, 0.42);
+  animation: ld-fade 200ms ease-out;
+  transition: opacity 200ms ease-out;
+}
+.sh-mask.out {
+  opacity: 0;
+}
+.sh-panel {
+  animation: ld-sheet-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 240ms cubic-bezier(0.4, 0, 1, 1);
+}
+.sh-panel.out {
+  transform: translateY(100%);
+}
+/* 进场：淡入 200ms（ENTER.fade）/ 下方 8px 上浮 260ms（ENTER.rise） */
+.enter-fade {
+  animation: ld-fade 200ms ease-out;
+}
+.enter-rise {
+  animation: ld-rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes ld-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ld-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes ld-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 骨架屏微光（home/catalog 共用·加载态设计对齐 Claude Design 通过稿）：配 background-size:200% 的

@@ -1,0 +1,68 @@
+// 物流页壳（设计稿「物流轨迹」·拍板 8）：小货车按订单态摆姿势 + 承运方 + 大号运单号 + 复制；
+// 实时轨迹不自造——「查看物流详情」进快递100 插件（同 AppID 已授权·app.json 声明即用），插件打不开复制运单号兜底。
+// ponytail: 设计稿的下拉刷新与站内时间轴没做（没有轨迹数据源）；接了轨迹接口再在「查看物流详情」上方铺时间轴。
+import { tapHaptic } from '../../lib/haptics'
+import { getOrderById } from '../../api/orders'
+import { mapOrder } from '../../lib/mapOrders'
+import { expressCode } from '../../lib/express'
+import { keyDown, keyUp } from '../../lib/keyFx'
+
+const POSE: Record<string, string> = { paid: 'drive', shipped: 'drive', done: 'unload' }
+
+Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
+  data: {
+    loading: true,
+    loadFailed: false, // 失败≠没有运单（根因#14）
+    company: '',
+    trackingNo: '',
+    pose: 'park',
+    cargo: 0,
+  },
+  orderId: '',
+  onLoad(query: Record<string, string | undefined>) {
+    this.orderId = String(query.id || '')
+  },
+  onShow() {
+    void this.reload()
+  },
+  async reload() {
+    const r = await getOrderById(this.orderId)
+    const vm = r.ok ? mapOrder(r.order) : null
+    if (!r.ok) {
+      const notFound = r.error === 'NOT_FOUND' || r.error === 'NO_ID'
+      this.setData({ loading: false, loadFailed: !notFound && !this.data.trackingNo })
+      return
+    }
+    this.setData({
+      loading: false,
+      loadFailed: false,
+      company: vm ? vm.shipCompany : '',
+      trackingNo: vm ? vm.trackingNo : '',
+      pose: (vm && POSE[vm.status]) || 'park',
+      cargo: vm && vm.status !== 'closed' ? Math.min(3, vm.items.length) : 0,
+    })
+  },
+  onRetryLoad() {
+    tapHaptic()
+    this.setData({ loading: true, loadFailed: false })
+    return this.reload()
+  },
+  onCopy() {
+    const no = this.data.trackingNo
+    if (!no) return
+    wx.setClipboardData({
+      data: no,
+      success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
+    })
+  },
+  // 快递100 插件结果页。插件打不开（未安装/版本不匹配等）不静默——回退复制运单号，用户仍能拿到号码自行查（根因#14）。
+  onOpen() {
+    const no = this.data.trackingNo
+    if (!no) return
+    const com = expressCode(this.data.company)
+    const url = 'plugin://kuaidi100/index?num=' + no + '&appName=' + encodeURIComponent('小棉鸭') + (com ? '&com=' + com : '')
+    wx.navigateTo({ url, fail: () => this.onCopy() })
+  },
+})

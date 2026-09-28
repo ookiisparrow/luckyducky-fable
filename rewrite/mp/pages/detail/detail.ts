@@ -35,6 +35,7 @@ Page({
     galleryIndex: 0,
     galleryWindow: [] as boolean[], // 随 galleryIndex 同步重算，详见 computeGalleryWindow
     rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
+    wide: {} as Record<string, boolean>, // 横图 src（退回 aspectFill 居中·见 onImgLoad）
   },
   productId: '',
   _seq: 0, // loadProduct 代次（同 order-list/home 范式）：连点「重试」可并发在途·丢弃被更晚一次取代的过期回包
@@ -111,13 +112,21 @@ Page({
       galleryWindow: vm ? computeGalleryWindow(vm.gallery.length, e.detail.current) : [],
     })
   },
+  /** <image bindload>：横图（宽>高）记下来退回 aspectFill 居中——竖图/方图走 widthFix + 40% 焦点（见 detail.wxss .focus-img）。 */
+  onImgLoad(e: WechatMiniprogram.CustomEvent<{ width: number; height: number }>) {
+    const src = String(e.currentTarget.dataset.src || '')
+    if (src && e.detail.width > e.detail.height && !this.data.wide[src]) this.setData({ wide: { ...this.data.wide, [src]: true } })
+  },
   onSelectSku(e: WechatMiniprogram.TouchEvent) {
     const idx = Number(e.currentTarget.dataset.index)
     const vm = this.data.vm
     if (!vm) return
+    // 换款式图集回第 1 张：swiper current 绑 galleryIndex，改它 swiper 自己带动画滑回（平滑）
     this.setData({
       skuIndex: idx,
       currentPriceNum: vm.skus[idx] ? vm.skus[idx].price : vm.price,
+      galleryIndex: 0,
+      galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
     })
   },
   // 当前选中规格的成交行（加购/直买同源·价用规格价·双键行身份）。划线价是商品级、现价可能取了规格级：

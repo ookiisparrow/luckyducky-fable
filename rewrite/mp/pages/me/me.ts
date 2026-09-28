@@ -10,7 +10,7 @@ import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热
 import { getPageContent } from '../../lib/pageContent'
 import { continueResolve } from '../../lib/continueResolve'
 import { readStoredCont, writeStoredCont } from '../../lib/meCont'
-import { mapMe, type MeVM } from '../../lib/mapMe' // 直引拆分模块（tab 闭包不拖 mapPages 法务长文）
+import { mapMe, contMainLine, type MeVM } from '../../lib/mapMe' // 直引拆分模块（tab 闭包不拖 mapPages 法务长文）
 import { openCustomerService } from '../../utils/customerService'
 import { goHomeTab } from '../../lib/homeIntent'
 // consumeExitGuard 别名：页面方法须叫 onExitGuardBeforeLeave（wxml bindbeforeleave 绑的就是它），同名易误读成递归
@@ -70,6 +70,7 @@ Page({
     avatar: '',
     bio: '',
     cont: seededCont,
+    contMain: '', // 继续学习卡下行（「1.3 鸭嘴收针」/「全部学完 · 可以重看」）；空＝旧卡还没刷，wxml 退回课时名
     entries: seededMe.entries as MeVM['entries'], // 九入口标题/可见性·首帧默认（CMS 到达覆盖）
     contFailed: false, // 继续学习区取数失败标记（同 aftersales/order-list loadFailed 分治：失败≠没进度）
     contLoaded: !!seededCont, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）；有上次会话旧卡则首帧先画、后台再刷
@@ -160,7 +161,9 @@ Page({
     }
     const cont = continueResolve(progress.list, mine.list, courses)
     writeStoredCont(cont)
-    this.setData({ cont, contFailed: false, contLoaded: true, hatchKey: hatchedCourseId(progress.list, courses) })
+    const course = cont ? courses.find((c) => String(c.id || '') === cont.courseId) : null
+    const contMain = cont ? contMainLine(cont, course, !!course && !!hatchedCourseId(progress.list, [course])) : ''
+    this.setData({ cont, contMain, contFailed: false, contLoaded: true, hatchKey: hatchedCourseId(progress.list, courses) })
     if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
     return true
   },

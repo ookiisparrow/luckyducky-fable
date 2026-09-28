@@ -27,7 +27,9 @@
   <view class="hm-fold" style="height: calc(100vh - {{statusBarHeight + 44}}px - 52px - max(24px, env(safe-area-inset-bottom)))">
     <view class="hm-gap-a"></view>
     <view class="hm-hero">
-      <image wx:if="{{content.hero.img}}" class="hm-hero-img" src="{{content.hero.img}}" mode="aspectFill" />
+      <!-- 裁切焦点照设计稿 object-position 50% 40%：小程序 image 不认 object-position（内部是背景图、样式够不着），
+           故竖图/方图用 widthFix + .focus-img（top 40% 再上移自身 40%＝同一公式），横图由 onImgLoad 记进 wide 退回 aspectFill 居中（横向本就 50%） -->
+      <image wx:if="{{content.hero.img}}" class="hm-hero-img {{wide[content.hero.img] ? '' : 'focus-img'}}" src="{{content.hero.img}}" mode="{{wide[content.hero.img] ? 'aspectFill' : 'widthFix'}}" data-src="{{content.hero.img}}" bindload="onImgLoad" />
       <view class="hm-fade-top"></view>
       <view class="hm-fade-bottom"></view>
     </view>
@@ -67,7 +69,7 @@
     <view class="hm-rail-row">
       <view class="hm-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
         <view class="hm-card-media">
-          <image wx:if="{{item.cover}}" class="hm-card-img" src="{{item.cover}}" mode="aspectFill" />
+          <image wx:if="{{item.cover}}" class="hm-card-img {{wide[item.cover] ? '' : 'focus-img'}}" src="{{item.cover}}" mode="{{wide[item.cover] ? 'aspectFill' : 'widthFix'}}" data-src="{{item.cover}}" bindload="onImgLoad" />
         </view>
         <view class="hm-card-info">
           <text class="hm-card-name">{{item.name}}</text>
@@ -82,6 +84,7 @@
     </view>
   </scroll-view>
   <view wx:elif="{{loading}}" class="hm-rail hm-rail-skel">
+    <view class="t-sys hm-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
     <view class="hm-rail-row">
       <view class="hm-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
         <view class="hm-card-media skel"></view>
@@ -150,14 +153,14 @@
         <text class="hm-faq-title">{{item.title}}</text>
         <text class="t-sys hm-faq-act">{{openFaq === index ? '收起' : '展开'}}</text>
       </view>
-      <text wx:if="{{openFaq === index}}" class="t-sys hm-faq-body">{{item.body}}</text>
+      <text wx:if="{{openFaq === index}}" class="t-sys hm-faq-body enter-rise">{{item.body}}</text>
     </view>
   </view>
 
   <!-- ⑧ 收尾：大图 + 大字 + 墨黑键（每 3.6s 一道像素紫光扫过·v5 定稿 sheenEl） -->
   <view class="hm-closing">
     <view class="hm-closing-media">
-      <image wx:if="{{content.closing.img}}" class="hm-hero-img" src="{{content.closing.img}}" mode="aspectFill" lazy-load />
+      <image wx:if="{{content.closing.img}}" class="hm-hero-img {{wide[content.closing.img] ? '' : 'focus-img'}}" src="{{content.closing.img}}" mode="{{wide[content.closing.img] ? 'aspectFill' : 'widthFix'}}" lazy-load data-src="{{content.closing.img}}" bindload="onImgLoad" />
       <view class="hm-fade-top"></view>
       <view class="hm-fade-bottom hm-fade-short"></view>
     </view>
@@ -185,13 +188,10 @@
 </scroll-view>
 
 <!-- 回到顶部（滚过一屏半浮现） -->
-<view wx:if="{{showTop}}" class="k k-light hm-backtop" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+<view wx:if="{{showTop}}" class="k k-light hm-backtop enter-rise"hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
   <px-i name="up" />
   <text>顶部</text>
 </view>
-
-<!-- 轻提示 -->
-<view class="ld-toast {{toast.show ? 'show' : ''}}"><text>{{toast.text}}</text></view>
 
 <!-- 登录授权半屏（R1·软门槛）：进 App 首个落地页即弹（未同意时·本会话一次）·可「暂不登录」关掉先逛·经 lib/loginGate 单例驱动 -->
 <login-sheet />
@@ -202,5 +202,5 @@
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />
 
-<!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
+<!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->
 <px-fx id="fx" />

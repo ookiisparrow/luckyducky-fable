@@ -97,6 +97,18 @@ describe('结算页：渲染', () => {
   })
 })
 
+describe('结算页：地址卡展示（v5 A5）', () => {
+  it('大白话：姓名和打码手机号一行「鸭 · 138 **** 0428」；省市区去掉空格和详址连起来；下单仍用原始手机号和地区', async () => {
+    const page = await mount('cart', false)
+    ;(await import('../lib/address')).saveAddress({ name: '鸭', phone: '13800000428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号', isDefault: true })
+    await page.refresh()
+    expect(page.data.address).toMatchObject({ who: '鸭 · 138 **** 0428', where: '上海市上海市徐汇区漕溪北路 1 号' })
+    createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
+    await page.onSubmit()
+    expect(createOrderMock.mock.calls[0][1]).toEqual({ name: '鸭', phone: '13800000428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号' })
+  })
+})
+
 describe('结算页：空草稿', () => {
   it('大白话：转场还没落地就发现空草稿——先提示，等 onReady 后再 600ms 退回', async () => {
     vi.useFakeTimers()
@@ -130,7 +142,7 @@ describe('结算页：提交', () => {
     const page = await mount('cart', false)
     await page.refresh()
     await page.onSubmit()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '请先添加收货地址', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '先添加收货地址', icon: 'none' })
     expect(createOrderMock).not.toHaveBeenCalled()
   })
 
@@ -186,6 +198,24 @@ describe('结算页：提交', () => {
     vi.advanceTimersByTime(1000)
     expect(wxMock.showToast).not.toHaveBeenCalledWith({ title: '还没有要结算的商品', icon: 'none' })
     expect(wxMock.navigateBack).not.toHaveBeenCalled()
+  })
+
+  it('大白话：建单成功——按键先打勾「已提交」停 0.6 秒再拉支付；支付只发一次，期间连点不会再建单', async () => {
+    vi.useFakeTimers()
+    const page = await mount()
+    await page.refresh()
+    createOrderMock.mockResolvedValue({ ok: true, order: { id: 'o9', status: 'pending', amount: 278 } })
+    payMock.mockResolvedValue({ ok: false, error: 'PAY_NOT_ENABLED' })
+    const p = page.onSubmit()
+    await vi.advanceTimersByTimeAsync(599)
+    expect(page.data.submitted).toBe(true)
+    expect(payMock).not.toHaveBeenCalled()
+    await page.onSubmit()
+    await vi.advanceTimersByTimeAsync(1)
+    await p
+    expect(payMock).toHaveBeenCalledTimes(1)
+    expect(payMock).toHaveBeenCalledWith('o9')
+    expect(createOrderMock).toHaveBeenCalledTimes(1)
   })
 
   it('大白话：刷新等商品数据期间用户点了提交（草稿被清空）——刷新回来不能拿空草稿重画页面', async () => {

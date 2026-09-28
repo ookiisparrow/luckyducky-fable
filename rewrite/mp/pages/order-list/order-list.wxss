@@ -90,6 +90,18 @@ page {
   font-weight: 300;
   color: var(--v5-ink-2);
 }
+/* 待支付倒计时（设计稿：等宽 600 15px 琥珀 + 13/300「后取消」） */
+.ol-cd {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.ol-cd-n {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--v5-warn-text);
+}
 .ol-row {
   display: flex;
   align-items: center;
@@ -138,7 +150,27 @@ page {
   padding: 0 12px;
 }
 .ol-danger {
+  position: relative;
+  overflow: hidden;
   color: var(--v5-err-text);
+}
+/* 按住取消：浅红从左往右填满（HOLD_MS 700ms·同购物车按住删除写法） */
+.ol-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: rgba(217, 72, 59, 0.14);
+}
+.ol-hold-on .ol-fill {
+  transform: scaleX(1);
+  transition: transform 700ms linear;
+}
+.ol-act-t {
+  position: relative;
 }
 .ol-act-busy {
   opacity: 0.6;

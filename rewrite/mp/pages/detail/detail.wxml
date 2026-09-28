@@ -5,19 +5,24 @@
   <!-- 图集：窗口渲染（current±1·circular 首尾邻接算窗口内）：swiper 内 lazy-load 不生效（真机验证过），
        全量 swiper-item 会让画廊全部图并发下载；galleryWindow 由 detail.ts 随 galleryIndex 同步维护。 -->
   <view class="pd-gallery">
-    <swiper wx:if="{{vm.gallery.length}}" class="pd-swiper" circular="{{vm.gallery.length > 1}}" bindchange="onGallery">
-      <swiper-item wx:for="{{vm.gallery}}" wx:key="*this">
-        <image wx:if="{{galleryWindow[index]}}" class="pd-img" src="{{item}}" mode="aspectFill" />
+    <!-- current 绑 galleryIndex：切款式时置 0，swiper 自带动画滑回第 1 张（detail.ts onSelectSku）。
+         裁切焦点 50% 40%（设计稿 object-position）：同首页写法——竖图/方图 widthFix + .focus-img，横图 onImgLoad 记进 wide 退回 aspectFill -->
+    <swiper wx:if="{{vm.gallery.length}}" class="pd-swiper" current="{{galleryIndex}}" circular="{{vm.gallery.length > 1}}" bindchange="onGallery">
+      <swiper-item wx:for="{{vm.gallery}}" wx:key="*this" class="pd-slide">
+        <image wx:if="{{galleryWindow[index]}}" class="pd-img {{wide[item] ? '' : 'focus-img'}}" src="{{item}}" mode="{{wide[item] ? 'aspectFill' : 'widthFix'}}" data-src="{{item}}" bindload="onImgLoad" />
       </swiper-item>
     </swiper>
     <view class="pd-fade-top"></view>
     <view class="pd-fade-bottom"></view>
   </view>
-  <view class="pd-pager" wx:if="{{vm.gallery.length > 1}}">
-    <view class="pd-dots">
-      <view wx:for="{{vm.gallery}}" wx:key="*this" class="pd-dot {{galleryIndex === index ? 'on' : ''}}"></view>
-    </view>
-    <text class="mono pd-gi">{{galleryIndex + 1}}/{{vm.gallery.length}}</text>
+  <!-- 页码行常驻（设计稿：只有一张图也留这行 12px，点只有一个）；页码补 0、斜杠两侧空格：01 / 06 -->
+  <view class="pd-pager">
+    <block wx:if="{{vm.gallery.length}}">
+      <view class="pd-dots">
+        <view wx:for="{{vm.gallery}}" wx:key="*this" class="pd-dot {{galleryIndex === index ? 'on' : ''}}"></view>
+      </view>
+      <text class="mono pd-gi">{{galleryIndex < 9 ? '0' : ''}}{{galleryIndex + 1}} / {{vm.gallery.length < 10 ? '0' : ''}}{{vm.gallery.length}}</text>
+    </block>
   </view>
 
   <view class="pd-head">
@@ -85,7 +90,9 @@
   <view class="pd-skel-line short skel"></view>
 </view>
 
-<view class="pd-state" wx:elif="{{!loading && loadFailed}}">
+<!-- 失败态照设计稿 E2：像素信号动画 + 上边距 88、间距 12、重试键宽 120（同 order-list） -->
+<view class="pd-state pd-fail" wx:elif="{{!loading && loadFailed}}">
+  <view class="pd-signal"><px-anim name="signal" size="4" /></view>
   <text class="pd-state-title">网络开小差</text>
   <text class="t-sys pd-state-hint">商品加载失败，请重试</text>
   <view class="k k-light pd-state-btn" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>

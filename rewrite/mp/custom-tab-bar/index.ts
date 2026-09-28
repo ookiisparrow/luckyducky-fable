@@ -6,12 +6,15 @@ import { keyDown, keyUp } from '../lib/keyFx'
 
 // 每实例一份退订句柄（多 tabBar 页各自挂本组件·同 privacy-sheet/login-sheet 范式）
 const unsubs = new WeakMap<object, () => void>()
+const bumpTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
+const BUMP_MS = 320 // 设计稿 bumpCart：数字 1→1.5→1 弹一下
 
 Component({
   options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的全局键帽 .k-*
   data: {
     active: 'home',
     cartCount: 0,
+    bump: false, // 购物车数字弹跳中（bump() 置真·320ms 复位）
     // 登录半屏打开时隐藏本 tabBar：自定义 tabBar 是框架独立原生层、页面内 z-index 盖不住它，
     // 全屏遮罩想盖住底部只能让 tabBar 自身让位（订阅 loginGate·关闭即恢复）。
     hidden: false,
@@ -44,9 +47,21 @@ Component({
     setActive(id: string) {
       this.setData({ active: id, cartCount: cartCount() })
     },
+    /** 加购后页面调 getTabBar()?.bump?.()：刷新角标并让数字弹一下。 */
+    bump() {
+      clearTimeout(bumpTimers.get(this))
+      this.setData({ cartCount: cartCount(), bump: true })
+      bumpTimers.set(this, setTimeout(() => this.setData({ bump: false }), BUMP_MS))
+    },
     onTap(e: WechatMiniprogram.TouchEvent) {
       const { id, path } = e.currentTarget.dataset as { id: string; path: string }
-      if (id === this.data.active) return
+      if (id === this.data.active) {
+        // 点已选中的 tab：交给当前页（首页回顶）；页面没实现就什么都不做
+        const pages = getCurrentPages()
+        const cur = pages[pages.length - 1] as { onTabReselect?: () => void } | undefined
+        cur?.onTabReselect?.()
+        return
+      }
       wx.switchTab({ url: path })
     },
   },

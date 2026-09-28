@@ -10,11 +10,11 @@
     <view class="as-list">
       <view class="as-row" wx:for="{{list}}" wx:key="id">
         <view class="as-ico">
-          <px-anim wx:if="{{item.status === 'refunded'}}" class="as-coin" name="coin" size="2" />
-          <px-i wx:elif="{{item.status === 'applied'}}" name="led" tone="#f4bd3f" />
-          <px-i wx:elif="{{item.status === 'approved'}}" name="led" tone="#8a5ae0" />
-          <px-i wx:elif="{{item.status === 'rejected'}}" name="led" tone="#d9483b" />
-          <px-i wx:else name="led" tone="#9a9a92" />
+          <!-- 设计稿 AS_ST：已同意＝金币（退款在路上）、申请中＝紫灯、已退款＝绿灯、已拒绝＝灰灯无光晕 -->
+          <px-anim wx:if="{{item.status === 'approved'}}" class="as-coin" name="coin" size="2" />
+          <px-i wx:elif="{{item.status === 'applied'}}" name="led" tone="#8A5AE0" />
+          <px-i wx:elif="{{item.status === 'refunded'}}" name="led" tone="#3F9A5E" />
+          <px-i wx:else name="led" tone="rgba(17,17,17,.28)" halo="none" />
         </view>
         <view class="as-mid">
           <view class="as-top">
@@ -38,7 +38,13 @@
     <view class="t-sys as-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
     <view class="as-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
       <view class="as-skel-bar skel" style="width: 96px"></view>
-      <view class="as-skel-bar skel" style="width: 60%"></view>
+      <view class="as-skel-row">
+        <view class="as-skel-thumb skel"></view>
+        <view class="as-skel-col">
+          <view class="as-skel-bar skel" style="width: 60%"></view>
+          <view class="as-skel-bar skel" style="width: 36%"></view>
+        </view>
+      </view>
     </view>
   </block>
 
@@ -50,9 +56,8 @@
     <view class="k k-light as-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
   <view class="as-state" wx:elif="{{!loading && !list.length}}">
-    <px-ground kind="box" />
+    <view class="as-box"><px-ground kind="box" /></view>
     <text class="as-state-t">还没有售后记录</text>
-    <text class="t-sys as-note">需要退款时，从订单详情发起申请</text>
   </view>
   <view class="as-dock-space"></view>
 </view>

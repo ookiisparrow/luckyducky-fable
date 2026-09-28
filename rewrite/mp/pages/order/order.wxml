@@ -1,22 +1,22 @@
-<!-- 订单详情（v5「字重」稿 B2）：小货车（姿态随订单态）+ 状态卡（四步进度）+ 物流卡 + 收货地址 + 商品与金额 + 订单信息；
-     底部按状态：返回 + 取消/去支付 | 返回 + 申请售后 + 确认收货 | 返回 + 申请售后。
-     业务逻辑一字不动：续付(onPay)/取消(onCancel·二次确认)/确认收货(onConfirm)/申请售后(onAfterSale)/写评价(onWriteReview·per-line)/
-     查看物流(onViewLogistics·快递100 插件)/复制(onCopyTracking/onCopyOrderNo) 全承接 order.ts。订单行为历史快照·只读。 -->
+<!-- 订单详情（v5「字重」稿 B2）：小货车（姿态随订单态）+ 状态卡（短状态名 + 右侧小字 + 四步进度 + 异常说明）+ 物流卡 + 收货地址 + 商品与金额 + 订单信息；
+     底部按状态：返回 + 按住取消/去支付 | 返回 + 申请售后 (+ 确认收货) | 返回 + 联系客服（待退款/支付异常）；已关闭不出底部栏。
+     续付(onPay)/按住取消(onCancelStart/End·拍板 7)/确认收货(onConfirm)/申请售后(onAfterSale·自绘半屏)/写评价(onWriteReview·per-line)/
+     物流页(onViewLogistics)/复制(onCopyTracking/onCopyOrderNo)/客服(onKefu) 全承接 order.ts。订单行为历史快照·只读。 -->
 <v5-nav title="订单详情" />
 
 <view class="od" wx:if="{{vm}}">
   <view class="od-truck"><px-truck pose="{{truckPose}}" cargo="{{cargo}}" /></view>
 
   <view class="od-body">
-    <!-- 状态卡 -->
+    <!-- 状态卡：左短状态名 20/700，右 13/300 小字（待支付琥珀倒计时、剩不到 1 分钟变红） -->
     <view class="od-card">
       <view class="od-state">
         <view class="od-state-l">
           <px-anim wx:if="{{vm.status === 'pending'}}" name="hourglass" size="2" />
-          <text class="od-head">{{banner.head}}</text>
+          <text class="od-head">{{head}}</text>
         </view>
+        <text class="t-sys od-sub od-sub-{{sub.tone}}" wx:if="{{sub.text}}">{{sub.text}}</text>
       </view>
-      <text class="t-sys od-sub" wx:if="{{banner.sub}}">{{banner.sub}}</text>
       <view class="od-steps">
         <view class="od-step" wx:for="{{steps}}" wx:key="label">
           <view wx:if="{{index > 0}}" class="od-line {{item.state === 'todo' ? '' : 'od-line-on'}}"></view>
@@ -27,6 +27,11 @@
           </view>
           <text class="t-sys od-step-t {{item.state === 'cur' ? 'od-step-cur' : ''}} {{item.state === 'todo' ? 'od-step-todo' : ''}}">{{item.label}}</text>
         </view>
+      </view>
+      <!-- 待退款 / 支付异常：分隔线 + 状态灯 + 说明行 -->
+      <view class="od-warn" wx:if="{{warn}}">
+        <px-i class="od-warn-led" name="led" tone="{{warn.tone}}" />
+        <text class="t-sys od-warn-t">{{warn.text}}</text>
       </view>
     </view>
 
@@ -68,7 +73,7 @@
         <view class="od-item-r">
           <text class="mono od-item-price">{{item.priceLabel}}</text>
           <view wx:if="{{vm.status === 'done'}}" class="k k-sm k-light od-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-            data-lineid="{{item.lineId}}" data-name="{{item.name}}" catch:tap="onWriteReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
+            data-i="{{index}}" catch:tap="onWriteReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
         </view>
       </view>
       <view class="od-sum">
@@ -92,11 +97,15 @@
     </view>
   </view>
 
-  <view class="od-dock-space"></view>
-  <view class="od-dock">
+  <view class="od-dock-space" wx:if="{{dock}}"></view>
+  <view class="od-dock" wx:if="{{dock}}">
     <view class="k k-light k-48 od-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">返回</view>
     <block wx:if="{{vm.status === 'pending'}}">
-      <view class="k k-light k-48 od-side od-danger" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onCancel" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">取消订单</view>
+      <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条；轻点提示「按住取消订单」） -->
+      <view class="od-side" catch:touchstart="onCancelStart" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd">
+        <view class="k k-light k-48 od-danger {{holding ? 'od-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill"></view><text class="od-danger-t">取消订单</text></view>
+      </view>
       <view class="k k-ink k-48 od-main {{paying ? 'od-busy' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <block wx:if="{{paying}}"><px-anim name="loader" size="2" dark /><text>支付中</text></block>
         <text wx:else>去支付</text>
@@ -104,6 +113,7 @@
     </block>
     <view wx:if="{{canAfterSale}}" class="k k-light k-48 od-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAfterSale" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">申请售后</view>
     <view wx:if="{{vm.status === 'shipped'}}" class="k k-ink k-48 od-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onConfirm" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
+    <view wx:if="{{help}}" class="k k-light k-48 od-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onKefu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
   </view>
 </view>
 
@@ -134,6 +144,47 @@
 <view class="od-state-page" wx:elif="{{!loading}}">
   <text class="od-state-t">订单不存在</text>
   <text class="t-sys od-k">可能已被删除或不属于当前账号</text>
+</view>
+
+<!-- 申请售后半屏（设计稿 sheet aftersales·拍板 7）：退款/换货/补发 三段 + 原因标签 + 多件单选商品 + 取消/提交。
+     只有「退款」调 applyRefund；换货/补发后台无接口，提交键改「联系客服办理」走客服入口。 -->
+<view wx:if="{{asOpen}}" class="as-root" catch:touchmove="noop">
+  <view class="sh-mask as-mask {{asOut ? 'out' : ''}}" bind:tap="onAsClose"></view>
+  <view class="sh-panel as-panel {{asOut ? 'out' : ''}}">
+    <view class="as-grip"></view>
+    <view class="as-t">
+      <text class="as-h">申请售后</text>
+      <block wx:for="{{asLines}}" wx:key="lineId"><text wx:if="{{item.lineId === asLine}}" class="t-sys as-sub">{{item.label}}</text></block>
+    </view>
+    <view class="well as-seg">
+      <view wx:for="{{asTypes}}" wx:key="*this" class="k as-seg-k {{asType === item ? 'k-light as-on' : ''}}" hover-start-time="20" hover-class="{{asType === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
+        data-v="{{item}}" bind:tap="onAsType" data-k="{{asType === item ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asType === item}}" name="led" tone="#8A5AE0" />{{item}}</view>
+    </view>
+    <view class="as-group" wx:if="{{asLines.length > 1}}">
+      <text class="t-sys as-cap">商品</text>
+      <scroll-view class="as-lines" scroll-y="{{true}}">
+        <view class="as-chips">
+          <view wx:for="{{asLines}}" wx:key="lineId" class="k as-chip {{asLine === item.lineId ? 'k-light' : 'k-flat'}}" hover-start-time="20" hover-class="{{asLine === item.lineId ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
+            data-v="{{item.lineId}}" bind:tap="onAsLine" data-k="{{asLine === item.lineId ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asLine === item.lineId}}" name="led" tone="#8A5AE0" /><text class="t-sys as-chip-t">{{item.label}}</text></view>
+        </view>
+      </scroll-view>
+    </view>
+    <view class="as-group">
+      <text class="t-sys as-cap">原因</text>
+      <view class="as-chips">
+        <view wx:for="{{asReasons}}" wx:key="*this" class="k as-chip {{asReason === item ? 'k-light' : 'k-flat'}}" hover-start-time="20" hover-class="{{asReason === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
+          data-v="{{item}}" bind:tap="onAsReason" data-k="{{asReason === item ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asReason === item}}" name="led" tone="#8A5AE0" />{{item}}</view>
+      </view>
+    </view>
+    <view class="as-ks">
+      <view class="k k-light k-48 as-cancel" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAsClose" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">取消</view>
+      <view class="k k-ink k-48 as-go {{asBusy ? 'od-busy' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAsSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <block wx:if="{{asBusy}}"><px-anim name="loader" size="2" dark /><text>提交中</text></block>
+        <text wx:elif="{{asType === '退款'}}">提交申请</text>
+        <text wx:else>联系客服办理</text>
+      </view>
+    </view>
+  </view>
 </view>
 
 <!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->

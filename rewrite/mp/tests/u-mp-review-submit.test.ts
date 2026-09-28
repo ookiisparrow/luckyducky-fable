@@ -25,7 +25,7 @@ async function mount(): Promise<Record<string, any>> {
 let toast: ReturnType<typeof vi.fn>
 beforeEach(() => {
   toast = vi.fn()
-  ;(globalThis as any).wx = { showToast: toast, navigateBack: vi.fn() }
+  ;(globalThis as any).wx = { showToast: toast, showLoading: vi.fn(), hideLoading: vi.fn(), navigateBack: vi.fn() }
   submitMock.mockReset()
 })
 
