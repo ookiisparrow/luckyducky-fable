@@ -448,8 +448,9 @@ export const applyRefund = withOpenId(
       alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
       return err('REFUND_SCAN_CAP')
     }
-    if (exist.data.some((a) => (a.lineId || a.productId) === lineId))
-      return err(ERR.ALREADY_APPLIED)
+    // 该行已有售后：全是「顾客撤销」的才许重新申请（复用同一张单），有任何别的状态（含越规退款单）仍算申请过
+    const mine = exist.data.filter((a) => (a.lineId || a.productId) === lineId)
+    if (mine.some((a) => a.status !== 'withdrawn')) return err(ERR.ALREADY_APPLIED)
     const used = asFen(
       exist.data
         .filter((a) => AFTERSALE_QUOTA_STATUSES.includes(a.status))
@@ -479,12 +480,46 @@ export const applyRefund = withOpenId(
       status: 'applied',
       appliedAt: now,
     }
+    if (mine.length) {
+      // 撤销后重新申请：withdrawn→applied 条件更新原子复用同一 _id（并发重申只一路 moved）。金额/件数/原因/地址快照
+      // 按此刻重算覆盖。outRefundNo 由 _id 派生、保持不变——复用单号安全的前提：withdrawn 只能来自「从没被批准过」
+      // 的 applied（withdrawRefund 拒 approvedAt 在的单），即这个单号从没发给过微信。
+      const { _id, _openid, status, ...patch } = rec
+      const { moved } = await transition(COLLECTIONS.afterSales, asId, ['withdrawn'], 'applied', patch)
+      return moved ? ok({ afterSale: rec }) : err(ERR.ALREADY_APPLIED)
+    }
     try {
       await addCreatingColl(db, COLLECTIONS.afterSales, rec)
     } catch {
       return err(ERR.ALREADY_APPLIED) // 库级唯一：一单一行一售后（并发双发只落一条）
     }
     return ok({ afterSale: rec })
+  })
+)
+
+/**
+ * 顾客撤销售后申请：仅本人 + 仅申请中。applied→withdrawn 走 transition 条件更新，与 approveRefund/rejectRefund
+ * 对 applied 的抢占天然互斥，谁先到算谁的；没抢到按此刻状态回 BAD_STATUS:<状态>。撤销后记录保留、不占退款额度，
+ * 同一行可经 applyRefund 重新申请。
+ */
+export const withdrawRefund = withOpenId(
+  withRateLimit('withdrawRefund', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
+    const e: any = event
+    const orderId = str(e.orderId, 200)
+    const lineId = str(e.lineId, 200)
+    if (!orderId || !lineId) return err(ERR.BAD_ARGS)
+    const id = orderId + '__' + lineId
+    const read = () => getDocOrNull<AfterSaleDoc>(db.collection(COLLECTIONS.afterSales).doc(id))
+    const cur = await read()
+    // 他人/不存在一律 NOT_FOUND（不泄露存在性）
+    if (!cur || cur._openid !== OPENID || cur.orderId !== orderId) return err(ERR.NOT_FOUND)
+    // 批过又回滚到 applied 的单（approveRefund 工作流未受理）不许撤：微信那边可能已真退款（见 refunds.ts
+    // rollbackApproved），撤了再重申会复用同一 outRefundNo。按「已同意」回，顾客去找客服。
+    if (cur.status === 'applied' && cur.approvedAt) return err(buildBadStatus('approved'))
+    const withdrawnAt = Date.now()
+    const { moved } = await transition(COLLECTIONS.afterSales, id, ['applied'], 'withdrawn', { withdrawnAt })
+    if (!moved) return err(buildBadStatus((await read())?.status || 'unknown')) // 重读：被并发同意/拒绝抢先
+    return ok({ afterSale: { ...cur, status: 'withdrawn', withdrawnAt } })
   })
 )
 

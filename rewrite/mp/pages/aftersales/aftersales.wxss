@@ -78,6 +78,38 @@ page {
   font-size: 13px;
   font-weight: 300;
 }
+/* 撤销申请：浅色键红字，按住时浅红从左往右填满（HOLD_MS 700ms·同订单页按住取消写法）；外层补热区到 44 高 */
+.as-wd {
+  align-self: flex-start;
+  margin: 0 0 -8px;
+  padding: 4px 0 8px;
+}
+.as-wd-k {
+  position: relative;
+  overflow: hidden;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500; /* 圆体只 500/700/900 */
+  color: var(--v5-err-text);
+}
+.as-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: rgba(217, 72, 59, 0.14);
+}
+.as-hold-on .as-fill {
+  transform: scaleX(1);
+  transition: transform 700ms linear;
+}
+.as-wd-t {
+  position: relative;
+}
 .as-more {
   padding: 8px 0 16px;
   text-align: center;

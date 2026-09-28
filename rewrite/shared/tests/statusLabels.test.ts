@@ -15,7 +15,7 @@ import {
 
 // 键清单手落 + Record<Status,string> 类型焊死：canonical 集合改动时这里编译期红（同源文件头纪律）。
 const ORDER_KEYS: OrderStatus[] = ['pending', 'paid', 'shipped', 'done', 'closed', 'refund_required', 'payment_exception']
-const AFTERSALE_KEYS: AfterSaleStatus[] = ['applied', 'approved', 'refunded', 'rejected']
+const AFTERSALE_KEYS: AfterSaleStatus[] = ['applied', 'approved', 'refunded', 'rejected', 'withdrawn']
 const PURCHASE_KEYS: PurchaseOrderStatus[] = ['draft', 'ordered', 'received', 'cancelled']
 const OUTWORK_KEYS: OutworkOrderStatus[] = ['draft', 'issued', 'delivered', 'settled', 'cancelled']
 

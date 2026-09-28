@@ -28,12 +28,15 @@ export const AFTERSALE_STATUS_SPEC = {
   collection: 'afterSales',
   /** approved：overrideRefund 越规退款由管理员发起，直接以已批准建档。 */
   initial: ['applied', 'approved'],
+  /** withdrawn（顾客撤销）不是终态：同一行可再申请，走 withdrawn→applied 复用同一 _id。 */
   terminal: ['refunded', 'rejected'],
   transitions: [
     { from: ['applied'], to: 'approved', trigger: 'adminApi.approveRefund（原子抢占·触发退款工作流）' },
     { from: ['approved'], to: 'applied', trigger: 'adminApi.approveRefund 回滚（工作流未受理·条件化，不打回已退款）' },
     { from: ['applied'], to: 'rejected', trigger: 'adminApi.rejectRefund（拒绝售后）' },
     { from: ['applied', 'approved'], to: 'refunded', trigger: 'refundCallback（退款成功幂等）' },
+    { from: ['applied'], to: 'withdrawn', trigger: 'app.withdrawRefund（顾客撤销·仅申请中）' },
+    { from: ['withdrawn'], to: 'applied', trigger: 'app.applyRefund（撤销后重新申请·原子复用同 _id）' },
   ],
 } as const
 
@@ -157,6 +160,8 @@ export interface AfterSaleDoc {
   requalifiedAt?: number
   rejectedAt?: number
   rejectReason?: string
+  /** 顾客撤销时刻；撤销后重新申请时保留（留痕曾撤销过）。 */
+  withdrawnAt?: number
   refundedAt?: number
   refundTransactionId?: string
   refundMismatch?: boolean
@@ -172,7 +177,7 @@ export const PAID_ORDER_STATUSES: readonly OrderStatus[] = ['paid', 'shipped', '
  *  报成「微信有我方无」，而它们的退款又照常计入。GMV/画像仍用 PAID_ORDER_STATUSES。 */
 export const MONEY_RECEIVED_STATUSES: readonly OrderStatus[] = [...PAID_ORDER_STATUSES, 'refund_required', 'payment_exception']
 
-/** 占退款额度的售后状态（算已退/可退封顶时要减掉的）。 */
+/** 占退款额度的售后状态（算已退/可退封顶时要减掉的）。白名单：rejected / withdrawn（顾客撤销）不占。 */
 export const AFTERSALE_QUOTA_STATUSES: readonly AfterSaleStatus[] = ['applied', 'approved', 'refunded']
 /** 在途售后（钱可能正在退）：有这类记录的订单不能发货。refunded 是终态，只把退掉的件排除出发货。 */
 export const AFTERSALE_INFLIGHT_STATUSES: readonly AfterSaleStatus[] = ['applied', 'approved']

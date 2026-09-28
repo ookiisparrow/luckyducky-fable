@@ -43,7 +43,7 @@ const ROOT = resolve(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'assets/brand-fonts')
 
 // 产物版本（进文件名·CDN 缓存失效靠改名）：字符集/分层口径变更时 +1，并同步 rewrite/mp/utils/brandFont.ts。
-const V = 'v8'
+const V = 'v9'
 
 // v5 视觉（Claude Design「字重」稿）：500 正文/700 标题/900 首屏大标题，两层都出三档。稿里 300 细字只用在 13px 以下的
 // 辅助小字上，这类小字走黑体（老板 2026-09-28），圆体不出细体。

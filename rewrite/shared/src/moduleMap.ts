@@ -25,6 +25,7 @@ export const APP_ACTION_MODULE: Record<string, string> = {
   createOrder: 'orders',
   pay: 'orders',
   applyRefund: 'orders',
+  withdrawRefund: 'orders',
   confirmReceive: 'orders',
   cancelOrder: 'orders',
   getMyOrders: 'orders',

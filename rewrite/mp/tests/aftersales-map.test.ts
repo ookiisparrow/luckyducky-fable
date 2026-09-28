@@ -1,7 +1,7 @@
 // 黄金 orders-money 售后节前端半边（可申请口径与云端 applyRefund 一致）+ frontend-store §八
 // （翻页去重·申请成功列表即时收窄由 applicableLines 排除已申请实现·非独立插头部函数）。
 import { describe, it, expect } from 'vitest'
-import { mapAfterSale, mapAfterSales, mergeAfterSales, applicableLines, asStatusLabel, refundBlock, afterSalesByOrder, afterSaleOverlay } from '../lib/mapAftersales'
+import { mapAfterSale, mapAfterSales, mergeAfterSales, applicableLines, asStatusLabel, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, withdrawableLines, withdrawErrText } from '../lib/mapAftersales'
 import type { OrderLineVM } from '../lib/mapOrders'
 
 const line = (over: Partial<OrderLineVM>): OrderLineVM => ({
@@ -94,5 +94,35 @@ describe('订单叠加售后显示（订单状态不变·只改显示）', () =>
     expect(afterSaleOverlay(two, by([as('o1', 'L1', 'rejected')]))).toBeNull()
     expect(afterSaleOverlay(two, undefined)).toBeNull()
     expect(afterSaleOverlay([], by([as('o1', 'L1', 'refunded')]))).toBeNull() // 脏单无条目不冒充已退款
+  })
+})
+
+describe('顾客撤销售后（已撤销＝不占行、不叠加、可重申）', () => {
+  const as = (lineId: string, status: string, over: Record<string, unknown> = {}) => ({ _id: 'o1__' + lineId, orderId: 'o1', lineId, status, appliedAt: 1, ...over })
+
+  it('大白话：已撤销显示「已撤销」；只有申请中且没被商家批过的能撤', () => {
+    expect(asStatusLabel('withdrawn')).toBe('已撤销')
+    const [a, b, c, d] = mapAfterSales([as('L1', 'applied'), as('L2', 'approved'), as('L3', 'withdrawn'), as('L4', 'applied', { approvedAt: 9 })])
+    expect([a.canWithdraw, b.canWithdraw, c.canWithdraw, d.canWithdraw]).toEqual([true, false, false, false])
+    expect(withdrawableLines(mapAfterSales([as('L1', 'applied'), as('L2', 'rejected'), { ...as('L3', 'applied'), orderId: 'o2' }]), 'o1')).toEqual({ L1: true })
+  })
+
+  it('大白话：已撤销的行不算「申请过」——退款段不置灰、可再选；订单不叠加售后中，但仍算有售后记录', () => {
+    const list = mapAfterSales([as('L1', 'withdrawn'), as('L2', 'rejected'), { ...as('L3', 'applied'), orderId: 'o2' }])
+    expect(appliedLineIdsOf(list, 'o1')).toEqual(['L2'])
+    const items = [line({ lineId: 'L1' })]
+    expect(refundBlock('paid', items, appliedLineIdsOf(list, 'o1'))).toBe('')
+    expect(applicableLines('paid', items, appliedLineIdsOf(list, 'o1')).map((l) => l.lineId)).toEqual(['L1'])
+    const by = afterSalesByOrder(mapAfterSales([as('L1', 'withdrawn')]))
+    expect(by.o1).toEqual({ live: '', lines: {} })
+    expect(afterSaleOverlay(items, by.o1)).toBeNull()
+  })
+
+  it('大白话：撤销失败按码说人话', () => {
+    expect(withdrawErrText('BAD_STATUS:approved')).toBe('商家已同意退款，正在处理，不能撤销了')
+    expect(withdrawErrText('BAD_STATUS:refunded')).toBe('这条已经退款了，不能撤销')
+    expect(withdrawErrText('BAD_STATUS:rejected')).toBe('这条申请已被拒绝，不用撤销')
+    expect(withdrawErrText('BAD_STATUS:withdrawn')).toBe('这条申请已经撤销了')
+    expect(withdrawErrText('RATE_LIMITED')).toBe('撤销没成功，稍后再试')
   })
 })

@@ -279,7 +279,7 @@
       "action": "refundCounts",
       "keys": {
         "": ["counts", "ok", "partial"],
-        "counts": ["all", "applied", "approved", "refunded", "rejected"]
+        "counts": ["all", "applied", "approved", "refunded", "rejected", "withdrawn"]
       },
       "units": {},
       "sample": {
@@ -289,7 +289,8 @@
           "applied": 1,
           "approved": 0,
           "refunded": 1,
-          "rejected": 0
+          "rejected": 0,
+          "withdrawn": 0
         },
         "partial": false
       }

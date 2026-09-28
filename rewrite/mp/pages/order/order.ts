@@ -1,16 +1,16 @@
-// 订单详情：状态卡（短状态名 + 右侧小字 + 四步进度 + 异常说明）/条目/地址/金额明细/操作（续付·按住取消·确认收货·申请售后·联系客服）。
+// 订单详情：状态卡（短状态名 + 右侧小字 + 四步进度 + 异常说明）/条目/地址/金额明细/操作（续付·按住取消·确认收货·申请售后·按住撤销售后·联系客服）。
 import { tapHaptic } from '../../lib/haptics'
-import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
+import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales, withdrawRefund } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
-import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, type AfterSaleVM } from '../../lib/mapAftersales'
+import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, withdrawableLines, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
 import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxToast, fxHint } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { openCustomerService } from '../../utils/customerService'
 
-const HOLD_MS = 700 // 按住多久算取消（设计稿 data-ms=700·拍板 7）
+const HOLD_MS = 700 // 按住多久算取消订单/撤销售后（设计稿 data-ms=700·拍板 7）
 const SHEET_OUT_MS = 240 // 半屏关：面板 240ms 下滑后撤节点（app.wxss .sh-panel.out）
 const AS_TYPES = ['退款', '换货', '补发'] // 售后类型（设计稿 asf.types）：后台只有退款接口，换货/补发走客服（拍板 7）
 const AS_REASONS = ['线材缺色', '少件', '做工问题', '其他']
@@ -39,6 +39,8 @@ Page({
     asLed: null as { tone: string; halo: string } | null, // 售后叠加状态灯（售后中紫 / 已退款绿），null＝不出灯
     asHas: false, // 该单有任何售后记录：出「查看售后进度」入口
     lineTags: {} as Record<string, string>, // 行标 lineId→「退款中 / 已退款」
+    lineWd: {} as Record<string, boolean>, // 行内「撤销申请」键：该行售后申请中且可撤（lib/mapAftersales withdrawableLines）
+    wdHold: '', // 正在按住撤销的行 lineId（驱动键内红色进度条）
     sub: { text: '', tone: '' } as { text: string; tone: string }, // 状态卡右侧小字（倒计时/签收日期…）
     warn: null as { text: string; tone: string } | null,
     help: false, // 待退款/支付异常：底部「返回 + 联系客服」
@@ -159,6 +161,7 @@ Page({
       asLed: ov ? ov.led : null,
       asHas: !!asOf,
       lineTags: asOf ? asOf.lines : {},
+      lineWd: this._asList ? withdrawableLines(this._asList, vm.id) : {},
       sub: ov ? { text: ov.sub, tone: '' } : detailSub(vm, Date.now()),
       warn: WARN[s] || null,
       help: !!WARN[s],
@@ -236,6 +239,37 @@ Page({
   },
   onCancelEnd() {
     hold?.end()
+  },
+  // 撤销申请中的售后（行内键·按住 700ms，同按住取消手感；最终裁决在云端）
+  onWithdrawStart(e: WechatMiniprogram.TouchEvent) {
+    const lineId = String(e.currentTarget.dataset.line || '')
+    if (!this.data.lineWd[lineId]) return
+    const t = e.touches && e.touches[0]
+    hold?.cancel()
+    hold = createHold(HOLD_MS, () => void this.withdrawNow(lineId), {
+      onQuick: () => fxHint(this, '按住撤销申请'),
+      onChange: (v) => this.setData({ wdHold: v ? lineId : '' }),
+    })
+    hold.start(t ? t.clientX : undefined, t ? t.clientY : undefined)
+  },
+  onWithdrawMove(e: WechatMiniprogram.TouchEvent) {
+    this.onCancelMove(e)
+  },
+  onWithdrawEnd() {
+    hold?.end()
+  },
+  async withdrawNow(lineId: string) {
+    const vm = this.data.vm
+    if (!vm || !this.data.lineWd[lineId]) return
+    tapHaptic()
+    const r = await this.withLoading('正在撤销', () => withdrawRefund(vm.id, lineId))
+    if (!r || this.unloaded) return
+    if (r.ok) {
+      // 撤销结果先并进本地售后：刷新时售后没拉到也能去掉「售后中」叠加
+      if (this._asList) this._asList = mergeAfterSales(mapAfterSales([r.afterSale]), this._asList)
+      fxToast(this, '已撤销')
+    } else wx.showToast({ title: withdrawErrText(r.error), icon: 'none' }) // 没抢过商家等：下面刷新看最新状态
+    await this.reload()
   },
   async cancelNow() {
     const vm = this.data.vm
@@ -322,7 +356,7 @@ Page({
       }
       list = this._asList = mapAfterSales(asRes.list)
     }
-    const appliedIds = list.filter((a) => a.orderId === vm.id).map((a) => a.lineId)
+    const appliedIds = appliedLineIdsOf(list, vm.id) // 已撤销的行不算申请过，可再申请
     this._asOk = applicableLines(vm.status, vm.items, appliedIds).map(asLineOf)
     this._asAll = vm.items.map(asLineOf)
     const asBlock = refundBlock(vm.status, vm.items, appliedIds)
