@@ -97,6 +97,32 @@ describe('底部 TabBar', () => {
     expect(wxMock.switchTab).toHaveBeenCalledWith({ url: '/pages/cart/cart' })
   })
 
+  // 老板真机 2026-09-29：「我」页点头像换头像，先弹隐私保护指引半屏——「拒绝/同意」被 TabBar 盖住、关不掉
+  it('大白话：隐私半屏打开时 TabBar 让位，关掉后回来；转场遮罩撤了但隐私半屏还开着，仍让位', async () => {
+    const c = await mountComp('../custom-tab-bar/index')
+    const { privacyGate } = await import('../lib/privacyGate')
+    expect(c.data.hidden).toBe(false)
+    privacyGate.open(() => {})
+    expect(c.data.hidden).toBe(true)
+    c.setCovered(false)
+    expect(c.data.hidden).toBe(true)
+    privacyGate.agree()
+    expect(c.data.hidden).toBe(false)
+  })
+
+  it('大白话：TabBar 只是旁观——隐私半屏随页面走了没选，照样按「不同意」收场，不被 TabBar 挂住', async () => {
+    const c = await mountComp('../custom-tab-bar/index')
+    const { privacyGate } = await import('../lib/privacyGate')
+    const resolve = vi.fn()
+    const unsubSheet = privacyGate.subscribe(() => {}) // 页面上的 privacy-sheet
+    privacyGate.open(resolve)
+    expect(c.data.hidden).toBe(true)
+    unsubSheet() // 页面走了、用户没选
+    expect(resolve).toHaveBeenCalledWith({ event: 'disagree' })
+    expect(privacyGate.visible()).toBe(false)
+    expect(c.data.hidden).toBe(false)
+  })
+
   it('大白话：加购后 bump()——购物车数字刷新并弹一下（320ms 后复位）', async () => {
     const c = await mountComp('../custom-tab-bar/index')
     c.bump()

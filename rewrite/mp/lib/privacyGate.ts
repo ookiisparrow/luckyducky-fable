@@ -8,6 +8,8 @@ export type PrivacyResolve = (r: { buttonId?: string; event: 'agree' | 'disagree
 interface PrivacyGate {
   visible(): boolean
   subscribe(fn: (visible: boolean) => void): () => void
+  /** 只旁观可见态（custom-tab-bar 让位用）：不算「挂着弹窗的页面」，不参与「最后一个离开按不同意收场」。 */
+  observe(fn: (visible: boolean) => void): () => void
   open(resolve: unknown): void
   agree(buttonId?: string): void
   disagree(): void
@@ -18,9 +20,11 @@ export function createPrivacyGate(): PrivacyGate {
   let pending: PrivacyResolve | null = null
   let shown = false
   const listeners = new Set<(v: boolean) => void>()
+  const observers = new Set<(v: boolean) => void>()
   const setShown = (v: boolean) => {
     shown = v
     listeners.forEach((fn) => fn(v))
+    observers.forEach((fn) => fn(v))
   }
   // 「不同意」——中止本次涉隐私接口（不影响无关功能）
   const disagree = () => {
@@ -40,6 +44,10 @@ export function createPrivacyGate(): PrivacyGate {
         // 下个页面一挂弹窗就莫名弹出。别的页还挂着（能看见）就留给它选。
         if (shown && !listeners.size) disagree()
       }
+    },
+    observe(fn) {
+      observers.add(fn)
+      return () => observers.delete(fn)
     },
     open(resolve) {
       pending = typeof resolve === 'function' ? (resolve as PrivacyResolve) : null
