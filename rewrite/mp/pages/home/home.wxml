@@ -117,7 +117,7 @@
         <view class="hm-stars"><px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:key="*this" wx:for-item="s" name="star5" /></view>
         <text class="t-sys hm-rv-quote">{{item.quote}}</text>
         <view class="hm-rv-meta">
-          <text class="hm-rv-user">{{item.user}}</text>
+          <text class="t-sys hm-rv-user">{{item.user}}</text>
           <view class="hm-verified">
             <px-i name="led" tone="#3f9a5e" />
             <text>已验证买家</text>

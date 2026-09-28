@@ -57,7 +57,7 @@
     <text class="pd-sec-title">商品详情</text>
     <!-- wx:key 刻意用 index（同 about/reviews）：段落无 id 字段，lead 作 key 多段空标题必撞键；列表随 vm 整体替换、不重排，index 稳定 -->
     <block wx:for="{{vm.sections}}" wx:key="index">
-      <text class="pd-lead" wx:if="{{item.lead}}">{{item.lead}}</text>
+      <text class="t-sys pd-lead" wx:if="{{item.lead}}">{{item.lead}}</text>
       <text class="t-sys pd-body" wx:if="{{item.body}}">{{item.body}}</text>
     </block>
     <view class="pd-kit" wx:if="{{vm.kit.length}}">

@@ -1,4 +1,4 @@
-// 品牌字体分层字符集推导单源（字体分层批）：tier1(tab首屏) / tier2(二级页+云端文案) / tier3(GB2312一级兜底)。
+// 品牌字体分层字符集推导单源（字体分层批）：tier1(tab首屏) / tier2(二级页)。
 // 谁在用：scripts/build-brand-font.mjs（子集构建）+ check-structure.mjs 守卫 rw-mp-font-tier-subset-covers
 // （盯「上屏字 ⊆ 已提交子集」防新增文案静默掉回退）。分层归属只此一处权威，两端不各写各的（病根#5）。
 //
@@ -6,11 +6,16 @@
 //   tier1 = tab 页(home/cart/me)四件套闭包 ∪ custom-tab-bar ∪ brand-splash ∪ app.ts import 闭包
 //           ∪ app.json 值(tabBar text/导航标题) ∪ seed 标题类字段(首页卡片渲染的商品/课程名)
 //           + ASCII + 常用中文标点（只进 tier1，后层不重复）
-//   tier2 = 其余页闭包 + mp 未被闭包触达的散文件 + seed 其余 + rewrite/{shared,cloud/src} 字面量 − tier1
-//           + 高频 GBK 二级补字（圳：收货地址「深圳」几乎必现、GB2312 一级不含、源 OTF 有字形）
-//   tier3 = GB2312 一级(3755) − tier1 − tier2（UGC 昵称/评价/地址兜底·最后空闲加载）
-// 抽取口径：wxml 剥注释全量 CJK；json 只取 value；ts/js 只取字符串字面量（剥注释——注释字不上屏，
-// 混进来虚胖 3 倍）；wxss 不抽（无上屏文案）；tests/typings 排除。
+//   tier2 = 其余页闭包 + mp 未被闭包触达的散文件 + seed 其余 − tier1
+//
+// 只收「真用圆体显示」的字（v5·老板 2026-09-28 拍板：圆体只留给按钮/标题/界面固定文案，正文长段和用户内容
+// 走黑体 .t-sys）。所以不收：wxml 里 .t-sys（黑体）/.mono（等宽）/.ld-toast 子树与 input/textarea；ts 里系统
+// 弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast——原生界面或系统字）的
+// 参数；ts 里 ≥20 汉字的长段（正文，页面上必须挂 .t-sys）；云端报错文案（只经提示上屏＝系统字）。
+// 用户内容走黑体，所以不设 GB2312 兜底层。
+// ponytail: ts 字面量看不出最终渲染在哪，「≥20 字＝正文」是约定；长标题会漏收（逐字掉黑体），届时给它挂圆体
+// 专用短字段或调阈值。后台新增的商品名不在 seed 里也会漏收（同样逐字掉黑体）——上新后重建字体。
+// 抽取口径：json 只取 value；ts/js 只取字符串字面量（剥注释——注释字不上屏）；wxss 不抽；tests/typings 排除。
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -22,14 +27,42 @@ const cjkOf = (text, into) => {
 
 export const ASCII = Array.from({ length: 0x7e - 0x20 + 1 }, (_, i) => String.fromCharCode(0x20 + i)).join('')
 export const CJK_PUNCT = '，。、；：？！“”‘’（）《》〈〉【】「」『』—…·～￥％°№'
-// 高频 GBK 二级补字（GB2312 一级之外、真实 UGC 高频、源 OTF 有字形）：现仅「圳」（深圳收货地址）。
-// 加字条件从严：确有真实上屏场景才补，不为「万一」囤字（§7 防过度工程）。
-export const GBK2_EXTRA = '圳'
+export const LONG_TEXT_CJK = 20 // ts 字面量里汉字数达到这个就当正文（黑体），不收
+
+// ---------- wxml：跳过黑体/等宽/提示子树与输入框，其余文字节点与属性全收 ----------
+const SYS_CLASS = /(^|\s)(t-sys|mono|ld-toast)(\s|$)/
+const SELF_CLOSING = new Set(['input', 'textarea', 'image', 'import', 'include'])
+function wxmlCJK(src, into) {
+  src = src.replace(/<!--[\s\S]*?-->/g, '').replace(/<wxs[\s\S]*?<\/wxs>/g, '')
+  const stack = [] // 每层：该元素是否黑体子树
+  const re = /<(\/?)([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>|([^<]+)/g
+  let m
+  while ((m = re.exec(src))) {
+    const inSys = stack.some(Boolean)
+    if (m[5] != null) {
+      if (!inSys) cjkOf(m[5], into) // 文字节点（含 {{}} 里的字面量）
+      continue
+    }
+    const [, close, tag, attrs, self] = m
+    if (close) {
+      stack.pop()
+      continue
+    }
+    const cls = (attrs.match(/\bclass="([^"]*)"/)?.[1] ?? '').replace(/\{\{[\s\S]*?\}\}/g, ' ')
+    const sys = inSys || SYS_CLASS.test(cls) || tag === 'input' || tag === 'textarea'
+    if (!sys) cjkOf(attrs, into) // 组件入参（v5-nav title 等）走圆体
+    if (!self && !SELF_CLOSING.has(tag)) stack.push(sys)
+  }
+}
 
 // ---------- ts/js 字符串字面量抽取（跳过注释；' " ` 三种；模板字面量跳 ${…}） ----------
-function extractStringLiterals(src) {
+// dropNativeUi：系统弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast）括号里的
+// 字面量不收——原生界面或系统字，不用圆体。
+const NATIVE_UI_AT = /(?:wx\.(?:showToast|showModal|showLoading|showActionSheet)|ping|fxToast)\(/y
+function extractStringLiterals(src, { dropNativeUi = false } = {}) {
   const out = []
   let i = 0
+  let skip = 0 // >0＝在系统弹窗调用的括号里（值为括号深度）
   const n = src.length
   while (i < n) {
     const c = src[i]
@@ -60,7 +93,7 @@ function extractStringLiterals(src) {
           i++
         }
       }
-      if (ok) out.push(buf)
+      if (ok && !skip) out.push(buf)
     } else if (c === '`') {
       i++
       let buf = ''
@@ -84,8 +117,19 @@ function extractStringLiterals(src) {
           i++
         }
       }
-      out.push(buf)
+      if (!skip) out.push(buf)
     } else {
+      if (dropNativeUi && !skip && !/[\w$]/.test(src[i - 1] || '')) {
+        NATIVE_UI_AT.lastIndex = i
+        const m = NATIVE_UI_AT.exec(src)
+        if (m) {
+          skip = 1
+          i += m[0].length
+          continue
+        }
+      }
+      if (skip && c === '(') skip++
+      else if (skip && c === ')') skip--
       i++
     }
   }
@@ -98,7 +142,7 @@ function extractFileCJK(file, into) {
   const src = fs.readFileSync(file, 'utf8')
   const ext = path.extname(file)
   if (ext === '.wxml') {
-    cjkOf(src.replace(/<!--[\s\S]*?-->/g, ''), into) // 剥注释后全量 CJK
+    wxmlCJK(src, into)
   } else if (ext === '.json') {
     try {
       const walk = (v) => {
@@ -111,7 +155,9 @@ function extractFileCJK(file, into) {
       /* 非法 json 忽略 */
     }
   } else if (ext === '.ts' || ext === '.js') {
-    for (const s of extractStringLiterals(src)) cjkOf(s, into)
+    for (const s of extractStringLiterals(src, { dropNativeUi: true })) {
+      if ([...s].filter((ch) => isCJK(ch.codePointAt(0))).length < LONG_TEXT_CJK) cjkOf(s, into) // 长段＝正文＝黑体
+    }
   }
   // .wxss 不抽：样式表无上屏文案，CJK 只在注释里（虚胖源）
 }
@@ -173,20 +219,8 @@ function collectClosure(repoRoot, mpRoot, base, files, seen) {
   }
 }
 
-function gb2312Level1() {
-  const dec = new TextDecoder('gbk')
-  const set = new Set()
-  for (let hi = 0xb0; hi <= 0xd7; hi++) {
-    for (let lo = 0xa1; lo <= 0xfe; lo++) {
-      const ch = dec.decode(Uint8Array.from([hi, lo]))
-      if (ch.length === 1 && ch >= '一' && ch <= '鿿') set.add(ch)
-    }
-  }
-  return set
-}
-
 /**
- * 推导三层字符集。返回 { tier1, tier2, tier3 }（均为 Set<单字>·仅 CJK；ASCII/标点由调用方按
+ * 推导两层字符集。返回 { tier1, tier2 }（均为 Set<单字>·仅 CJK；ASCII/标点由调用方按
  * 「只进 tier1」拼装——见 build-brand-font.mjs）。
  */
 export function deriveTierCharsets(repoRoot) {
@@ -239,7 +273,7 @@ export function deriveTierCharsets(repoRoot) {
           if (['node_modules', 'tests', 'typings', 'dist'].includes(f) || f.startsWith('.')) continue
           sweep(p)
         } else if (['.wxml', '.json', '.ts', '.js'].includes(path.extname(f)) && !touched.has(p)) {
-          if (f.endsWith('.d.ts') || f === 'project.config.json' || f === 'project.private.config.json' || f === 'package.json') continue
+          if (f.endsWith('.d.ts') || ['project.config.json', 'project.private.config.json', 'package.json', 'sitemap.json'].includes(f)) continue
           extractFileCJK(p, tier2raw)
         }
       }
@@ -248,28 +282,7 @@ export function deriveTierCharsets(repoRoot) {
   }
 
   for (const ch of seedAllCjk) tier2raw.add(ch)
-  // rewrite/shared 与 rewrite/cloud/src 的字符串字面量（云端报错文案会经 toast 上屏·刻意超收不缺字）
-  const sweepTs = (d) => {
-    if (!fs.existsSync(d)) return
-    for (const f of fs.readdirSync(d)) {
-      const p = path.join(d, f)
-      const st = fs.statSync(p)
-      if (st.isDirectory()) {
-        if (['node_modules', 'dist', 'tests'].includes(f) || f.startsWith('.')) continue
-        sweepTs(p)
-      } else if (['.ts', '.js'].includes(path.extname(p)) && !p.endsWith('.d.ts') && !p.endsWith('.spec.ts') && !p.endsWith('.test.ts')) {
-        for (const s of extractStringLiterals(fs.readFileSync(p, 'utf8'))) cjkOf(s, tier2raw)
-      }
-    }
-  }
-  sweepTs(path.join(repoRoot, 'rewrite/shared/src'))
-  sweepTs(path.join(repoRoot, 'rewrite/cloud/src'))
-
-  for (const ch of GBK2_EXTRA) tier2raw.add(ch)
   const tier2 = new Set([...tier2raw].filter((c) => !tier1.has(c)))
 
-  const gb1 = gb2312Level1()
-  const tier3 = new Set([...gb1].filter((c) => !tier1.has(c) && !tier2.has(c)))
-
-  return { tier1, tier2, tier3 }
+  return { tier1, tier2 }
 }

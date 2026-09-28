@@ -12,7 +12,7 @@
       </view>
       <view class="ad-text">
         <view class="ad-line1">
-          <text class="ad-name">{{item.name}}</text>
+          <text class="t-sys ad-name">{{item.name}}</text>
           <text class="mono ad-phone">{{item.phone}}</text>
           <text class="ad-def" wx:if="{{item.isDefault}}">默认</text>
         </view>

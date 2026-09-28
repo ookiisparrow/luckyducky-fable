@@ -20,7 +20,7 @@
       <image wx:elif="{{loggedIn}}" class="me-av-img" src="/static/hero-full.jpg" mode="aspectFill" />
     </view>
     <view class="me-id-t">
-      <text class="me-nick">{{nickname}}</text>
+      <text class="t-sys me-nick">{{nickname}}</text>
       <text wx:if="{{!loggedIn}}" class="me-id-sub">登录后同步订单与学习进度</text>
     </view>
     <view wx:if="{{loggedIn}}" class="k k-sm k-flat me-mini me-mini-weak" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onEditProfile" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">编辑</view>

@@ -30,7 +30,7 @@
   <view class="rv-list" wx:if="{{list.length}}">
     <view class="rv-item" wx:for="{{list}}" wx:key="index" wx:if="{{!hidden[index]}}">
       <view class="rv-top">
-        <text class="rv-name">{{item.name}}</text>
+        <text class="t-sys rv-name">{{item.name}}</text>
         <view class="rv-stars">
           <px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:for-item="s" wx:key="*this" wx:if="{{s <= item.rating}}" name="star5" />
         </view>
