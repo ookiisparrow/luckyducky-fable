@@ -199,6 +199,9 @@ const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sess
 
 /** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。
  *  企微免登带 wecomUserId 记进 uid，resolveSession 据此让改绑/解绑前签的令牌失效。 */
+/** 会话令牌的长相（issueSession 签发：32 字节随机数的十六进制）。 */
+export const isSessionTokenShape = (key: string): boolean => /^[0-9a-f]{64}$/.test(key)
+
 export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom', wecomUserId = ''): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex')
   const now = Date.now()
@@ -284,6 +287,9 @@ export async function checkKey(db: any, key: any, login: boolean) {
   if (!login) {
     const s = await resolveSession(db, sha(keyStr))
     if (s.ok || s.error !== 'BAD_KEY') return s
+    // 令牌长相的 key 只当令牌查、不回落口令比对：失效令牌（过期被剪/已登出）因此不计口令爆破（index.ts authFail），
+    // 而令牌长相的串永远比不中口令——不计数不会给猜口令留口子。
+    if (isSessionTokenShape(keyStr)) return s
   }
   const got = await readDoc(db.collection(COLLECTIONS.adminConfig).doc('auth').get())
   if (!got.ok) return err('AUTH_UNAVAILABLE') // 库故障≠查无此号：不当错口令记爆破

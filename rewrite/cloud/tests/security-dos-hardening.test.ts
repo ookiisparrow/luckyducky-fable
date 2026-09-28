@@ -41,6 +41,37 @@ describe('#1 全局登录锁不自我 DoS（收尾硬化·用户拍板 A：先�
   })
 })
 
+describe('#1b 失效会话令牌不按口令爆破计数（2026-09-28 真事故：看板并发 5 个请求带失效令牌，一次打开就锁本机 IP）', () => {
+  beforeEach(() => {
+    control.reset()
+    control.setOpenId('')
+  })
+  const staleToken = 'ab'.repeat(32) // 形同签发的会话令牌（32 字节十六进制），但已过期被剪、查无此令牌
+
+  it('大白话：带失效令牌连发 8 个业务请求全回 401，但本机 IP 不被锁——随后用正确口令照常登录', async () => {
+    seedSuper()
+    for (let i = 0; i < 8; i++) {
+      const r = await post({ action: 'getDashboard', key: staleToken }, '4.4.4.4')
+      expect(r.statusCode).toBe(401)
+    }
+    const r = await post({ action: 'login', key: 'super-secret-key' }, '4.4.4.4')
+    expect(r.statusCode).toBe(200)
+  })
+
+  it('大白话：真输错口令照旧计数——同一 IP 业务请求带 5 次错误口令后被 429 锁', async () => {
+    seedSuper()
+    for (let i = 0; i < 5; i++) await post({ action: 'getDashboard', key: 'wrong-long-key' }, '5.5.5.5')
+    const r = await post({ action: 'login', key: 'super-secret-key' }, '5.5.5.5')
+    expect(r.statusCode).toBe(429)
+  })
+
+  it('大白话：令牌长相的串只当令牌查、不拿去比口令——哪怕口令本身恰好长这样，也不能借不计数的口子猜口令', async () => {
+    seedSuper(staleToken) // 极端：超管口令恰好是 64 位十六进制
+    const r = await post({ action: 'getDashboard', key: staleToken }, '6.6.6.6')
+    expect(r.statusCode).toBe(401)
+  })
+})
+
 // —— #2 createOrder 在途未支付单上限 —— //
 const ADDR = { name: '张三', phone: '13800000000', region: '浙江·杭州', detail: 'xx 路 1 号' }
 const order = (openid: string, over: Record<string, unknown> = {}) =>
