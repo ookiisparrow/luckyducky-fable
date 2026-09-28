@@ -43,9 +43,9 @@
 
     <view class="k-card ol-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
       <view class="ol-head">
-        <px-anim wx:if="{{item.status === 'shipped'}}" class="ol-truck" name="truck" size="2" />
+        <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
-        <text class="ol-status">{{item.label}}</text>
+        <text class="ol-status" style="{{item.labelColor ? 'color:' + item.labelColor : ''}}">{{item.label}}</text>
         <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后自动取消</text></view>
         <text wx:elif="{{item.right}}" class="t-sys ol-time">{{item.right}}</text>
       </view>

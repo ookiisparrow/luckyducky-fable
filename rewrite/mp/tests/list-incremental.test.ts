@@ -15,6 +15,7 @@ vi.mock('../api/orders', () => ({
   pay: vi.fn(),
   confirmReceive: vi.fn(),
   cancelOrder: vi.fn(),
+  getMyAfterSales: vi.fn(async () => ({ ok: false })), // 售后叠加：拉失败＝不叠加（本测试只钉翻页 setData 形状）
 }))
 vi.mock('../lib/payFlow', () => ({ mapPayResult: vi.fn() }))
 vi.mock('../lib/mapOrders', async (orig) => ({

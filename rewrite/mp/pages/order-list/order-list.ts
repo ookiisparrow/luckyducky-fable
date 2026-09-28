@@ -1,8 +1,9 @@
 // 我的订单：状态分栏 + 游标分页 + 待支付续付（倒计时）+ 按住取消 + 查看物流 + 确认收货 + 写评价。列表从云端拉取、无本地回退单。
 import { tapHaptic } from '../../lib/haptics'
-import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
+import { getMyOrders, pay, confirmReceive, cancelOrder, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, cardLabel, orderLed, listRight, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
+import { mapAfterSales, afterSalesByOrder, afterSaleOverlay, type OrderAfterSales } from '../../lib/mapAftersales'
 import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
@@ -40,26 +41,32 @@ type OrderRow = Omit<OrderVM, 'items'> & {
   tint: string
   amountNum: string
   label: string
+  labelColor: string // 状态名字色（已退款绿字），空＝默认
   led: { tone: string; halo: string }
+  truck: boolean // 待收货且没有售后叠加：状态灯位出小货车
   cd: string
   right: string
   expired: boolean // 待支付倒计时已归零：藏「去支付」、右上角写「已超时」（云端关单前）
 }
 
 // 视图装饰：附 tint + 拆分货币符号 + 卡片状态名/状态灯/右上角（设计稿 B1 oview·不动 mapOrders 单源）。
-function decorate(o: OrderVM): OrderRow {
+// 有售后时叠加「售后中 / 已退款」（云端退款不改订单状态·lib/mapAftersales afterSaleOverlay），订单状态本身不动。
+function decorate(o: OrderVM, as: Record<string, OrderAfterSales>): OrderRow {
   const now = Date.now()
   const r = listRight(o, now)
+  const ov = afterSaleOverlay(o.items, as[o.id])
   return {
     ...o,
     tint: TINT[o.status] || 'purple',
     amountNum: stripCny(o.amountLabel),
     items: o.items.map((l) => ({ ...l, priceNum: stripCny(l.priceLabel) })),
     thumbs: o.items.slice(0, 3), // 缩略图最多 3 张（设计稿 thumbs.slice(0,3)）
-    label: cardLabel(o.status),
-    led: orderLed(o.status),
+    label: ov ? ov.head : cardLabel(o.status),
+    labelColor: ov ? ov.color : '',
+    led: ov ? ov.led : orderLed(o.status),
+    truck: !ov && o.status === 'shipped',
     cd: r.cd,
-    right: r.text,
+    right: ov ? ov.sub : r.text,
     expired: o.status === 'pending' && payLeftMs(o, now) === 0,
   }
 }
@@ -82,6 +89,7 @@ Page({
   },
   _busy: false, // 网络动作在途锁（确认收货/取消）：重复点直接丢
   _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
+  _as: {} as Record<string, OrderAfterSales>, // 本人售后按订单汇总（reload 并行拉·翻页复用）：卡片叠加「售后中 / 已退款」
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
@@ -144,8 +152,15 @@ Page({
     const tab = this.data.tabKey // 捕获本次请求的 tab·回包落地前复核，防快速切 tab 慢回包乱序覆盖（同 player playToken）
     const seq = ++this._seq // 代次：同 tab 内被更晚 reload（如取消后 reload）取代的旧回包丢弃
     this.setData({ loading: true })
-    const r = await getMyOrders(undefined, 20, tab)
-    if (seq !== this._seq || tab !== this.data.tabKey) return // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
+    // 并行拉本人售后（云端退款不改订单状态，卡片靠它叠加「售后中 / 已退款」）；失败静默不叠加（保留上次拉到的）。翻页复用不重拉。
+    // ponytail: 只取最近 100 条售后，超出不叠加；上限升级路径＝云端订单接口直接带售后汇总。
+    // 售后只做叠加显示：同步抛错/非 Promise 也只当「没拉到」，不拖垮订单列表
+    const asReq = Promise.resolve()
+      .then(() => getMyAfterSales(undefined, 100))
+      .catch(() => null)
+    const [r, asRes] = await Promise.all([getMyOrders(undefined, 20, tab), asReq])
+    if (seq !== this._seq || tab !== this.data.tabKey) return
+    if (asRes && asRes.ok) this._as = afterSalesByOrder(mapAfterSales(asRes.list)) // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
     // 失败≠空态（根因#14）：失败不覆盖已有列表（onShow 返回抖动一次不该把待支付订单清空）；
     // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
     if (!r.ok) {
@@ -158,7 +173,7 @@ Page({
     const anim = this._animDir // 消费一次：仅切 tab 触发的 reload 带方向动画；onShow/翻页 _animDir 为空＝不动画
     this._animDir = ''
     this._all = all // 全量重发（新列表本该全发·非增量场景）：迁实例字段后 shown 仍整表替换
-    this.setData({ loading: false, loadFailed: false, shown: all.map(decorate), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
+    this.setData({ loading: false, loadFailed: false, shown: all.map((o) => decorate(o, this._as)), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
   },
   onRetryLoad() {
     tapHaptic()
@@ -185,7 +200,7 @@ Page({
       if (seen.has(o.id)) continue // 追加去重
       seen.add(o.id)
       this._all.push(o)
-      patch['shown[' + idx + ']'] = decorate(o)
+      patch['shown[' + idx + ']'] = decorate(o, this._as)
       idx++
     }
     this.setData(patch)

@@ -83,3 +83,41 @@ export function refundBlock(orderStatus: string, items: OrderLineVM[], appliedLi
   if (hasApplied) return '这件已申请过'
   return '已开课的商品不支持退款'
 }
+
+// —— 订单叠加售后显示（只改显示，不改订单状态/钱）——
+// 云端退款不改订单状态（applyRefund 只新建售后单，订单仍是 paid/shipped/done），只看订单状态会出现
+// 「申请了退款还显示正在发货」。页面另拉本人售后，按订单汇总后叠加到状态名/灯/行标上。
+// ponytail: 页面只取最近 100 条售后，更早的不叠加；升级路径＝云端订单接口直接带售后汇总。
+export interface OrderAfterSales {
+  live: '' | 'applied' | 'approved' // 进行中售后（两者都有取 approved）
+  lines: Record<string, '退款中' | '已退款'> // 行标（rejected 不标）
+}
+
+/** 按订单汇总售后：出现在结果里＝该单有售后记录（含被拒）。一行只有一张售后单（云端确定性 _id），无冲突。 */
+export function afterSalesByOrder(list: AfterSaleVM[]): Record<string, OrderAfterSales> {
+  const out: Record<string, OrderAfterSales> = {}
+  for (const a of list) {
+    const o = out[a.orderId] || (out[a.orderId] = { live: '', lines: {} })
+    if (a.status === 'applied' || a.status === 'approved') {
+      if (o.live !== 'approved') o.live = a.status
+      o.lines[a.lineId] = '退款中'
+    } else if (a.status === 'refunded') o.lines[a.lineId] = '已退款'
+  }
+  return out
+}
+
+export interface AfterSaleOverlay {
+  head: string // 状态名
+  sub: string // 右侧/副文
+  led: { tone: string; halo: string } // 状态灯（设计稿 LED p 紫 / g 绿）
+  color: string // 状态名字色（已退款绿字 #2F7A48·设计稿 AS_ST refunded），空＝默认
+}
+
+/** 叠加规则：有进行中售后→「售后中」紫灯；否则每一行都已退款→「已退款」绿灯；否则不叠加（null）。
+ *  「已退款」按行判断：云端一行只退剩余可退件（qty−已进课件），已进课的件退不了，那行有 refunded 就算退完。 */
+export function afterSaleOverlay(items: OrderLineVM[], s: OrderAfterSales | undefined): AfterSaleOverlay | null {
+  if (!s) return null
+  if (s.live) return { head: '售后中', sub: s.live === 'approved' ? '退款处理中' : '退款申请中', led: { tone: '#8A5AE0', halo: '' }, color: '' }
+  if (items.length && items.every((it) => s.lines[it.lineId] === '已退款')) return { head: '已退款', sub: '', led: { tone: '#3F9A5E', halo: '' }, color: '#2F7A48' }
+  return null
+}

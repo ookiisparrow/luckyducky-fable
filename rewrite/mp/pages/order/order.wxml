@@ -13,7 +13,8 @@
       <view class="od-state">
         <view class="od-state-l">
           <px-anim wx:if="{{vm.status === 'pending'}}" name="hourglass" size="2" />
-          <text class="od-head">{{head}}</text>
+          <px-i wx:elif="{{asLed}}" name="led" tone="{{asLed.tone}}" halo="{{asLed.halo}}" />
+          <text class="od-head" style="{{headColor ? 'color:' + headColor : ''}}">{{head}}</text>
         </view>
         <text class="t-sys od-sub od-sub-{{sub.tone}}" wx:if="{{sub.text}}">{{sub.text}}</text>
       </view>
@@ -33,6 +34,8 @@
         <px-i class="od-warn-led" name="led" tone="{{warn.tone}}" />
         <text class="t-sys od-warn-t">{{warn.text}}</text>
       </view>
+      <!-- 有售后记录（含被拒）：进我的售后看进度（云端退款不改订单状态，进度在售后页） -->
+      <view class="t-sys od-more od-as-go" wx:if="{{asHas}}" bind:tap="onGoAfterSales"><text>查看售后进度</text><px-i name="arrow" /></view>
     </view>
 
     <!-- 物流（有运单号时·真实数据仅运单号+公司，实时轨迹经快递100插件；插件打不开回退复制运单号） -->
@@ -69,6 +72,7 @@
         <view class="od-item-mid">
           <text class="od-item-name">{{item.name}}</text>
           <text class="t-sys od-item-sub">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
+          <text wx:if="{{lineTags[item.lineId]}}" class="t-sys od-as-tag">{{lineTags[item.lineId]}}</text>
         </view>
         <view class="od-item-r">
           <text class="mono od-item-price">{{item.priceLabel}}</text>

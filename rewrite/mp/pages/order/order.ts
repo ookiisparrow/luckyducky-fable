@@ -3,7 +3,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
-import { applicableLines, mapAfterSales, refundBlock } from '../../lib/mapAftersales'
+import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, type AfterSaleVM } from '../../lib/mapAftersales'
 import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxToast, fxHint } from '../../lib/pxFx'
@@ -34,7 +34,11 @@ Page({
     loading: true,
     loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
     vm: null as OrderVM | null,
-    head: '', // 状态卡左侧短状态名（设计稿 ST）
+    head: '', // 状态卡左侧短状态名（设计稿 ST）；有售后时叠加「售后中 / 已退款」（lib/mapAftersales afterSaleOverlay）
+    headColor: '', // 状态名字色（已退款绿字），空＝默认
+    asLed: null as { tone: string; halo: string } | null, // 售后叠加状态灯（售后中紫 / 已退款绿），null＝不出灯
+    asHas: false, // 该单有任何售后记录：出「查看售后进度」入口
+    lineTags: {} as Record<string, string>, // 行标 lineId→「退款中 / 已退款」
     sub: { text: '', tone: '' } as { text: string; tone: string }, // 状态卡右侧小字（倒计时/签收日期…）
     warn: null as { text: string; tone: string } | null,
     help: false, // 待退款/支付异常：底部「返回 + 联系客服」
@@ -68,6 +72,7 @@ Page({
   _busy: false, // 网络动作在途锁（确认收货/取消/售后前置拉取）：重复点直接丢
   _asOk: [] as AsLine[], // 售后半屏：可退行
   _asAll: [] as AsLine[], // 售后半屏：全部商品（换货/补发转客服用）
+  _asList: null as AfterSaleVM[] | null, // 最近一次拉到的本人售后（reload 并行拉）：叠加显示 + 申请售后复用；null＝还没拉到过
   _seq: 0, // reload 代次·丢弃过期回包（onShow/取消/支付/确认收货多触发点并发·慢回包别把状态卡盖回过期态）
   _ticker: null as ReturnType<typeof setInterval> | null, // 待支付倒计时每秒刷新
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay/售后回包在途用户退出详情页，迟到回包不再对已退页 toast/reload/导航
@@ -112,8 +117,15 @@ Page({
     // 订单状态/钱路径页：多 reload 触发点（onShow + 取消/支付/确认收货各自 reload）并发时，慢回包迟到落地会把
     // 状态卡盖回过期态（如取消成功已 closed 又被在途 onShow 的 pending 盖回·重现取消/支付按钮）。代次不符即丢弃。
     const seq = ++this._seq
-    const r = await getOrderById(this.orderId)
+    // 并行拉本人售后（云端退款不改订单状态，靠它叠加「售后中 / 已退款」）；失败静默不叠加（保留上次拉到的，首次则不叠加）。
+    // ponytail: 只取最近 100 条售后，超出不叠加；上限升级路径＝云端订单接口直接带售后汇总。
+    // Promise.resolve().then 包一层：接口桩/异常实现同步抛错或返回非 Promise 时也只当「没拉到」，不拖垮订单主体
+    const asReq = Promise.resolve()
+      .then(() => getMyAfterSales(undefined, 100))
+      .catch(() => null)
+    const [r, asRes] = await Promise.all([getOrderById(this.orderId), asReq])
     if (seq !== this._seq) return
+    if (asRes && asRes.ok) this._asList = mapAfterSales(asRes.list)
     // 失败≠不存在（根因#14）：请求失败落 loadFailed 给重试（已有 vm 时保留不覆盖）；
     // 查无此单保持 vm 空、loadFailed 灭，wxml 的 !loading 空态就是「订单不存在」。
     if (!r.ok) {
@@ -136,12 +148,18 @@ Page({
       return
     }
     const s = vm.status
+    const asOf = this._asList ? afterSalesByOrder(this._asList)[vm.id] : undefined
+    const ov = afterSaleOverlay(vm.items, asOf)
     this.setData({
       loading: false,
       loadFailed: false,
       vm,
-      head: cardLabel(s),
-      sub: detailSub(vm, Date.now()),
+      head: ov ? ov.head : cardLabel(s),
+      headColor: ov ? ov.color : '',
+      asLed: ov ? ov.led : null,
+      asHas: !!asOf,
+      lineTags: asOf ? asOf.lines : {},
+      sub: ov ? { text: ov.sub, tone: '' } : detailSub(vm, Date.now()),
       warn: WARN[s] || null,
       help: !!WARN[s],
       dock: s !== 'closed',
@@ -191,6 +209,10 @@ Page({
       success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
       fail: () => wx.showToast({ title: '复制没成功，长按运单号手动复制', icon: 'none' }),
     })
+  },
+  // 「查看售后进度」→ 我的售后（售后↔详情会互跳，防叠栈）
+  onGoAfterSales() {
+    navigateOrRedirect('/pages/aftersales/aftersales')
   },
   // 物流卡 → 物流页壳（运单号大字 + 快递100 插件入口·pages/logistics）
   onViewLogistics() {
@@ -286,17 +308,21 @@ Page({
   async onAfterSale() {
     const vm = this.data.vm
     if (!vm) return
-    // 该单已申请过的行：从我的售后里筛本单。云端按申请时间倒序截断，
-    // 页长取云端默认 100（api 默认 20 会把本单较早的申请截掉，用户选了才被 ALREADY_APPLIED 拒）。
+    // 该单已申请过的行：从我的售后里筛本单。reload 已并行拉过就复用（不重复请求），没拉到才现拉。
+    // 云端按申请时间倒序截断，页长取云端默认 100（api 默认 20 会把本单较早的申请截掉，用户选了才被 ALREADY_APPLIED 拒）。
     // ponytail: 只取首页·不看 hasMore——本人售后超 100 条时本单更早的申请仍会被截掉（云端 ALREADY_APPLIED 兜底）；
     // 根治=云端 getMyAfterSales 接 orderId 过滤后改传 vm.id、删下方客户端 filter。
-    const asRes = await this.withLoading('正在加载', () => getMyAfterSales(undefined, 100))
-    if (!asRes || this.unloaded) return // 在途重复点 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
-    if (!asRes.ok) {
-      wx.showToast({ title: '售后记录没加载出来，稍后再试', icon: 'none' }) // 失败≠一条都没申请过
-      return
+    let list = this._asList
+    if (!list) {
+      const asRes = await this.withLoading('正在加载', () => getMyAfterSales(undefined, 100))
+      if (!asRes || this.unloaded) return // 在途重复点 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
+      if (!asRes.ok) {
+        wx.showToast({ title: '售后记录没加载出来，稍后再试', icon: 'none' }) // 失败≠一条都没申请过
+        return
+      }
+      list = this._asList = mapAfterSales(asRes.list)
     }
-    const appliedIds = mapAfterSales(asRes.list).filter((a) => a.orderId === vm.id).map((a) => a.lineId)
+    const appliedIds = list.filter((a) => a.orderId === vm.id).map((a) => a.lineId)
     this._asOk = applicableLines(vm.status, vm.items, appliedIds).map(asLineOf)
     this._asAll = vm.items.map(asLineOf)
     const asBlock = refundBlock(vm.status, vm.items, appliedIds)
@@ -359,6 +385,8 @@ Page({
     const r = await applyRefund(vm.id, this.data.asLine, this.data.asReason)
     if (this.unloaded) return // await 恢复点复核：申请已真实提交，非钱副作用，静默收尾即可（不再对已退页 toast/导航）
     if (r.ok) {
+      // 新售后单先并进本地记录：回到详情时就算这次刷新售后没拉到，也能显示「售后中」
+      if (this._asList) this._asList = mergeAfterSales(mapAfterSales([r.afterSale]), this._asList)
       this.setData({ asOpen: false, asOut: false, asBusy: false })
       wx.showToast({ title: '已提交申请', icon: 'success' }) // 紧接着跳售后页：原生提示跨页不断
       navigateOrRedirect('/pages/aftersales/aftersales')

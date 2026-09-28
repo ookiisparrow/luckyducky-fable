@@ -74,6 +74,13 @@ page {
   font-weight: 300;
   line-height: 1.5;
 }
+/* 有售后记录：「查看售后进度 →」行（分隔线 + 右对齐小字，同物流卡「查看物流」口径） */
+.od-as-go {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--v5-hair);
+  justify-content: flex-end;
+}
 .od-steps {
   margin-top: 16px;
   display: flex;
@@ -225,6 +232,17 @@ page {
 .od-item-sub {
   font-size: 13px;
   font-weight: 300;
+  color: var(--v5-ink-2);
+}
+/* 商品行售后小标（退款中 / 已退款） */
+.od-as-tag {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 18px;
+  border-radius: 4px;
+  background: var(--v5-sunk);
   color: var(--v5-ink-2);
 }
 .od-item-r {
