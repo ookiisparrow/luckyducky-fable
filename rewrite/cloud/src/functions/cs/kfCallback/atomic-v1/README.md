@@ -52,9 +52,9 @@ atomic-v1/
 | 合照 | 易夹杂订单号等 | 权威三句只要合照，禁订单号 |
 | 情绪 | 常写死在业务文案里 | 独立 `emotion/*`，始终先抽再拼 |
 | 发送 | 一次拼好再发 | 按 sequence：情绪 → 同理 → 合照×3 |
-| 来源 | Pack 内嵌/覆盖 | 话术 md + OVERRIDE_packaging 拆出 |
+| 来源 | Pack 内嵌/覆盖 | 话术 md 拆出 |
 
-旧 Pack「请先发订单号」对本线作废；权威合照见 `OVERRIDE_packaging.md` / `ask_photo_01~03`。
+旧 Pack「请先发订单号」对本线作废；权威合照见 `ask_photo_01~03`。
 
 ## 测法
 
@@ -62,7 +62,7 @@ atomic-v1/
 2. 顾客侧发：「包裹被摔坏了」。
 3. 预期出泡：先惊讶短句（如「啊？」）→ 再同理一句 → 再三条合照权威句（三气泡依次发）。
 
-来源：`topics/收到后-包装.md`、`docs/04` 惊讶段、`OVERRIDE_packaging.md`。不改仓库代码、不部署；仅供测版挂接读盘/打进资产。
+来源：`topics/收到后-包装.md`、`docs/04` 惊讶段。原子 `.txt` 与序列由 `rewrite/cloud/build.mjs` 经 `scripts/bundle-cs-atomic.mjs` 打进 kfCallback 的 `csAtomicAssets.generated.json`，随该云函数部署；运行时读打包资产。
 
 ## 演进 · 查单门闩 + 优先级组装（2026-09-19）
 

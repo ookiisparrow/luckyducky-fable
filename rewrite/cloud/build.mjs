@@ -1,5 +1,5 @@
 /**
- * 重写线云函数打包（esbuild·M1 批18 收口·承接旧线 packages/cloud/build.mjs 范式）：
+ * 重写线云函数打包（esbuild·M1 批18 收口）：
  * functions/ 下每个「函数单元」→ dist/<name>/index.js（CJS 单文件，kit/@ldrw/shared 内联 + 摇树），
  * external: wx-server-sdk（tcb 运行时提供 + installDependency 装）。
  *

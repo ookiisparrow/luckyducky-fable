@@ -6,8 +6,7 @@ import type { App } from 'vue'
 // 的 anomalies 账本（服务端 hashSig 避开 mp 侧 anomalyFingerprint 对非 ASCII 字符剥空可能导致的中文报错
 // 坍缩坑，见 rewrite/cloud/src/functions/adminApi/actions/ops.ts 头注）。会话内同指纹去重 + 封顶
 // MAX_REPORTS=20（防错误风暴自激：上报本身失败又抛错、被自己的监听器再捕一次形成自激环）；无会话不外呼
-// （不为上报开未鉴权口子）。agent 端 lib/errorReporter.ts 是本文件的同构小副本（两包各自独立部署，不新开
-// 共享包——Rule of Three 未到，见该文件头注）。
+// （不为上报开未鉴权口子）。
 
 interface ReportableClient {
   hasSession(): boolean
