@@ -10,6 +10,7 @@ import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 import { fxHint } from '../../lib/pxFx'
 import { clearConsentHint } from '../../lib/consent'
+import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
 // 守卫 rw-mp-list-loadfailed-state 焊死两侧一致）：宽下界容座机/带区号号码，与地址页收货电话同精神。
@@ -30,27 +31,20 @@ Page({
     busy: false,
     loading: true, // login 在途：不画空白可编辑档（根因#14·失败≠空档案）
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
-    holdOut: false, // 正在按住「退出登录」（驱动灰色填充）
     holdDel: false, // 正在按住「删除资料」（驱动红色填充）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   orig: { nickname: '', phone: '' }, // 载入时的原值：判断有没有改动（放弃确认）
   unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
-  // 账号操作（v5 D3·老板拍板从「我」页挪来）：退出＝按住 0.6s；删除＝按住 0.9s 再弹一次后果确认（删除不可恢复·隐私政策第六条）
-  _holdOut: null as Hold | null,
+  // 账号操作（v5 D3·老板拍板从「我」页挪来）：删除＝按住 0.9s 再弹一次后果确认（删除不可恢复·隐私政策第六条）
   _holdDel: null as Hold | null,
   _deleting: false,
   onUnload() {
     this.unloaded = true
-    this._holdOut?.cancel()
     this._holdDel?.cancel()
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   async onLoad() {
-    this._holdOut = createHold(600, () => this.doLogout(), {
-      onQuick: () => fxHint(this, '按住退出登录'),
-      onChange: (v) => this.setData({ holdOut: v }),
-    })
     this._holdDel = createHold(900, () => this.confirmDelete(), {
       onQuick: () => fxHint(this, '按住删除资料'),
       onChange: (v) => this.setData({ holdDel: v }),
@@ -105,43 +99,21 @@ Page({
   onBlur() {
     this.setData({ focus: '' })
   },
-  onLogoutStart(e: WechatMiniprogram.TouchEvent) {
-    keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
-    const t = e.touches[0]
-    this._holdOut?.start(t?.clientX, t?.clientY)
-  },
-  onLogoutMove(e: WechatMiniprogram.TouchEvent) {
-    const t = e.touches[0]
-    if (t) this._holdOut?.move(t.clientX, t.clientY) // 手指滑开超 10px 作废（顺势滚动不误退出）
-  },
-  onLogoutEnd() {
-    this._holdOut?.end()
-  },
-  onLogoutCancel() {
-    this._holdOut?.cancel()
-  },
   onDeleteStart(e: WechatMiniprogram.TouchEvent) {
     if (this._deleting) return
-    keyPress('light')
+    keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
     const t = e.touches[0]
     this._holdDel?.start(t?.clientX, t?.clientY)
   },
   onDeleteMove(e: WechatMiniprogram.TouchEvent) {
     const t = e.touches[0]
-    if (t) this._holdDel?.move(t.clientX, t.clientY)
+    if (t) this._holdDel?.move(t.clientX, t.clientY) // 手指滑开超 10px 作废（顺势滚动不误删）
   },
   onDeleteEnd() {
     this._holdDel?.end()
   },
   onDeleteCancel() {
     this._holdDel?.cancel()
-  },
-  // 退出登录：清本地登录 hint，回「我」页（它 onShow 见登录态变了会整页重拉·转登出态）。openid 身份与服务端订单/学习仍在，再登即回。
-  doLogout() {
-    tapHaptic()
-    loginGate.logout()
-    wx.showToast({ title: '已退出登录', icon: 'none' }) // 随即退回上一页：原生提示跨页不断，自绘的会随本页消失
-    this.leaveNow()
   },
   confirmDelete() {
     tapHaptic()
@@ -177,7 +149,7 @@ Page({
     wx.showToast({ title: '已删除', icon: 'none' }) // 随即退回上一页：原生提示跨页不断
     if (!this.unloaded) this.leaveNow()
   },
-  /** 退出/删除后直接走：先撤放弃确认的拦截（有改动也不再问），渲染落地后再返回。 */
+  /** 删除后直接走：先撤放弃确认的拦截（有改动也不再问），渲染落地后再返回。 */
   leaveNow() {
     this.setData({ dirty: false }, () => goBackOrHome())
   },
@@ -215,11 +187,7 @@ Page({
     let avatarFailed = false
     if (this.data.avatarTemp) {
       try {
-        const up = await wx.cloud.uploadFile({
-          cloudPath: `avatars/${Date.now()}-${Math.floor(Math.random() * 1e6)}.png`,
-          filePath: this.data.avatarTemp,
-        })
-        patch.avatar = up.fileID // 换永久标识再同步
+        patch.avatar = await uploadAvatar(this.data.avatarTemp) // 换永久标识再同步
       } catch {
         avatarFailed = true // 上传失败：昵称照常同步·不带头像字段（不清云端旧头像）
       }
@@ -238,18 +206,7 @@ Page({
       fxHint(this, '资料已存，头像上传没成功')
       return
     }
-    // 审核被拒按码说人话（云端 actions/user.ts updateProfile）：IMG_RISKY＝头像违规；SEC_CHECK_FAIL＝昵称没过，
-    // 带了新头像时也可能是头像没校成（云端同码），那就两样都提。
-    const err = String(r.error)
-    fxHint(
-      this,
-      err === 'IMG_RISKY'
-        ? '这张头像不能用，换一张'
-        : err === 'SEC_CHECK_FAIL'
-          ? patch.avatar
-            ? '昵称或头像没通过审核，换一个再试'
-            : '昵称没通过审核，换一个'
-          : '保存没成功，稍后再试'
-    )
+    // 审核被拒按码说人话（lib/avatar·与「我」页换头像同口径）：本页总送昵称/签名，带了新头像时两样都可能没过
+    hintProfileFail(this, r.error, { text: true, avatar: !!patch.avatar })
   },
 })

@@ -306,6 +306,7 @@ Page({
   onReview(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id)
     const o = this._all.find((x) => x.id === id)
+    if (o && o.reviewedAll) return // 全评完出灰标不可点（拍板 6）
     if (o && o.items.length === 1) wx.navigateTo({ url: reviewUrl(id, o.items[0]) })
     else wx.navigateTo({ url: '/pages/order/order?id=' + id + '&pick=review' })
   },

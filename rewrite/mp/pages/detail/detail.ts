@@ -10,7 +10,7 @@ import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
 import { openCustomerService } from '../../utils/customerService'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxToast } from '../../lib/pxFx'
+import { fxHint, fxToast } from '../../lib/pxFx'
 import { goHomeTab } from '../../lib/homeIntent'
 
 const NAV_LOCK_MS = 800 // 跳转类按钮防连点：跳转发起后 800ms 内不再响应
@@ -39,6 +39,7 @@ Page({
     galleryWindow: [] as boolean[], // 随 galleryIndex 同步重算，详见 computeGalleryWindow
     rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
     wide: {} as Record<string, boolean>, // 横图 src（退回 aspectFill 居中·见 onImgLoad）
+    added: false, // 本款式已加购：底栏「加入购物车」「立即购买」合并成「去结算」（老板拍板 8）；换款式恢复
   },
   productId: '',
   _navAt: 0, // 上次发起跳转的时刻（防连点短时锁·NAV_LOCK_MS）
@@ -127,6 +128,7 @@ Page({
     if (!vm) return
     // 换款式图集回第 1 张：swiper current 绑 galleryIndex，改它 swiper 自己带动画滑回（平滑）
     this.setData({
+      ...(idx !== this.data.skuIndex ? { added: false } : {}), // 换了别的款式：恢复加购/直买两颗键
       skuIndex: idx,
       currentPriceNum: (vm.skus[idx] ? vm.skus[idx].price : vm.price).toFixed(2),
       galleryIndex: 0,
@@ -145,9 +147,22 @@ Page({
     if (!vm) return
     tapHaptic()
     const line = this._line(vm)
-    cart.add(line)
+    try {
+      cart.add(line)
+    } catch {
+      fxHint(this, '没加进购物车，请重试') // 失败不合并底栏
+      return
+    }
     trackEvent('add_to_cart', 'detail', line.id, { sku: line.sku, price: line.price }) // 电商漏斗埋点（R41）
+    this.setData({ added: true })
     fxToast(this, '已加入购物车')
+  },
+  // 合并后的「去结算」：切到购物车页结算（购物车是 tab 页，只能 switchTab）
+  onGoCheckout() {
+    if (Date.now() - this._navAt < NAV_LOCK_MS) return
+    this._navAt = Date.now()
+    tapHaptic()
+    wx.switchTab({ url: '/pages/cart/cart' })
   },
   onService() {
     openCustomerService()

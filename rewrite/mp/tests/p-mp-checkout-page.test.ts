@@ -2,6 +2,7 @@
 // 缺地址、建单失败可重试（同一幂等键）、建单成功扣车并拉支付、提交在途退页的收尾。
 // 草稿/购物车/地址用真的（wx 存储桩），只桩云调用。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import wxmlSrc from '../pages/checkout/checkout.wxml?raw'
 
 const { createOrderMock, payMock, goHomeMock, getAllProductsMock } = vi.hoisted(() => ({
   createOrderMock: vi.fn(),
@@ -301,5 +302,93 @@ describe('结算页：提交', () => {
     await p
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
     expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到「我 → 我的订单」继续支付', icon: 'none' })
+  })
+})
+
+describe('结算页：改数量（老板拍板 9）', () => {
+  const tap = (line: string) => ({ currentTarget: { dataset: { line } } })
+
+  it('大白话：点 +/− 改本次草稿，件数和应付跟着变；购物车里的数量不变（不回写）', async () => {
+    const page = await mount()
+    await page.refresh()
+    page.onQtyInc(tap(page.data.items[1].lineId)) // 云朵鸭 1→2
+    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    expect(page.data.items.map((l: any) => l.qty)).toEqual([2, 2])
+    expect(page.data.amountNum).toBe('300.00')
+    page.onQtyDec(tap(page.data.items[0].lineId)) // 小鸭 2→1
+    await vi.waitFor(() => expect(page.data.count).toBe(3))
+    expect(page.data.amountNum).toBe('172.00')
+    expect(cart.getItems().map((it) => it.qty)).toEqual([2, 1])
+  })
+
+  it('大白话：只剩 1 件再按 − 不动；行上带出能不能再减/再加', async () => {
+    const page = await mount()
+    await page.refresh()
+    expect(page.data.items.map((l: any) => [l.canDec, l.canInc])).toEqual([
+      [true, true],
+      [false, true],
+    ])
+    page.onQtyDec(tap(page.data.items[1].lineId))
+    await page.refresh()
+    expect(page.data.items[1].qty).toBe(1)
+  })
+
+  it('大白话：提交在途时按 +/− 没反应，草稿数量不变', async () => {
+    const page = await mount()
+    await page.refresh()
+    page.data.submitting = true
+    page.onQtyInc(tap(page.data.items[0].lineId))
+    page.onQtyDec(tap(page.data.items[0].lineId))
+    expect(ck.getDraft().items.map((l) => l.qty)).toEqual([2, 1])
+  })
+
+  it('大白话：改了数量再提交——按新数量下单，并用新的幂等键', async () => {
+    const page = await mount()
+    await page.refresh()
+    createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
+    await page.onSubmit()
+    page.onQtyInc(tap(page.data.items[1].lineId))
+    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    await page.onSubmit()
+    expect(createOrderMock.mock.calls[1][0]).toEqual([
+      { id: 'p1', sku: '', qty: 2 },
+      { id: 'p2', sku: '', qty: 2 },
+    ])
+    expect(createOrderMock.mock.calls[1][2]).not.toBe(createOrderMock.mock.calls[0][2])
+  })
+
+  it('大白话：进页时价格刚同步过，接着改数量——新价和新数量都保留、应付按两者重算', async () => {
+    getAllProductsMock.mockImplementation(async () => [{ id: 'p1', price: 99 }, { id: 'p2', price: 22 }])
+    const page = await mount()
+    await page.refresh()
+    page.onQtyInc(tap(page.data.items[0].lineId))
+    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    expect(page.data.items.map((l: any) => [l.qty, l.priceNum])).toEqual([
+      [3, '99.00'],
+      [1, '22.00'],
+    ])
+    expect(page.data.amountNum).toBe('319.00')
+  })
+})
+
+describe('结算页：协议小字（老板拍板 10）', () => {
+  it('大白话：点《用户协议》《隐私政策》打开对应协议页；提交在途不跳（否则下单成功的换页会替掉协议页、结算页残留在栈里）', async () => {
+    const page = await mount()
+    await page.refresh()
+    page.onAgreement({ currentTarget: { dataset: { type: 'user' } } })
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/pages/agreement/agreement?type=user' }))
+    page.onAgreement({ currentTarget: { dataset: { type: 'privacy' } } })
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/pages/agreement/agreement?type=privacy' }))
+    const n = wxMock.navigateTo.mock.calls.length
+    page.data.submitting = true
+    page.onAgreement({ currentTarget: { dataset: { type: 'user' } } })
+    expect(wxMock.navigateTo.mock.calls.length).toBe(n)
+  })
+
+  it('大白话：页面上真有这行字，两个书名号各绑到对应协议', () => {
+    const w = wxmlSrc.replace(/<!--[\s\S]*?-->/g, '')
+    expect(w).toContain('提交订单即表示同意')
+    expect(w).toMatch(/data-type="user"[^>]*bind:tap="onAgreement"[^>]*>《用户协议》/)
+    expect(w).toMatch(/data-type="privacy"[^>]*bind:tap="onAgreement"[^>]*>《隐私政策》/)
   })
 })

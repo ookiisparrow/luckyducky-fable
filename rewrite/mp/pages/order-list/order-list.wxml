@@ -60,8 +60,8 @@
           <text class="t-sys ol-amt-t">{{item.amountTitle}} · 共 {{item.count}} 件</text>
         </view>
       </view>
-      <!-- 操作键：待支付＝按住取消 + 去支付；待收货＝查看物流 + 确认收货；已完成＝写评价（浅色键）。
-           ponytail: 云端订单没有「已评价」字段，灰底「已评价」标签暂不出；云端给行级 reviewed 后按它二选一 -->
+      <!-- 操作键：待支付＝按住取消 + 去支付；待收货＝查看物流 + 确认收货；已完成＝写评价（浅色键），
+           每行都评过＝灰底「已评价」标签不可点（拍板 6·云端订单接口带 reviewedLineIds） -->
       <view class="ol-acts" wx:if="{{item.status === 'pending'}}">
         <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条）：外层接按住手势 + 吞掉 tap 不进详情，内层是键帽 -->
         <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
@@ -77,6 +77,9 @@
           data-id="{{item.id}}" catch:tap="onLogistics" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看物流</view>
         <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
           data-id="{{item.id}}" catch:tap="onConfirm" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
+      </view>
+      <view class="ol-acts" wx:elif="{{item.status === 'done' && item.reviewedAll}}">
+        <text class="ol-act ol-reviewed">已评价</text>
       </view>
       <view class="ol-acts" wx:elif="{{item.status === 'done'}}">
         <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"

@@ -394,13 +394,13 @@ describe('订单详情：申请售后（拍板 7·自绘底部弹层）', () => 
     expect(page.data.asOpen).toBe(true)
   })
 
-  it('大白话：弹层默认「退款 + 线材缺色」；选「退款」提交才调退款接口，原因带上所选标签；成功提示并跳我的售后', async () => {
+  it('大白话：弹层默认「退款 + 无理由」（拍板 3）；选「退款」提交才调退款接口，原因带上所选标签；成功提示并跳我的售后', async () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [] })
     handlers.applyRefund = () => ({ ok: true })
     const page = await mount()
     page.data.vm = doneVm()
     await page.onAfterSale()
-    expect(page.data).toMatchObject({ asOpen: true, asType: '退款', asReason: '线材缺色', asLine: 'L1' })
+    expect(page.data).toMatchObject({ asOpen: true, asType: '退款', asReason: '无理由', asLine: 'L1' })
     expect(page.data.asLines).toEqual([{ lineId: 'L1', name: '小鸭', spec: '黄' }]) // 规格单独一行，同款不同色分得清
     page.onAsReason(tapV('少件'))
     await page.onAsSubmit()
@@ -423,7 +423,7 @@ describe('订单详情：申请售后（拍板 7·自绘底部弹层）', () => 
     expect(callAppMock).not.toHaveBeenCalledWith('applyRefund', expect.anything())
     expect(kefuMock).toHaveBeenCalledTimes(2)
     // 打开客服前把「订单号 + 商品 + 原因」交给客服入口去复制
-    expect(kefuMock.mock.calls[0][0]).toBe('订单号：o1\n商品：小鸭 · 黄\n售后：换货 · 线材缺色')
+    expect(kefuMock.mock.calls[0][0]).toBe('订单号：o1\n商品：小鸭 · 黄\n售后：换货 · 无理由')
   })
 
   it('大白话：多件单——弹层里列出全部可退商品（8 件也都选得到），选第 7 件提交的就是第 7 件', async () => {
@@ -435,7 +435,7 @@ describe('订单详情：申请售后（拍板 7·自绘底部弹层）', () => 
     expect(page.data.asLines.map((l: { name: string }) => l.name)).toEqual(['鸭1', '鸭2', '鸭3', '鸭4', '鸭5', '鸭6', '鸭7', '鸭8'])
     page.onAsLine({ currentTarget: { dataset: { v: 'L7' } } })
     await page.onAsSubmit()
-    expect(callAppMock).toHaveBeenCalledWith('applyRefund', { orderId: 'o1', lineId: 'L7', reason: '线材缺色' })
+    expect(callAppMock).toHaveBeenCalledWith('applyRefund', { orderId: 'o1', lineId: 'L7', reason: '无理由' })
   })
 
   it('大白话：点「取消」或遮罩——收起弹层，什么都不提交', async () => {

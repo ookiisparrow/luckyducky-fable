@@ -1,6 +1,6 @@
-// 退出登录 / 删除资料（v5 D3·老板拍板放编辑资料页）：退出＝按住 0.6s；删除＝按住 0.9s 再弹一次后果确认才真删
+// 删除资料（v5 D3·老板拍板放编辑资料页）：按住 0.9s 再弹一次后果确认才真删
 // （删除不可恢复·隐私政策第六条；按住是设计稿交互，确认框讲清后果）。删成清本地地址、登录态、继续学习旧卡；删失败什么都不清。
-// 「我」页不再放这两个入口。Page 桩同 me-cont-failed.test.ts。
+// 「退出登录」键老板 2026-09-29 拍板去掉（两页都不再有）。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import meWxml from '../pages/me/me.wxml?raw'
 import peWxml from '../pages/profile-edit/profile-edit.wxml?raw'
@@ -58,31 +58,20 @@ async function mountLoggedIn() {
 }
 
 describe('入口位置', () => {
-  it('大白话：「我」页没有退出登录/删除资料；编辑资料页有，且用按住（touchstart/touchend）触发、不是轻点', () => {
+  it('大白话：「我」页没有退出登录/删除资料；编辑资料页只有删除资料（没有退出登录），且用按住（touchstart/touchend）触发、不是轻点', async () => {
     const me = meWxml.replace(/<!--[\s\S]*?-->/g, '')
     expect(me).not.toContain('删除资料')
     expect(me).not.toContain('退出登录')
     const pe = peWxml.replace(/<!--[\s\S]*?-->/g, '')
     expect(pe).toContain('删除资料')
-    expect(pe).toContain('退出登录')
+    expect(pe).not.toContain('退出登录')
+    expect(pe).not.toMatch(/onLogout/)
     expect(pe).toMatch(/touchstart="onDeleteStart"/)
-    expect(pe).toMatch(/touchstart="onLogoutStart"/)
     expect(pe).not.toMatch(/bind:tap="onDelete/)
-  })
-})
-
-describe('退出登录（按住 0.6s）', () => {
-  it('大白话：按满才退出并回上一页；点一下只提示按住', async () => {
-    const { page, loginGate } = await mountLoggedIn()
-    page.onLogoutStart({ touches: [{ clientX: 0, clientY: 0 }] })
-    vi.advanceTimersByTime(100)
-    page.onLogoutEnd()
-    expect(loginGate.hasAgreed()).toBe(true)
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '按住退出登录', icon: 'none' })
-    page.onLogoutStart({ touches: [{ clientX: 0, clientY: 0 }] })
-    vi.advanceTimersByTime(600)
-    expect(loginGate.hasAgreed()).toBe(false)
-    expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
+    const { page } = await mountLoggedIn()
+    expect(page.onLogoutStart).toBeUndefined()
+    expect(page.doLogout).toBeUndefined()
+    expect('holdOut' in page.data).toBe(false)
   })
 })
 
@@ -136,10 +125,6 @@ describe('删除资料（按住 0.9s + 一次确认）', () => {
     page.onDeleteMove({ touches: [{ clientX: 100, clientY: 120 }] })
     vi.advanceTimersByTime(900)
     expect(wxMock.showModal).not.toHaveBeenCalled()
-    page.onLogoutStart({ touches: [{ clientX: 0, clientY: 0 }] })
-    page.onLogoutMove({ touches: [{ clientX: 30, clientY: 0 }] })
-    vi.advanceTimersByTime(600)
-    expect(wxMock.navigateBack).not.toHaveBeenCalled()
   })
 
   it('大白话：云端没删成——提示稍后再试，地址和登录态都不动', async () => {

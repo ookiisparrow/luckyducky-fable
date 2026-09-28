@@ -160,6 +160,14 @@ page {
   font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   flex: 0 0 auto;
 }
+/* 已评价（拍板 6·设计稿灰底标签·不可点，不是键） */
+.od-reviewed {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  background: var(--v5-sunk);
+  color: var(--v5-ink-3);
+}
 /* 热区补到 44 高（上下各让 8px·看不见，视觉仍 28 高） */
 .od-mini::after {
   content: '';
@@ -456,11 +464,38 @@ page {
 .as-seg-k.as-seg-off {
   color: var(--v5-ink-4);
 }
-.as-block {
+/* 退款不可选 / 被拒说明（+ 联系客服键·拍板 5） */
+.as-note {
   margin-top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.as-note-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.as-block {
   font-size: 13px;
   font-weight: 300;
   color: var(--v5-ink-2);
+}
+.as-kefu {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+/* 预计退款（拍板 4·云端试算） */
+.as-est {
+  margin-bottom: -8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+  text-align: right;
 }
 .as-group {
   display: flex;

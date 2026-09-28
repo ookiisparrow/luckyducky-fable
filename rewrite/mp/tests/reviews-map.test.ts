@@ -62,12 +62,13 @@ describe('汇总映射（黄金 §七读取：条数 0 视同无数据）', () =
     expect(mapSummary({ count: 'abc' })).toBeNull()
   })
 
-  it('大白话：分布条按 6px 一格取整（24 格共 142px），占比再小也至少亮 1 格（设计稿 logic）', () => {
+  it('大白话：分布条按 6px 一格取整（24 格共 142px），有评分的星级占比再小也至少亮 1 格；0% 一格不亮（老板拍板 7）', () => {
     const w = (pct: number) => mapSummary({ score: '5', count: 1, dist: [['5', pct]] })!.dist[0].w
     expect(w(100)).toBe(142) // 满格 24×6−2
     expect(w(82)).toBe(118) // round(19.68)=20 格
     expect(w(1)).toBe(4) // round(0.24)=0 → 至少 1 格
-    expect(w(0)).toBe(4)
+    expect(w(0)).toBe(0) // 没人打这个星级＝一格不亮
+    expect(w(-5)).toBe(0) // 脏值同 0
     expect(reviewsWxml).toContain('width: {{item.w}}px')
   })
 

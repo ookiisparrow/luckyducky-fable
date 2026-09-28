@@ -1,9 +1,9 @@
 // 订单详情：状态卡（短状态名 + 右侧小字 + 四步进度 + 异常说明）/条目/地址/金额明细/操作（续付·按住取消·确认收货·申请售后·按住撤回售后·联系客服）。
 import { tapHaptic } from '../../lib/haptics'
-import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, getMyAfterSales, withdrawRefund } from '../../api/orders'
+import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, estimateRefund, getMyAfterSales, withdrawRefund } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
-import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, withdrawableLines, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
+import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, payLeftMs, money, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
+import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, rejectedLineIdsOf, REFUND_REJECTED, withdrawableLines, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
 import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxToast, fxHint } from '../../lib/pxFx'
@@ -13,7 +13,7 @@ import { openCustomerService } from '../../utils/customerService'
 const HOLD_MS = 700 // 按住多久算取消订单/撤回售后（设计稿 data-ms=700·拍板 7）
 const SHEET_OUT_MS = 240 // 半屏关：面板 240ms 下滑后撤节点（app.wxss .sh-panel.out）
 const AS_TYPES = ['退款', '换货', '补发'] // 售后类型（设计稿 asf.types）：后台只有退款接口，换货/补发走客服（拍板 7）
-const AS_REASONS = ['线材缺色', '少件', '做工问题', '其他']
+const AS_REASONS = ['无理由', '线材缺色', '少件', '做工问题', '其他'] // 「无理由」排第一并默认选中（老板 2026-09-29 拍板 3）
 let hold: Hold | null = null
 type AsLine = { lineId: string; name: string; spec: string }
 const asLineOf = (l: OrderLineVM): AsLine => ({ lineId: l.lineId, name: l.name, spec: l.spec })
@@ -62,10 +62,13 @@ Page({
     asTypes: AS_TYPES,
     asReasons: AS_REASONS,
     asType: '退款',
-    asReason: '线材缺色',
+    asReason: AS_REASONS[0],
     asLines: [] as AsLine[], // 当前类型可选的商品（退款＝可退行；换货/补发＝全部商品）·规格单列，同款不同色分得清
     asLine: '',
     asBlock: '', // 「退款」段置灰原因（没有可退行时·lib/mapAftersales refundBlock），空＝可退
+    asRej: '', // 还能退别的行时，被拒的那几件（「小鸭 · 黄、…」）——弹层点名「已被拒绝，有疑问联系客服」（拍板 5）
+    asRejKefu: false, // 有被拒的行：弹层给「联系客服」键
+    asEst: '', // 预计退款（拍板 4·云端 estimateRefund 试算）：「计算中…」/「预计退款 ¥X.XX」/「预计金额以审核为准」；非退款段为空
   },
   onLoad(query: Record<string, string | undefined>) {
     this.orderId = String(query.id || '')
@@ -76,6 +79,8 @@ Page({
   _busy: false, // 网络动作在途锁（确认收货/取消/售后前置拉取）：重复点直接丢
   _asOk: [] as AsLine[], // 售后半屏：可退行
   _asAll: [] as AsLine[], // 售后半屏：全部商品（换货/补发转客服用）
+  _asRejLines: [] as AsLine[], // 售后半屏：被拒的行（客服入口带上下文）
+  _estSeq: 0, // 试算代次：切商品/切类型后，旧的试算回包作废（别把上一件的数盖到这一件上）
   _asList: null as AfterSaleVM[] | null, // 最近一次拉到的本人售后（reload 并行拉）：叠加显示 + 申请售后复用；null＝还没拉到过
   _seq: 0, // reload 代次·丢弃过期回包（onShow/取消/支付/确认收货多触发点并发·慢回包别把状态卡盖回过期态）
   _ticker: null as ReturnType<typeof setInterval> | null, // 待支付倒计时每秒刷新
@@ -345,7 +350,7 @@ Page({
   },
   onWriteReview(e: WechatMiniprogram.TouchEvent) {
     const line = this.data.vm && this.data.vm.items[Number(e.currentTarget.dataset.i)]
-    if (line) wx.navigateTo({ url: reviewUrl(this.orderId, line) })
+    if (line && !line.reviewed) wx.navigateTo({ url: reviewUrl(this.orderId, line) }) // 已评价行出灰标不可点（拍板 6）
   },
   // 申请售后：先算可申请行（入口收窄·最终裁决在云端），再开自绘半屏选 类型/原因/商品（多件单在半屏里点选商品）。
   // 没有可退行（如激活过课程）也照开：「退款」段置灰写原因，换货/补发照常走联系客服——不留死路。
@@ -367,21 +372,52 @@ Page({
       list = this._asList = mapAfterSales(asRes.list)
     }
     const appliedIds = appliedLineIdsOf(list, vm.id) // 已撤回的行不算申请过，可再申请
+    const rejIds = rejectedLineIdsOf(list, vm.id) // 被拒维持永久锁（拍板 5）：弹层写清并给客服入口
     this._asOk = applicableLines(vm.status, vm.items, appliedIds).map(asLineOf)
     this._asAll = vm.items.map(asLineOf)
-    const asBlock = refundBlock(vm.status, vm.items, appliedIds)
+    this._asRejLines = this._asAll.filter((l) => rejIds.includes(l.lineId))
+    const asBlock = refundBlock(vm.status, vm.items, appliedIds, rejIds)
     const asLines = asBlock ? this._asAll : this._asOk
     if (!asLines.length) return // 脏单无条目：没东西可选
+    const asType = asBlock ? AS_TYPES[1] : AS_TYPES[0]
     this.setData({
       asOpen: true,
       asOut: false,
       asBusy: false,
-      asType: asBlock ? AS_TYPES[1] : AS_TYPES[0],
+      asType,
       asReason: AS_REASONS[0],
       asBlock,
+      asRej: asBlock === REFUND_REJECTED ? '' : this._asRejLines.map(lineText).join('、'), // 全被拒时置灰原因已说清，不重复点名
+      asRejKefu: this._asRejLines.length > 0,
       asLines,
       asLine: asLines[0].lineId,
     })
+    this.estimate()
+  },
+  // 预计退款（拍板 4）：只在「退款」段按所选商品向云端试算（与 applyRefund 同一份算额·前端不算钱）；
+  // 在途「计算中…」，失败「预计金额以审核为准」不挡提交。代次防旧回包覆盖。
+  estimate() {
+    const seq = ++this._estSeq
+    const vm = this.data.vm
+    if (!vm || this.data.asType !== '退款' || this.data.asBlock || !this.data.asLine) {
+      this.setData({ asEst: '' })
+      return
+    }
+    this.setData({ asEst: '计算中…' })
+    estimateRefund(vm.id, this.data.asLine)
+      .catch(() => null)
+      .then((r) => {
+        if (seq !== this._estSeq || this.unloaded) return
+        const fen = r && r.ok ? Number(r.refundFen) : NaN
+        this.setData({ asEst: Number.isInteger(fen) && fen > 0 ? '预计退款 ' + money(fen / 100) : '预计金额以审核为准' })
+      })
+  },
+  // 被拒的行「联系客服」：订单号 + 被拒商品先复制，客服那边直接粘贴
+  onAsKefu() {
+    const vm = this.data.vm
+    if (!vm) return
+    const copy = `订单号：${vm.id}\n商品：${this._asRejLines.map(lineText).join('、')}\n售后：退款已被拒绝`
+    openCustomerService(copy, () => this.copiedHint())
   },
   onAsType(e: WechatMiniprogram.TouchEvent) {
     const v = String(e.currentTarget.dataset.v)
@@ -393,6 +429,7 @@ Page({
     const asLines = v === '退款' ? this._asOk : this._asAll
     const asLine = asLines.some((l) => l.lineId === this.data.asLine) ? this.data.asLine : asLines[0].lineId
     this.setData({ asType: v, asLines, asLine })
+    this.estimate()
   },
   onAsReason(e: WechatMiniprogram.TouchEvent) {
     const v = String(e.currentTarget.dataset.v)
@@ -400,7 +437,9 @@ Page({
   },
   onAsLine(e: WechatMiniprogram.TouchEvent) {
     const v = String(e.currentTarget.dataset.v)
-    if (this.data.asLines.some((l) => l.lineId === v)) this.setData({ asLine: v })
+    if (!this.data.asLines.some((l) => l.lineId === v) || v === this.data.asLine) return
+    this.setData({ asLine: v })
+    this.estimate()
   },
   onAsClose() {
     if (!this.data.asOpen || this.data.asOut) return

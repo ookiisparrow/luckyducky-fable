@@ -28,7 +28,7 @@ Page({
   onKeyUp: keyUp,
   data: {
     address: null as (Addr & { who: string; where: string }) | null,
-    items: [] as Array<checkout.DraftLine & { priceNum: string }>,
+    items: [] as Array<checkout.DraftLine & { priceNum: string; step: boolean; canDec: boolean; canInc: boolean }>,
     addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
     shipLabel: '',
@@ -93,7 +93,15 @@ Page({
     const a = addr.defaultAddress()
     this.setData({
       address: a && view(a),
-      items: draft.items.map((l) => ({ ...l, cover: freshCover(l, allRaw), priceNum: l.price.toFixed(2) })), // 结算页两位小数（财务口径）
+      // 结算页两位小数（财务口径）；step＝显示 −/+（搭配购恒 1 件不显示），canDec/canInc＝到头的键置灰
+      items: draft.items.map((l) => ({
+        ...l,
+        cover: freshCover(l, allRaw),
+        priceNum: l.price.toFixed(2),
+        step: !checkout.isAddon(l.id),
+        canDec: l.qty > 1,
+        canInc: l.qty < checkout.MAX_QTY,
+      })),
       cargo: Math.min(3, draft.items.length),
       addons: checkout.sellableAddons().map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
@@ -111,6 +119,21 @@ Page({
     if (this.data.submitting) return // 提交在途禁止改搭配购：否则下单用 await 前草稿快照·成功页金额 await 后重算，二者分叉展示不一致
     checkout.toggleAddon(String(e.currentTarget.dataset.id))
     void this.refresh()
+  },
+  // 改数量（老板拍板 9）：只改本次草稿、不回写购物车；应付随之重算（展示用·最终以云端为准）。
+  // 提交在途禁改：否则下单用的是 await 前的草稿快照，画面上的数量/应付与真正下的单对不上（同 onToggleAddon 闸）
+  onQtyInc(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.submitting) return
+    if (checkout.bumpQty(String(e.currentTarget.dataset.line), 1)) void this.refresh()
+  },
+  onQtyDec(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.submitting) return
+    if (checkout.bumpQty(String(e.currentTarget.dataset.line), -1)) void this.refresh()
+  },
+  // 协议小字（老板拍板 10）：提交在途不跳——下单成功的 redirectTo 会替掉栈顶协议页、结算页残留在栈里
+  onAgreement(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.submitting) return
+    wx.navigateTo({ url: '/pages/agreement/agreement?type=' + (e.currentTarget.dataset.type === 'privacy' ? 'privacy' : 'user') })
   },
   async onSubmit() {
     if (this.data.submitting) return

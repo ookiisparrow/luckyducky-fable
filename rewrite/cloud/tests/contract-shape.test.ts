@@ -59,6 +59,8 @@ const seedRealPay = () => control.seed('config', [{ _id: 'pay', mode: 'real', fl
 // 订单文档键集（mock 路径 13 键·含 payMode 条件键 paidAt）；real(pending) 路径为去 paidAt 的 12 键。
 const ORDER_KEYS_MOCK = ['_id', '_openid', 'address', 'amount', 'coupon', 'createdAt', 'goods', 'id', 'items', 'paidAt', 'reserved', 'ship', 'status']
 const ORDER_KEYS_REAL = ORDER_KEYS_MOCK.filter((k) => k !== 'paidAt')
+// 订单读接口（getMyOrders/getOrderById）另带读时附加的 reviewedLineIds（已评价行·拍板 6·评价读失败时不带）
+const ORDER_READ_KEYS = [...ORDER_KEYS_MOCK, 'reviewedLineIds'].sort()
 const LINE_KEYS = ['cover', 'enteredQty', 'lineId', 'name', 'price', 'productId', 'qty', 'refundable', 'spec']
 // 第二批扩面键集（omp 交接工单#1·B10「按热度逐批扩」）：
 // 售后行 16 键——刻意由 applyRefund 真写入后回读（不是测试自造 seed 回声），锁的是「写入方字段集」这个真契约。
@@ -147,23 +149,30 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(keysOf(r)).toEqual(['ok', 'paid', 'paidAt'])
   })
 
-  it('getMyOrders：顶层 [hasMore,list,nextCursor,ok]（末页 nextCursor 为 null 但键在·如实锁现状）；list 行＝订单 13 键', async () => {
+  it('getMyOrders：顶层 [hasMore,list,nextCursor,ok]（末页 nextCursor 为 null 但键在·如实锁现状）；list 行＝订单 13 键 + reviewedLineIds', async () => {
     const c = await createMockOrder()
     expect(c.ok).toBe(true)
     const r = await call('getMyOrders')
     expect(r.ok).toBe(true)
     expect(keysOf(r)).toEqual(['hasMore', 'list', 'nextCursor', 'ok'])
     expect(r.nextCursor).toBe(null) // 键在值 null——mp order-list.ts 消费 nextCursor/hasMore
-    expect(keysOf(r.list[0])).toEqual(ORDER_KEYS_MOCK)
+    expect(keysOf(r.list[0])).toEqual(ORDER_READ_KEYS)
   })
 
-  it('getOrderById：顶层 [ok,order]；order 13 键', async () => {
+  it('getOrderById：顶层 [ok,order]；order 13 键 + reviewedLineIds', async () => {
     const c = await createMockOrder()
     expect(c.ok).toBe(true)
     const r = await call('getOrderById', { id: c.order.id })
     expect(r.ok).toBe(true)
     expect(keysOf(r)).toEqual(['ok', 'order'])
-    expect(keysOf(r.order)).toEqual(ORDER_KEYS_MOCK)
+    expect(keysOf(r.order)).toEqual(ORDER_READ_KEYS)
+  })
+
+  it('estimateRefund：顶层 [ok,refundFen]（mp order.ts 消费 r.refundFen·分整数）', async () => {
+    control.seed('orders', [AS_ORDER])
+    const r = await call('estimateRefund', { orderId: 'oR', lineId: 'p1__基础款' })
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['ok', 'refundFen'])
   })
 
   it('getPlaybackUrl：素材未剪 url:null 与已授权换址两分支同为 [ok,url]（playbackCache.ts 消费 r.url）', async () => {

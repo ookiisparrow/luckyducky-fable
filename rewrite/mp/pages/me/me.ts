@@ -1,7 +1,7 @@
 // 「我」页：静默登录回灌资料 + 继续学习卡 + 入口列。
 // 登录零资料采集；继续学习定位纯函数（不假装有课·无课卡片走「去逛逛」兜底）。
 import { tapHaptic } from '../../lib/haptics'
-import { login, getMyProgress } from '../../api/user'
+import { login, getMyProgress, updateProfile } from '../../api/user'
 import { getMyOrders } from '../../api/orders'
 import { countBadge } from '../../lib/mapOrders'
 import { getMyCourses } from '../../api/learning'
@@ -17,7 +17,8 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxTransit } from '../../lib/pxFx'
+import { fxTransit, fxToast, fxHint } from '../../lib/pxFx'
+import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 
 // 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
 // ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
@@ -76,7 +77,7 @@ Page({
     contLoaded: !!seededCont, // 继续学习区首次取数是否落地（加载中≠没课·根因#8/#14）；有上次会话旧卡则首帧先画、后台再刷
     // 和「确认无课」，无 loading 位会让空态在数据未回来时就渲染成假空态（先空后有闪烁）；
     // 置 true 前空态不显、改显骨架；首次 refresh 落地后恒 true（成功/失败任一路都置）。
-    loggedIn: seededLoggedIn, // 已显式同意登录（loginGate hint）：真才显真实资料 + 退出按钮，假显登出态（默认身份 + 登录入口）
+    loggedIn: seededLoggedIn, // 已显式同意登录（loginGate hint）：真才显真实资料 + 头像可换，假显登出态（默认身份 + 登录入口）
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
     counts: { pending: '', paid: '', shipped: '' }, // 订单格数字（v5 D1·'' 不显示：加载中或取数失败）
   },
@@ -193,6 +194,31 @@ Page({
       // 兜底去逛逛→首页应从头逛起：防首页上次恰好滚到 FAQ 板块的旧滚动位置残留，造成「弹出大家都在问」错位观感
       goHomeTab()
     }
+  },
+  _avatarBusy: false, // 换头像在途锁（上传+保存）：重复选直接丢，防连传两张孤儿文件
+  /** 点头像换微信头像（老板 2026-09-29 拍板 2）：选完立即上传 + 只存头像字段（不碰昵称/手机号）。
+   *  只有已登录才渲染这颗能力键（wxml）——未登录点头像＝打开登录半屏，先登录再换（同「编辑」只给已登录的口径）。 */
+  async onChooseAvatar(e: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
+    const path = e?.detail?.avatarUrl
+    if (this._avatarBusy || !path) return
+    this._avatarBusy = true
+    wx.showLoading({ title: '头像保存中', mask: true })
+    let fileID = ''
+    let r: Awaited<ReturnType<typeof updateProfile>> | null = null
+    try {
+      fileID = await uploadAvatar(path)
+      r = await updateProfile({ avatar: fileID }) // callApp 不抛错，失败收成 ok:false
+    } catch {
+      // 只有上传会抛：r 留空
+    } finally {
+      wx.hideLoading()
+      this._avatarBusy = false
+    }
+    if (!r) return fxHint(this, '头像没传上去，稍后再试')
+    if (!r.ok) return hintProfileFail(this, r.error, { text: false, avatar: true })
+    this.setData({ avatar: String((r.user as { avatar?: unknown } | undefined)?.avatar || fileID) }) // 当场换上，不等整页重拉
+    fxToast(this, '头像已更新')
+    void this.refresh() // 整页重拉（新代次作废在途旧 refresh，免得旧回包把旧头像刷回来）
   },
   onEditProfile() {
     this._expireFresh() // 改完昵称头像回来要看到新的

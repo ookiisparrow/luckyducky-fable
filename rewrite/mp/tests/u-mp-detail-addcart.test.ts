@@ -2,6 +2,7 @@
 // 否则购物车行会渲染「划线 ¥158 < 现价 ¥198」（cart.wxml wx:if="{{item.was}}" 直渲），同 lib/quickAdd 那道闸。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import detailWxml from '../pages/detail/detail.wxml?raw'
 
 const { addMock, trackMock, buyNowMock } = vi.hoisted(() => ({ addMock: vi.fn(), trackMock: vi.fn(), buyNowMock: vi.fn() }))
 vi.mock('../lib/cart', () => ({ add: addMock }))
@@ -22,6 +23,9 @@ async function mount(vm: Record<string, unknown>, skuIndex: number): Promise<Rec
   await import('../pages/detail/detail')
   const page = Object.create(pageOpts) as Record<string, any>
   page.data = { ...pageOpts.data, vm, skuIndex }
+  page.setData = function (patch: Record<string, unknown>) {
+    Object.assign(this.data as Record<string, unknown>, patch)
+  }
   return page
 }
 
@@ -99,5 +103,54 @@ describe('详情页切款式', () => {
     expect(page.data.currentPriceNum).toBe('98.00') // 两位小数（老板拍板 1）
     expect(page.data.galleryIndex).toBe(0)
     expect(page.data.galleryWindow).toEqual([true, true])
+  })
+})
+
+describe('详情页加购后合并成「去结算」（老板拍板 8）', () => {
+  async function live(skuIndex = 0) {
+    const page = await mount(VM, skuIndex)
+    ;(globalThis as any).wx.switchTab = vi.fn()
+    return page
+  }
+
+  it('大白话：加购成功——两颗键合并成「去结算」；点它切到购物车页', async () => {
+    const page = await live()
+    expect(page.data.added).toBe(false)
+    page.onAddCart()
+    expect(page.data.added).toBe(true)
+    page.onGoCheckout()
+    expect((globalThis as any).wx.switchTab).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/cart/cart' }))
+  })
+
+  it('大白话：连点「去结算」——只切一次', async () => {
+    const page = await live()
+    page.onAddCart()
+    page.onGoCheckout()
+    page.onGoCheckout()
+    expect((globalThis as any).wx.switchTab).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：换了别的款式——恢复「加入购物车」「立即购买」两颗键；点同一款式不恢复', async () => {
+    const page = await live()
+    page.onAddCart()
+    page.onSelectSku({ currentTarget: { dataset: { index: 0 } } })
+    expect(page.data.added).toBe(true)
+    page.onSelectSku({ currentTarget: { dataset: { index: 1 } } })
+    expect(page.data.added).toBe(false)
+  })
+
+  it('大白话：加购失败——不合并、不记埋点', async () => {
+    const page = await live()
+    addMock.mockImplementation(() => {
+      throw new Error('boom')
+    })
+    page.onAddCart()
+    expect(page.data.added).toBe(false)
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it('大白话：底栏按 added 切换——合并态只剩客服 + 墨黑「去结算」', () => {
+    expect(detailWxml).toMatch(/wx:if="\{\{added\}\}"[^>]*bind:tap="onGoCheckout"[^>]*>去结算</)
+    expect(detailWxml).toMatch(/k-ink[^"]*pd-go/)
   })
 })

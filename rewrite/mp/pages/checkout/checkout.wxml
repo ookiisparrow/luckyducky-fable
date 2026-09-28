@@ -1,6 +1,7 @@
 <!-- 确认订单（v5「字重」稿 A5）：开进来的小货车 + 地址卡 + 商品卡 + 搭配购（设计稿未画·真实在卖保留）+ 点线明细；
      底部 应付 + 提交（在途换像素 loader）。业务逻辑全在 checkout.ts：地址(onPickAddress)/搭配购(onToggleAddon)/提交(onSubmit)。
-     顾客页不展示券类折扣（已拍板·no-customer-coupon-ui 测试钉）。商品数量只读（草稿单源）。
+     顾客页不展示券类折扣（已拍板·no-customer-coupon-ui 测试钉）。商品行 −/+ 改数量（老板拍板 9：只改本次草稿、不回写购物车；
+     键帽/热区同购物车；到头或提交在途置灰且 onQtyInc/onQtyDec 不响应）。搭配购恒 1 件不带 −/+。
      整页一列（设计稿 L212-213）：顶栏 + 小货车固定在滚动区外，只有中间内容滚，底部应付/提交也不动。 -->
 <view class="co">
   <v5-nav title="确认订单" />
@@ -32,9 +33,22 @@
         </view>
         <view class="co-item-mid">
           <text class="co-item-name">{{item.name}}</text>
-          <text class="t-sys co-item-sub">{{item.sku || item.tag}}{{item.sku || item.tag ? ' · ' : ''}}×{{item.qty}}</text>
+          <text wx:if="{{item.step}}" class="t-sys co-item-sub">{{item.sku || item.tag}}</text>
+          <text wx:else class="t-sys co-item-sub">{{item.sku || item.tag}}{{item.sku || item.tag ? ' · ' : ''}}×{{item.qty}}</text>
         </view>
-        <text class="mono co-item-price">¥{{item.priceNum}}</text>
+        <view wx:if="{{item.step}}" class="co-item-right">
+          <text class="mono co-item-price">¥{{item.priceNum}}</text>
+          <view class="co-step">
+            <view class="co-step-hit co-step-l" data-line="{{item.lineId}}" bind:tap="onQtyDec">
+              <view class="k k-sm k-light co-step-key {{item.canDec && !submitting ? '' : 'co-step-off'}}" hover-start-time="20" hover-class="{{item.canDec && !submitting ? 'k-light-down' : ''}}" hover-stay-time="100" data-k="{{item.canDec && !submitting ? 'light' : ''}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="minus" /></view>
+            </view>
+            <text class="mono co-qty">{{item.qty}}</text>
+            <view class="co-step-hit co-step-r" data-line="{{item.lineId}}" bind:tap="onQtyInc">
+              <view class="k k-sm k-light co-step-key {{item.canInc && !submitting ? '' : 'co-step-off'}}" hover-start-time="20" hover-class="{{item.canInc && !submitting ? 'k-light-down' : ''}}" hover-stay-time="100" data-k="{{item.canInc && !submitting ? 'light' : ''}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
+            </view>
+          </view>
+        </view>
+        <text wx:else class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>
     </view>
 
@@ -58,6 +72,12 @@
   </scroll-view>
 
   <view class="co-dock">
+    <!-- 协议小字（老板拍板 10）：书名号点开对应协议页；提交在途不跳（防下单成功换页替掉协议页） -->
+    <view class="t-sys co-agree">
+      <text>提交订单即表示同意</text>
+      <text class="co-link" data-type="user" bind:tap="onAgreement">《用户协议》</text>
+      <text class="co-link" data-type="privacy" bind:tap="onAgreement">《隐私政策》</text>
+    </view>
     <view class="co-total">
       <text class="t-sys co-k">应付</text>
       <text class="mono co-amount">¥{{amountNum}}</text>

@@ -96,10 +96,18 @@ export function applicableLines(orderStatus: string, items: OrderLineVM[], appli
   return items.filter((it) => it.refundable && it.qty - it.enteredQty > 0 && !applied.has(it.lineId))
 }
 
+/** 本单被拒的行（被拒维持永久锁、不能再申请·老板 2026-09-29 拍板 5·云端 applyRefund 同口径）。 */
+export function rejectedLineIdsOf(list: AfterSaleVM[], orderId: string): string[] {
+  return list.filter((a) => a.orderId === orderId && a.status === 'rejected').map((a) => a.lineId)
+}
+export const REFUND_REJECTED = '已被拒绝，有疑问联系客服'
+
 /** 「退款」段置灰原因（售后半屏）：还有可退行回空串；否则按不可退的来由说人话——
- *  不可退/剩余可退件为 0＝已开课（进课即失效退货权·云端 learning 同口径），已申请过＝这件已申请过，两种都有给合并句。 */
-export function refundBlock(orderStatus: string, items: OrderLineVM[], appliedLineIds: string[]): string {
+ *  每行都被拒＝已被拒绝（引导联系客服），不可退/剩余可退件为 0＝已开课（进课即失效退货权·云端 learning 同口径），
+ *  已申请过＝这件已申请过，两种都有给合并句。 */
+export function refundBlock(orderStatus: string, items: OrderLineVM[], appliedLineIds: string[], rejectedLineIds: string[] = []): string {
   if (applicableLines(orderStatus, items, appliedLineIds).length) return ''
+  if (items.length && items.every((it) => rejectedLineIds.includes(it.lineId))) return REFUND_REJECTED
   const applied = new Set(appliedLineIds)
   const started = items.some((it) => !applied.has(it.lineId) && (!it.refundable || it.qty - it.enteredQty <= 0))
   const hasApplied = items.some((it) => applied.has(it.lineId))

@@ -131,6 +131,61 @@ page {
   font-size: 15px;
   font-weight: 600;
 }
+/* 改数量（老板拍板 9）：价格在上、−/+ 在下，键帽与热区同购物车（28px 键·44×44 热区） */
+.co-item-right {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.co-step {
+  display: flex;
+  align-items: center;
+}
+.co-step-hit {
+  position: relative;
+  width: 34px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.co-step-l {
+  margin: -8px 0 -8px -3px;
+}
+.co-step-r {
+  margin: -8px -3px -8px 0;
+}
+.co-step-hit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+}
+.co-step-l::after {
+  left: -10px;
+}
+.co-step-r::after {
+  right: -10px;
+}
+.co-step-key {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+}
+/* 到头（1 件 / 上限）或提交在途：置灰、按了不动 */
+.co-step-off {
+  opacity: 0.35;
+}
+.co-qty {
+  width: 24px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+}
 .co-addon-head {
   display: block;
   padding: 12px 0 0;
@@ -177,10 +232,28 @@ page {
   flex: 0 0 auto;
   padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
+  flex-wrap: wrap; /* 协议小字独占第一行，应付 + 提交在第二行 */
   align-items: center;
   gap: 12px;
   border-top: 1px solid var(--v5-hair);
   background: var(--v5-canvas);
+}
+/* 协议小字（老板拍板 10）：书名号上下各让 8px 扩热区，负外边距抵掉、视觉不变 */
+.co-agree {
+  flex: 0 0 100%;
+  margin: -8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.co-link {
+  padding: 8px 0;
+  color: var(--v5-ink);
+  font-weight: 500;
 }
 .co-total {
   flex: 1;

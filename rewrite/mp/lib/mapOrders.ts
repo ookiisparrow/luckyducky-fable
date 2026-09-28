@@ -10,6 +10,7 @@ export interface OrderLineVM {
   enteredQty: number
   refundable: boolean
   cover: string // 下单快照封面（cloud:// fileID）·旧单/搭配购无则空串
+  reviewed: boolean // 这行已评价（云端订单接口读时附带 reviewedLineIds·没带＝当没评过，照旧出写评价）
 }
 
 export interface OrderVM {
@@ -30,6 +31,7 @@ export interface OrderVM {
   goodsLabel: string
   shipLabel: string
   couponLabel: string
+  reviewedAll: boolean // 已完成且每行都评过：列表出灰底「已评价」、不出写评价
 }
 
 // 状态中文·客户向措辞（shared ORDER_STATUS 全集·未知状态回原串不冒充）。canonical 单源在
@@ -77,11 +79,13 @@ export function dateTime(ts: unknown): string {
 export function itemsOf(raw: unknown): OrderLineVM[] {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>
   if (!Array.isArray(o.items)) return []
+  const reviewed = new Set(Array.isArray(o.reviewedLineIds) ? o.reviewedLineIds.map(String) : [])
   const out: OrderLineVM[] = []
   for (const it of o.items) {
     if (!it || typeof it !== 'object') continue
+    const lineId = String(it.lineId || it.productId || '')
     out.push({
-      lineId: String(it.lineId || it.productId || ''),
+      lineId,
       name: String(it.name || ''),
       spec: String(it.spec || ''),
       priceLabel: money(it.price),
@@ -89,6 +93,7 @@ export function itemsOf(raw: unknown): OrderLineVM[] {
       enteredQty: Number.isInteger(it.enteredQty) && it.enteredQty > 0 ? it.enteredQty : 0, // 旧单无字段视 0
       refundable: it.refundable !== false,
       cover: String(it.cover || ''), // 旧单/搭配购无字段→空串（模板 wx:if 回退灰底占位·不裂图）
+      reviewed: reviewed.has(lineId),
     })
   }
   return out
@@ -105,12 +110,13 @@ export function mapOrder(raw: unknown): OrderVM | null {
   const a = o.address && typeof o.address === 'object' ? o.address : null
   // 物流取自 shipping 子对象（admin shipOne 写 o.shipping={company,trackingNo}·非顶层）·脏形不抛
   const s = o.shipping && typeof o.shipping === 'object' ? o.shipping : {}
+  const items = itemsOf(o)
   return {
     id,
     status: String(o.status || ''),
     statusLabel: statusLabel(o.status),
     amountTitle: amountTitle(o.status),
-    items: itemsOf(o),
+    items,
     count: countOf(o),
     // 支付异常单展示实际到账：标题「实付款」不能配「订单标价」，否则对账/退款沟通依据错。
     // paidFee 为整数分（回调/补录落库），脏/缺回退订单金额。
@@ -129,6 +135,7 @@ export function mapOrder(raw: unknown): OrderVM | null {
     shipLabel: Number(o.ship) > 0 ? money(o.ship) : '包邮',
     // 主线顾客页不展示优惠券：历史单可能仍带 coupon 快照，标签恒空，实付走库内 amount。
     couponLabel: '',
+    reviewedAll: o.status === 'done' && items.length > 0 && items.every((l) => l.reviewed),
   }
 }
 

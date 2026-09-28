@@ -10,6 +10,9 @@ export function sellableAddons(): CheckoutAddon[] {
   return CHECKOUT_ADDONS.filter((a) => !PLACEHOLDER_ADDON_IDS.has(a.id))
 }
 
+/** 是不是搭配购行（按 CHECKOUT_ADDONS 认·含占位）：搭配购恒 1 件、不扣购物车、不能单独成单。 */
+export const isAddon = (id: string): boolean => CHECKOUT_ADDONS.some((a) => a.id === id)
+
 export interface DraftLine {
   id: string
   sku: string
@@ -55,13 +58,31 @@ export function getIdemKey(): string {
   return draftItems.length ? idemKey : ''
 }
 
-/** 搭配购增删（id ∈ CHECKOUT_ADDONS·qty 恒 1·重复添加幂等）。 */
+/** 搭配购增删（id ∈ CHECKOUT_ADDONS·qty 恒 1·重复添加幂等）。草稿内容变了换幂等键（同 bumpQty 的理由）。 */
 export function toggleAddon(addonId: string): void {
   const a = CHECKOUT_ADDONS.find((x) => x.id === addonId)
   if (!a) return
   const i = draftItems.findIndex((l) => l.id === addonId)
   if (i >= 0) draftItems.splice(i, 1)
   else draftItems.push({ id: a.id, sku: '', name: a.name, tag: '搭配购', price: a.price, qty: 1, cover: '', lineId: cart.lineIdOf(a.id, '') })
+  idemKey = newIdemKey()
+}
+
+// 下单单行数量上限：镜像 shared/src/limits.ts MAX_QTY（云端 createOrder 超了拒 BAD_QTY；mp 进不了 shared 手抄，
+// tests/checkout.test 读 shared 源码对数，改一边那里就红）
+export const MAX_QTY = 999
+
+/** 结算页改数量（老板拍板 9）：±1，只改本次草稿、不回写购物车（提交成功仍按草稿实际数量扣车）；
+ *  落在 1..MAX_QTY 外就不动；搭配购恒 1 件不参与。只动 qty、不碰 price，与 syncDraftPrices 互不覆盖。
+ *  数量真变了换幂等键：草稿变了就不是「同一次提交的重试」——否则网络超时（单其实已建）后改量再提交，
+ *  云端会按旧键折回那张旧数量的单。返回改没改。 */
+export function bumpQty(lineId: string, delta: number): boolean {
+  const l = draftItems.find((x) => x.lineId === lineId)
+  const q = l ? l.qty + delta : 0
+  if (!l || q < 1 || q > MAX_QTY || isAddon(l.id)) return false
+  l.qty = q
+  idemKey = newIdemKey()
+  return true
 }
 
 /** 草稿按现价同步（同 cart.syncPrices 口径·搭配购不在商品档里、原样不动）；返回有没有哪行价变了。 */
@@ -89,7 +110,7 @@ export const fenLabel = (fen: number): string => '¥' + (fen / 100).toFixed(2)
 
 /** 提交成功收尾：来自购物车的按实际提交数量精确扣（cart.consume 语义）；清草稿。 */
 export function finishSubmitted(): void {
-  if (fromCart) cart.consume(draftItems.filter((l) => !CHECKOUT_ADDONS.some((a) => a.id === l.id)).map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })))
+  if (fromCart) cart.consume(draftItems.filter((l) => !isAddon(l.id)).map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })))
   draftItems = []
   fromCart = false
   idemKey = ''
@@ -147,7 +168,7 @@ export function dropRejectedLine(msg: string): string {
   if (!hit.length) return ''
   draftItems = draftItems.filter((l) => !hit.includes(l))
   if (fromCart) hit.forEach((l) => cart.remove(l.id, l.sku))
-  if (draftItems.every((l) => CHECKOUT_ADDONS.some((a) => a.id === l.id))) draftItems = []
+  if (draftItems.every((l) => isAddon(l.id))) draftItems = []
   return hit[0].name + (sku ? '（' + sku + '）' : '')
 }
 

@@ -20,7 +20,7 @@ import {
 } from '@ldrw/shared'
 // 响应契约（病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
 // （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
-import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, OrderDoc, OrderLine, AfterSaleDoc, ErrCode } from '@ldrw/shared'
+import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, EstimateRefundResp, OrderDoc, OrderRead, OrderLine, AfterSaleDoc, ErrCode, Fen } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -39,6 +39,7 @@ import {
   isDocMissing,
   isCollectionMissing,
   getDocOrNull,
+  recordAnomaly,
   str,
 } from '../../../kit'
 
@@ -400,64 +401,86 @@ export const pay = withOpenId(
   })
 )
 
+// 售后算额（applyRefund 实退与 estimateRefund 试算共用这一份：同一套校验 + 同一个 refundShareFen，
+// 试算数＝真申请时算出的数；两处各抄一份会分叉·tests/app-refund-estimate 锁「试算＝实退」）。只读不写。
+type RefundQuote = { order: OrderDoc; item: OrderLine; orderId: string; lineId: string; refundableQty: number; itemFen: Fen; refundFen: Fen; reapply: boolean }
+async function quoteRefund(db: any, OPENID: string, e: any, fn: string): Promise<RefundQuote | { error: ErrCode }> {
+  const orderId = str(e.orderId, 200)
+  const reqLine = str(e.lineId, 200) || str(e.productId, 200) // 新单行键/旧单回退 productId
+  if (!orderId || !reqLine) return { error: ERR.BAD_ARGS }
+
+  const order = await readOwnOrder(db, orderId, OPENID)
+  if (!order) return { error: ERR.NOT_FOUND }
+  if (!['paid', 'shipped', 'done'].includes(order.status)) return { error: buildBadStatus(order.status) }
+
+  const item = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
+  if (!item) return { error: `UNKNOWN_ITEM:${reqLine}` }
+  // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
+  const qty = item.qty || 1
+  const enteredQty = item.enteredQty || 0
+  const refundableQty = qty - enteredQty
+  if (item.refundable === false || refundableQty <= 0) return { error: ERR.NOT_REFUNDABLE }
+  const lineId = item.lineId || item.productId
+
+  // 分摊全程分整数；同单已占额度（申请中/已同意/已退）不可重复退
+  const amountFen = toFen(Number(order.amount))
+  const goodsFen = toFen(Number(order.goods))
+  const itemFen = asFen(toFen(item.price) * refundableQty)
+
+  // 同单售后须读齐才能算准 used 封顶（根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
+  // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
+  // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：只有集合还没建
+  // 才是真没有售后，其余异常不接住，交网关回 INTERNAL 并记账。
+  const exist: { data: AfterSaleDoc[] } = await db
+    .collection(COLLECTIONS.afterSales)
+    .where({ orderId })
+    .limit(AFTERSALE_SCAN_CAP)
+    .get()
+    .catch((e: unknown) => {
+      if (isCollectionMissing(e)) return { data: [] }
+      throw e
+    })
+  if (exist.data.length >= AFTERSALE_SCAN_CAP) {
+    alert('money', fn, 'AFTERSALE_SCAN_CAP', { orderId })
+    return { error: ERR.REFUND_SCAN_CAP }
+  }
+  // 该行已有售后：全是「顾客撤回」的才许重新申请（复用同一张单），有任何别的状态（含越规退款单、被拒）仍算申请过
+  const mine = exist.data.filter((a) => (a.lineId || a.productId) === lineId)
+  if (mine.some((a) => a.status !== 'withdrawn')) return { error: ERR.ALREADY_APPLIED }
+  const used = asFen(
+    exist.data
+      .filter((a) => AFTERSALE_QUOTA_STATUSES.includes(a.status))
+      .reduce((s, a) => s + toFen(Number(a.refundAmount)), 0)
+  )
+  const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
+  if (refundFen <= 0) return { error: ERR.NOTHING_LEFT }
+  return { order, item, orderId, lineId, refundableQty, itemFen, refundFen, reapply: mine.length > 0 }
+}
+
 /**
- * 申请售后退款：退款额一律云端分摊算定（refundShareFen 单源）；
+ * 退款试算（老板 2026-09-29 拍板 4·申请前显示「预计退款 ¥X」）：与 applyRefund 同一份 quoteRefund，只算不写。
+ * 回分整数 refundFen，前端只做分→元展示；最终以申请时云端重算为准。
+ */
+// 频控（根因#13）：弹层切商品就试算一次，给足余量；每次读 1 单 + 同单售后（有上界）。
+export const estimateRefund = withOpenId(
+  withRateLimit('estimateRefund', { max: 60, windowMs: 60_000 }, async ({ db, OPENID, event }): Promise<EstimateRefundResp> => {
+    const q = await quoteRefund(db, OPENID, event, 'estimateRefund')
+    return 'error' in q ? err(q.error) : ok({ refundFen: q.refundFen })
+  })
+)
+
+/**
+ * 申请售后退款：退款额一律云端分摊算定（quoteRefund → refundShareFen 单源）；
  * 一单一行一售后（确定性 _id 库级唯一）；数量级退剩余可退件；同单累计封顶实付。
  */
 export const applyRefund = withOpenId(
   withRateLimit('applyRefund', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const e: any = event
-    const orderId = str(e.orderId, 200)
-    const reqLine = str(e.lineId, 200) || str(e.productId, 200) // 新单行键/旧单回退 productId
-    if (!orderId || !reqLine) return err(ERR.BAD_ARGS)
-    const reason = str(e.reason, 200)
-
-    const order = await readOwnOrder(db, orderId, OPENID)
-    if (!order) return err(ERR.NOT_FOUND)
-    if (!['paid', 'shipped', 'done'].includes(order.status)) return err(buildBadStatus(order.status))
-
-    const item = (order.items || []).find((it) => (it.lineId || it.productId) === reqLine)
-    if (!item) return err(`UNKNOWN_ITEM:${reqLine}`)
-    // 剩余可退件 = 购买件数 − 已进课件数；全进则无可退（旧单无 enteredQty 视 0＝整行可退）
-    const qty = item.qty || 1
-    const enteredQty = item.enteredQty || 0
-    const refundableQty = qty - enteredQty
-    if (item.refundable === false || refundableQty <= 0) return err(ERR.NOT_REFUNDABLE)
-    const lineId = item.lineId || item.productId
+    const q = await quoteRefund(db, OPENID, e, 'applyRefund')
+    if ('error' in q) return err(q.error)
+    const { order, item, orderId, lineId, refundableQty, itemFen, refundFen } = q
     const productId = item.productId
-
-    // 分摊全程分整数；同单已占额度（申请中/已同意/已退）不可重复退
-    const amountFen = toFen(Number(order.amount))
-    const goodsFen = toFen(Number(order.goods))
-    const itemFen = asFen(toFen(item.price) * refundableQty)
-
-    // 同单售后须读齐才能算准 used 封顶（根因#7）：裸 .get() 服务端默认 100 条静默截断会少算 used、
-    // 令行/单级退款封顶失效。显式取到 AFTERSALE_SCAN_CAP；命中上限＝记录数异常，fail-closed 拒退 + 告警，
-    // 绝不按截断值算钱（钱守恒 > 可用性）。读失败同理不能当「没有售后」（used=0 会退超）：只有集合还没建
-    // 才是真没有售后，其余异常不接住，交网关回 INTERNAL 并记账。
-    const exist: { data: AfterSaleDoc[] } = await db
-      .collection(COLLECTIONS.afterSales)
-      .where({ orderId })
-      .limit(AFTERSALE_SCAN_CAP)
-      .get()
-      .catch((e: unknown) => {
-        if (isCollectionMissing(e)) return { data: [] }
-        throw e
-      })
-    if (exist.data.length >= AFTERSALE_SCAN_CAP) {
-      alert('money', 'applyRefund', 'AFTERSALE_SCAN_CAP', { orderId })
-      return err('REFUND_SCAN_CAP')
-    }
-    // 该行已有售后：全是「顾客撤回」的才许重新申请（复用同一张单），有任何别的状态（含越规退款单）仍算申请过
-    const mine = exist.data.filter((a) => (a.lineId || a.productId) === lineId)
-    if (mine.some((a) => a.status !== 'withdrawn')) return err(ERR.ALREADY_APPLIED)
-    const used = asFen(
-      exist.data
-        .filter((a) => AFTERSALE_QUOTA_STATUSES.includes(a.status))
-        .reduce((s, a) => s + toFen(Number(a.refundAmount)), 0)
-    )
-    const refundFen = refundShareFen(amountFen, goodsFen, itemFen, used)
-    if (refundFen <= 0) return err(ERR.NOTHING_LEFT)
+    const reason = str(e.reason, 200)
 
     const now = Date.now()
     const asId = orderId + '__' + lineId
@@ -480,7 +503,7 @@ export const applyRefund = withOpenId(
       status: 'applied',
       appliedAt: now,
     }
-    if (mine.length) {
+    if (q.reapply) {
       // 撤回后重新申请：withdrawn→applied 条件更新原子复用同一 _id（并发重申只一路 moved）。金额/件数/原因/地址快照
       // 按此刻重算覆盖。outRefundNo 由 _id 派生、保持不变——复用单号安全的前提：withdrawn 只能来自「从没被批准过」
       // 的 applied（withdrawRefund 拒 approvedAt 在的单），即这个单号从没发给过微信。
@@ -560,6 +583,35 @@ export const cancelOrder = withOpenId(
   })
 )
 
+// 已评价行（老板 2026-09-29 拍板 6）：给响应里每单带 reviewedLineIds（订单文档不改·只读评价集合）。
+// 只有已完成单能评价（submitReview 闸 status==='done'），故只按这页里的 done 单号批量查一次本人评价（不逐单查）；
+// 其余单直接给 []。评价行键与订单行键同口径（lineId || productId）。
+// 读失败 fail-soft：订单照常回、这页不带该字段（前端当「不知道」照旧出写评价，重复提交云端回 REVIEWED），记异常账。
+// ponytail: 一次最多读 1000 条评价（这页 done 单行数超过才截断，截断的行照旧出「写评价」）；要全准就按单号分批读。
+const REVIEWED_SCAN_CAP = 1000
+/** 单号→已评价行；读失败回 null（调用方不带字段）。 */
+async function reviewedByOrder(db: any, OPENID: string, orders: OrderDoc[], fn: string): Promise<Record<string, string[]> | null> {
+  const by: Record<string, string[]> = {}
+  const doneIds = orders.filter((o) => o.status === 'done').map((o) => o.id || o._id)
+  if (!doneIds.length) return by
+  try {
+    const res = await db
+      .collection(COLLECTIONS.reviews)
+      .where({ _openid: OPENID, orderId: db.command.in(doneIds) })
+      .field({ orderId: true, lineId: true, productId: true })
+      .limit(REVIEWED_SCAN_CAP)
+      .get()
+    for (const r of res.data || []) (by[r.orderId] = by[r.orderId] || []).push(String(r.lineId || r.productId))
+    return by
+  } catch (e) {
+    if (isCollectionMissing(e)) return by // 集合没建＝一条评价都没有过
+    await recordAnomaly('server-exception', 'REVIEWED_READ_FAIL', { fp: fn, fn, msg: String((e as Error)?.message || e).slice(0, 200) }, 'low')
+    return null
+  }
+}
+const withReviewed = (o: OrderDoc, by: Record<string, string[]> | null): OrderRead =>
+  by ? { ...o, reviewedLineIds: by[o.id || o._id] || [] } : o
+
 /** 本人订单列表（游标分页·属主隔离）。 */
 export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<GetMyOrdersResp> => {
   // 状态筛选下推服务端（与游标分页同源·修 order-list 短过滤 tab 内容短于视口拉不动、深页匹配单看不到）：
@@ -568,7 +620,8 @@ export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<Get
   const status = (Object.values(ORDER_STATUS) as string[]).includes(raw) ? raw : ''
   const where = status ? { _openid: OPENID, status } : { _openid: OPENID }
   const paged = await pageQuery(db, COLLECTIONS.orders, where, 'createdAt', event as any, 100)
-  return ok({ ...paged, list: await swapOrdersCover(paged.list) })
+  const [list, by] = await Promise.all([swapOrdersCover(paged.list), reviewedByOrder(db, OPENID, paged.list, 'getMyOrders')])
+  return ok({ ...paged, list: list.map((o) => withReviewed(o, by)) })
 })
 
 /** 按单号取本人订单（他人/不存在一律 NOT_FOUND·不泄露存在性）。 */
@@ -578,8 +631,8 @@ export const getOrderById = withOpenId(async ({ db, OPENID, event }): Promise<Ge
   // 只有真缺档才算「没有这单」：订单页把 NOT_FOUND 当确定空态不给重试，读失败抛给网关回 INTERNAL
   const got = await getDocOrNull<OrderDoc>(db.collection(COLLECTIONS.orders).doc(id))
   if (!got || got._openid !== OPENID) return err(ERR.NOT_FOUND)
-  const [order] = await swapOrdersCover([got])
-  return ok({ order })
+  const [[order], by] = await Promise.all([swapOrdersCover([got]), reviewedByOrder(db, OPENID, [got], 'getOrderById')])
+  return ok({ order: withReviewed(order, by) })
 })
 
 /** 本人售后单（游标分页·按申请时间倒序）。 */

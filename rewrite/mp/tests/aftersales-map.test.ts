@@ -13,6 +13,7 @@ const line = (over: Partial<OrderLineVM>): OrderLineVM => ({
   enteredQty: 0,
   refundable: true,
   cover: '',
+  reviewed: false,
   ...over,
 })
 

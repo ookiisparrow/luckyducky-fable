@@ -76,7 +76,9 @@
         </view>
         <view class="od-item-r">
           <text class="mono od-item-price">{{item.priceLabel}}</text>
-          <view wx:if="{{vm.status === 'done'}}" class="k k-sm k-light od-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          <!-- 已评价的行：灰底「已评价」标签不可点（拍板 6·设计稿 #ededea 底 #8f8f88 字）；没评的出「写评价」 -->
+          <text wx:if="{{vm.status === 'done' && item.reviewed}}" class="od-mini od-reviewed">已评价</text>
+          <view wx:elif="{{vm.status === 'done'}}" class="k k-sm k-light od-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
             data-i="{{index}}" catch:tap="onWriteReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
         </view>
       </view>
@@ -156,7 +158,7 @@
   <text class="t-sys od-k">可能已被删除或不属于当前账号</text>
 </view>
 
-<!-- 申请售后半屏（设计稿 sheet aftersales·拍板 7）：退款/换货/补发 三段 + 原因标签 + 多件单选商品 + 取消/提交。
+<!-- 申请售后半屏（设计稿 sheet aftersales·拍板 7）：退款/换货/补发 三段 + 原因标签（无理由默认） + 多件单选商品 + 预计退款 + 取消/提交。
      只有「退款」调 applyRefund；换货/补发后台无接口，提交键改「联系客服办理」走客服入口。 -->
 <view wx:if="{{asOpen}}" class="as-root" catch:touchmove="noop">
   <view class="sh-mask as-mask {{asOut ? 'out' : ''}}" bind:tap="onAsClose"></view>
@@ -170,8 +172,16 @@
       <view wx:for="{{asTypes}}" wx:key="*this" class="k as-seg-k {{asType === item ? 'k-light as-on' : ''}} {{asBlock && item === '退款' ? 'as-seg-off' : ''}}"hover-start-time="20" hover-class="{{asType === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
         data-v="{{item}}" bind:tap="onAsType" data-k="{{asType === item ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asType === item}}" name="led" tone="#8A5AE0" />{{item}}</view>
     </view>
-    <!-- 没有可退商品（已开课/已申请过）：退款段置灰并写原因；换货/补发照常走联系客服 -->
-    <text wx:if="{{asBlock}}" class="t-sys as-block">退款不可选：{{asBlock}}</text>
+    <!-- 没有可退商品（已开课/已申请过/已被拒）：退款段置灰并写原因；换货/补发照常走联系客服。
+         被拒的行（拍板 5·被拒维持永久锁）：写清「已被拒绝，有疑问联系客服」+「联系客服」键（带订单上下文复制） -->
+    <view wx:if="{{asBlock || asRej}}" class="as-note">
+      <view class="as-note-col">
+        <text wx:if="{{asBlock}}" class="t-sys as-block">退款不可选：{{asBlock}}</text>
+        <text wx:if="{{asRej}}" class="t-sys as-block">{{asRej}}：已被拒绝，有疑问联系客服</text>
+      </view>
+      <view wx:if="{{asRejKefu}}" class="k k-sm k-light as-kefu" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+        bind:tap="onAsKefu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+    </view>
     <view class="as-group" wx:if="{{asLines.length > 1}}">
       <text class="t-sys as-cap">商品</text>
       <scroll-view class="as-lines" scroll-y="{{true}}">
@@ -188,6 +198,8 @@
           data-v="{{item}}" bind:tap="onAsReason" data-k="{{asReason === item ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asReason === item}}" name="led" tone="#8A5AE0" />{{item}}</view>
       </view>
     </view>
+    <!-- 预计退款（拍板 4·云端试算·最终以审核为准）：仅「退款」段 -->
+    <text wx:if="{{asEst}}" class="t-sys as-est">{{asEst}}</text>
     <view class="as-ks">
       <view class="k k-light k-48 as-cancel" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAsClose" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">取消</view>
       <view class="k k-ink k-48 as-go {{asBusy ? 'od-busy' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAsSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">

@@ -32,8 +32,12 @@ interface WxPaymentParams {
 export type CreateOrderResp = AppResp<{ order: OrderDoc }>
 /** pay 双分支：0 元直付 {paid,paidAt}（paid 写 boolean 不写字面量 true——ok() 泛型推断会宽化）| 收银台 {payment}。 */
 export type PayResp = AppResp<{ paid: boolean; paidAt: number } | { payment: WxPaymentParams }>
-export type GetMyOrdersResp = AppResp<{ list: OrderDoc[]; nextCursor: unknown; hasMore: boolean }>
-export type GetOrderByIdResp = AppResp<{ order: OrderDoc }>
+/** 订单读响应＝库内文档 + 读时附加的已评价行 lineId（只读评价集合·不在订单文档里；评价读失败时不带该键）。 */
+export type OrderRead = OrderDoc & { reviewedLineIds?: string[] }
+export type GetMyOrdersResp = AppResp<{ list: OrderRead[]; nextCursor: unknown; hasMore: boolean }>
+export type GetOrderByIdResp = AppResp<{ order: OrderRead }>
+/** 退款试算：预计退款额，分整数（与 applyRefund 同一份算额）。 */
+export type EstimateRefundResp = AppResp<{ refundFen: number }>
 export type GetPlaybackUrlResp = AppResp<{ url: string | null }>
 
 // ── 后台 adminApi 钱链 action 的成功包字段（admin api/money.ts 用；失败包与 ok/status 由 admin client 统一建模）──

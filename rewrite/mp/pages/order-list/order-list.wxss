@@ -159,6 +159,17 @@ page {
   top: -6px;
   bottom: -6px;
 }
+/* 已评价（拍板 6·设计稿灰底标签 32 高·不可点，不是键） */
+.ol-reviewed {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  font-size: 17px;
+  font-weight: 500;
+  background: var(--v5-sunk);
+  color: var(--v5-ink-3);
+}
 .ol-hold {
   padding: 6px 0;
   margin: -6px 0;

@@ -249,6 +249,10 @@ page {
   flex: 1.25;
   min-width: 0;
 }
+.pd-go {
+  flex: 1; /* 客服键外全占＝加购+直买两键合计宽 */
+  min-width: 0;
+}
 
 /* 骨架 / 空态 */
 .pd-skel {

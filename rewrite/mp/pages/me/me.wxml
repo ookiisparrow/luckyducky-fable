@@ -15,10 +15,15 @@
 
   <!-- 身份行：已登录＝头像昵称 + 编辑；登出态＝占位 + 登录 -->
   <view class="me-id">
-    <view class="me-av {{loggedIn ? '' : 'me-av-out'}}">
-      <image wx:if="{{loggedIn && avatar}}" class="me-av-img" src="{{avatar}}" mode="aspectFill" />
-      <image wx:elif="{{loggedIn}}" class="me-av-img" src="/static/hero-full.jpg" mode="aspectFill" />
-    </view>
+    <!-- 已登录：头像＝换头像能力键（open-type=chooseAvatar·隐私能力·页尾挂 privacy-sheet），选完直接上传保存；
+         按头像任意处「换」角标下沉（同编辑资料页）。未登录：占位，点了打开登录半屏（先登录再换）。 -->
+    <button wx:if="{{loggedIn}}" class="me-av-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" hover-start-time="20" hover-class="me-av-down" hover-stay-time="100">
+      <view class="me-av">
+        <image class="me-av-img" src="{{avatar || '/static/hero-full.jpg'}}" mode="aspectFill" />
+      </view>
+      <view class="k k-sm k-light me-av-k">换</view>
+    </button>
+    <view wx:else class="me-av me-av-out" bind:tap="onLoginTap"></view>
     <view class="me-id-t">
       <text class="t-sys me-nick">{{nickname}}</text>
       <text wx:if="{{!loggedIn}}" class="t-sys me-id-sub">登录后同步订单与学习进度</text>
@@ -123,3 +128,6 @@
 
 <!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
 <px-fx id="fx" />
+
+<!-- 隐私授权弹窗：头像键 chooseAvatar 属隐私接口，未授权时由 lib/privacyGate 唤起（守卫 rw-mp-privacy-gated） -->
+<privacy-sheet />
