@@ -139,18 +139,15 @@ page {
   transform: scaleX(0);
   transform-origin: left;
 }
-.pe-fill-del {
-  background: var(--v5-err-soft);
+.pe-fill-out {
+  background: rgba(17, 17, 17, 0.08); /* 退出登录按住填充（设计稿 15 题：墨色 .08） */
 }
-.pe-hold-on .pe-fill-del {
+.pe-hold-on .pe-fill-out {
   transform: scaleX(1);
   transition: transform 900ms linear;
 }
 .pe-acct-t {
   position: relative;
-}
-.pe-danger {
-  color: var(--v5-err-text);
 }
 .pe-acct-note {
   font-size: 13px;

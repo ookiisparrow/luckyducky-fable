@@ -20,6 +20,11 @@
     <text class="ag-row-t">联系客服</text>
     <px-i name="arrow" tone="var(--v5-ink-2)" />
   </view>
+  <!-- 删除个人资料（隐私政策第六条·§39）：放正文末尾——读到底才看得到；已解锁课程与学习进度保留 -->
+  <view wx:if="{{isPrivacy}}" class="ag-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onDeleteData">
+    <text class="ag-row-t ag-danger">删除个人资料</text>
+    <px-i name="arrow" tone="var(--v5-ink-2)" />
+  </view>
 </view>
 
 <!-- 隐私政策：数据共享授权管理入口 -->

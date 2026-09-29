@@ -46,14 +46,15 @@
     </view>
   </view>
 
-  <!-- 账号操作（v5 D3）：按住确认——删除 0.9s（红填充·按满后再弹一次后果确认） -->
+  <!-- 账号操作（老板 2026-09-30·§39）：按住 0.6s 退出登录（墨色填充）。只退本机，同一微信再登资料、课程、进度都回来。
+       删除个人资料在隐私政策正文末尾。 -->
   <view class="pe-acct">
-    <view class="k k-light pe-acct-k {{holdDel ? 'pe-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-      catch:touchstart="onDeleteStart" bind:touchmove="onDeleteMove" catch:touchend="onDeleteEnd" catch:touchcancel="onDeleteCancel">
-      <view class="pe-fill pe-fill-del"></view>
-      <text class="pe-acct-t pe-danger">删除资料</text>
+    <view class="k k-light pe-acct-k {{holdOut ? 'pe-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+      catch:touchstart="onLogoutStart" bind:touchmove="onLogoutMove" catch:touchend="onLogoutEnd" catch:touchcancel="onLogoutCancel">
+      <view class="pe-fill pe-fill-out"></view>
+      <text class="pe-acct-t">退出登录</text>
     </view>
-    <text class="t-sys pe-acct-note">删除后学习记录和地址都会没有，订单还在</text>
+    <text class="t-sys pe-acct-note">退出后用同一个微信再登录，资料和课程都会回来</text>
   </view>
 </view>
 </scroll-view>

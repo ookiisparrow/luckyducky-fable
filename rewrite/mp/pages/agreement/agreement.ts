@@ -6,6 +6,12 @@ import { getPageContent } from '../../lib/pageContent'
 import { mapAgreement, type AgreementDocVM } from '../../lib/mapPages'
 import { navigateOrRedirect } from '../../lib/nav'
 import { openCustomerService } from '../../utils/customerService'
+import { deleteAccount } from '../../api/user'
+import { clearAll as clearAddresses } from '../../lib/address'
+import { loginGate } from '../../lib/loginGate'
+import { writeStoredCont } from '../../lib/meCont'
+import { clearConsentHint } from '../../lib/consent'
+import { tapHaptic } from '../../lib/haptics'
 
 Page({
   data: {
@@ -36,5 +42,40 @@ Page({
   },
   onKefu() {
     openCustomerService()
+  },
+  // 删除个人资料（隐私政策第六条·老板 2026-09-30 从编辑资料页挪到这里·§39）：确认框讲清删什么、课程与进度保留。
+  _deleting: false,
+  onDeleteData() {
+    tapHaptic()
+    wx.showModal({
+      title: '删除个人资料',
+      content: '将删除你的昵称、头像、签名、手机号和本机地址簿，评价改为匿名。已解锁的课程和学习进度会保留，订单依法留存。删除后不能恢复。',
+      confirmText: '删除',
+      confirmColor: '#D9483B', // 不可恢复操作：确认键警示红（= tokens --v5-err·原生弹窗只收 hex）
+      success: (r) => {
+        if (r.confirm) void this.runDeleteData()
+      },
+    })
+  },
+  async runDeleteData() {
+    if (this._deleting) return
+    this._deleting = true
+    wx.showLoading({ title: '删除中', mask: true }) // 遮罩挡住在途连点/返回（服务端要跑好几步批删）
+    let r: { ok: boolean }
+    try {
+      r = await deleteAccount()
+    } finally {
+      wx.hideLoading()
+      this._deleting = false
+    }
+    if (!r.ok) {
+      wx.showToast({ title: '没删成，请稍后再试', icon: 'none' })
+      return
+    }
+    clearAddresses() // 地址簿只存本机
+    clearConsentHint() // 服务端已把数据共享授权重置；本机旧提示别再显示「已同意」
+    loginGate.logout()
+    writeStoredCont(null)
+    wx.showToast({ title: '已删除', icon: 'none' })
   },
 })
