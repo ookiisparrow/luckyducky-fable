@@ -6,8 +6,8 @@
 <view class="wl">
   <!-- 自绘返回：custom 导航无原生返回箭头；带 tapHaptic 故不用 v5-nav（onBack 走 goBackOrHome） -->
   <view class="wl-nav" style="padding-top:{{statusBarHeight}}px">
-    <view class="wl-hit" bind:tap="onBack">
-      <view class="k k-sm k-light wl-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
+    <view class="wl-hit" bind:tap="onBack" hover-start-time="20" hover-class="wl-hit-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="k k-sm k-light wl-back"><px-i name="back" /></view>
     </view>
     <text wx:if="{{phase === 'nocode' || (phase === 'result' && kind !== 'activated')}}" class="t-sys wl-nav-t">激活课程</text>
   </view>

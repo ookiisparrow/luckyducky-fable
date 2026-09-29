@@ -35,7 +35,7 @@
         <text class="t-sys od-warn-t">{{warn.text}}</text>
       </view>
       <!-- 有售后记录（含被拒）：进我的售后看进度（云端退款不改订单状态，进度在售后页） -->
-      <view class="t-sys od-more od-as-go hit44" wx:if="{{asHas}}" bind:tap="onGoAfterSales"><text>查看售后进度</text><px-i name="arrow" /></view>
+      <view class="t-sys od-more od-as-go hit44" wx:if="{{asHas}}" bind:tap="onGoAfterSales" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100"><text>查看售后进度</text><px-i name="arrow" /></view>
     </view>
 
     <!-- 物流（有运单号时·真实数据仅运单号+公司，实时轨迹经快递100插件；插件打不开回退复制运单号） -->
@@ -169,7 +169,7 @@
       <block wx:for="{{asLines}}" wx:key="lineId"><text wx:if="{{item.lineId === asLine}}" class="t-sys as-sub">{{item.name}}{{item.spec ? ' · ' + item.spec : ''}}</text></block>
     </view>
     <view class="well as-seg">
-      <view wx:for="{{asTypes}}" wx:key="*this" class="k as-seg-k hit44 {{asType === item ? 'k-light as-on' : ''}} {{asBlock && item === '退款' ? 'as-seg-off' : ''}}"hover-start-time="20" hover-class="{{asType === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
+      <view wx:for="{{asTypes}}" wx:key="*this" class="k as-seg-k hit44 {{asType === item ? 'k-light as-on' : ''}} {{asBlock && item === '退款' ? 'as-seg-off' : ''}}" hover-start-time="20" hover-class="{{asType === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
         data-v="{{item}}" bind:tap="onAsType" data-k="{{asType === item ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asType === item}}" name="led" tone="var(--v5-violet)" />{{item}}</view>
     </view>
     <!-- 没有可退商品（已开课/已申请过/已被拒）：退款段置灰并写原因；换货/补发照常走联系客服。

@@ -155,7 +155,6 @@ page {
 }
 .ct-skel-bar {
   height: 12px;
-  background: var(--v5-sunk);
 }
 .ct-skel-segs {
   height: 4px;
@@ -164,7 +163,6 @@ page {
 .ct-skel-key {
   height: 44px;
   border-radius: 6px;
-  background: var(--v5-sunk);
 }
 
 /* 失败 / 不存在 */

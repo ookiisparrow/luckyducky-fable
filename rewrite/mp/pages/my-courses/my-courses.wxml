@@ -16,12 +16,12 @@
   <view class="mc-list mc-list-load" wx:elif="{{loading}}">
     <view class="t-sys mc-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
     <view class="mc-card mc-skel-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="mc-skel-bar" style="width: 96px"></view>
+      <view class="mc-skel-bar skel" style="width: 96px"></view>
       <view class="mc-row">
-        <view class="mc-skel-thumb"></view>
+        <view class="mc-skel-thumb skel"></view>
         <view class="mc-body">
-          <view class="mc-skel-bar" style="width: 60%"></view>
-          <view class="mc-skel-bar" style="width: 36%"></view>
+          <view class="mc-skel-bar skel" style="width: 60%"></view>
+          <view class="mc-skel-bar skel" style="width: 36%"></view>
         </view>
       </view>
     </view>

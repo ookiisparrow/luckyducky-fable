@@ -216,7 +216,7 @@ Page({
     this._animDir = to > from ? 'anim-next' : 'anim-prev' // 目标 tab 在右→新内容自右滑入；在左→自左滑入（reload 落数据时应用）
     // 先清 anim 类：reload 落新数据时才把方向类应用上去→动画重新触发（连续同向切换也重播，不是「类没变不重放」）
     this._all = [] // 切 tab 清空全量基准（迁实例字段·随后 reload 从服务端按该状态重新分页）
-    this.setData({ tabKey: key, shown: [], cursor: null, hasMore: false, anim: '' })
+    this.setData({ tabKey: key, shown: [], cursor: null, hasMore: false, anim: '', loading: true }) // 同帧进加载态：不闪「暂无订单」
     void this.reload() // 切 tab 从服务端按该状态重新分页（过滤与分页同源）
   },
   // 手势滑动换 tab（bind 不 catch，不影响纵向滚动/上拉翻页）：抬指判定，不做跟手动画（需求未要求）。

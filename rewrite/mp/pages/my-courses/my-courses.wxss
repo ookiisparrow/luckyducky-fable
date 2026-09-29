@@ -115,14 +115,12 @@ page {
 }
 .mc-skel-bar {
   height: 12px;
-  background: var(--v5-sunk);
 }
 .mc-skel-thumb {
-  width: 44px;
-  height: 44px;
+  width: 64px;
+  height: 64px;
   flex: 0 0 auto;
   border-radius: 4px;
-  background: var(--v5-sunk);
 }
 
 /* 失败 / 空 */
