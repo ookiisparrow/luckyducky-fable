@@ -59,7 +59,7 @@ describe('协议页', () => {
     await flush()
     expect(callAppMock).toHaveBeenCalledWith('getPageContent', { page: 'agreement' })
     expect(page.data.doc).toMatchObject({ title: '隐私政策', updated: '2026-10', intro: DEF.privacy.intro })
-    expect(page.data.doc.articles).toEqual([{ title: '乙条', body: '隐私政策新条款' }])
+    expect(page.data.doc.articles).toEqual([{ title: '乙条', body: '隐私政策新条款', important: false }])
   })
 
   it('大白话：后台条款拉不到——保持默认全文，不空屏', async () => {

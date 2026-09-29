@@ -1,6 +1,6 @@
 <!-- 激活页（v5「字重」稿 C2 激活码无效 / C3 激活成功·开课须知）。只从「微信扫实体激活卡二维码」带 ?code= 进来——
      老板拍板不做应用内手动输码（设计稿 C1）与扫码按钮：
-     phase 'nocode'（没带码直接进来）→ 提示用微信扫卡；'result' 且 kind mine/taken/invalid/error → C2 各变体（无「重新输入」）；
+     phase 'nocode'（没带码直接进来）→ 提示用微信扫卡；'loading'（带码兑课在途）→ 居中转圈；'result' 且 kind mine/taken/invalid/error → C2 各变体（无「重新输入」）；
      'result' 且 kind==='activated' → W1（C3 上半）；'w2' → W2（C3 下半：三件事 + 不可退货 + 进课）。
      handler：onBack/onRetryCode/onEnter/onContact/onNextWelcome/onGoHome。 -->
 <view class="wl">
@@ -25,6 +25,14 @@
     </view>
     <view class="wl-dock">
       <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBack" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">返回</view>
+    </view>
+  </block>
+
+  <!-- 带码兑课在途：居中转圈 + 一行小字，不给键（UI 审查 2026-09-29·老板选「居中转圈+一行小字」） -->
+  <block wx:elif="{{phase === 'loading'}}">
+    <view class="wl-body wl-loading">
+      <px-anim name="loader" size="2" />
+      <text class="t-sys wl-loading-t">正在激活…</text>
     </view>
   </block>
 
