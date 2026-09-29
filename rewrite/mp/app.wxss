@@ -3,7 +3,7 @@
 page {
   background: var(--v5-canvas);
   color: var(--v5-ink);
-  font-size: 28rpx;
+  font-size: 14px; /* 全站 px（原 28rpx 随屏宽缩放，与其余 px 文字对不齐） */
   font-family: var(--v5-font-brand); /* 品牌字体全局应用——见 tokens.wxss 注释 */
   font-weight: 500; /* 注册字重只有 300/500/700/900（brandFont.ts BRAND_FONT_TIERS），默认 400 没有对应档——
     显式钉 500 使正文命中已注册字重、行为确定 */
@@ -139,6 +139,10 @@ page {
   bottom: -4px;
   height: auto;
   margin-top: 0;
+}
+/* 图片卡/缩略图按下：淡一下（白卡用 .k-card 下沉压暗，图片区压暗看不出） */
+.press-fade {
+  opacity: 0.7;
 }
 /* 凹槽：输入框、分段选择器底槽 */
 .well {

@@ -1,6 +1,7 @@
 // 结业页（v5「字重」稿 C10 结业·小鸭孵化）：播放页整门课最后一节播完点「完成课程」进来（?courseId=）。
 // 孵化动画同一只鸭（hatch-key＝courseId）只播一次，之后在「我」页陪着；数据只读课程本身，拿不到就只显示祝贺。
 import { getCourseById } from '../../lib/courses'
+import { getMyOrders } from '../../api/orders'
 import { mapFinish } from '../../lib/mapLearning'
 import { tapHaptic } from '../../lib/haptics'
 import { keyDown, keyUp } from '../../lib/keyFx'
@@ -16,6 +17,7 @@ Page({
     name: '',
     lessonsLabel: '',
     durLabel: '',
+    canReview: true, // 有已完成订单才能评价（评价挂订单行）；收礼人没下过单→false（查询失败不误藏）
   },
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome 范式）
   onUnload() {
@@ -27,10 +29,18 @@ Page({
   async onLoad(query: Record<string, string | undefined>) {
     const courseId = String(query.courseId || '')
     this.setData({ courseId })
+    void this.checkReviewable()
     if (!courseId) return
     const course = await getCourseById(courseId)
     if (this.unloaded || !course) return
     this.setData(mapFinish(course))
+  },
+  // 课程是扫实体激活卡绑到本人微信的，收礼人和下单人是两个账号（老板 2026-09-30）：收礼人没有订单，
+  // 「去评价」带去的「已完成」列表是空的——先查一条已完成订单，没有就不出这颗键。失败按有（不因网络误藏）。
+  async checkReviewable() {
+    const r = await getMyOrders(undefined, 1, 'done').catch(() => null)
+    if (this.unloaded || !r || !r.ok) return
+    this.setData({ canReview: Array.isArray(r.list) && r.list.length > 0 })
   },
   onCatalog() {
     tapHaptic()

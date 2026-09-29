@@ -8,12 +8,12 @@
     <view class="ae">
       <view class="ae-field">
         <text class="t-sys ae-label">收货人</text>
-        <input class="well ae-input {{focus === 'name' ? 'well-focus' : ''}}" value="{{name}}" data-field="name" bind:input="onInput"
+        <input class="well ae-input {{focus === 'name' ? 'well-focus' : ''}}" value="{{name}}" data-field="name" bind:input="onInput" cursor-spacing="24" confirm-type="next" bind:confirm="onNameNext"
           bind:focus="onFocus" bind:blur="onBlur" maxlength="40" placeholder="姓名" placeholder-class="ae-ph" />
       </view>
       <view class="ae-field">
         <text class="t-sys ae-label">手机号</text>
-        <input class="well ae-input ae-mono {{focus === 'phone' ? 'well-focus' : ''}} {{phoneLack ? 'ae-warn' : ''}}" value="{{phone}}" data-field="phone" bind:input="onInput"
+        <input class="well ae-input ae-mono {{focus === 'phone' ? 'well-focus' : ''}} {{phoneLack ? 'ae-warn' : ''}}" value="{{phone}}" data-field="phone" bind:input="onInput" cursor-spacing="24" focus="{{focusNext === 'phone'}}"
           bind:focus="onFocus" bind:blur="onBlur" type="number" maxlength="11" placeholder="11 位手机号" placeholder-class="ae-ph" />
         <view wx:if="{{phoneLack}}" class="t-sys ae-err">
           <px-anim name="alert" size="2" hold="400" />
@@ -32,7 +32,7 @@
       </view>
       <view class="ae-field">
         <text class="t-sys ae-label">详细地址</text>
-        <textarea class="well ae-area {{focus === 'detail' ? 'well-focus' : ''}}" value="{{detail}}" data-field="detail" bind:input="onInput"
+        <textarea class="well ae-area {{focus === 'detail' ? 'well-focus' : ''}}" value="{{detail}}" data-field="detail" bind:input="onInput" cursor-spacing="24"
           bind:focus="onFocus" bind:blur="onBlur" maxlength="120" auto-height="{{true}}" disable-default-padding="{{true}}"
           placeholder="街道、门牌号" placeholder-class="ae-ph" />
       </view>

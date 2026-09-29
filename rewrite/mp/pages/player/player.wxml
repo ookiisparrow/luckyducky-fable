@@ -14,8 +14,8 @@
   <!-- 顶栏：暗色返回键 + 一行课时名（数据源 lib/player lessonStrip；拿不到课时按态兜底，missing/error 不写「正在学习」自相矛盾） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
     <view class="lp-bar">
-      <view class="lp-back" bind:tap="onBack">
-        <view class="k k-sm k-dk lp-back-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
+      <view class="lp-back" bind:tap="onBack" hover-start-time="20" hover-class="lp-back-down" hover-stay-time="100" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <view class="k k-sm k-dk lp-back-key"><px-i name="back" /></view>
       </view>
       <text class="t-sys lp-nav-cap">{{strip ? strip.lessonNo + ' · ' + strip.lessonName : (title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习')))}}</text>
     </view>

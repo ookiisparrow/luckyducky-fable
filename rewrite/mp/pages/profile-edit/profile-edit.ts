@@ -96,7 +96,10 @@ Page({
   onFocus(e: WechatMiniprogram.TouchEvent) {
     this.setData({ focus: String(e.currentTarget.dataset.f || '') })
   },
-  onBlur() {
+  onBlur(e: WechatMiniprogram.InputBlur) {
+    // iOS 从键盘候选栏选「微信昵称」部分版本不触发 input：昵称框失焦时以框内值补同步（值没变不动）
+    const v = e && e.detail ? e.detail.value : undefined
+    if (e && e.currentTarget.dataset.f === 'nickname' && typeof v === 'string' && v !== this.data.nickname) this.sync({ nickname: v })
     this.setData({ focus: '' })
   },
   onDeleteStart(e: WechatMiniprogram.TouchEvent) {

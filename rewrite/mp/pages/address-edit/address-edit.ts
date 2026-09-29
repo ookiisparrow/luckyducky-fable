@@ -28,6 +28,7 @@ Page({
     phoneWarn: false, // 点过灰色保存键且手机号不够位 → 之后边打边提示（设计稿 aeErr）
     phoneLack: 0, // 手机号还差几位（>0 时框下「手机号少了 N 位」+ 黄框·派生；文案在 wxml 的黑体里）
     focus: '', // 正在输入的框（驱动 .well-focus 紫描边）
+    focusNext: '', // 键盘「下一项」要跳去的框（驱动该框 focus 属性·失焦即清，免得下次同值不触发）
     dirty: false, // 与进页时相比有改动（驱动 <leave-sheet> 拦返回/侧滑）
     deleting: false, // 正在按住删除（驱动红色填充进度）
     pick: 0, // 从结算页选址来新增（?pick=N）：存完自动设默认、退 N 页直接回结算页；0＝管理态
@@ -58,7 +59,11 @@ Page({
     this.setData({ focus: String(e.currentTarget.dataset.field) })
   },
   onBlur() {
-    this.setData({ focus: '' })
+    this.setData({ focus: '', focusNext: '' })
+  },
+  // 收货人填完按键盘「下一项」→ 跳到手机号（省市区是选择器、详细地址是多行框，不再往下串）
+  onNameNext() {
+    this.setData({ focusNext: 'phone' })
   },
   // 省市区级联选择（微信内置 region picker·全国省市区数据运行时自带·无需数据/API/密钥）
   onRegionChange(e: WechatMiniprogram.PickerChange) {

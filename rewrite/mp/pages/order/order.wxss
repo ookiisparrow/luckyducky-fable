@@ -303,6 +303,7 @@ page {
   color: var(--v5-ink-2);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 底部：返回 48 + 次 1 : 主 1.6 */
@@ -518,6 +519,7 @@ page {
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 15px;
 }
 .as-chip-spec {

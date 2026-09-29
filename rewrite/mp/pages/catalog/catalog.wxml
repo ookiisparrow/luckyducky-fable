@@ -23,12 +23,12 @@
     <view class="ct-hero"></view>
     <view class="ct-skel">
       <view class="t-sys ct-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
-      <view class="ct-skel-bar" style="width: 50%"></view>
+      <view class="ct-skel-bar skel" style="width: 50%"></view>
       <view class="ct-skel-segs"></view>
-      <view class="ct-skel-key"></view>
-      <view class="ct-skel-bar" style="width: 72%"></view>
-      <view class="ct-skel-bar" style="width: 64%"></view>
-      <view class="ct-skel-bar" style="width: 40%"></view>
+      <view class="ct-skel-key skel"></view>
+      <view class="ct-skel-bar skel" style="width: 72%"></view>
+      <view class="ct-skel-bar skel" style="width: 64%"></view>
+      <view class="ct-skel-bar skel" style="width: 40%"></view>
     </view>
   </view>
 
