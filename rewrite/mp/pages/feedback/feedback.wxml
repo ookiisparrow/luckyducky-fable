@@ -10,9 +10,9 @@
 
   <view class="well fb-cats">
     <view wx:for="{{cats}}" wx:key="key" data-key="{{item.key}}" bind:tap="onCat"
-      class="k fb-cat {{cat === item.key ? 'k-light' : 'fb-cat-off'}}"
+      class="k fb-cat hit44 {{cat === item.key ? 'k-light' : 'fb-cat-off'}}"
       hover-start-time="20" hover-class="{{cat === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-k="{{cat === item.key ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <px-i wx:if="{{cat === item.key}}" name="led" tone="#8a5ae0" />
+      <px-i wx:if="{{cat === item.key}}" name="led" tone="var(--v5-violet)" />
       <text>{{item.label}}</text>
     </view>
   </view>
@@ -36,7 +36,7 @@
 
 <view class="fb-dock">
   <view wx:if="{{ok && !busy}}" class="k k-ink k-48 fb-submit" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">提交</view>
-  <view wx:else class="k k-flat k-48 fb-submit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">提交</view>
+  <view wx:else class="k k-flat k-off k-48 fb-submit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">提交</view>
 </view>
 </view>
 

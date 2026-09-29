@@ -9,7 +9,7 @@
   display: flex;
   flex-direction: column;
   background: var(--v5-dark);
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
 }
 
 /* —— 顶栏：返回键 + 一行课时名；右侧 104px 留给原生胶囊 —— */
@@ -55,7 +55,7 @@
   margin: 0 16px;
   border-radius: 8px;
   overflow: hidden;
-  background: repeating-linear-gradient(135deg, #1a1a1a 0 8px, #202020 8px 16px);
+  background: repeating-linear-gradient(135deg, var(--v5-dark-2) 0 8px, var(--v5-dark-3) 8px 16px);
 }
 .lp-stage.lesson-done {
   flex: 0 0 200px;
@@ -103,7 +103,7 @@
   background: rgba(0, 0, 0, 0.45);
   font-size: 13px;
   font-weight: 300;
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -131,7 +131,7 @@
   background: rgba(0, 0, 0, 0.45);
   font-size: 13px;
   font-weight: 300;
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
   white-space: nowrap;
 }
 
@@ -154,7 +154,7 @@
 .lp-segend-cap {
   font-size: 17px;
   font-weight: 500;
-  color: #c9c9c2;
+  color: var(--v5-rule);
   text-align: center;
 }
 .lp-segend-keys {
@@ -165,7 +165,7 @@
 /* 非播放态（空/未激活/找不到/失败）：同尺寸暗框 + 标题 + 说明 + 键 */
 .lp-state {
   padding: 0 32px;
-  background: #1a1a1a;
+  background: var(--v5-dark-2);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
@@ -177,7 +177,7 @@
 .lp-state-title {
   font-size: 17px;
   font-weight: 500;
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
 }
 .lp-state-hint {
   font-size: 13px;
@@ -222,11 +222,11 @@
 }
 .lp-seek-track {
   right: 0;
-  background: #333330;
+  background: var(--v5-dark-track);
 }
 /* 缓冲水位：介于轨道与紫填充之间的灰（DOM 序 track→buffer→fill） */
 .lp-seek-buffer {
-  background: #4a4a46;
+  background: var(--v5-dark-buffer);
 }
 .lp-seek-fill {
   background: var(--v5-violet);
@@ -246,7 +246,7 @@
   width: 4px;
   height: 12px;
   margin-left: -2px;
-  background: #f2f2ec;
+  background: var(--v5-dark-ink);
 }
 .lp-seek-handle.big {
   top: 2px;
@@ -278,7 +278,7 @@
   background: var(--v5-dark-key);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
   font-size: 15px;
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
   white-space: nowrap;
 }
 .lp-seek-preview-bubble {
@@ -312,7 +312,7 @@
 .lp-seg-title {
   font-size: 17px;
   font-weight: 500;
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -323,7 +323,7 @@
   color: var(--v5-ink-4);
 }
 .lp-time.on {
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
 }
 
 .lp-controls {
@@ -342,8 +342,8 @@
 }
 /* 暗底不可用键：平面、无键座、弱字 */
 .lp-key-off {
-  background: #1a1a1a;
-  color: #55554f;
+  background: var(--v5-dark-2);
+  color: var(--v5-dark-off);
 }
 
 /* —— C9 学完一节 —— */
@@ -368,10 +368,10 @@
 .lp-done-seg {
   flex: 1;
   height: 4px;
-  background: #333330;
+  background: var(--v5-dark-track);
 }
 .lp-done-seg.done {
-  background: #f2f2ec;
+  background: var(--v5-dark-ink);
 }
 .lp-done-seg.cur {
   background: var(--v5-violet);
@@ -386,7 +386,7 @@
   font-size: 30px;
   font-weight: 900;
   letter-spacing: -0.01em;
-  color: #f2f2ec;
+  color: var(--v5-dark-ink);
 }
 .lp-done-keys {
   flex: 0 0 auto;
@@ -427,7 +427,7 @@
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(17, 17, 17, 0.2);
+  background: var(--v5-grab);
 }
 .lp-help-nav {
   display: flex;

@@ -18,7 +18,7 @@
       <view class="rv-stars {{shake ? 'rv-shake' : ''}}">
         <view wx:for="{{starIdx}}" wx:key="*this" id="rv-star-{{item}}" class="k k-light rv-star {{rating >= item ? 'rv-star-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
           data-n="{{item}}" bind:tap="onStar" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-          <px-i name="star9" size="4" tone="{{rating >= item ? '#F4BD3F' : '#C9C9C2'}}" halo="none" />
+          <px-i name="star9" size="4" tone="{{rating >= item ? 'var(--v5-warn)' : 'var(--v5-rule)'}}" halo="none" />
         </view>
       </view>
       <text class="rv-label {{rating ? 'on' : ''}}">{{ratingLabel}}</text>
@@ -26,7 +26,7 @@
       <view class="rv-more">
         <text class="t-sys rv-cap">补充一下 · 选填</text>
         <view class="rv-tags">
-          <view wx:for="{{tags}}" wx:key="t" class="k k-sm rv-tag {{item.on ? 'k-light rv-tag-on' : 'k-flat'}}"
+          <view wx:for="{{tags}}" wx:key="t" class="k k-sm rv-tag hit44 hit-wrap {{item.on ? 'k-light rv-tag-on' : 'k-flat'}}"
             hover-start-time="20" hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag" data-k="{{item.on ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.t}}</view>
         </view>
 
@@ -46,12 +46,12 @@
         <view class="rv-photos" wx:if="{{photos.length}}">
           <view class="rv-photo" wx:for="{{photos}}" wx:key="*this">
             <image class="rv-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
-            <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><view class="rv-photo-x"><px-i name="times" tone="#ffffff" /></view></view>
+            <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><view class="rv-photo-x"><px-i name="times" tone="var(--v5-surface)" /></view></view>
           </view>
         </view>
 
-        <view class="rv-anon" bind:tap="onAnon">
-          <view class="k k-sm k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="#8A5AE0" /></view>
+        <view class="rv-anon hit44" bind:tap="onAnon">
+          <view class="k k-sm k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="var(--v5-violet)" /></view>
           <text class="rv-anon-t">匿名评价</text>
         </view>
       </view>
@@ -60,7 +60,7 @@
 
   <view class="rv-dock">
     <view wx:if="{{rating && !busy}}" class="k k-ink k-48 rv-pub" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">发布评价</view>
-    <view wx:else class="k k-flat k-48 rv-pub" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">发布评价</view>
+    <view wx:else class="k k-flat k-off k-48 rv-pub" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">发布评价</view>
   </view>
 </view>
 

@@ -53,7 +53,7 @@ page {
 .fn-leader {
   flex: 1;
   height: 2px;
-  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(90deg, var(--v5-rule) 0 2px, transparent 2px 4px);
 }
 .fn-v {
   font-size: 15px;

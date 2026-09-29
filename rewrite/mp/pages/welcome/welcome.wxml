@@ -40,7 +40,7 @@
       <view wx:if="{{code}}" class="well mono wl-code wl-code-ro wl-code-{{kind}}">{{code}}</view>
       <view class="wl-msg">
         <!-- mine 绿·error（网络/频控/繁忙，码可能没问题）黄·taken/invalid 红 -->
-        <view class="wl-msg-led"><px-i name="led" tone="{{kind === 'mine' ? '#3f9a5e' : kind === 'error' ? '#f4bd3f' : '#d9483b'}}" /></view>
+        <view class="wl-msg-led"><px-i name="led" tone="{{kind === 'mine' ? 'var(--v5-ok)' : kind === 'error' ? 'var(--v5-warn)' : 'var(--v5-err)'}}" /></view>
         <text wx:if="{{kind === 'mine'}}" class="t-sys wl-msg-t wl-msg-mine">这个码已经是你的了，接着上次继续钩就好，慢慢来。</text>
         <text wx:elif="{{kind === 'taken'}}" class="t-sys wl-msg-t wl-msg-bad">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过初学者钩织学习套装想自己学，用套装里你自己的码。</text>
         <text wx:elif="{{kind === 'error'}}" class="t-sys wl-msg-t wl-msg-error">{{errCopy.lead}}</text>
@@ -54,7 +54,7 @@
       <!-- 没兑成但码可能是好的：「再试一次」用原码重发，不清码不误导 -->
       <view class="wl-row" wx:elif="{{kind === 'error'}}">
         <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
-        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onRetryCode" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">再试一次</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat k-off' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onRetryCode" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">再试一次</view>
       </view>
       <view class="wl-row" wx:else>
         <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
@@ -73,7 +73,7 @@
       </view>
       <view class="wl-ok">
         <view class="wl-ok-row">
-          <px-i name="led" tone="#3f9a5e" />
+          <px-i name="led" tone="var(--v5-ok)" />
           <text class="wl-h0">{{welcome.w1.title}}</text>
         </view>
         <text wx:if="{{courseTitle}}" class="wl-meta">{{courseTitle}}</text>
@@ -104,12 +104,12 @@
     <view class="wl-dock wl-dock-col">
       <!-- 不可退货警示（业务告知义务·需求 R4，不省）·空则强制回默认（mapWelcome·不允许被清空） -->
       <view class="wl-warn">
-        <view class="wl-msg-led"><px-i name="led" tone="#f4bd3f" /></view>
+        <view class="wl-msg-led"><px-i name="led" tone="var(--v5-warn)" /></view>
         <text class="t-sys wl-warn-t">{{welcome.w1.warning}}</text>
       </view>
       <view class="wl-row">
         <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">先逛逛</view>
-        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onEnter" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">进入课程</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat k-off' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onEnter" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">进入课程</view>
       </view>
     </view>
   </block>

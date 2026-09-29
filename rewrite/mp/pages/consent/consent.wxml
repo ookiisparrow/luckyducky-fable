@@ -9,19 +9,19 @@
   <text class="cs-p t-sys">此类第三方受托客服访问以你的同意为前提。你可在本页随时同意或撤回该数据共享授权；撤回后，外包坐席将无法再查看你的上述数据（不影响此前已依约进行的处理）。</text>
 
   <view class="k k-light cs-state">
-    <px-i name="led" tone="{{state === true ? '#3F9A5E' : 'rgba(17,17,17,.28)'}}" halo="{{state === true ? '' : 'none'}}" />
+    <px-i name="led" tone="{{state === true ? 'var(--v5-ok)' : 'rgba(17,17,17,.28)'}}" halo="{{state === true ? '' : 'none'}}" />
     <text class="cs-state-t">{{stateLabel}}</text>
   </view>
 
   <view class="cs-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onPolicy">
     <text class="cs-row-t">查看完整隐私政策</text>
-    <px-i name="arrow" tone="#62625c" />
+    <px-i name="arrow" tone="var(--v5-ink-2)" />
   </view>
 
   <text class="t-sys cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
   <view class="cs-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">
     <text class="cs-row-t">联系客服</text>
-    <px-i name="arrow" tone="#62625c" />
+    <px-i name="arrow" tone="var(--v5-ink-2)" />
   </view>
 </view>
 

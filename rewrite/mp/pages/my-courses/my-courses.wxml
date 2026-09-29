@@ -45,7 +45,7 @@
             <view class="mc-meta">
               <!-- 单位「段」对齐数据模型与目录页（章>课时>段落）：此处数的是 segments，别另起「集」之类叫法。 -->
               <text class="t-sys mc-left">已学 {{item.doneCount}}/{{item.totalSegments}} 段</text>
-              <view class="t-sys mc-fin" wx:if="{{item.percent >= 100}}"><px-i name="led" tone="#3f9a5e" /><text>学完</text></view>
+              <view class="t-sys mc-fin" wx:if="{{item.percent >= 100}}"><px-i name="led" tone="var(--v5-ok)" /><text>学完</text></view>
               <text class="mono mc-pct" wx:else>{{item.percent}}%</text>
             </view>
           </block>

@@ -66,7 +66,7 @@ page {
 .ol-card {
   padding: 16px;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--v5-surface);
   box-shadow: 0 0 0 1px var(--v5-hair);
   display: flex;
   flex-direction: column;
@@ -118,7 +118,7 @@ page {
   flex: 0 0 auto;
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .ol-thumb-img {
   display: block;
@@ -151,14 +151,6 @@ page {
   padding: 0 12px;
 }
 /* 热区补到 44 高（上下各让 6px·看不见，视觉仍 32 高）；取消键 overflow:hidden 裁掉伪元素，改由外层 .ol-hold 让位 */
-.ol-act::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -6px;
-  bottom: -6px;
-}
 /* 已评价（拍板 6·设计稿灰底标签 32 高·不可点，不是键） */
 .ol-reviewed {
   box-sizing: border-box;
@@ -168,7 +160,7 @@ page {
   font-size: 17px;
   font-weight: 500;
   background: var(--v5-sunk);
-  color: var(--v5-ink-3);
+  color: var(--v5-ink-2);
 }
 .ol-hold {
   padding: 6px 0;
@@ -188,7 +180,7 @@ page {
   width: 100%;
   transform: scaleX(0);
   transform-origin: left;
-  background: rgba(217, 72, 59, 0.14);
+  background: var(--v5-err-soft);
 }
 .ol-hold-on .ol-fill {
   transform: scaleX(1);

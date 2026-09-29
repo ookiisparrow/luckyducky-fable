@@ -12,8 +12,8 @@
         <view class="as-ico">
           <!-- 设计稿 AS_ST：已同意＝金币（退款在路上）、申请中＝紫灯、已退款＝绿灯、已拒绝＝灰灯无光晕 -->
           <px-anim wx:if="{{item.status === 'approved'}}" class="as-coin" name="coin" size="2" />
-          <px-i wx:elif="{{item.status === 'applied'}}" name="led" tone="#8A5AE0" />
-          <px-i wx:elif="{{item.status === 'refunded'}}" name="led" tone="#3F9A5E" />
+          <px-i wx:elif="{{item.status === 'applied'}}" name="led" tone="var(--v5-violet)" />
+          <px-i wx:elif="{{item.status === 'refunded'}}" name="led" tone="var(--v5-ok)" />
           <px-i wx:else name="led" tone="rgba(17,17,17,.28)" halo="none" />
         </view>
         <view class="as-mid">

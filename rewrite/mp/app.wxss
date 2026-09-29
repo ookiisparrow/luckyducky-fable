@@ -69,6 +69,10 @@ page {
 }
 .k-flat {
   background: var(--v5-sunk);
+  color: var(--v5-ink-2); /* 能点的次操作/未选中（暂不登录、复制、标签…）：ink-2 约 5:1 */
+}
+/* 置灰＝还不能用（未勾协议、未填好、忙碌中、无可播）：只这类保持 ink-3（UI 审查 2026-09-29·老板选「分两组」） */
+.k-flat.k-off {
   color: var(--v5-ink-3);
 }
 .k-flat-down {
@@ -115,6 +119,27 @@ page {
   transform: translateY(1px);
   background: #f3f3f0;
 }
+/* 点击区补足 44（外观不变·UI 审查 2026-09-29·老板选「透明扩到 44」）：透明 ::after 纵向撑到 44、横向不扩
+   （并排的标签/链接不互相抢点）。给了 relative 作定位上下文；页面自己写 fixed/absolute 的（如首页回顶键）
+   以页面样式为准（page wxss 后加载·同权重后者胜）。.hit-wrap：折行标签组（行距 8）只扩进半个行距，不越到邻行。 */
+.hit44 {
+  position: relative;
+}
+.hit44::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 44px;
+  margin-top: -22px;
+}
+.hit44.hit-wrap::after {
+  top: -4px;
+  bottom: -4px;
+  height: auto;
+  margin-top: 0;
+}
 /* 凹槽：输入框、分段选择器底槽 */
 .well {
   box-sizing: border-box;
@@ -132,6 +157,12 @@ page {
 input,
 textarea {
   font-family: 'PingFang SC', -apple-system, system-ui, sans-serif;
+}
+/* 长串断行（UI 审查 2026-09-29）：用户内容里连续英文/链接/长数字没有断点会把页面撑出横滚——允许在任意处折行；
+   中文本来就逐字可断，不受影响；已设 nowrap+省略号的单行不受影响。word-break 那行给老内核（不认 anywhere）兜底。 */
+.t-sys {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 /* v5 骨架屏：凹槽灰底 + 微光扫过（配下方 @keyframes ld-shimmer） */
 .skel {

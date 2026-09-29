@@ -97,7 +97,7 @@ describe('订单详情：加载', () => {
     handlers.getOrderById = () => ({ ok: true, order: ORDER({ status: 'refund_required' }) })
     const page = await mount()
     await page.reload()
-    expect(page.data.warn).toEqual({ text: '该订单需人工处理退款，请联系客服协助处理', tone: '#F4BD3F' })
+    expect(page.data.warn).toEqual({ text: '该订单需人工处理退款，请联系客服协助处理', tone: 'var(--v5-warn)' })
     page.onKefu()
     expect(kefuMock).toHaveBeenCalledTimes(1)
     // 带上下文：订单号 + 商品 + 原因先复制，客服那边直接粘贴

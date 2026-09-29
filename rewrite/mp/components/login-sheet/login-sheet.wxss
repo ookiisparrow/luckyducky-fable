@@ -41,7 +41,7 @@
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(17, 17, 17, 0.2);
+  background: var(--v5-grab);
 }
 .ls-logo {
   align-self: flex-start;
@@ -71,7 +71,7 @@
   width: 22px;
   height: 22px;
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--v5-surface);
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px var(--v5-hair), 0 1px 2px rgba(17, 17, 17, 0.08);
   display: flex;
   align-items: center;

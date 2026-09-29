@@ -18,10 +18,10 @@
   <!-- 标签筛选（设计稿 A3）：点选只看带该标签的评价，再点放回。
        ponytail: 接口不支持按标签拉列表，只筛已加载的行 + 不足一屏自动往下翻页补（reviews.ts fillTag）；评价量大了在 getReviews 加 tag 参数改云端筛。 -->
   <view class="rv-tags" wx:if="{{summary.tags.length}}">
-    <view wx:for="{{summary.tags}}" wx:key="tag" class="k {{tag === item.tag ? 'k-light' : 'k-flat'}} rv-tag" hover-start-time="20"
+    <view wx:for="{{summary.tags}}" wx:key="tag" class="k {{tag === item.tag ? 'k-light' : 'k-flat'}} rv-tag hit44 hit-wrap" hover-start-time="20"
       hover-class="{{tag === item.tag ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-tag="{{item.tag}}" bind:tap="onTag"
       data-k="{{tag === item.tag ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <px-i wx:if="{{tag === item.tag}}" name="led" tone="#8A5AE0" />{{item.tag}}<text class="t-sys rv-tag-n">{{item.n}}</text>
+      <px-i wx:if="{{tag === item.tag}}" name="led" tone="var(--v5-violet)" />{{item.tag}}<text class="t-sys rv-tag-n">{{item.n}}</text>
     </view>
   </view>
 

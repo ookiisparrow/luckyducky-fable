@@ -101,7 +101,7 @@ page {
   width: 100%;
   transform: scaleX(0);
   transform-origin: left;
-  background: rgba(217, 72, 59, 0.14);
+  background: var(--v5-err-soft);
 }
 .as-hold-on .as-fill {
   transform: scaleX(1);
@@ -131,7 +131,7 @@ page {
   margin: 8px 16px 0;
   padding: 16px;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--v5-surface);
   box-shadow: 0 0 0 1px var(--v5-hair);
   display: flex;
   flex-direction: column;

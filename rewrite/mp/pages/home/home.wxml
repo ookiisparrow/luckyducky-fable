@@ -10,7 +10,7 @@
 <scroll-view class="hm-scroll" style="top: {{statusBarHeight + 44}}px" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}"
   refresher-enabled="{{true}}" refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresher"
   refresher-default-style="none" refresher-threshold="{{64}}" bindrefresherpulling="onPulling"
-  refresher-background="#fafaf8" scroll-into-view="{{scrollInto}}" scroll-with-animation="{{scrollAnim}}"
+  refresher-background="var(--v5-canvas)" scroll-into-view="{{scrollInto}}" scroll-with-animation="{{scrollAnim}}"
   bindscroll="onScroll">
 
   <!-- 下拉刷新（设计稿物流页 lg.pull）：像素加载器随下拉逐格点亮，松手后转圈；文字 下拉刷新 → 松手刷新 → 正在刷新 -->
@@ -41,7 +41,7 @@
     <view class="hm-hero-keys">
       <view class="k k-light hm-search" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="toIntro" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <text class="hm-search-text">{{content.hero.search}}</text>
-        <px-i name="down" tone="#62625c" />
+        <px-i name="down" tone="var(--v5-ink-2)" />
       </view>
       <view class="k k-ink hm-buy" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProductsTop" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">购买</view>
     </view>
@@ -136,7 +136,7 @@
           <view class="hm-rv-meta">
             <text class="t-sys hm-rv-user">{{item.user}}</text>
             <view class="t-sys hm-verified">
-              <px-i name="led" tone="#3f9a5e" />
+              <px-i name="led" tone="var(--v5-ok)" />
               <text>已验证买家</text>
             </view>
           </view>
@@ -181,7 +181,7 @@
     <view class="hm-footer-links">
       <block wx:for="{{content.footer.links}}" wx:key="*this">
         <text wx:if="{{index > 0}}" class="t-sys hm-footer-dot">·</text>
-        <text class="t-sys hm-footer-link" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
+        <text class="t-sys hm-footer-link hit44" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
       </block>
     </view>
     <text class="mono hm-footer-copy">{{content.footer.copy}}</text>
@@ -190,7 +190,7 @@
 </scroll-view>
 
 <!-- 回到顶部（滚过一屏半浮现） -->
-<view wx:if="{{showTop}}" class="k k-light hm-backtop enter-rise"hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+<view wx:if="{{showTop}}" class="k k-light hm-backtop hit44 enter-rise"hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
   <px-i name="up" />
   <text>顶部</text>
 </view>

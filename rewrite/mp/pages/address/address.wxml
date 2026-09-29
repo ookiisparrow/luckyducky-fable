@@ -9,7 +9,7 @@
   <view class="ad-list">
     <view class="ad-row" wx:for="{{list}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onTapRow">
       <view wx:if="{{picking}}" class="k k-sm k-light ad-radio">
-        <px-i wx:if="{{item.isDefault}}" name="node" tone="#8a5ae0" />
+        <px-i wx:if="{{item.isDefault}}" name="node" tone="var(--v5-violet)" />
       </view>
       <view class="ad-text">
         <view class="ad-line1">

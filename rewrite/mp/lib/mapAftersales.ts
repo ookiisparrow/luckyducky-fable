@@ -149,7 +149,7 @@ export interface AfterSaleOverlay {
  *  「已退款」按行判断：云端一行只退剩余可退件（qty−已进课件），已进课的件退不了，那行有 refunded 就算退完。 */
 export function afterSaleOverlay(items: OrderLineVM[], s: OrderAfterSales | undefined): AfterSaleOverlay | null {
   if (!s) return null
-  if (s.live) return { head: '售后中', sub: s.live === 'approved' ? '退款处理中' : '退款申请中', led: { tone: '#8A5AE0', halo: '' }, color: '' }
-  if (items.length && items.every((it) => s.lines[it.lineId] === '已退款')) return { head: '已退款', sub: '', led: { tone: '#3F9A5E', halo: '' }, color: '#2F7A48' }
+  if (s.live) return { head: '售后中', sub: s.live === 'approved' ? '退款处理中' : '退款申请中', led: { tone: 'var(--v5-violet)', halo: '' }, color: '' }
+  if (items.length && items.every((it) => s.lines[it.lineId] === '已退款')) return { head: '已退款', sub: '', led: { tone: 'var(--v5-ok)', halo: '' }, color: 'var(--v5-ok-text)' }
   return null
 }

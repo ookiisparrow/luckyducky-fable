@@ -21,8 +21,8 @@ const lineText = (l: { name: string; spec: string }): string => l.name + (l.spec
 
 // 待退款 / 支付异常：状态卡内说明行（设计稿 WARN·文案与 admin 同口径，不承诺不存在的自动化流程）
 const WARN: Record<string, { text: string; tone: string }> = {
-  refund_required: { text: '该订单需人工处理退款，请联系客服协助处理', tone: '#F4BD3F' },
-  payment_exception: { text: '到账金额与订单金额不一致，请联系客服处理退款', tone: '#D9483B' },
+  refund_required: { text: '该订单需人工处理退款，请联系客服协助处理', tone: 'var(--v5-warn)' },
+  payment_exception: { text: '到账金额与订单金额不一致，请联系客服处理退款', tone: 'var(--v5-err)' },
 }
 // 小货车姿态（设计稿 tpose）：待发货/待收货在路上、完成卸货、待退款倒车，其余停着
 const POSE: Record<string, string> = { paid: 'drive', shipped: 'drive', done: 'unload', refund_required: 'reverse' }

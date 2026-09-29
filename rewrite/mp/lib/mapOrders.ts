@@ -181,7 +181,7 @@ export const mmss = (ms: number): string => {
 export const cardLabel = (s: string): string => (s === 'paid' ? '正在发货' : statusLabel(s))
 
 // 状态灯（设计稿 LED）：灰点无光晕；其余带同色光晕（px-i halo 默认）
-const LED: Record<string, string> = { pending: '#F4BD3F', paid: '#8A5AE0', shipped: '#8A5AE0', refund_required: '#F4BD3F', payment_exception: '#D9483B' }
+const LED: Record<string, string> = { pending: 'var(--v5-warn)', paid: 'var(--v5-violet)', shipped: 'var(--v5-violet)', refund_required: 'var(--v5-warn)', payment_exception: 'var(--v5-err)' }
 export function orderLed(status: string): { tone: string; halo: string } {
   const tone = LED[status]
   return tone ? { tone, halo: '' } : { tone: 'rgba(17,17,17,.28)', halo: 'none' }

@@ -50,7 +50,7 @@ page {
   flex: 0 0 auto;
   width: 142px; /* 24 格 × 6px − 2（亮条宽按格取整，见 mapReviews mapSummary） */
   height: 4px;
-  background: repeating-linear-gradient(90deg, #e0e1d9 0 4px, transparent 4px 6px);
+  background: repeating-linear-gradient(90deg, var(--v5-track) 0 4px, transparent 4px 6px);
 }
 .rv-fill {
   position: absolute;
@@ -150,7 +150,7 @@ page {
   width: 56px;
   height: 56px;
   border-radius: 4px;
-  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px); /* 设计稿 A3 占位斜纹 */
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px); /* 设计稿 A3 占位斜纹 */
 }
 /* 标签筛选后为空（设计稿 A3） */
 .rv-none {
