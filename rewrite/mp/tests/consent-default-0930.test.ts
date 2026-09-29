@@ -7,6 +7,7 @@ import loginSheetTs from '../components/login-sheet/login-sheet.ts?raw'
 import meTs from '../pages/me/me.ts?raw'
 import peTs from '../pages/profile-edit/profile-edit.ts?raw'
 import consentWxml from '../pages/consent/consent.wxml?raw'
+import loginSheetWxss from '../components/login-sheet/login-sheet.wxss?raw'
 
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
@@ -57,6 +58,11 @@ describe('登录带「已同意协议」标记', () => {
   })
   it('大白话：登录半屏协议勾选下方告知「登录即默认开启受托客服数据共享，可随时撤回」', () => {
     expect(live(loginSheetWxml)).toMatch(/<text class="t-sys ls-cs-note">登录即默认开启受托客服数据共享，可随时撤回<\/text>/)
+    // 与「已阅读并同意」同字号同粗细（老板 2026-09-30：原先继承页面 500 显得太粗）
+    const rule = (sel: string) => loginSheetWxss.slice(loginSheetWxss.indexOf('\n' + sel + ' {'), loginSheetWxss.indexOf('}', loginSheetWxss.indexOf('\n' + sel + ' {')))
+    const weight = (sel: string) => /font-weight: (\d+)/.exec(rule(sel))?.[1]
+    expect(weight('.ls-cs-note')).toBe(weight('.ls-agree-t'))
+    expect(weight('.ls-cs-note')).toBe('300')
   })
 })
 

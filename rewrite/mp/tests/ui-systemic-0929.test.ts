@@ -22,9 +22,9 @@ describe('弱灰字分两组（能点的 ink-2 ≈5:1，还不能用的保持 in
     expect(rule('.k-flat')).toContain('color: var(--v5-ink-2)')
     expect(rule('.k-flat.k-off')).toContain('color: var(--v5-ink-3)')
   })
-  it('大白话：登录半屏——「暂不登录」能点不置灰；没勾协议时「微信一键登录」置灰', () => {
+  it('大白话：登录半屏——「暂不登录」能点不置灰；「微信一键登录」始终是墨黑主键做视觉引导（老板 2026-09-30·没勾协议点了协议行抖一下提示先勾）', () => {
     expect(classOf(loginWxml, 'ls-later')).not.toContain('k-off')
-    expect(classOf(loginWxml, 'ls-go')).toContain("'k-flat k-off'")
+    expect(classOf(loginWxml, 'ls-go')).toBe('k k-ink k-48 ls-go')
   })
 })
 

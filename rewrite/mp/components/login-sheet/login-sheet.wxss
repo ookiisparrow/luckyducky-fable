@@ -88,6 +88,7 @@
 .ls-cs-note {
   margin-top: -8px;
   font-size: 13px;
+  font-weight: 300; /* 与「已阅读并同意」同粗细（老板 2026-09-30） */
   color: var(--v5-ink-2);
 }
 .ls-link {
