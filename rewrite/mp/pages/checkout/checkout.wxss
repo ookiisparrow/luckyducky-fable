@@ -52,18 +52,26 @@ page {
   font-weight: 300;
 }
 /* 姓名 · 打码手机号一行（设计稿 co.who：17px 黑字） */
-.co-who {
+/* 地址卡三行（UI 审查 15 问 1c：手打的详细地址是全卡唯一重点） */
+.co-region {
   display: block;
   margin-top: 8px;
-  font-size: 17px;
-  font-weight: 500;
-  color: var(--v5-ink);
+  font-size: 13px;
+  color: var(--v5-ink-2);
 }
-.co-where {
+.co-detail {
   display: block;
   margin-top: 2px;
-  font-size: 13px;
-  font-weight: 300;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--v5-ink);
+}
+.co-who {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 400;
   color: var(--v5-ink-2);
 }
 .co-addr-none {

@@ -124,11 +124,11 @@ describe('结算页：渲染', () => {
 })
 
 describe('结算页：地址卡展示（v5 A5）', () => {
-  it('大白话：姓名和打码手机号一行「鸭 · 138 **** 0428」；省市区去掉空格和详址连起来；下单仍用原始手机号和地区', async () => {
+  it('大白话：姓名和打码手机号一行「鸭 · 138 **** 0428」；省市区与详细地址分行显示（UI 审查 15 问 1c）；下单仍用原始手机号和地区', async () => {
     const page = await mount('cart', false)
     ;(await import('../lib/address')).saveAddress({ name: '鸭', phone: '13800000428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号', isDefault: true })
     await page.refresh()
-    expect(page.data.address).toMatchObject({ who: '鸭 · 138 **** 0428', where: '上海市上海市徐汇区漕溪北路 1 号' })
+    expect(page.data.address).toMatchObject({ who: '鸭 · 138 **** 0428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号' })
     createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
     await page.onSubmit()
     expect(createOrderMock.mock.calls[0][1]).toEqual({ name: '鸭', phone: '13800000428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号' })

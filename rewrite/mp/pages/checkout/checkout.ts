@@ -22,14 +22,14 @@ const ORDER_KEPT_TIP = '订单已生成，可到「我 → 我的订单」继续
 
 type Addr = NonNullable<ReturnType<typeof addr.defaultAddress>>
 /** 地址卡展示（设计稿 co.who / co.where）：姓名 · 打码手机号一行；省市区去空格直接接详址。下单仍用原始字段。 */
-const view = (a: Addr) => ({ ...a, who: a.name + ' · ' + addr.maskPhone(a.phone), where: a.region.replace(/ /g, '') + a.detail })
+const view = (a: Addr) => ({ ...a, who: a.name + ' · ' + addr.maskPhone(a.phone) }) // 省市区/详细地址分行显示（UI 审查 15 问 1c）
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
     groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
-    address: null as (Addr & { who: string; where: string }) | null,
+    address: null as (Addr & { who: string }) | null,
     items: [] as Array<checkout.DraftLine & { priceNum: string; step: boolean; canDec: boolean; canInc: boolean }>,
     addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',

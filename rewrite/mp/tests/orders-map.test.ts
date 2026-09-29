@@ -166,44 +166,46 @@ describe('订单卡右上角 / 详情状态卡小字（v5 B1·B2）', () => {
   it('大白话：支付窗口副本与 shared 同值（15 分钟）', () => {
     expect(PAY_WINDOW_MS).toBe(SHARED_PAY_WINDOW_MS)
   })
-  it('大白话：待支付显示「mm:ss」倒计时（下单时间 + 15 分钟），过点不倒负、改写「已超时」', () => {
+  it('大白话：待支付显示「mm:ss」倒计时（下单时间 + 15 分钟），过点不倒负、右侧改写「未按时支付」、详情「15 分钟内未支付，订单已关闭」（UI 审查 15 问 6a）', () => {
     expect(listRight(vmOf({ status: 'pending' }), T0 + 60_000)).toEqual({ cd: '14:00', text: '' })
     expect(listRight(vmOf({ status: 'pending' }), T0 + 14 * 60_000 + 55_500)).toEqual({ cd: '00:04', text: '' })
-    expect(listRight(vmOf({ status: 'pending' }), T0 + 99 * 60_000)).toEqual({ cd: '', text: '已超时' })
-    expect(detailSub(vmOf({ status: 'pending' }), T0 + 15 * 60_000)).toEqual({ text: '已超时', tone: 'err' })
+    expect(listRight(vmOf({ status: 'pending' }), T0 + 99 * 60_000)).toEqual({ cd: '', text: '未按时支付' })
+    expect(detailSub(vmOf({ status: 'pending' }), T0 + 15 * 60_000)).toEqual({ text: '15 分钟内未支付，订单已关闭', tone: '' })
   })
-  it('大白话：待发货「48 小时内发货」；待收货「承运方 · 派送中」（没填承运方只写派送中）；完成写完成日期，旧单没完成时间退回下单时间', () => {
+  it('大白话：待发货「48 小时内发货」；待收货「承运方 · 派送中」（没填承运方只写派送中）；完成写「M月D日 签收」，旧单没完成时间退回下单时间；待退款「客服处理中」', () => {
     expect(listRight(vmOf({ status: 'paid' }), T0).text).toBe('48 小时内发货')
     expect(listRight(vmOf({ status: 'shipped', shipping: { company: '中通快递' } }), T0).text).toBe('中通快递 · 派送中')
     expect(listRight(vmOf({ status: 'shipped' }), T0).text).toBe('派送中')
     const done = vmOf({ status: 'done', doneAt: T0 + 3 * 86400_000 })
-    expect(listRight(done, T0).text).toBe(done.doneDateLabel)
+    expect(listRight(done, T0).text).toMatch(/^\d{1,2}月\d{1,2}日 签收$/)
     expect(done.doneDateLabel).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     const oldDone = vmOf({ status: 'done' })
     expect(listRight(oldDone, T0).text).toBe(oldDone.createdAtLabel)
-    expect(listRight(vmOf({ status: 'refund_required' }), T0).text).toBe('待人工处理')
+    expect(listRight(vmOf({ status: 'refund_required' }), T0).text).toBe('客服处理中')
   })
-  it('大白话：卡片状态名——待发货叫「正在发货」，其余同状态中文（筛选标签仍叫「待发货」）', () => {
-    expect(cardLabel('paid')).toBe('正在发货')
+  it('大白话：卡片状态名与筛选标签、详情完全同名（UI 审查 15 问 6a）；支付异常只叫「支付异常」', () => {
+    expect(cardLabel('paid')).toBe('待发货')
+    expect(cardLabel('payment_exception')).toBe('支付异常')
     expect(cardLabel('shipped')).toBe('待收货')
     expect(statusLabel('paid')).toBe('待发货')
   })
-  it('大白话：状态灯——已完成/已关闭灰点无光晕、待支付/待退款黄、支付异常红、待发货紫', () => {
+  it('大白话：状态灯——已完成/已关闭灰点无光晕、待支付/待退款黄、支付异常红、待发货/待收货墨点（UI 审查 15 问 6a）', () => {
     expect(orderLed('done')).toEqual({ tone: 'rgba(17,17,17,.28)', halo: 'none' })
     expect(orderLed('closed')).toEqual({ tone: 'rgba(17,17,17,.28)', halo: 'none' })
     expect(orderLed('refund_required').tone).toBe('var(--v5-warn)')
     expect(orderLed('pending').tone).toBe('var(--v5-warn)')
     expect(orderLed('payment_exception').tone).toBe('var(--v5-err)')
-    expect(orderLed('paid').tone).toBe('var(--v5-violet)')
+    expect(orderLed('paid').tone).toBe('var(--v5-ink)')
+    expect(orderLed('shipped').tone).toBe('var(--v5-ink)')
   })
-  it('大白话：详情小字——待支付「mm:ss 后自动取消」琥珀、剩不到 1 分钟变红；完成「日期 已签收」；支付异常红；待退款琥珀', () => {
-    expect(detailSub(vmOf({ status: 'pending' }), T0 + 60_000)).toEqual({ text: '14:00 后自动取消', tone: 'warn' })
-    expect(detailSub(vmOf({ status: 'pending' }), T0 + 14 * 60_000 + 30_000)).toEqual({ text: '00:30 后自动取消', tone: 'err' })
+  it('大白话：详情说明句——只有待支付倒计时深黄，其余一律灰；完成「M月D日 已签收」；待退款/支付异常写原因不承诺时效（UI 审查 15 问 6a）', () => {
+    expect(detailSub(vmOf({ status: 'pending' }), T0 + 60_000)).toEqual({ text: '14:00 后自动取消，请尽快支付', tone: 'warn' })
+    expect(detailSub(vmOf({ status: 'pending' }), T0 + 14 * 60_000 + 30_000)).toEqual({ text: '00:30 后自动取消，请尽快支付', tone: 'warn' })
     const done = vmOf({ status: 'done', doneAt: T0 })
-    expect(detailSub(done, T0)).toEqual({ text: done.doneDateLabel + ' 已签收', tone: '' })
+    expect(detailSub(done, T0)).toEqual({ text: expect.stringMatching(/^\d{1,2}月\d{1,2}日 已签收$/), tone: '' })
     expect(detailSub(vmOf({ status: 'done' }), T0).text).toBe('')
     expect(detailSub(vmOf({ status: 'paid' }), T0)).toEqual({ text: '商家会在 48 小时内发货', tone: '' })
-    expect(detailSub(vmOf({ status: 'payment_exception' }), T0)).toEqual({ text: '待人工处理', tone: 'err' })
-    expect(detailSub(vmOf({ status: 'refund_required' }), T0)).toEqual({ text: '需人工退款', tone: 'warn' })
+    expect(detailSub(vmOf({ status: 'payment_exception' }), T0)).toEqual({ text: '到账金额与订单金额不一致，请联系客服处理', tone: '' })
+    expect(detailSub(vmOf({ status: 'refund_required' }), T0)).toEqual({ text: '需人工退款，请联系客服处理', tone: '' })
   })
 })

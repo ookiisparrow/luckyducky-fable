@@ -33,15 +33,17 @@ page {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .rv-bar {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 19px; /* 行高 19、行距 6：五行 119 与左侧大数块对齐（UI 审查 15 问 7b） */
 }
 .rv-bar-lbl {
-  font-size: 11px;
+  flex: 0 0 40px;
+  font-size: 13px;
   color: var(--v5-ink-2);
 }
 /* 分段条：高 4、每段 4 间隔 2、直角（设计规范·像素小元素） */
@@ -79,7 +81,7 @@ page {
   color: var(--v5-ink); /* 未选中是凹键底，但字不置灰（设计稿 A3 标签一律 #111） */
 }
 .rv-tag-n {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--v5-ink-2);
 }
 
@@ -136,7 +138,7 @@ page {
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--v5-sunk);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 300;
   color: var(--v5-ink-2);
 }

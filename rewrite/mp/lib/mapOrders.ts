@@ -46,7 +46,7 @@ const STATUS_LABELS: Record<string, string> = {
   done: '已完成',
   closed: '已关闭',
   refund_required: '待退款', // PAID_BUT_OOS 死信（已付但缺货·待人工退款）·非「退款处理中」（与 admin 同口径，见 admin/src/lib/format.ts）
-  payment_exception: '支付异常待处理',
+  payment_exception: '支付异常', // 标签是名词，「待处理」交给灯和说明句（UI 审查 15 问 6a·2026-09-30）
 }
 export const statusLabel = (s: unknown): string => STATUS_LABELS[String(s)] || String(s || '')
 
@@ -177,54 +177,73 @@ export const mmss = (ms: number): string => {
   return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60)
 }
 
-/** 卡片/状态卡上的短状态名（设计稿 ST）：待发货在卡上叫「正在发货」，筛选标签仍用 statusLabel。 */
-export const cardLabel = (s: string): string => (s === 'paid' ? '正在发货' : statusLabel(s))
+/** 卡片/状态卡上的状态名：与筛选标签、详情完全同名（UI 审查 15 问 6a·2026-09-30：同一张单在任何地方叫同一个名字）。 */
+export const cardLabel = (s: string): string => statusLabel(s)
 
-// 状态灯（设计稿 LED）：灰点无光晕；其余带同色光晕（px-i halo 默认）
-const LED: Record<string, string> = { pending: 'var(--v5-warn)', paid: 'var(--v5-violet)', shipped: 'var(--v5-violet)', refund_required: 'var(--v5-warn)', payment_exception: 'var(--v5-err)' }
+// 状态灯（UI 审查 15 问 6a·2026-09-30）：颜色只落在灯上——黄＝等你（待支付/待退款）、红＝出错（支付异常·唯一用红的状态）、
+// 墨点＝进行中（待发货/待收货）；已完成/已关闭/已超时/已退款＝灰圈无光晕。其余带同色光晕（px-i halo 默认）。
+const LED: Record<string, string> = { pending: 'var(--v5-warn)', paid: 'var(--v5-ink)', shipped: 'var(--v5-ink)', refund_required: 'var(--v5-warn)', payment_exception: 'var(--v5-err)' }
+export const GREY_LED = { tone: 'rgba(17,17,17,.28)', halo: 'none' }
 export function orderLed(status: string): { tone: string; halo: string } {
   const tone = LED[status]
-  return tone ? { tone, halo: '' } : { tone: 'rgba(17,17,17,.28)', halo: 'none' }
+  return tone ? { tone, halo: '' } : GREY_LED
+}
+
+/** 状态名 + 灯（列表卡与详情状态卡共用）：待支付过点＝「已超时」灰圈（终态不是错误·不用红）。 */
+export function statusHead(vm: OrderVM, now: number): { label: string; led: { tone: string; halo: string } } {
+  if (vm.status === 'pending' && payLeftMs(vm, now) === 0) return { label: '已超时', led: GREY_LED }
+  return { label: cardLabel(vm.status), led: orderLed(vm.status) }
+}
+
+// 'YYYY-MM-DD' → 'M月D日'（签收日期短写）
+const md = (ymd: string): string => {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(ymd)
+  return m ? `${Number(m[1])}月${Number(m[2])}日` : ymd // 黑体（显示在 .t-sys 节点）
 }
 
 /** 订单卡右上角（设计稿 oview.right）：待支付给倒计时 cd，其余给小字 text。 */
 export function listRight(vm: OrderVM, now: number): { cd: string; text: string } {
   if (vm.status === 'pending') {
     const left = payLeftMs(vm, now)
-    if (left === 0) return { cd: '', text: '已超时' } // 过点：云端关单前先说超时，不停在 00:00
+    if (left === 0) return { cd: '', text: '未按时支付' } // 黑体·过点：状态名换「已超时」（statusHead），不停在 00:00
     return { cd: left < 0 ? '' : mmss(left), text: '' }
   }
+  // 列表右侧 ≤8 字短句，与详情说明句说同一件事（UI 审查 15 问 6a·2026-09-30）
   const text: Record<string, string> = {
     paid: '48 小时内发货',
     shipped: vm.shipCompany ? vm.shipCompany + ' · 派送中' : '派送中',
-    done: vm.doneDateLabel || vm.createdAtLabel,
-    refund_required: '待人工处理',
-    payment_exception: '待人工处理',
+    done: vm.doneDateLabel ? md(vm.doneDateLabel) + ' 签收' : vm.createdAtLabel,
+    closed: '已取消或超时',
+    refund_required: '客服处理中',
+    payment_exception: '请联系客服',
   }
   return { cd: '', text: text[vm.status] ?? vm.createdAtLabel }
 }
 
-/** 详情状态卡右侧小字（设计稿 logic subMap/subC）：tone err＝红、warn＝琥珀、''＝次要灰。 */
+/** 详情状态卡说明句（完整一句·一律灰字；只有待支付倒计时是深黄）（UI 审查 15 问 6a·2026-09-30）。
+ *  不承诺时效（老板 2026-09-30：待退款/审核/到账都不写时限）；没有数据源的不编（预计送达）。 */
 export function detailSub(vm: OrderVM, now: number): { text: string; tone: '' | 'warn' | 'err' } {
   switch (vm.status) {
     case 'pending': {
       const left = payLeftMs(vm, now)
       if (left < 0) return { text: '', tone: '' }
-      if (left === 0) return { text: '已超时', tone: 'err' }
-      return { text: mmss(left) + ' 后自动取消', tone: left < 60_000 ? 'err' : 'warn' }
+      if (left === 0) return { text: `${PAY_WINDOW_MS / 60_000} 分钟内未支付，订单已关闭`, tone: '' } // 黑体（显示在 .t-sys 节点）
+      return { text: mmss(left) + ' 后自动取消，请尽快支付', tone: 'warn' } // 黑体（显示在 .t-sys 节点）
     }
     case 'paid':
       return { text: '商家会在 48 小时内发货', tone: '' }
+    case 'shipped':
+      return { text: vm.shipCompany ? vm.shipCompany + ' · 派送中' : '', tone: '' } // 预计送达没有数据源，不编
     case 'done':
-      return { text: vm.doneDateLabel ? vm.doneDateLabel + ' 已签收' : '', tone: '' }
+      return { text: vm.doneDateLabel ? md(vm.doneDateLabel) + ' 已签收' : '', tone: '' }
     case 'closed':
       return { text: '订单已取消或超时未支付', tone: '' }
     case 'refund_required':
-      return { text: '需人工退款', tone: 'warn' }
+      return { text: '需人工退款，请联系客服处理', tone: '' }
     case 'payment_exception':
-      return { text: '待人工处理', tone: 'err' }
+      return { text: '到账金额与订单金额不一致，请联系客服处理', tone: '' } // 黑体（显示在 .t-sys 节点）
     default:
-      return { text: '', tone: '' } // 待收货：预计送达时间没有数据源，留空不编
+      return { text: '', tone: '' }
   }
 }
 

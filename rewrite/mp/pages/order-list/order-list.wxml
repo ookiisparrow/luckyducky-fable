@@ -5,11 +5,16 @@
 <v5-nav title="我的订单" />
 
 <view class="ol" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
+  <!-- 页签常驻导航栏下方（UI 审查 15 问 5a）；滚动后下缘出 1px 分隔线 -->
+  <view class="ol-tabs-bar {{scrolled ? 'ol-tabs-bar-line' : ''}}" style="top: {{navBottom}}px">
   <view class="well ol-tabs">
     <view wx:for="{{tabs}}" wx:key="key" data-key="{{item.key}}" bind:tap="onTab"
       class="k ol-tab hit44 {{tabKey === item.key ? 'k-light ol-tab-on' : ''}}"
       hover-start-time="20" hover-class="{{tabKey === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-k="{{tabKey === item.key ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.label}}</view>
   </view>
+
+  </view>
+  <view class="ol-tabs-space"></view>
 
   <!-- {{anim}}：切 tab 时按方向（anim-next 自右入 / anim-prev 自左入）播一次滑入动画，见 order-list.ts switchTab -->
   <view class="ol-body {{anim}}">
@@ -46,7 +51,7 @@
         <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
         <text class="ol-status" style="{{item.labelColor ? 'color:' + item.labelColor : ''}}">{{item.label}}</text>
-        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后自动取消</text></view>
+        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后取消</text></view>
         <text wx:elif="{{item.right}}" class="t-sys ol-time">{{item.right}}</text>
       </view>
       <view class="ol-row">

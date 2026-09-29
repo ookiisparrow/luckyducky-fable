@@ -2,13 +2,14 @@
 import { tapHaptic } from '../../lib/haptics'
 import { getMyOrders, pay, confirmReceive, cancelOrder, getMyAfterSales } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrders, cardLabel, orderLed, listRight, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
+import { mapOrders, statusHead, listRight, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 import { mapAfterSales, afterSalesByOrder, afterSaleOverlay, type OrderAfterSales } from '../../lib/mapAftersales'
 import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxToast, fxHint } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
+import { navBottom } from '../../lib/ground'
 
 const HOLD_MS = 700 // 按住多久算取消（设计稿 data-ms=700·拍板 7）
 let hold: Hold | null = null // 当前按住取消的那张卡（lib/hold）
@@ -55,15 +56,16 @@ function decorate(o: OrderVM, as: Record<string, OrderAfterSales>): OrderRow {
   const now = Date.now()
   const r = listRight(o, now)
   const ov = afterSaleOverlay(o.items, as[o.id])
+  const sh = statusHead(o, now)
   return {
     ...o,
     tint: TINT[o.status] || 'purple',
     amountNum: stripCny(o.amountLabel),
     items: o.items.map((l) => ({ ...l, priceNum: stripCny(l.priceLabel) })),
     thumbs: o.items.slice(0, 3), // 缩略图最多 3 张（设计稿 thumbs.slice(0,3)）
-    label: ov ? ov.head : cardLabel(o.status),
-    labelColor: ov ? ov.color : '',
-    led: ov ? ov.led : orderLed(o.status),
+    label: ov ? ov.head : sh.label,
+    labelColor: '', // 状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）
+    led: ov ? ov.led : sh.led,
     truck: !ov && o.status === 'shipped',
     cd: r.cd,
     right: ov ? ov.sub : r.text,
@@ -75,6 +77,8 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    navBottom: navBottom(), // 页签条 top＝状态栏 + 44 导航栏（UI 审查 15 问 5a）
+    scrolled: false, // 页面已下滚：页签条下缘出发丝线
     tabs: TABS,
     tabKey: '',
     shown: [] as OrderRow[],
@@ -113,7 +117,7 @@ Page({
     if (this._ticker) clearInterval(this._ticker)
     this._ticker = null
   },
-  // 待支付倒计时：只按路径键刷新待支付卡的 cd（不整表重发）；过点改写「已超时」、藏「去支付」，
+  // 待支付倒计时：只按路径键刷新待支付卡的 cd（不整表重发）；过点状态名改「已超时」、右侧「未按时支付」、藏「去支付」，
   // 首次归零自动刷新一次（真正关单以云端为准）
   tick() {
     const now = Date.now()
@@ -126,7 +130,10 @@ Page({
       if (r.text !== o.right) patch['shown[' + i + '].right'] = r.text
       // 只在「未超时→超时」那一下触发刷新：刷回来仍待支付时 decorate 按时间重算 expired 仍为真，不会再刷
       if (!o.expired && payLeftMs(o as unknown as OrderVM, now) === 0) {
+        const sh = statusHead(o as unknown as OrderVM, now) // 过点：状态名换「已超时」、灯换灰圈（UI 审查 15 问 6a）
         patch['shown[' + i + '].expired'] = true
+        patch['shown[' + i + '].label'] = sh.label
+        patch['shown[' + i + '].led'] = sh.led
         zeroHit = true
       }
     })
@@ -178,6 +185,10 @@ Page({
   onRetryLoad() {
     tapHaptic()
     void this.reload()
+  },
+  onPageScroll(e: WechatMiniprogram.Page.IPageScrollOption) {
+    const s = e.scrollTop > 0
+    if (s !== this.data.scrolled) this.setData({ scrolled: s }) // 只在跨过顶端时 setData
   },
   async onReachBottom() {
     if (!this.data.hasMore || this.data.cursor == null || this.data.paging) return // 在途重复触底：丢弃

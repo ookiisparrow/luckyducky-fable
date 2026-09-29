@@ -13,6 +13,7 @@
 // 弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast——原生界面或系统字）的
 // 参数；ts 里 ≥20 汉字的长段（正文，页面上必须挂 .t-sys）；云端报错文案（只经提示上屏＝系统字）。
 // 用户内容走黑体，所以不设 GB2312 兜底层。
+// ts 里显示在黑体节点上的短句：行尾加「// 黑体」注释即不收（见 extractFileCJK）。
 // ponytail: ts 字面量看不出最终渲染在哪，「≥20 字＝正文」是约定；长标题会漏收（逐字掉黑体），届时给它挂圆体
 // 专用短字段或调阈值。后台新增的商品名不在 seed 里也会漏收（同样逐字掉黑体）——上新后重建字体。
 // 抽取口径：json 只取 value；ts/js 只取字符串字面量（剥注释——注释字不上屏）；wxss 不抽；tests/typings 排除。
@@ -155,7 +156,13 @@ function extractFileCJK(file, into) {
       /* 非法 json 忽略 */
     }
   } else if (ext === '.ts' || ext === '.js') {
-    for (const s of extractStringLiterals(src, { dropNativeUi: true })) {
+    // 行尾注释以「// 黑体」开头＝这行的字符串显示在 .t-sys 黑体节点上，不收（2026-09-30·老板定：ts 字面量看不出渲染位置，
+    // 短句按长度会被误判成圆体）。标记须紧跟 // ——「// 长段＝正文＝黑体」这类顺带提到的不算。
+    const code = src
+      .split('\n')
+      .map((l) => (/\/\/\s*黑体/.test(l) ? '' : l))
+      .join('\n')
+    for (const s of extractStringLiterals(code, { dropNativeUi: true })) {
       if ([...s].filter((ch) => isCJK(ch.codePointAt(0))).length < LONG_TEXT_CJK) cjkOf(s, into) // 长段＝正文＝黑体
     }
   }

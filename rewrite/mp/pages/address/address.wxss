@@ -40,10 +40,22 @@ page {
   align-items: center;
   gap: 8px;
 }
+/* 地址行三层（UI 审查 15 问 1c：手打的详细地址是全卡唯一重点） */
+.ad-region {
+  font-size: 13px;
+  color: var(--v5-ink-2);
+}
+.ad-detail {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--v5-ink);
+}
 .ad-name {
   min-width: 0;
-  font-size: 17px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--v5-ink-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -65,12 +77,6 @@ page {
   background: var(--v5-sunk);
   font-size: 13px;
   font-weight: 300;
-}
-.ad-where {
-  font-size: 13px;
-  font-weight: 300;
-  line-height: 1.5;
-  color: var(--v5-ink-2);
 }
 .ad-edit {
   position: relative;

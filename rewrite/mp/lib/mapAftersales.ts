@@ -140,16 +140,35 @@ export function afterSalesByOrder(list: AfterSaleVM[]): Record<string, OrderAfte
 
 export interface AfterSaleOverlay {
   head: string // 状态名
-  sub: string // 右侧/副文
-  led: { tone: string; halo: string } // 状态灯（设计稿 LED p 紫 / g 绿）
-  color: string // 状态名字色（已退款绿字 #2F7A48·设计稿 AS_ST refunded），空＝默认
+  sub: string // 列表右侧短句
+  detail: string // 详情说明句（完整一句·灰字）
+  led: { tone: string; halo: string } // 状态灯：售后中墨点、已退款灰圈（UI 审查 15 问 6a·2026-09-30）
+  color: string // 状态名字色：一律墨（空）——颜色只落在灯上
 }
 
-/** 叠加规则：有进行中售后→「售后中」紫灯；否则每一行都已退款→「已退款」绿灯；否则不叠加（null）。
+/** 叠加规则：有进行中售后→「售后中」墨点；否则每一行都已退款→「已退款」灰圈（终态·不用「成功」色）；否则不叠加（null）。
+ *  不写审核/到账时效（老板 2026-09-30）。
  *  「已退款」按行判断：云端一行只退剩余可退件（qty−已进课件），已进课的件退不了，那行有 refunded 就算退完。 */
 export function afterSaleOverlay(items: OrderLineVM[], s: OrderAfterSales | undefined): AfterSaleOverlay | null {
   if (!s) return null
-  if (s.live) return { head: '售后中', sub: s.live === 'approved' ? '退款处理中' : '退款申请中', led: { tone: 'var(--v5-violet)', halo: '' }, color: '' }
-  if (items.length && items.every((it) => s.lines[it.lineId] === '已退款')) return { head: '已退款', sub: '', led: { tone: 'var(--v5-ok)', halo: '' }, color: 'var(--v5-ok-text)' }
+  if (s.live) {
+    const ok = s.live === 'approved'
+    return {
+      head: '售后中',
+      sub: ok ? '退款处理中' : '退款申请中',
+      detail: ok ? '退款处理中，完成后原路退回' : '退款申请已提交，审核后原路退回', // 黑体（详情说明句·.t-sys）
+      led: { tone: 'var(--v5-ink)', halo: '' },
+      color: '',
+    }
+  }
+  if (items.length && items.every((it) => s.lines[it.lineId] === '已退款')) {
+    return {
+      head: '已退款',
+      sub: '已原路退回', // 黑体（列表右侧短句·.t-sys）
+      detail: '已原路退回', // 黑体（详情说明句·.t-sys）
+      led: { tone: 'rgba(17,17,17,.28)', halo: 'none' },
+      color: '',
+    }
+  }
   return null
 }

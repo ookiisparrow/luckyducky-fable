@@ -86,11 +86,11 @@ describe('订单叠加售后显示（订单状态不变·只改显示）', () =>
     expect(afterSalesByOrder(mapAfterSales([as('o1', 'L1', 'approved'), as('o1', 'L2', 'applied')])).o1.live).toBe('approved') // 顺序无关
   })
 
-  it('大白话：有进行中售后→「售后中」紫灯 + 退款申请中/退款处理中；全部行都退完→「已退款」绿灯绿字；部分退款/被拒/没记录→不叠加', () => {
+  it('大白话：有进行中售后→「售后中」墨点 + 退款申请中/退款处理中；全部行都退完→「已退款」灰圈墨字（UI 审查 15 问 4b/6a）；部分退款/被拒/没记录→不叠加', () => {
     const by = (list: unknown[]) => afterSalesByOrder(mapAfterSales(list)).o1
-    expect(afterSaleOverlay(two, by([as('o1', 'L1', 'applied')]))).toEqual({ head: '售后中', sub: '退款申请中', led: { tone: 'var(--v5-violet)', halo: '' }, color: '' })
+    expect(afterSaleOverlay(two, by([as('o1', 'L1', 'applied')]))).toEqual({ head: '售后中', sub: '退款申请中', detail: '退款申请已提交，审核后原路退回', led: { tone: 'var(--v5-ink)', halo: '' }, color: '' })
     expect(afterSaleOverlay(two, by([as('o1', 'L1', 'refunded'), as('o1', 'L2', 'approved')]))!.sub).toBe('退款处理中')
-    expect(afterSaleOverlay(two, by([as('o1', 'L1', 'refunded'), as('o1', 'L2', 'refunded')]))).toEqual({ head: '已退款', sub: '', led: { tone: 'var(--v5-ok)', halo: '' }, color: 'var(--v5-ok-text)' })
+    expect(afterSaleOverlay(two, by([as('o1', 'L1', 'refunded'), as('o1', 'L2', 'refunded')]))).toEqual({ head: '已退款', sub: '已原路退回', detail: '已原路退回', led: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, color: '' })
     expect(afterSaleOverlay(two, by([as('o1', 'L1', 'refunded')]))).toBeNull() // 部分退款：只行标
     expect(afterSaleOverlay(two, by([as('o1', 'L1', 'rejected')]))).toBeNull()
     expect(afterSaleOverlay(two, undefined)).toBeNull()

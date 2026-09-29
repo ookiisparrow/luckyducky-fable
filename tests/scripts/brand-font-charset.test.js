@@ -33,7 +33,9 @@ wx.showToast({ title: '网络异常', icon: 'none' })
 wx.showModal({ title: '确认删除', content: '删除后不能恢复' })
 this.ping('收藏成功')
 fxHint(this, '敬请期待')
-const BODY = '我们希望每个人都能亲手创造自己的随身幸运物件这是一段长长的正文说明'`
+const BODY = '我们希望每个人都能亲手创造自己的随身幸运物件这是一段长长的正文说明'
+const SUB = '务必细看' // 黑体：显示在 .t-sys 节点
+const CTRL = '限时抢购' // 说明：显示在黑体上（标记不在注释开头，照收）`
   )
   w('rewrite/mp/pages/doc/doc.wxml', '<view class="doc-h">协议</view>')
   w('rewrite/shared/src/seed/products.ts', "export const P = [{ name: '小棉鸭', note: '附送卡片' }]")
@@ -54,6 +56,12 @@ describe('品牌字体挑字口径（只收真用圆体显示的字）', () => {
     for (const t of ['正文段落嵌套', '单号', '请输入昵称写点什么', '网络异常确认删除后不能恢复收藏成功敬请期待', '我们希望每个人都能亲手', '库存不足请稍后']) {
       expect([...t].filter((c) => all.has(c)).join(''), t).toBe('')
     }
+  })
+
+  it('大白话：行尾注释以「// 黑体」开头的脚本字符串（显示在黑体节点上）不收；注释里只是顺带提到黑体的照收（UI 审查 15 问·2026-09-30）', () => {
+    const all = new Set([...tiers.tier1, ...tiers.tier2])
+    expect([...'务必细看'].filter((c) => all.has(c)).join('')).toBe('')
+    expect(has(tiers.tier1, '限时抢购')).toBe(true)
   })
 
   it('大白话：GB2312 兜底层删了——用户内容走黑体，不再为昵称/地址囤 2870 字', () => {
