@@ -70,7 +70,7 @@
           <image wx:if="{{item.cover}}" class="od-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         </view>
         <view class="od-item-mid">
-          <text class="od-item-name">{{item.name}}</text>
+          <text class="t-sys od-item-name">{{item.name}}</text>
           <text class="t-sys od-item-sub">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
           <text wx:if="{{lineTags[item.lineId]}}" class="t-sys od-as-tag">{{lineTags[item.lineId]}}</text>
         </view>

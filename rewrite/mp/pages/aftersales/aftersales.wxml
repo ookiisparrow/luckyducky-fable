@@ -18,7 +18,7 @@
         </view>
         <view class="as-mid">
           <view class="as-top">
-            <text class="as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
+            <text class="t-sys as-name">{{item.name}}{{item.spec ? '（' + item.spec + '）' : ''}}</text>
             <text class="t-sys as-st as-st-{{item.status}}">{{item.statusLabel}}</text>
           </view>
           <!-- 已拒绝/已撤回没退钱：金额叫「申请金额」，不写「退款」免得像退了 -->

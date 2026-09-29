@@ -20,6 +20,11 @@ import finishWxss from '../pages/finish/finish.wxss?raw'
 import meWxss from '../pages/me/me.wxss?raw'
 import reviewEggWxss from '../pages/review/review.wxss?raw'
 import aftersalesWxss from '../pages/aftersales/aftersales.wxss?raw'
+import homeWxml from '../pages/home/home.wxml?raw'
+import cartWxml from '../pages/cart/cart.wxml?raw'
+import checkoutWxml from '../pages/checkout/checkout.wxml?raw'
+import orderWxml from '../pages/order/order.wxml?raw'
+import aftersalesWxml from '../pages/aftersales/aftersales.wxml?raw'
 
 const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 const classOf = (wxml: string, marker: string): string => {
@@ -75,6 +80,23 @@ describe('3a 后台来的标题统一走黑体', () => {
     const rows = live(meWxml).match(/class="[^"]*me-row-t[^"]*"/g) ?? []
     expect(rows.length).toBeGreaterThan(0)
     for (const r of rows) expect(r).toContain('t-sys')
+  })
+})
+
+describe('3a 延伸：商品名也走黑体（老板 2026-09-30·详情页后续重设计不在内）', () => {
+  it('大白话：首页卡片、购物车、结算（含搭配购）、订单详情、售后的商品名都挂 .t-sys', () => {
+    const pages: Array<[string, string, number]> = [
+      [homeWxml, 'hm-card-name', 1],
+      [cartWxml, 'ca-name', 1],
+      [checkoutWxml, 'co-item-name', 2],
+      [orderWxml, 'od-item-name', 1],
+      [aftersalesWxml, 'as-name', 1],
+    ]
+    for (const [w, cls, n] of pages) {
+      const hits = live(w).match(new RegExp(`class="[^"]*(?<![\\w-])${cls}(?![\\w-])[^"]*"`, 'g')) ?? []
+      expect(hits.length, cls).toBe(n)
+      for (const h of hits) expect(h, cls).toContain('t-sys')
+    }
   })
 })
 

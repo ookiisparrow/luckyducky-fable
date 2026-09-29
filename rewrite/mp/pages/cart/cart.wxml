@@ -19,7 +19,7 @@
             <view wx:if="{{item.cover}}" class="ca-thumb-img" style="background-image: url('{{item.cover}}')"></view>
           </view>
           <view class="ca-mid" data-id="{{item.id}}" catch:tap="onOpen">
-            <text class="ca-name">{{item.name}}</text>
+            <text class="t-sys ca-name">{{item.name}}</text>
             <text class="t-sys ca-sku" wx:if="{{item.sku}}">{{item.sku}}</text>
           </view>
           <view class="ca-right">
