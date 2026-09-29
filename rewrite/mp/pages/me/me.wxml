@@ -67,21 +67,21 @@
     <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top">
         <text class="me-cell-n {{counts.pending && counts.pending !== '0' ? '' : 'me-cell-zero'}}">{{counts.pending || '-'}}</text>
-        <px-i wx:if="{{counts.pending && counts.pending !== '0'}}" name="led" tone="#8a5ae0" />
+        <px-i wx:if="{{counts.pending && counts.pending !== '0'}}" name="led" tone="var(--v5-violet)" />
       </view>
       <text class="t-sys me-cell-l">待支付</text>
     </view>
     <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top">
         <text class="me-cell-n {{counts.paid && counts.paid !== '0' ? '' : 'me-cell-zero'}}">{{counts.paid || '-'}}</text>
-        <px-i wx:if="{{counts.paid && counts.paid !== '0'}}" name="led" tone="#8a5ae0" />
+        <px-i wx:if="{{counts.paid && counts.paid !== '0'}}" name="led" tone="var(--v5-violet)" />
       </view>
       <text class="t-sys me-cell-l">待发货</text>
     </view>
     <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="me-cell-top">
         <text class="me-cell-n {{counts.shipped && counts.shipped !== '0' ? '' : 'me-cell-zero'}}">{{counts.shipped || '-'}}</text>
-        <px-i wx:if="{{counts.shipped && counts.shipped !== '0'}}" name="led" tone="#8a5ae0" />
+        <px-i wx:if="{{counts.shipped && counts.shipped !== '0'}}" name="led" tone="var(--v5-violet)" />
       </view>
       <text class="t-sys me-cell-l">待收货</text>
     </view>

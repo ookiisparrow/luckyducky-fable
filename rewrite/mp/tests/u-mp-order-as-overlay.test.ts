@@ -63,7 +63,7 @@ describe('订单详情叠加售后', () => {
     const page = await detail()
     await page.reload()
     expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100 })
-    expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请中', tone: '' }, asLed: { tone: '#8A5AE0', halo: '' }, asHas: true, lineTags: { L1: '退款中' } })
+    expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请中', tone: '' }, asLed: { tone: 'var(--v5-violet)', halo: '' }, asHas: true, lineTags: { L1: '退款中' } })
     expect(page.data.vm.status).toBe('paid') // 订单状态本身不动
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'approved')] })
@@ -78,7 +78,7 @@ describe('订单详情叠加售后', () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded'), AS('o1', 'L2', 'refunded')] })
     const page = await detail()
     await page.reload()
-    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: '#3F9A5E', halo: '' }, headColor: '#2F7A48' })
+    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'var(--v5-ok)', halo: '' }, headColor: 'var(--v5-ok-text)' })
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded')] })
     await page.reload()
@@ -152,8 +152,8 @@ describe('订单列表叠加售后', () => {
     const page = await list()
     await page.reload()
     const [o1, o2, o3] = page.data.shown
-    expect(o1).toMatchObject({ label: '售后中', led: { tone: '#8A5AE0', halo: '' }, right: '退款申请中', truck: false, labelColor: '' })
-    expect(o2).toMatchObject({ label: '已退款', led: { tone: '#3F9A5E', halo: '' }, labelColor: '#2F7A48' })
+    expect(o1).toMatchObject({ label: '售后中', led: { tone: 'var(--v5-violet)', halo: '' }, right: '退款申请中', truck: false, labelColor: '' })
+    expect(o2).toMatchObject({ label: '已退款', led: { tone: 'var(--v5-ok)', halo: '' }, labelColor: 'var(--v5-ok-text)' })
     expect(o3).toMatchObject({ label: '正在发货', right: '48 小时内发货' })
 
     handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o4', 'shipped')], nextCursor: null, hasMore: false })

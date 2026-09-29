@@ -30,7 +30,7 @@
     <text class="pd-name">{{vm.name}}</text>
     <text class="mono pd-price">¥{{currentPriceNum}}</text>
   </view>
-  <view class="pd-rate" hover-start-time="20" hover-class="k-row-down" bind:tap="onViewReviews">
+  <view class="pd-rate hit44" hover-start-time="20" hover-class="k-row-down" bind:tap="onViewReviews">
     <block wx:if="{{rating}}">
       <px-i name="star5" />
       <text class="t-sys pd-rate-text">{{rating.scoreLabel}} · {{rating.count}} 条评价</text>
@@ -52,9 +52,9 @@
 
   <view class="well pd-vars" wx:if="{{vm.skus.length > 1}}">
     <view wx:for="{{vm.skus}}" wx:key="name" data-index="{{index}}" bind:tap="onSelectSku"
-      class="k pd-var {{skuIndex === index ? 'k-light' : 'pd-var-off'}}"
+      class="k pd-var hit44 {{skuIndex === index ? 'k-light' : 'pd-var-off'}}"
       hover-start-time="20" hover-class="{{skuIndex === index ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-k="{{skuIndex === index ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <px-i wx:if="{{skuIndex === index}}" name="led" tone="#8a5ae0" />
+      <px-i wx:if="{{skuIndex === index}}" name="led" tone="var(--v5-violet)" />
       <text class="pd-var-name">{{item.name}}</text>
     </view>
   </view>

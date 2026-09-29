@@ -19,9 +19,9 @@
       <text class="t-sys co-where">{{address.where}}</text>
     </view>
     <view wx:else class="k-card co-card co-addr-none" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
-      <px-i name="led" tone="#f4bd3f" />
+      <px-i name="led" tone="var(--v5-warn)" />
       <text class="co-addr-add">添加收货地址</text>
-      <px-i name="arrow" tone="#62625c" />
+      <px-i name="arrow" tone="var(--v5-ink-2)" />
     </view>
 
     <!-- 商品 -->
@@ -56,7 +56,7 @@
     <view class="co-card co-items" wx:if="{{addons.length}}">
       <text class="t-sys co-k co-addon-head">搭配购买</text>
       <view class="co-item" wx:for="{{addons}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onToggleAddon">
-        <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="#8a5ae0" /></view>
+        <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
         <text class="co-item-name co-addon-name">{{item.name}}</text>
         <text class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>
@@ -75,8 +75,8 @@
     <!-- 协议小字（老板拍板 10）：书名号点开对应协议页；提交在途不跳（防下单成功换页替掉协议页） -->
     <view class="t-sys co-agree">
       <text>提交订单即表示同意</text>
-      <text class="co-link" data-type="user" bind:tap="onAgreement">《用户协议》</text>
-      <text class="co-link" data-type="privacy" bind:tap="onAgreement">《隐私政策》</text>
+      <text class="co-link hit44" data-type="user" bind:tap="onAgreement">《用户协议》</text>
+      <text class="co-link hit44" data-type="privacy" bind:tap="onAgreement">《隐私政策》</text>
     </view>
     <view class="co-total">
       <text class="t-sys co-k">应付</text>

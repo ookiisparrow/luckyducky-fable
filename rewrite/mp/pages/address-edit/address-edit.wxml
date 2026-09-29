@@ -26,7 +26,7 @@
           <view class="well ae-region" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
             <text class="ae-region-t {{region ? '' : 'ae-ph'}}">{{region || '选择省市区'}}</text>
             <text class="t-sys ae-pick">选择</text>
-            <px-i name="arrow" tone="#62625c" />
+            <px-i name="arrow" tone="var(--v5-ink-2)" />
           </view>
         </picker>
       </view>
@@ -37,11 +37,11 @@
           placeholder="街道、门牌号" placeholder-class="ae-ph" />
       </view>
       <!-- 从结算页来新增（pick）：选址＝设默认，开关不露（存时自动设默认） -->
-      <view wx:if="{{!pick}}" class="ae-def" bind:tap="onToggleDefault">
+      <view wx:if="{{!pick}}" class="ae-def hit44" bind:tap="onToggleDefault">
         <text class="ae-def-t">设为默认地址</text>
         <view class="well ae-switch">
           <view class="k k-sm k-light ae-knob {{isDefault ? 'on' : ''}}">
-            <px-i wx:if="{{isDefault}}" name="led" tone="#8a5ae0" />
+            <px-i wx:if="{{isDefault}}" name="led" tone="var(--v5-violet)" />
           </view>
         </view>
       </view>
@@ -55,7 +55,7 @@
       <text class="ae-del-t">删除</text>
     </view>
     <view wx:if="{{valid}}" class="k k-ink k-48 ae-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
-    <view wx:else class="k k-flat k-48 ae-save" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSave" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
+    <view wx:else class="k k-flat k-off k-48 ae-save" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSave" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
   </view>
 </view>
 

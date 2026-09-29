@@ -36,7 +36,7 @@
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(17, 17, 17, 0.2);
+  background: var(--v5-grab);
 }
 .ps-title {
   font-size: 20px;

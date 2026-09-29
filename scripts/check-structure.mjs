@@ -517,21 +517,26 @@ export const repoChecks = [
     // 逐行扫（跳注释行与带 structure-ok 的行；wxml 先剥 <!-- --> 注释）。加一条禁用写法＝加一行，别另立守卫。
     id: 'rw-mp-banned-patterns',
     roots: ['#8', 'T1'],
-    desc: '小程序禁用写法清单：外链视频地址、内联 <svg>、wxss 本地背景图、裸 wx.request——各自真机失效或越过云函数单源，逐行扫 rewrite/mp 即红',
+    desc: '小程序禁用写法清单：外链视频地址、内联 <svg>、wxss 本地背景图、裸 wx.request、页面/组件写死 #色值——各自真机失效或越过云函数单源，逐行扫 rewrite/mp 即红',
     run() {
       const BANNED = [
         { ext: /\.(js|ts|wxml)$/, re: /https?:\/\/[^'"`\s)]+\.(?:mp4|m3u8|mov|webm|avi|mkv)\b/i, why: '裸 http(s) 视频地址——视频源须经 getPlaybackUrl 换云端临时地址，禁外链（合规 + urlCheck 下真机播不了）' },
         { ext: /\.wxml$/, re: /<svg[\s>]/i, why: '内联 <svg>——mp 端不渲染（真机静默不显），图标用 <image src="/static/icons/*.svg">' },
         { ext: /\.wxss$/, re: /background(?:-image)?\s*:[^;]*url\(\s*['"]?(?!https?:\/\/|data:)[^'")\s]/i, why: 'background:url() 引本地图——mp 端不可靠，本地图用 <image>' },
         { ext: /\.ts$/, re: /\bwx\.request\s*\(/, skipTests: true, why: '裸 wx.request()——核心交易只经云函数 callCloud，不另开 HTTP 直连（T1）' },
+        // 页面/组件写死 #色值（2026-09-29 UI 审查·病根#5）：v5 落地时 60 余处散写色值（px-i tone、斜纹占位、播放页暗色），
+        // 「改配色只改 tokens.wxss」名存实亡。色值只许定义在 styles/tokens.wxss，页面/组件一律 var(--v5-*)；
+        // px-i 的 tone 只写进 color，传 var() 可用。app.wxss（全局键帽阴影底色）与 ts 里的像素画调色板不在扫描面。
+        { ext: /\.(wxml|wxss)$/, only: /^rewrite\/mp\/(pages|components|custom-tab-bar)\//, re: /(?<![&\w])#[0-9a-fA-F]{3,8}\b/, why: '页面/组件写死 #色值——颜色只在 styles/tokens.wxss 定义，这里用 var(--v5-*)（缺档就去 tokens 补一档）' },
       ]
       const bad = []
       for (const f of walk(join(ROOT, 'rewrite/mp'), /\.(js|ts|wxml|wxss)$/)) {
         const rel = relative(ROOT, f)
-        const rules = BANNED.filter((b) => b.ext.test(f) && !(b.skipTests && rel.includes('/tests/')))
+        const rules = BANNED.filter((b) => b.ext.test(f) && !(b.skipTests && rel.includes('/tests/')) && (!b.only || b.only.test(rel)))
         if (!rules.length) continue
         let src = readFileSync(f, 'utf8')
         if (f.endsWith('.wxml')) src = src.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '))
+        if (f.endsWith('.wxss')) src = src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')) // 注释里的设计稿色值不算
         src.split('\n').forEach((line, i) => {
           if (isCommentLine(line) || line.includes('structure-ok')) return
           for (const b of rules) if (b.re.test(line)) bad.push(`${rel}:${i + 1} ${b.why}`)

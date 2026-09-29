@@ -26,7 +26,7 @@ page {
 }
 .co-card {
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--v5-surface);
   box-shadow: 0 0 0 1px var(--v5-hair);
 }
 .co-k {
@@ -100,7 +100,7 @@ page {
   flex: 0 0 auto;
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .co-thumb-img {
   width: 100%;
@@ -216,7 +216,7 @@ page {
 .co-leader {
   flex: 1;
   height: 2px;
-  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(90deg, var(--v5-rule) 0 2px, transparent 2px 4px);
 }
 .co-v {
   font-size: 15px;

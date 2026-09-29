@@ -34,7 +34,7 @@ page {
   right: 0;
   top: 0;
   height: 12%;
-  background: linear-gradient(to top, rgba(250, 250, 248, 0), #fafaf8);
+  background: linear-gradient(to top, rgba(250, 250, 248, 0), var(--v5-canvas));
   pointer-events: none;
 }
 .pd-fade-bottom {
@@ -43,7 +43,7 @@ page {
   right: 0;
   bottom: 0;
   height: 16%;
-  background: linear-gradient(to bottom, rgba(250, 250, 248, 0), #fafaf8 88%);
+  background: linear-gradient(to bottom, rgba(250, 250, 248, 0), var(--v5-canvas) 88%);
   pointer-events: none;
 }
 .pd-pager {
@@ -61,7 +61,7 @@ page {
 .pd-dot {
   width: 4px;
   height: 4px;
-  background: #c9c9c2;
+  background: var(--v5-rule);
 }
 .pd-dot.on {
   width: 12px;

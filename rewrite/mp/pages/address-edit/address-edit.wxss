@@ -145,7 +145,7 @@ page {
   width: 100%;
   transform: scaleX(0);
   transform-origin: left;
-  background: rgba(217, 72, 59, 0.14);
+  background: var(--v5-err-soft);
 }
 .ae-del-on .ae-del-fill {
   transform: scaleX(1);

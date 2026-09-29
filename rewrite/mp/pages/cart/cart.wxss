@@ -64,7 +64,7 @@ page {
   flex: 0 0 auto;
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .ca-thumb-img {
   width: 100%;
@@ -165,7 +165,7 @@ page {
   width: 100%;
   transform: scaleX(0);
   transform-origin: left;
-  background: rgba(217, 72, 59, 0.18);
+  background: var(--v5-err-soft);
 }
 .ca-del-on .ca-del-fill {
   transform: scaleX(1);
@@ -193,7 +193,7 @@ page {
 .ca-leader {
   flex: 1;
   height: 2px;
-  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(90deg, var(--v5-rule) 0 2px, transparent 2px 4px);
 }
 .ca-sum-v {
   font-size: 15px;

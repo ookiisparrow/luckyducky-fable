@@ -11,7 +11,7 @@
         <view class="ca-row" wx:for="{{items}}" wx:key="lineId">
           <view class="ca-check-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle">
             <view class="k k-sm k-light ca-check" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-              <px-i wx:if="{{item.selected}}" name="check" tone="#8a5ae0" />
+              <px-i wx:if="{{item.selected}}" name="check" tone="var(--v5-violet)" />
             </view>
           </view>
           <view class="ca-thumb" data-id="{{item.id}}" catch:tap="onOpen">

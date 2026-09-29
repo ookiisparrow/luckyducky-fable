@@ -31,12 +31,12 @@ page {
 .ct-fade-top {
   top: 0;
   height: 12%;
-  background: linear-gradient(to top, rgba(250, 250, 248, 0), #fafaf8);
+  background: linear-gradient(to top, rgba(250, 250, 248, 0), var(--v5-canvas));
 }
 .ct-fade-bot {
   bottom: 0;
   height: 16%;
-  background: linear-gradient(to bottom, rgba(250, 250, 248, 0), #fafaf8 88%);
+  background: linear-gradient(to bottom, rgba(250, 250, 248, 0), var(--v5-canvas) 88%);
 }
 
 /* 课时分段进度：高 4、间隔 2、直角 */
@@ -48,7 +48,7 @@ page {
 .ct-seg {
   flex: 1;
   height: 4px;
-  background: #e0e1d9;
+  background: var(--v5-track);
 }
 .ct-seg-done {
   background: var(--v5-ink);
@@ -74,7 +74,7 @@ page {
   font-weight: 500;
 }
 .ct-ch-no {
-  color: var(--v5-ink-3);
+  color: var(--v5-ink-2);
 }
 .ct-ch-no.cur {
   color: var(--v5-violet-text);
@@ -91,7 +91,7 @@ page {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.02em;
-  color: var(--v5-ink-3);
+  color: var(--v5-ink-2);
 }
 /* 节点位宽取 nodeCur（7 格×2px），node/ring 居中对齐 */
 .ct-node {
@@ -114,7 +114,7 @@ page {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.02em;
-  color: var(--v5-ink-3);
+  color: var(--v5-ink-2);
 }
 .ct-lesson.done .ct-no,
 .ct-lesson.done .ct-dur {
@@ -156,7 +156,7 @@ page {
 }
 .ct-skel-segs {
   height: 4px;
-  background: repeating-linear-gradient(90deg, #e0e1d9 0 12px, transparent 12px 14px);
+  background: repeating-linear-gradient(90deg, var(--v5-track) 0 12px, transparent 12px 14px);
 }
 .ct-skel-key {
   height: 44px;

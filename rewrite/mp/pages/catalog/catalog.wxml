@@ -48,7 +48,7 @@
 
     <!-- 「开始学习」：continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
     <view class="ct-cta-wrap">
-      <view class="k ct-start {{continueTarget ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="k ct-start {{continueTarget ? 'k-ink' : 'k-flat k-off'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="play" />
         <text>{{resumeCta}}</text>
       </view>
@@ -71,9 +71,9 @@
         >
           <text class="mono ct-no">{{lesson.no}}</text>
           <view class="ct-node">
-            <px-i wx:if="{{lesson.status === 'current'}}" name="nodeCur" tone="#8a5ae0" />
-            <px-i wx:elif="{{lesson.status === 'done'}}" name="node" tone="#111111" />
-            <px-i wx:else name="ring" tone="#9a9a92" />
+            <px-i wx:if="{{lesson.status === 'current'}}" name="nodeCur" tone="var(--v5-violet)" />
+            <px-i wx:elif="{{lesson.status === 'done'}}" name="node" tone="var(--v5-ink)" />
+            <px-i wx:else name="ring" tone="var(--v5-ink-4)" />
           </view>
           <text class="ct-name">{{lesson.name}}</text>
           <text class="mono ct-dur" wx:if="{{lesson.minutes}}">{{lesson.minutes}} 分钟</text>

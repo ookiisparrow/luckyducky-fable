@@ -10,7 +10,7 @@
       <text class="t-sys lg-co" wx:if="{{company}}">{{company}}</text>
       <text class="mono lg-track" user-select>{{trackingNo}}</text>
     </view>
-    <view class="k k-sm k-flat lg-copy" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onCopy" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
+    <view class="k k-sm k-flat lg-copy hit44" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onCopy" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
   </view>
   <view class="lg-more">
     <view class="k k-light k-48" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onOpen" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看物流详情</view>

@@ -24,8 +24,22 @@ page,
   --v5-warn-text: #8a6100;
   --v5-err: #d9483b;
   --v5-err-text: #b7362b;
+  --v5-surface: #ffffff; /* 白卡、浅色键帽 */
+  --v5-press: #f0f0ed; /* 浅色键/头像键按下底、选中星键 */
+  --v5-card-press: #f3f3f0; /* 白卡按下底、骨架微光亮带 */
+  --v5-sunk-2: #e3e3df; /* 斜纹占位深条、平面键按下底 */
+  --v5-rule: #c9c9c2; /* 点线引导线、页码点、未亮星 */
+  --v5-track: #e0e1d9; /* 分段进度条未学格 */
+  --v5-err-soft: rgba(217, 72, 59, 0.14); /* 按住删除/取消的进度填充 */
+  --v5-grab: rgba(17, 17, 17, 0.2); /* 半屏顶部拖动条 */
   --v5-dark: #121212; /* 播放页暗底 */
+  --v5-dark-2: #1a1a1a; /* 播放页状态卡/置灰键底、斜纹占位浅条 */
+  --v5-dark-3: #202020; /* 斜纹占位深条、暗键按下 */
   --v5-dark-key: #262626;
+  --v5-dark-track: #333330; /* seek 轨道、未完成段格 */
+  --v5-dark-buffer: #4a4a46; /* seek 已缓冲 */
+  --v5-dark-off: #55554f; /* 暗底置灰字 */
+  --v5-dark-ink: #f2f2ec; /* 暗底主文字、seek 手柄 */
   --v5-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   /* 品牌字体（文源圆体 WenYuan Rounded SC）：分层子集 WebFont 远程加载（loadBrandFonts·utils/brandFont.ts）
      ——T1(tab首屏字·最先到) → T2(二级页字) 两族按 CSS 逐字回退补字，到达前/失败时回退系统字（FOUT 可接受）。

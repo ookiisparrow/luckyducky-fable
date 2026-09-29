@@ -16,7 +16,7 @@ page {
 .od-card {
   padding: 16px;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--v5-surface);
   box-shadow: 0 0 0 1px var(--v5-hair);
 }
 .od-k {
@@ -101,7 +101,7 @@ page {
   right: calc(50% + 10px);
   width: calc(100% - 20px);
   height: 2px;
-  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(90deg, var(--v5-rule) 0 2px, transparent 2px 4px);
 }
 .od-line-on {
   background: repeating-linear-gradient(90deg, var(--v5-ink) 0 2px, transparent 2px 4px);
@@ -166,17 +166,9 @@ page {
   align-items: center;
   border-radius: 6px;
   background: var(--v5-sunk);
-  color: var(--v5-ink-3);
+  color: var(--v5-ink-2);
 }
 /* 热区补到 44 高（上下各让 8px·看不见，视觉仍 28 高） */
-.od-mini::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -8px;
-  bottom: -8px;
-}
 
 /* 地址 */
 .od-who {
@@ -216,7 +208,7 @@ page {
   flex: 0 0 auto;
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .od-thumb-img {
   display: block;
@@ -277,7 +269,7 @@ page {
 .od-leader {
   flex: 1;
   height: 2px;
-  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(90deg, var(--v5-rule) 0 2px, transparent 2px 4px);
 }
 .od-v {
   font-size: 15px;
@@ -354,7 +346,7 @@ page {
   width: 100%;
   transform: scaleX(0);
   transform-origin: left;
-  background: rgba(217, 72, 59, 0.14);
+  background: var(--v5-err-soft);
 }
 .od-hold-on .od-fill {
   transform: scaleX(1);
@@ -427,7 +419,7 @@ page {
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(17, 17, 17, 0.2);
+  background: var(--v5-grab);
 }
 .as-t {
   display: flex;
@@ -514,9 +506,6 @@ page {
   height: auto;
   min-height: 36px;
   padding: 4px 12px;
-}
-.as-chip.k-flat {
-  color: var(--v5-ink-2);
 }
 /* 商品名一行 + 规格单独一行：名字再长也只截名字，同款不同色靠规格行分得清 */
 .as-chip-col {

@@ -14,9 +14,6 @@
   flex: 1;
   font-size: 15px;
 }
-.k-flat.ld-tab {
-  color: var(--v5-ink-2);
-}
 .ld-tab-count {
   display: inline-block; /* transform 对行内 text 不生效 */
   font-size: 13px;

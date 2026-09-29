@@ -33,7 +33,7 @@ page {
   flex: 0 0 auto;
   border-radius: 4px;
   overflow: hidden;
-  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .rv-thumb-img {
   display: block;
@@ -69,7 +69,7 @@ page {
 /* 选中星键＝按下态（设计稿 stars：底 #f0f0ed、内阴影、下沉 1px） */
 .rv-star-on {
   transform: translateY(1px);
-  background: #f0f0ed;
+  background: var(--v5-press);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
 }
 /* 没打分点发布：星排左右抖 360ms（设计稿 shake -6,6,-4,3,0） */

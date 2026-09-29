@@ -191,10 +191,10 @@ describe('订单卡右上角 / 详情状态卡小字（v5 B1·B2）', () => {
   it('大白话：状态灯——已完成/已关闭灰点无光晕、待支付/待退款黄、支付异常红、待发货紫', () => {
     expect(orderLed('done')).toEqual({ tone: 'rgba(17,17,17,.28)', halo: 'none' })
     expect(orderLed('closed')).toEqual({ tone: 'rgba(17,17,17,.28)', halo: 'none' })
-    expect(orderLed('refund_required').tone).toBe('#F4BD3F')
-    expect(orderLed('pending').tone).toBe('#F4BD3F')
-    expect(orderLed('payment_exception').tone).toBe('#D9483B')
-    expect(orderLed('paid').tone).toBe('#8A5AE0')
+    expect(orderLed('refund_required').tone).toBe('var(--v5-warn)')
+    expect(orderLed('pending').tone).toBe('var(--v5-warn)')
+    expect(orderLed('payment_exception').tone).toBe('var(--v5-err)')
+    expect(orderLed('paid').tone).toBe('var(--v5-violet)')
   })
   it('大白话：详情小字——待支付「mm:ss 后自动取消」琥珀、剩不到 1 分钟变红；完成「日期 已签收」；支付异常红；待退款琥珀', () => {
     expect(detailSub(vmOf({ status: 'pending' }), T0 + 60_000)).toEqual({ text: '14:00 后自动取消', tone: 'warn' })

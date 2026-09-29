@@ -7,7 +7,7 @@
   <view class="ps-coin"><px-ground kind="pay" /></view>
   <view class="ps-body">
     <view class="ps-title-row">
-      <px-i name="led" tone="#3f9a5e" />
+      <px-i name="led" tone="var(--v5-ok)" />
       <text class="ps-title">支付成功</text>
     </view>
     <view class="ps-paid" wx:if="{{hasAmount}}">
