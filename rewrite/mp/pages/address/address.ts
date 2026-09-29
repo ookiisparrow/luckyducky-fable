@@ -1,61 +1,51 @@
-// 地址列表（对齐设计 coam-*）：管理 + 选择两用（?pick=1 时选中即设默认回结算页——
-// 结算页 onShow 读默认地址，无跨页传参耦合）。
+// 地址列表（v5「字重」稿 A6）：管理 + 选择两用（?pick=1 时选中即设默认回结算页——
+// 结算页 onShow 读默认地址，无跨页传参耦合）。删除收进编辑页（按住删除）。
 import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
-    list: [] as ReturnType<typeof addr.getList>,
+    list: [] as Array<ReturnType<typeof addr.getList>[number] & { phoneMasked: string; where: string }>,
     picking: false,
+  },
+  leaving: false, // 选中后等 140ms 才退回：期间连点不再退第二次（否则连退两页）
+  backTimer: null as ReturnType<typeof setTimeout> | null,
+  onUnload() {
+    if (this.backTimer) clearTimeout(this.backTimer) // 140ms 内用户自己退了：别再替他多退一页
   },
   onLoad(query: Record<string, string | undefined>) {
     this.setData({ picking: query.pick === '1' })
   },
   onShow() {
-    this.setData({ list: addr.getList() })
+    this.draw()
+  },
+  draw() {
+    // where：省市区去空格直接接详址（与结算页地址卡同口径）
+    this.setData({ list: addr.getList().map((a) => ({ ...a, phoneMasked: addr.maskPhone(a.phone), where: a.region.replace(/ /g, '') + a.detail })) })
   },
   // 主区点选：结算态选中即默认并返回；管理态进编辑页（原语义不变）。
   onTapRow(e: WechatMiniprogram.TouchEvent) {
     const id = Number(e.currentTarget.dataset.id)
     if (this.data.picking) {
+      if (this.leaving) return
+      this.leaving = true
       addr.setDefault(id) // 选中即默认·结算页 onShow 取默认
-      wx.navigateBack()
+      this.draw() // 紫点先跳到这行
+      this.backTimer = setTimeout(() => wx.navigateBack(), 140) // 设计稿 addrPick：停 140ms 让人看见选中再退回
       return
     }
     wx.navigateTo({ url: '/pages/address-edit/address-edit?id=' + id })
   },
-  // 选中圈点选：设为默认；结算态设默认后返回（与主区一致）。
-  onRadioTap(e: WechatMiniprogram.TouchEvent) {
-    const id = Number(e.currentTarget.dataset.id)
-    addr.setDefault(id)
-    if (this.data.picking) {
-      wx.navigateBack()
-      return
-    }
-    this.setData({ list: addr.getList() })
-  },
-  // 编辑笔：进编辑页（结算态亦可编辑而不选中）。
+  // 「编辑」键：进编辑页（结算态亦可编辑而不选中）。
   onEdit(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/address-edit/address-edit?id=' + Number(e.currentTarget.dataset.id) })
   },
-  // 长按删除：确认后移除（设计列表无删除位，删除入口收敛到长按二次确认，防误删）。
-  onLongPressRow(e: WechatMiniprogram.TouchEvent) {
-    const id = Number(e.currentTarget.dataset.id)
-    wx.showModal({
-      title: '删除地址',
-      content: '确定删除这个收货地址吗？',
-      confirmText: '删除',
-      confirmColor: '#e5484d',
-      success: (res) => {
-        if (res.confirm) {
-          addr.removeAddress(id)
-          this.setData({ list: addr.getList() })
-        }
-      },
-    })
-  },
+  // 选址态新增：pick=2＝存完自动设默认、连退两页（编辑页 + 本页）直接回结算页
   onAdd() {
     tapHaptic()
-    wx.navigateTo({ url: '/pages/address-edit/address-edit' })
+    wx.navigateTo({ url: '/pages/address-edit/address-edit' + (this.data.picking ? '?pick=2' : '') })
   },
 })

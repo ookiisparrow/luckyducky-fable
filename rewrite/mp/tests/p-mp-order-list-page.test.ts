@@ -1,6 +1,6 @@
 // 我的订单列表主路径行为：按 tab 拉取、失败/空态分治、过期回包、翻页（失败提示/去重/被刷新作废）、切 tab 与手势、
 // 继续支付、确认收货、取消订单。只桩云调用（callApp），api/映射/支付结果判定/手势判定都用真的。Page 桩同 me-cont-failed.test.ts。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
@@ -20,8 +20,9 @@ async function mount(query: Record<string, string> = {}): Promise<Record<string,
   page._all = []
   page.setData = function (patch: Record<string, unknown>) {
     for (const [k, v] of Object.entries(patch)) {
-      const m = k.match(/^(\w+)\[(\d+)\]$/)
-      if (m) (this.data as any)[m[1]][Number(m[2])] = v
+      const m = k.match(/^(\w+)\[(\d+)\](?:\.(\w+))?$/) // 也认 shown[N].field（倒计时按字段局部刷新）
+      if (m && m[3]) (this.data as any)[m[1]][Number(m[2])][m[3]] = v
+      else if (m) (this.data as any)[m[1]][Number(m[2])] = v
       else (this.data as any)[k] = v
     }
   }
@@ -251,15 +252,12 @@ describe('订单列表：继续支付', () => {
     release({ ok: true, payment: PAYMENT })
     await p
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '可到订单详情继续支付', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已保留，可在订单详情继续支付', icon: 'none' })
   })
 })
 
 describe('订单列表：确认收货与取消订单', () => {
-  const cases = [
-    { name: '确认收货', fn: 'onConfirm', action: 'confirmReceive', title: '确认收货', ok: '已确认收货', fail: '操作没成功，稍后再试' },
-    { name: '取消订单', fn: 'onCancel', action: 'cancelOrder', title: '取消订单', ok: '订单已取消', fail: '取消没成功，稍后再试' },
-  ]
+  const cases = [{ name: '确认收货', fn: 'onConfirm', action: 'confirmReceive', title: '确认收货', ok: '已确认收货', fail: '操作没成功，稍后再试' }]
   for (const c of cases) {
     it(`大白话：${c.name}——先确认；成功提示并刷新，失败提示稍后再试；不确认不发请求`, async () => {
       const page = await mount()
@@ -290,4 +288,169 @@ describe('订单列表：确认收货与取消订单', () => {
       expect(wxMock.showToast).not.toHaveBeenCalled()
     })
   }
+})
+
+describe('订单列表：按住取消订单（拍板 7·按住 700ms）', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('大白话：按满 700ms 才取消——成功提示并刷新；没按满松手不取消，提示「按住取消订单」', async () => {
+    const page = await mount()
+    handlers.cancelOrder = () => ({ ok: true })
+    page.onCancelStart(tap('o1'))
+    expect(page.data.holding).toBe('o1') // 键内红色进度条开始填
+    vi.advanceTimersByTime(100)
+    page.onCancelEnd()
+    expect(page.data.holding).toBe('')
+    expect(callAppMock).not.toHaveBeenCalledWith('cancelOrder', expect.anything())
+    expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '按住取消订单', icon: 'none' })
+
+    page.onCancelStart(tap('o1'))
+    vi.advanceTimersByTime(699)
+    expect(callAppMock).not.toHaveBeenCalledWith('cancelOrder', expect.anything())
+    vi.advanceTimersByTime(1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(callAppMock).toHaveBeenCalledWith('cancelOrder', { id: 'o1' })
+    expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '订单已取消', icon: 'success' })
+    expect(callAppMock).toHaveBeenCalledWith('getMyOrders', expect.anything())
+    expect(wxMock.showModal).not.toHaveBeenCalled() // 不再弹二次确认框
+
+    handlers.cancelOrder = () => ({ ok: false, error: 'BAD_STATUS' })
+    page.onCancelStart(tap('o1'))
+    await vi.advanceTimersByTimeAsync(700)
+    expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '取消没成功，稍后再试', icon: 'none' })
+  })
+
+  it('大白话：取消请求在途时退出了列表页——回包后不再提示；离页时按到一半的也作废', async () => {
+    const page = await mount()
+    handlers.cancelOrder = () => ({ ok: true })
+    page.onCancelStart(tap('o1'))
+    vi.advanceTimersByTime(700)
+    page.onUnload()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(wxMock.showToast).not.toHaveBeenCalled()
+
+    const p2 = await mount()
+    p2.onCancelStart(tap('o2'))
+    p2.onHide()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(callAppMock).not.toHaveBeenCalledWith('cancelOrder', { id: 'o2' })
+  })
+})
+
+describe('订单列表：卡片（v5 B1）', () => {
+  it('大白话：待支付卡右上角是倒计时；待发货卡叫「正在发货」写「48 小时内发货」；缩略图最多 3 张', async () => {
+    const now = Date.now()
+    const many = { lineId: 'L', name: '鸭', price: 1, qty: 1 }
+    handlers.getMyOrders = () => ({
+      ok: true,
+      list: [
+        { ...order('o1'), createdAt: now - 60_000 },
+        { ...order('o2', 'paid'), items: [1, 2, 3, 4].map((i) => ({ ...many, lineId: 'L' + i })) },
+      ],
+    })
+    const page = await mount()
+    await page.reload()
+    expect(page.data.shown[0].cd).toMatch(/^1[34]:\d{2}$/)
+    expect(page.data.shown[1]).toMatchObject({ label: '正在发货', right: '48 小时内发货' })
+    expect(page.data.shown[1].thumbs).toHaveLength(3)
+  })
+
+  it('大白话：待收货点「查看物流」进物流页；已完成点「写评价」——单件直达评价页，多件先进详情逐件评', async () => {
+    handlers.getMyOrders = () => ({
+      ok: true,
+      list: [
+        { _id: 'o1', status: 'done', amount: 1, items: [{ lineId: 'L&1', name: '小鸭', spec: '黄', price: 1, qty: 1 }] },
+        { _id: 'o2', status: 'done', amount: 1, items: [{ lineId: 'A', name: 'a', price: 1, qty: 1 }, { lineId: 'B', name: 'b', price: 1, qty: 1 }] },
+      ],
+    })
+    const page = await mount()
+    await page.reload()
+    page.onLogistics(tap('o9'))
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/logistics/logistics?id=o9' })
+    page.onReview(tap('o1'))
+    expect(wxMock.navigateTo.mock.calls[1][0].url).toBe(
+      '/pages/review/review?orderId=o1&lineId=' + encodeURIComponent('L&1') + '&name=' + encodeURIComponent('小鸭') + '&spec=' + encodeURIComponent('黄') + '&cover='
+    )
+    page.onReview(tap('o2'))
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/order/order?id=o2&pick=review' }) // 详情页据此提示「选一件来评价」
+  })
+})
+
+describe('订单列表：UX 修复轮', () => {
+  afterEach(() => vi.useRealTimers())
+  const touch = (id: string, x: number, y: number) => ({ currentTarget: { dataset: { id } }, touches: [{ clientX: x, clientY: y }] })
+  const calls = (action: string) => callAppMock.mock.calls.filter((c: unknown[]) => c[0] === action)
+
+  it('大白话：确认收货在途连点——只发一次请求，期间显示加载中', async () => {
+    let release!: (v: unknown) => void
+    handlers.confirmReceive = () => new Promise((r) => (release = r))
+    const page = await mount()
+    page.onConfirm(tap('o1'))
+    const a = modal().success({ confirm: true })
+    const b = modal().success({ confirm: true })
+    release({ ok: true })
+    await Promise.all([a, b])
+    expect(calls('confirmReceive')).toHaveLength(1)
+    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '正在确认', mask: true })
+    expect(wxMock.hideLoading).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：取消订单在途再触发——只发一次请求', async () => {
+    let release!: (v: unknown) => void
+    handlers.cancelOrder = () => new Promise((r) => (release = r))
+    const page = await mount()
+    const a = page.cancelNow('o1')
+    const b = page.cancelNow('o1')
+    release({ ok: true })
+    await Promise.all([a, b])
+    expect(calls('cancelOrder')).toHaveLength(1)
+    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '正在取消', mask: true })
+  })
+
+  it('大白话：按住取消时手指挪开超过 10px（顺势滑列表）——作废，不取消', async () => {
+    vi.useFakeTimers()
+    handlers.cancelOrder = () => ({ ok: true })
+    const page = await mount()
+    page.onCancelStart(touch('o1', 50, 50))
+    page.onCancelMove(touch('o1', 50, 80))
+    await vi.advanceTimersByTimeAsync(800)
+    expect(calls('cancelOrder')).toHaveLength(0)
+    expect(page.data.holding).toBe('')
+  })
+
+  it('大白话：倒计时走到 0——卡片写「已超时」、藏「去支付」，自动刷新一次（只一次）', async () => {
+    vi.useFakeTimers()
+    const T = Date.now()
+    handlers.getMyOrders = () => ({ ok: true, list: [{ ...order('o1'), createdAt: T - 15 * 60_000 + 1500 }], nextCursor: null, hasMore: false })
+    const page = await mount()
+    await page.reload()
+    expect(page.data.shown[0].expired).toBe(false)
+    callAppMock.mockClear()
+    vi.setSystemTime(T + 2000)
+    page.tick()
+    expect(page.data.shown[0]).toMatchObject({ expired: true, cd: '', right: '已超时' })
+    await flush()
+    expect(calls('getMyOrders')).toHaveLength(1)
+    expect(page.data.shown[0].expired).toBe(true)
+    page.tick()
+    page.tick()
+    await flush()
+    expect(calls('getMyOrders')).toHaveLength(1)
+  })
+
+  it('大白话：翻页在途显示加载行（再触底不重复拉）；翻到底有数据就能显示「没有更多了」', async () => {
+    const page = await mount()
+    await page.reload()
+    let release!: (v: unknown) => void
+    handlers.getMyOrders = () => new Promise((r) => (release = r))
+    const more = page.onReachBottom()
+    expect(page.data.paging).toBe(true)
+    await page.onReachBottom()
+    release({ ok: true, list: [order('o3')], nextCursor: null, hasMore: false })
+    await more
+    expect(calls('getMyOrders')).toHaveLength(2) // 首载 1 + 翻页 1
+    expect(page.data).toMatchObject({ paging: false, hasMore: false })
+    expect(ids(page)).toEqual(['o1', 'o2', 'o3'])
+  })
 })

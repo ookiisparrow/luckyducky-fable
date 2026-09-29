@@ -20,6 +20,7 @@ const TABS = [
   { key: 'approved', label: '退款处理中' },
   { key: 'refunded', label: '已退款' },
   { key: 'rejected', label: '已拒绝' },
+  { key: 'withdrawn', label: '已撤回' }, // 顾客自己撤回的申请（只读·不占退款额度）
   { key: '', label: '全部' },
 ]
 

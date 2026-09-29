@@ -1,15 +1,15 @@
-<view wx:if="{{!hidden}}" class="ld-tabbar">
+<view wx:if="{{!hidden}}" class="v5-scope ld-tabbar">
   <view
     wx:for="{{tabs}}"
     wx:key="id"
-    class="ld-tab {{active === item.id ? 'active' : ''}}"
+    class="k ld-tab {{active === item.id ? 'k-light ld-tab-on' : 'k-flat'}}"
+    hover-start-time="20" hover-class="{{active === item.id ? 'k-light-down' : 'k-flat-down'}}"
+    hover-stay-time="100"
     data-id="{{item.id}}"
     data-path="{{item.path}}"
     bind:tap="onTap"
-  >
-    <view class="ld-tab-iconwrap">
-      <image class="ld-tab-icon" src="/static/icons/{{active === item.id ? item.icon + '-on' : item.icon}}.svg" mode="aspectFit" />
-      <view class="ld-tab-badge" wx:if="{{item.id === 'cart' && cartCount > 0}}">{{cartCount > 99 ? '99+' : cartCount}}</view>
-    </view>
+   data-k="{{active === item.id ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+    <text>{{item.label}}</text>
+    <text wx:if="{{item.id === 'cart' && cartCount > 0}}" class="t-sys ld-tab-count {{bump ? 'ld-tab-bump' : ''}}">{{cartCount > 99 ? '99+' : cartCount}}</text>
   </view>
 </view>

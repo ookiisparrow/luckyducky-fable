@@ -1,7 +1,7 @@
-// 激活页（含 W1/W2 恭喜/学习方式两屏）：扫激活卡二维码带 ?code= 进入
-// （或手动输码）→ 兑课三态屏 → （新激活）W1 恭喜屏 → W2 三件事屏 → 确认进课。
-// 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。kind==='mine'/'taken'/'invalid'
-// 三态走沉浸壳；仅 kind==='activated' 的结果屏走 W1/W2 lilac 壳（见 wxml 头注）。
+// 激活页（含 W1/W2 恭喜/学习方式两屏）：微信扫激活卡二维码带 ?code= 进入 → 兑课三态屏 → （新激活）W1 恭喜屏 → W2 三件事屏 → 确认进课。
+// 老板拍板不做应用内手动输码/扫码：没带码进来只提示用微信扫卡（phase 'nocode'）。
+// 一码一用/幂等/退货权失效节点全在云端；本页只编排各态视图与背景回退链。
+// 视觉＝v5 稿 C2（mine/taken/invalid/error 结果屏）/ C3（W1+W2 拆两屏），见 wxml 头注。
 import { tapHaptic } from '../../lib/haptics'
 import { activateCourse, confirmEnter } from '../../api/learning'
 import { getContent } from '../../api/catalog'
@@ -12,11 +12,15 @@ import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import type { ApiResult } from '../../utils/cloud'
 import { goHomeTab } from '../../lib/homeIntent'
+import { openCustomerService } from '../../utils/customerService'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
-    phase: 'input' as 'input' | 'result' | 'w2',
+    phase: 'nocode' as 'nocode' | 'result' | 'w2',
     kind: 'invalid' as ActivationKind,
     code: '',
     courseId: '',
@@ -51,15 +55,9 @@ Page({
     if (this.unloaded) return
     this.setData({ welcome: mapWelcome(content) })
   },
-  onInput(e: WechatMiniprogram.Input) {
-    this.setData({ code: e.detail.value.trim().toUpperCase() })
-  },
-  onActivate() {
-    if (!this.data.code) {
-      wx.showToast({ title: '先输入激活码', icon: 'none' })
-      return
-    }
-    if (this.data.busy) return // 兑课在途（按钮 dim）：不重复触发、不震
+  // 网络/频控/繁忙「再试一次」：原码重发（码可能没问题）
+  onRetryCode() {
+    if (!this.data.code || this.data.busy) return // 兑课在途（按钮 dim）：不重复触发、不震
     tapHaptic()
     void this.activate(this.data.code)
   },
@@ -110,15 +108,16 @@ Page({
     const courseId = this.data.courseId
     wx.redirectTo({ url: courseId ? '/pages/catalog/catalog?courseId=' + courseId : '/pages/my-courses/my-courses' })
   },
-  onRetry() {
-    this.setData({ phase: 'input', code: '', kind: 'invalid', bg: '' })
-  },
   // 自绘返回：custom 导航无原生返回箭头，否则输入态/废码态退不出去。
   // 与 onGoHome（W2 屏「先逛逛，稍后再进课」）分工不同：那条是**主动放弃进课**的语义化出口、恒回首页；
   // 这条是通用返回，从「我」页进来的退回「我」、扫码深链进来的兜底回首页。
   onBack() {
     tapHaptic()
     goBackOrHome()
+  },
+  // 废码/已被使用屏「联系客服」（v5 稿 C2）：找不到码或码被占时让客服帮确认。
+  onContact() {
+    openCustomerService()
   },
   onGoHome() {
     // 「先逛逛，稍后再进课」→ 首页应从头逛起：防上次恰好滚到 FAQ 板块的旧滚动位置残留，造成错位观感

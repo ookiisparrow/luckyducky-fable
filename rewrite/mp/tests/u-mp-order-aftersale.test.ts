@@ -41,7 +41,7 @@ function cloudGetMyAfterSales(data: Record<string, unknown>) {
 let wxMock: Record<string, any>
 beforeEach(() => {
   callAppMock.mockReset()
-  wxMock = { showToast: vi.fn(), showActionSheet: vi.fn(), showModal: vi.fn() }
+  wxMock = { showToast: vi.fn(), showActionSheet: vi.fn(), showModal: vi.fn(), showLoading: vi.fn(), hideLoading: vi.fn() }
   ;(globalThis as any).wx = wxMock
 })
 
@@ -53,8 +53,8 @@ describe('申请售后入口：已申请过的行要排除', () => {
     const page = await mount()
     page.data.vm = VM
     await page.onAfterSale()
-    expect(wxMock.showActionSheet).toHaveBeenCalledTimes(1)
-    expect(wxMock.showActionSheet.mock.calls[0][0].itemList).toEqual(['云朵鸭'])
+    expect(page.data.asOpen).toBe(true)
+    expect(page.data.asLines.map((l: { name: string }) => l.name)).toEqual(['云朵鸭'])
   })
 
   it('大白话：售后记录拉取失败——不当成「一条都没申请过」把全部行摆出来，提示稍后再试', async () => {
@@ -62,7 +62,7 @@ describe('申请售后入口：已申请过的行要排除', () => {
     const page = await mount()
     page.data.vm = VM
     await page.onAfterSale()
-    expect(wxMock.showActionSheet).not.toHaveBeenCalled()
+    expect(page.data.asOpen).toBe(false)
     expect(wxMock.showToast).toHaveBeenCalledTimes(1)
     expect(wxMock.showToast.mock.calls[0][0].title).not.toBe('没有可申请售后的条目')
   })

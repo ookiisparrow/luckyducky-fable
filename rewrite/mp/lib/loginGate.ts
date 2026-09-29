@@ -4,6 +4,7 @@
 // loginGate 单例（镜像 lib/privacyGate 广播范式）：各页 <login-sheet/> 订阅同一开关；
 // 已同意真值本地 hint（服务端 users 为准可后续加·镜像 lib/consent「本地 hint·非真值」范式）。
 import { readStorage, writeStorage } from '../utils/storage'
+import { setExitGuardOverlay } from '../utils/exitGuard'
 
 const LOGIN_HINT_KEY = 'ld_login_hint'
 
@@ -70,7 +71,7 @@ export function createLoginGate() {
       writeLoginHint(true)
       this.close()
     },
-    // 退出登录：清本地已同意 hint（我的页据此显示登出态·默认身份）+ 收起弹窗。
+    // 转回登出态（现仅「删除资料」成功后调用·「退出登录」键老板 2026-09-29 拍板去掉）：清本地已同意 hint（我的页据此显示登出态·默认身份）+ 收起弹窗。
     // 注意 openid 是云开发上下文固定身份（一微信一 openid·mp 无「换账号」）——退出不删服务端 users 资料、
     // 不清 cart/address 本地缓存（同一用户便利态·再登即回·根因#3「换账号泄露」在 mp 不成立）；只重置「显式同意登录」这一态。
     logout(): void {
@@ -81,3 +82,10 @@ export function createLoginGate() {
 }
 
 export const loginGate = createLoginGate()
+
+// tab 页安卓返回键：登录半屏开着就只关半屏，不提示「再点一次退出」（utils/exitGuard 调）
+setExitGuardOverlay(() => {
+  if (!loginGate.visible()) return false
+  loginGate.close()
+  return true
+})

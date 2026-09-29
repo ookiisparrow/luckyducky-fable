@@ -21,9 +21,27 @@ export function shouldTick(prevFrame: number, frame: number, sinceLastMs: number
 // 真机兼容（根因#8·官方文档+社区核实）：type 分级需基础库 2.13.0+，老库忽略 type 仍震默认档（故直传 type 无害·不必特性
 // 检测）；wx/vibrateShort 存在性兜底防非小程序环境（测试）崩。设备侧坑（代码救不了、只能提示）：iOS 需「设置→声音与
 // 触感→系统触感反馈」开启（关则静默且仍报 success）+ 关低电量模式；开发者工具模拟器不震、只真机震。
+// v5 按键手感（lib/keyFx·老板 2026-09-28「按设计稿实现」）：每颗键按下时已震过一次，同一次点按里处理器
+// 再调 tapHaptic 就跳过——一次点按只震一下（KEY_VIBE_WINDOW_MS 覆盖按下到松手触发 tap 的间隔；
+// 须短于最短的按住时长 600ms，按住删除/退出「成了」那一下确认震不能被吞）。
+export const KEY_VIBE_WINDOW_MS = 450
+let lastKeyVibe = 0
+const vibe = (type: 'light' | 'medium' | 'heavy') => {
+  if (typeof wx !== 'undefined' && typeof wx.vibrateShort === 'function') wx.vibrateShort({ type })
+}
+/** 键按下那一震（lib/keyFx 调）：记下时间，让同一次点按里的 tapHaptic 不再叠震。 */
+export function keyHaptic(type: 'light' | 'medium'): void {
+  lastKeyVibe = Date.now()
+  vibe(type)
+}
+/** 大撒花的「哒-哒-哒」三连（设计稿 navigator.vibrate([14,60,20,60,30])，间隔取事件震节流地板）。 */
+export function burstHaptic(): void {
+  for (let i = 0; i < 3; i++) setTimeout(() => vibe(i === 2 ? 'medium' : 'light'), i * VIBE_GAP_MS)
+}
 let lastTapVibe = 0
 export function tapHaptic(type: 'light' | 'medium' | 'heavy' = 'medium'): void {
   const now = Date.now()
+  if (now - lastKeyVibe < KEY_VIBE_WINDOW_MS) return
   if (now - lastTapVibe < VIBE_GAP_MS) return
   lastTapVibe = now
   if (typeof wx === 'undefined' || typeof wx.vibrateShort !== 'function') return

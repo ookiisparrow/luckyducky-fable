@@ -568,14 +568,27 @@ export interface DispatchCtx {
  * （enter_session）都过它——若只有 handleMessage 查、enter_session 直发欢迎菜单，排队中顾客重开聊天窗会被
  * bot 抢话（且点菜单又被本闸静默＝发了菜单点了没反应的自相矛盾）。
  */
+// 人工接待闲置自动回机器人（老板 2026-09-28：默认机器人接待；转人工后双方停止对话满 15 分钟自动切回）。
+// 「最后一次对话」＝会话 updatedAt：坐席回复刷新（adminApi agentDesk），顾客在人工态发言也刷新（handleMessage）。
+// 真事故：9/18 转人工后没人点「结束会话」，机器人对这位顾客沉默了十天。
+export const HUMAN_IDLE_MS = 15 * 60_000
 export async function heldStatus(
   db: any,
   openKfId: string,
   externalUserId: string
 ): Promise<string | null> {
-  const held = await docData(db, COLLECTIONS.csSession, 'wxkf:' + openKfId + ':' + externalUserId)
+  const id = 'wxkf:' + openKfId + ':' + externalUserId
+  const held = await docData(db, COLLECTIONS.csSession, id)
   const hs = held && held.status
-  return hs === 'pending' || hs === 'active' || hs === 'escalated' ? hs : null
+  if (hs !== 'pending' && hs !== 'active' && hs !== 'escalated') return null
+  const lastAt = Number(held.updatedAt || held.createdAt || 0)
+  if (Date.now() - lastAt < HUMAN_IDLE_MS) return hs
+  // 闲置满 15 分钟：结束会话交回机器人（不发 CSAT——没人工收尾就别追着评分）。写失败也按机器人接待：下一句再结一次
+  const now = Date.now()
+  await transition(COLLECTIONS.csSession, id, ['pending', 'active', 'escalated'], 'closed', { updatedAt: now, closedAt: now, closedBy: 'idle' }).catch(
+    () => null
+  )
+  return null
 }
 
 // 关单评分标记（CSAT 闭环）：closeConversation 发「回复 1-5 分」提示时立 `csatask:<euid>` 标记，
@@ -623,6 +636,12 @@ export async function handleMessage(ctx: DispatchCtx, incoming: Incoming): Promi
   // **例外：顾客明确再点「找人工」不许装死**（闸太宽会把求人工也吞了）——回一句当前状态、不重复入队。
   const hs = await heldStatus(db, openKfId, to)
   if (hs === 'pending' || hs === 'active' || hs === 'escalated') {
+    // 顾客在人工态发言＝对话还在进行：刷新闲置计时（坐席回复在 agentDesk 刷新·两边任一开口都续 15 分钟）
+    await db
+      .collection(COLLECTIONS.csSession)
+      .doc('wxkf:' + openKfId + ':' + to)
+      .update({ data: { updatedAt: Date.now() } })
+      .catch(() => {})
     if (incoming.menuId && route(incoming.menuId).type === 'transfer') {
       await send(
         buildText(

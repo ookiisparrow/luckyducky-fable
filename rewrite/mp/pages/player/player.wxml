@@ -1,328 +1,278 @@
-<!-- 课程播放页·竖屏沉浸全屏：常态结构 + 段落播完不自动切换 + 自绘 seek 条/阻尼震感/关键节点磁吸/拖动预览
-     + 求助面板 + 返回二次确认 + 首次退出加桌引导。
-     整页纯黑铺满（player.json navigationStyle:custom）；视频 1:1.68（宽:高）居中，
-     上下 UI 是黑条覆盖层（普通 view 绝对定位 z-index 盖在 video 上·同层渲染官方已允许，不必 cover-view）。
+<!-- 课程播放页（v5 设计稿 C7 播放页 / 段间·停在本段末 / C9 学完一节）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv。
+     结构：顶栏（返回+一行课时名·右侧 104px 留白给原生胶囊）→ 视频舞台（弹性高·圆角）→ 底部（seek 条 + 段名/时长 + 上一段|播放暂停|下一段|求助）。
      回归红线：playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存；
-     段落播完不自动切下一段（onEnded 停在完成态，重播/切段交由用户，见 player.ts）。
-     自绘 seek 条两段式语义（WXS sk.onStart/onMove/onEnd + 逻辑层 onSeekTick/onSeekCommit：拖动中只改显示，松手才真 seek）+ 关键动作节点磁吸/震感
-     配方（单源 lib/haptics，见 player.ts）；拖动浮层＝时间浮窗+关键节点气泡，
-     雪碧图缩略图（R36·决策§31）素材已随 VOD 转码回写 vodSpriteVtt，mp 侧尚未接入。
-     求助面板：中央求助钮拉起底部 sheet（menu/videos/faq 三态，见 player.ts helpPanel），播放
-     不阻断，唯一暂停例外＝帮助视频内嵌播放（简化决策：原生 <video controls>，不做自绘控制条
-     ——辅助内容非主路径，防过度工程）。返回二次确认 + 首次成功退出加桌引导（仅一次·分端文案，
-     动画降级为静态示意区+文案）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回箭头经此。 -->
+     段落播完不自动切下一段（onEnded 停在完成态·段内停「段间」浮层、课时末段换 C9 学完一节版式，重播/切段交由用户，见 player.ts）。
+     自绘 seek 条两段式语义（WXS sk.onStart/onMove/onEnd + 逻辑层 onSeekTick/onSeekCommit：拖动中只改显示，松手才真 seek）+
+     关键动作节点磁吸/震感（单源 lib/haptics）。seek.wxs 按 class 操作 .lp-seek-fill/.lp-seek-handle/.lp-seek-preview（setStyle + addClass），
+     这些节点 class 不做数据绑定（错题本 E29：同一样式属性/类只能一个写入方）。
+     求助面板：底部 sheet（menu/videos/faq 三态），播放不阻断，唯一暂停例外＝帮助视频内嵌播放（原生 <video controls>）。
+     返回二次确认 + 首次成功退出加桌引导：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回键经此。 -->
 <!-- 自绘 seek 拖动几何·渲染层驱动（根因#15）：外置 WXS 模块 sk（内联 <wxs> 里的 < 比较会被 rw-mp-wxml-well-formed 咬红，必须外置） -->
 <wxs src="./seek.wxs" module="sk" />
 <view class="ld-player">
 
-  <!-- 顶条：返回 + 两行标题（数据源=lib/player 的 lessonStrip：主行 chapterTitle/副行 lessonNo·lessonName，
-       chapterTitle 空则只显 lessonName 脏档回退）+ 右侧留白 spacer（真机右上是原生胶囊，
-       继续保持右上留白纪律，不放任何自绘元素） -->
+  <!-- 顶栏：暗色返回键 + 一行课时名（数据源 lib/player lessonStrip；拿不到课时按态兜底，missing/error 不写「正在学习」自相矛盾） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
-    <view class="lp-back" bind:tap="onBack">
-      <image class="lp-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-    </view>
-    <view class="lp-topbar-title">
-      <block wx:if="{{strip && strip.chapterTitle}}">
-        <view class="lp-title-main">{{strip.chapterTitle}}</view>
-        <view class="lp-title-sub">{{strip.lessonNo}} · {{strip.lessonName}}</view>
-      </block>
-      <!-- 兜底标题按态分流：missing/error 态下课程都没拿到，顶条写「正在学习」会
-           自相矛盾（用户刚被告知「没找到这门课」，抬头看见「正在学习」）。 -->
-      <view class="lp-title-main" wx:else>{{(strip && strip.lessonName) || title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习'))}}</view>
-    </view>
-    <view class="lp-topbar-spacer"></view>
-  </view>
-
-  <!-- 视频舞台（播放框 padding-top 动态贴合素材真实比例·onVideoMeta 拿宽高后设 videoRatio·去左右黑边·垂直居中；
-       默认 168% 即 1:1.68·首帧前不裂；状态框仍走 wxss 168%·见 .lp-video-box） -->
-  <view class="lp-stage">
-    <block wx:if="{{state === 'playing' || state === 'loading'}}">
-      <view class="lp-video-box" style="padding-top: {{videoRatio}}%">
-        <video
-          wx:if="{{src}}"
-          id="lp-video"
-          class="lp-video"
-          src="{{src}}"
-          autoplay
-          initial-time="{{initialTime}}"
-          controls="{{false}}"
-          bind:play="onVideoPlay"
-          bind:pause="onVideoPause"
-          bind:ended="onEnded"
-          bind:error="onVideoError"
-          bind:waiting="onVideoWaiting"
-          bind:progress="onVideoProgress"
-          bind:timeupdate="onTimeUpdate"
-          bind:loadedmetadata="onVideoMeta"
-        ></video>
-        <view wx:else class="lp-video lp-skeleton">
-          <view class="lp-skeleton-spin"></view>
-          <view class="lp-skeleton-text">正在加载首帧…</view>
-        </view>
-
-        <!-- 全屏单击播放/暂停（透明点击层·playing 才挂·paused 以 bind:play/bind:pause 回报为准）；
-             暂停指示图标是它的子节点（非按钮·点它也走冒泡命中父层 tapzone·整屏单击即恢复）。 -->
-        <view wx:if="{{src}}" class="lp-tapzone" bind:tap="onTapVideo">
-          <view wx:if="{{paused}}" class="lp-pause-badge">
-            <image class="lp-pause-ico" src="/static/icons/play-circle.svg" mode="aspectFit" />
-          </view>
-          <!-- 缓冲失速角标（tapzone 子节点：点它冒泡到 tapzone、整屏单击播放/暂停语义不变）·见 ts onVideoWaiting -->
-          <view wx:if="{{buffering && !paused}}" class="lp-buffering">
-            <view class="lp-skeleton-spin lp-buffering-spin"></view>
-            <text>正在缓冲…</text>
-          </view>
-        </view>
+    <view class="lp-bar">
+      <view class="lp-back" bind:tap="onBack">
+        <view class="k k-sm k-dk lp-back-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
       </view>
-
-      <!-- 单击提示条：仅播放中且未被首次 tap 关闭过（页面实例级·不持久化）。
-           top 与 segstrip 同款动态避让：定位祖先是全屏 .lp-stage（顶=屏顶），
-           写死 top 会整条压进状态栏、只露一道边。落在 segstrip 之下（+92rpx 是 segstrip 实测高度带间距），两条浮层不叠。 -->
-      <view class="lp-tap-hint" wx:if="{{state === 'playing' && src && !hintDismissed}}" style="top: calc({{capsuleBottom}}px + {{strip ? 200 : 26}}rpx)">单击画面 播放 / 暂停</view>
-
-      <!-- 分段进度条浮层：段落层级只活在这里（目录页只到课时层）。
-           top 按原生胶囊底边动态避让（capsuleBottom+8）：浮层的定位祖先是全屏 .lp-stage（inset:0·顶=屏顶），
-           不动态给 top 就会贴屏顶撞状态栏/胶囊。 -->
-      <view class="lp-segstrip" wx:if="{{strip}}" style="top: {{capsuleBottom + 8}}px">
-        <view class="lp-segs">
-          <view class="lp-seg-cell {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
-        </view>
-        <view class="lp-segcap">
-          <text class="lp-segcap-text">{{capText}}</text>
-          <view class="lp-legend" wx:if="{{current && current.marks && current.marks.length > 0}}">
-            <text class="lp-legend-dot">◆</text>
-            <text class="lp-legend-text">关键动作节点</text>
-          </view>
-        </view>
-      </view>
-    </block>
-
-    <view class="lp-video-box lp-state" wx:elif="{{state === 'empty'}}">
-      <view class="lp-state-title">这段视频还在整理中</view>
-      <view class="lp-state-hint">先看看别的段落吧</view>
-      <view class="lp-state-actions">
-        <view class="lp-state-btn ghost" wx:if="{{canNext}}" bind:tap="onNext">跳到下一段</view>
-      </view>
-    </view>
-    <view class="lp-video-box lp-state" wx:elif="{{state === 'denied'}}">
-      <view class="lp-state-title">先激活课程才能观看</view>
-      <view class="lp-state-btn" bind:tap="onGoActivate">去输入激活码</view>
-    </view>
-    <!-- missing 态补出路：别只有「课程不存在」五个字、一个可点的都没有（同页 error 态有重试按钮）；文案用用户语言。 -->
-    <view class="lp-video-box lp-state" wx:elif="{{state === 'missing'}}">
-      <view class="lp-state-title">没找到这门课</view>
-      <view class="lp-state-hint">可能课程已下架，或者这个链接不对</view>
-      <view class="lp-state-actions">
-        <view class="lp-state-btn" bind:tap="onGoCourses">去我的课程看看</view>
-      </view>
-    </view>
-    <!-- error 态双语义：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到
-         （initCourse 失败·深链冷启动弱网），文案与按钮随态分流，重试都走 onRetryError（内部自分流）。 -->
-    <view class="lp-video-box lp-state" wx:elif="{{state === 'error'}}">
-      <view class="lp-state-title">{{current ? '这段视频暂时播放不了' : '课程内容没加载出来'}}</view>
-      <view class="lp-state-hint">{{current ? '可能是网络或格式问题，换一段或稍后再试' : '网络开小差了，稍后再试'}}</view>
-      <view class="lp-state-actions">
-        <view class="lp-state-btn" bind:tap="onRetryError">{{current ? '重试本段' : '重新加载'}}</view>
-        <view class="lp-state-btn ghost" wx:if="{{canNext}}" bind:tap="onNext">跳到下一段</view>
-      </view>
+      <text class="t-sys lp-nav-cap">{{strip ? strip.lessonNo + ' · ' + strip.lessonName : (title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习')))}}</text>
     </view>
   </view>
 
-  <!-- 底条：仅播放中显示——段落播完(segDone) 顶部通栏重播长条 + 进度(时间+slider+时长) + 求助|上一段|下一段 -->
-  <view class="lp-bottombar" wx:if="{{state === 'playing'}}">
-    <view class="lp-replay" wx:if="{{segDone}}" bind:tap="onReplay">
-      <image class="lp-replay-ico" src="/static/icons/rotate-ccw.svg" mode="aspectFit" />
-      <text>重播本段</text>
+  <!-- 视频舞台：弹性高圆角框（C9 学完一节时收成 200px 留本段最后一帧·<video> 不卸载） -->
+  <block wx:if="{{state === 'playing' || state === 'loading'}}">
+    <view class="lp-stage {{segDone && strip && strip.segIndex === strip.segTotal ? 'lesson-done' : ''}}">
+      <video
+        wx:if="{{src}}"
+        id="lp-video"
+        class="lp-video"
+        src="{{src}}"
+        autoplay
+        initial-time="{{initialTime}}"
+        controls="{{false}}"
+        object-fit="contain"
+        bind:play="onVideoPlay"
+        bind:pause="onVideoPause"
+        bind:ended="onEnded"
+        bind:error="onVideoError"
+        bind:waiting="onVideoWaiting"
+        bind:progress="onVideoProgress"
+        bind:timeupdate="onTimeUpdate"
+        bind:loadedmetadata="onVideoMeta"
+      ></video>
+      <view wx:else class="lp-video lp-skeleton">
+        <px-anim name="loader" size="2" dark />
+        <text class="t-sys lp-skeleton-text">正在加载首帧…</text>
+      </view>
+
+      <!-- 全屏单击播放/暂停（透明点击层·paused 以 bind:play/bind:pause 回报为准）；暂停大圆/缓冲角标是它的子节点，点它们冒泡到 tapzone。 -->
+      <view wx:if="{{src && !segDone}}" class="lp-tapzone" bind:tap="onTapVideo">
+        <view wx:if="{{state === 'playing' && !hintDismissed}}" class="t-sys lp-tap-hint">单击画面 播放 / 暂停</view>
+        <view wx:if="{{paused}}" class="lp-pause-badge"><px-i name="playL" tone="#f2f2ec" /></view>
+        <!-- 缓冲失速角标·见 ts onVideoWaiting -->
+        <view wx:if="{{buffering && !paused}}" class="t-sys lp-buffering">
+          <px-anim name="loader" size="2" dark />
+          <text>正在缓冲…</text>
+        </view>
+      </view>
+
+      <!-- 段间 · 停在本段末（课时内还有下一段）：本段完成文案 + 重播本段 / 继续下一段 -->
+      <view wx:if="{{segDone && !(strip && strip.segIndex === strip.segTotal)}}" class="lp-segend">
+        <text class="lp-segend-cap">{{capText}}</text>
+        <view class="lp-segend-keys">
+          <view class="k k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplay" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重播本段</view>
+          <view wx:if="{{canNext}}" class="k k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续下一段<px-i name="arrow" /></view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="lp-stage lp-state" wx:elif="{{state === 'empty'}}">
+    <text class="lp-state-title">这段视频还在整理中</text>
+    <text class="lp-state-hint t-sys">先看看别的段落吧</text>
+    <view wx:if="{{canNext}}" class="k k-dk lp-state-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">跳到下一段</view>
+  </view>
+  <view class="lp-stage lp-state" wx:elif="{{state === 'denied'}}">
+    <text class="lp-state-title">先激活课程才能观看</text>
+    <view class="k k-inv lp-state-key" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onGoActivate" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去输入激活码</view>
+  </view>
+  <!-- missing 态补出路：别只有「没找到」一句、一个可点的都没有（同页 error 态有重试按钮）。 -->
+  <view class="lp-stage lp-state" wx:elif="{{state === 'missing'}}">
+    <text class="lp-state-title">没找到这门课</text>
+    <text class="lp-state-hint t-sys">可能课程已下架，或者这个链接不对</text>
+    <view class="k k-inv lp-state-key" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onGoCourses" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去我的课程看看</view>
+  </view>
+  <!-- error 态双语义：current 有值=段级失败（取址/媒体）；current 空=课程目录都没拉到，重试都走 onRetryError（内部自分流）。 -->
+  <view class="lp-stage lp-state" wx:elif="{{state === 'error'}}">
+    <text class="lp-state-title">{{current ? '这段视频暂时播放不了' : '课程内容没加载出来'}}</text>
+    <text class="lp-state-hint t-sys">{{current ? '可能是网络或格式问题，换一段或稍后再试' : '网络开小差了，稍后再试'}}</text>
+    <view class="lp-state-keys">
+      <view class="k k-inv lp-state-key" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onRetryError" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{current ? '重试本段' : '重新加载'}}</view>
+      <view wx:if="{{canNext}}" class="k k-dk lp-state-key" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">跳到下一段</view>
+    </view>
+  </view>
+
+  <!-- 底部（仅播放中）：C9 学完一节时整块隐藏（不卸载·seek 节点与 WXS 状态留着），换学完版式 -->
+  <view wx:if="{{state === 'playing'}}" class="lp-bottombar {{segDone && strip && strip.segIndex === strip.segTotal ? 'is-off' : ''}}">
+    <view
+      class="lp-seek"
+      bind:touchstart="{{sk.onStart}}"
+      catch:touchmove="{{sk.onMove}}"
+      bind:touchend="{{sk.onEnd}}"
+      bind:touchcancel="{{sk.onEnd}}"
+      change:cfg="{{sk.onCfg}}"
+      cfg="{{seekCfg}}"
+      change:pct="{{sk.onPct}}"
+      pct="{{seekPct}}"
+    >
+      <!-- 拖动浮层（常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控）；命中关键动作节点再叠黄气泡 -->
+      <view class="lp-seek-preview">
+        <view class="lp-seek-preview-time mono">{{curClock}}</view>
+        <view wx:if="{{snapName}}" class="t-sys lp-seek-preview-bubble">关键动作 · {{snapName}}</view>
+      </view>
+      <view class="lp-seek-track"></view>
+      <!-- 缓冲水位（bind:progress 尽力而为·换段清零 bufferPct·WXS 不碰） -->
+      <view class="lp-seek-buffer" style="width: {{bufferPct}}%"></view>
+      <!-- fill 宽/handle left：非拖动期由 seekPct 经 change:pct→sk.onPct 落位；拖动期 seek.wxs setStyle 接管 -->
+      <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
+      <view class="lp-seek-node" wx:for="{{markVMs}}" wx:key="at" style="left: {{item.pct}}%"></view>
+      <view class="lp-seek-handle" style="left: {{seekPct}}%"></view>
     </view>
 
-    <view class="lp-progress-row">
-      <text class="lp-time {{seeking ? 'cur-strong' : ''}}">{{curClock}}</text>
-      <view
-        class="lp-seek"
-        bind:touchstart="{{sk.onStart}}"
-        catch:touchmove="{{sk.onMove}}"
-        bind:touchend="{{sk.onEnd}}"
-        bind:touchcancel="{{sk.onEnd}}"
-        change:cfg="{{sk.onCfg}}"
-        cfg="{{seekCfg}}"
-        change:pct="{{sk.onPct}}"
-        pct="{{seekPct}}"
-      >
-        <!-- 拖动浮层（WXS 控制·常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控——避免 setData 重建
-             与 WXS setStyle 抢写 position）；命中关键动作节点再叠鸭黄气泡（雪碧图缩略图 mp 侧尚未接入，见 player.ts 头注） -->
-        <view class="lp-seek-preview">
-          <view class="lp-seek-preview-time">{{curClock}}</view>
-          <view wx:if="{{snapName}}" class="lp-seek-preview-bubble">✦ 关键动作 · {{snapName}}</view>
-        </view>
-        <view class="lp-seek-track"></view>
-        <!-- 缓冲水位（bind:progress 尽力而为·灰阶介于轨道与紫填充之间·换段清零 bufferPct·低频 data 驱动·WXS 不碰） -->
-        <view class="lp-seek-buffer" style="width: {{bufferPct}}%"></view>
-        <!-- fill 宽/handle left：非拖动期播放推进由 seekPct 低频 data 驱动；拖动期由 seek.wxs setStyle 接管（seeking 冻结 seekPct·不抢写·.big 亦由 WXS toggle） -->
-        <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
-        <view class="lp-seek-node" wx:for="{{markVMs}}" wx:key="at" style="left: {{item.pct}}%"></view>
-        <view class="lp-seek-handle" style="left: {{seekPct}}%"></view>
+    <view class="lp-info">
+      <view class="lp-info-l">
+        <text class="t-sys lp-seg-no">{{strip ? '段落 ' + strip.segIndex + ' / ' + strip.segTotal : ''}}</text>
+        <text class="lp-seg-title">{{current ? current.segName : ''}}</text>
       </view>
-      <text class="lp-time">{{durClock}}</text>
+      <text class="lp-time mono {{seeking ? 'on' : ''}}">{{curClock}} / {{durClock}}</text>
     </view>
 
     <view class="lp-controls">
-      <view class="lp-chev {{canPrev ? '' : 'dim'}}" bind:tap="onPrev">
-        <image class="lp-chev-ico lp-chev-prev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <view class="lp-helpbtn" bind:tap="onHelp">
-        <image class="lp-helpbtn-ico" src="/static/icons/headset.svg" mode="aspectFit" />
-      </view>
-      <view class="lp-chev {{canNext ? '' : 'dim'}}" bind:tap="onNext">
-        <image class="lp-chev-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
+      <view class="k k-48 lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">上一段</view>
+      <view class="k k-48 k-inv lp-ctl-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onTapVideo" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="{{paused ? 'play' : 'pause'}}" tone="#111" /></view>
+      <view class="k k-48 lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext" data-k="{{canNext ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">下一段</view>
+      <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">求助</view>
     </view>
   </view>
 
-  <!-- 求助面板：底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。
-       scrim 与 sheet 均锁背景滚动（catch:touchmove="noop"）；videos 子层内部主题列表用 scroll-view
-       scroll-y 自滚（内嵌播放视图无需滚动，不放进 scroll-view）。 -->
+  <!-- C9 学完一节（课时末段播完）：分段全亮 + 完成文案 + 重看本节 / 继续下一节。
+       全课最后一段（无下一节）：重看本节 / 完成课程（进 C10 结业页 pages/finish）。 -->
+  <view wx:if="{{state === 'playing' && segDone && strip && strip.segIndex === strip.segTotal}}" class="lp-done">
+    <view class="lp-done-body">
+      <view class="lp-done-segs">
+        <view class="lp-done-seg {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
+      </view>
+      <text class="t-sys lp-done-cap">{{capText}}</text>
+      <text class="lp-done-title">这一节学完了</text>
+    </view>
+    <view class="lp-done-keys">
+      <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重看本节</view>
+      <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续下一节<px-i name="arrow" /></view>
+      <view wx:else class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onFinishCourse" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">完成课程</view>
+    </view>
+  </view>
+
+  <!-- 求助面板：浅色底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。
+       scrim 与 sheet 均锁背景滚动（catch:touchmove="noop"）；列表用 scroll-view 自滚。 -->
   <view class="lp-help-mask" wx:if="{{helpPanel}}" bind:tap="onHelpClose" catch:touchmove="noop">
-    <view class="lp-help-sheet" catch:tap="noop" catch:touchmove="noop">
+    <view class="lp-help-sheet" style="top: {{statusBarHeight + 44}}px" catch:tap="noop" catch:touchmove="noop">
       <view class="lp-help-grab" bind:tap="onHelpClose"></view>
+      <view class="lp-help-nav">
+        <view wx:if="{{helpPanel === 'videos' && helpSrc}}" class="k k-sm k-light lp-help-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideoBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
+        <view wx:elif="{{helpPanel !== 'menu'}}" class="k k-sm k-light lp-help-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpBackMenu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
+        <text class="lp-help-title">{{helpPanel === 'menu' ? '需要帮忙吗？' : (helpPanel === 'faq' ? help.faqTitle : (helpSrc ? (helpSegName || '正在播放') : help.videosTitle))}}</text>
+        <view class="lp-help-close" bind:tap="onHelpClose">
+          <view class="k k-sm k-light lp-help-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="times" /></view>
+        </view>
+      </view>
 
       <!-- menu 层 -->
       <block wx:if="{{helpPanel === 'menu'}}">
-        <view class="lp-help-head">
-          <view class="lp-help-title">需要帮忙吗？</view>
-          <view class="lp-help-sub">别急，大多数卡点都有现成的答案</view>
-        </view>
-        <view class="lp-help-card" bind:tap="onHelpContact">
-          <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/headset.svg" mode="aspectFit" /></view>
-          <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">{{help.contactTitle}}</text>
-            <text class="lp-help-card-sub">真人答疑</text>
-          </view>
-          <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-        </view>
-        <view class="lp-help-card" bind:tap="onHelpVideos">
-          <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/video.svg" mode="aspectFit" /></view>
+        <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideos" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
           <view class="lp-help-card-tx">
             <text class="lp-help-card-title">{{help.videosTitle}}</text>
-            <text class="lp-help-card-sub">小段讲解都在这里</text>
+            <text class="t-sys lp-help-card-sub">小段讲解都在这里</text>
           </view>
-          <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+          <px-i name="chev" tone="#62625c" />
         </view>
-        <view class="lp-help-card" bind:tap="onHelpFaq">
-          <view class="lp-help-card-pic"><image class="lp-help-card-ico" src="/static/icons/help-circle.svg" mode="aspectFit" /></view>
+        <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpFaq" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
           <view class="lp-help-card-tx">
             <text class="lp-help-card-title">{{help.faqTitle}}</text>
-            <text class="lp-help-card-sub">高频问题都在这里</text>
+            <text class="t-sys lp-help-card-sub">高频问题都在这里</text>
           </view>
-          <image class="lp-help-card-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+          <px-i name="chev" tone="#62625c" />
         </view>
+        <view class="k k-48 k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{help.contactTitle}}</view>
       </block>
 
       <!-- videos 子层：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
       <block wx:if="{{helpPanel === 'videos'}}">
-        <block wx:if="{{helpSrc}}">
-          <view class="lp-help-nav">
-            <view class="lp-help-back" bind:tap="onHelpVideoBack">
-              <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-            </view>
-            <text class="lp-help-nav-title">{{helpSegName || '正在播放'}}</text>
-          </view>
-          <view class="lp-help-play">
-            <video class="lp-help-play-video" src="{{helpSrc}}" controls autoplay bind:error="onHelpVideoError"></video>
-          </view>
-        </block>
-        <block wx:else>
-          <view class="lp-help-nav">
-            <view class="lp-help-back" bind:tap="onHelpBackMenu">
-              <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-            </view>
-            <text class="lp-help-nav-title">{{help.videosTitle}}</text>
-          </view>
-          <scroll-view class="lp-help-scroll" scroll-y>
-            <block wx:if="{{helpVideosState === 'ok'}}">
-              <view class="lp-help-group-title">全部课程通用</view>
-              <view class="lp-help-topic" wx:for="{{helpTopics}}" wx:key="id">
-                <view class="lp-help-topic-title">{{item.title}}</view>
-                <view class="lp-help-topic-sub" wx:if="{{item.sub}}">{{item.sub}}</view>
-                <view
-                  class="lp-help-seg {{seg.url ? '' : 'dim'}}"
-                  wx:for="{{item.segments}}"
-                  wx:for-item="seg"
-                  wx:key="id"
-                  data-url="{{seg.url}}"
-                  data-name="{{seg.name}}"
-                  bind:tap="onHelpPlaySegment"
-                >
-                  <view class="lp-help-seg-thumb"><image class="lp-help-seg-ico" src="/static/icons/play-circle.svg" mode="aspectFit" /></view>
-                  <view class="lp-help-seg-tx">
-                    <text class="lp-help-seg-name">{{seg.name}}</text>
-                    <text class="lp-help-seg-dur">{{seg.url ? seg.dur : '整理中'}}</text>
-                  </view>
+        <view wx:if="{{helpSrc}}" class="lp-help-play">
+          <video class="lp-help-play-video" src="{{helpSrc}}" controls autoplay bind:error="onHelpVideoError"></video>
+        </view>
+        <scroll-view wx:else class="lp-help-scroll" scroll-y>
+          <block wx:if="{{helpVideosState === 'ok'}}">
+            <view class="t-sys lp-help-group-title">全部课程通用</view>
+            <view class="lp-help-topic" wx:for="{{helpTopics}}" wx:key="id">
+              <view class="lp-help-topic-title">{{item.title}}</view>
+              <view class="lp-help-topic-sub t-sys" wx:if="{{item.sub}}">{{item.sub}}</view>
+              <view
+                class="k lp-help-seg {{seg.url ? 'k-light' : 'k-flat'}}"
+                hover-start-time="20" hover-class="{{seg.url ? 'k-light-down' : 'none'}}"
+                hover-stay-time="100"
+                wx:for="{{item.segments}}"
+                wx:for-item="seg"
+                wx:key="id"
+                data-url="{{seg.url}}"
+                data-name="{{seg.name}}"
+                bind:tap="onHelpPlaySegment"
+               data-k="{{seg.url ? 'light' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+                <view class="lp-help-card-tx">
+                  <text class="lp-help-card-title">{{seg.name}}</text>
+                  <text class="t-sys lp-help-seg-dur {{seg.url ? 'mono' : ''}}">{{seg.url ? seg.dur : '整理中'}}</text>
                 </view>
+                <px-i wx:if="{{seg.url}}" name="chev" tone="#62625c" />
               </view>
-            </block>
-            <view class="lp-help-empty" wx:elif="{{helpVideosState === 'loading'}}">
-              <text>正在加载…</text>
             </view>
-            <view class="lp-help-empty" wx:else>
-              <text>帮助视频整理中，先问客服吧</text>
-              <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
-            </view>
-          </scroll-view>
-        </block>
+          </block>
+          <view class="lp-help-empty" wx:elif="{{helpVideosState === 'loading'}}">
+            <px-anim name="loader" size="2" />
+            <text>正在加载…</text>
+          </view>
+          <view class="lp-help-empty" wx:else>
+            <text>帮助视频整理中，先问客服吧</text>
+            <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+          </view>
+        </scroll-view>
       </block>
 
       <!-- faq 子层：CMS 自由文本（help.faq）非空则优先；否则 KB 精选单源（getPublicFaq）。
            接口失败走 helpFaqState=fail，真没有才空态导流客服（根因#14·失败≠没有 FAQ）。 -->
       <block wx:if="{{helpPanel === 'faq'}}">
-        <view class="lp-help-nav">
-          <view class="lp-help-back" bind:tap="onHelpBackMenu">
-            <image class="lp-help-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
+        <scroll-view wx:if="{{help.faq.length > 0}}" class="lp-help-scroll" scroll-y>
+          <view class="lp-help-faq" wx:for="{{help.faq}}" wx:key="q">
+            <view class="lp-help-faq-q">{{item.q}}</view>
+            <view class="lp-help-faq-a t-sys">{{item.a}}</view>
           </view>
-          <text class="lp-help-nav-title">{{help.faqTitle}}</text>
-        </view>
-        <block wx:if="{{help.faq.length > 0}}">
-          <scroll-view class="lp-help-scroll" scroll-y>
-            <view class="lp-help-faq" wx:for="{{help.faq}}" wx:key="q">
-              <view class="lp-help-faq-q">{{item.q}}</view>
-              <view class="lp-help-faq-a">{{item.a}}</view>
+        </scroll-view>
+        <scroll-view wx:else class="lp-help-scroll" scroll-y>
+          <block wx:if="{{helpFaqState === 'ok'}}">
+            <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
+              <view class="lp-help-faq-q">{{item.title}}</view>
+              <view class="lp-help-faq-a t-sys">{{item.content}}</view>
             </view>
-          </scroll-view>
-        </block>
-        <block wx:else>
-          <scroll-view class="lp-help-scroll" scroll-y>
-            <block wx:if="{{helpFaqState === 'ok'}}">
-              <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
-                <view class="lp-help-faq-q">{{item.title}}</view>
-                <view class="lp-help-faq-a">{{item.content}}</view>
-              </view>
-            </block>
-            <view class="lp-help-empty" wx:elif="{{helpFaqState === 'loading'}}">
-              <text>加载中…</text>
-            </view>
-            <view class="lp-help-empty" wx:elif="{{helpFaqState === 'fail'}}">
-              <text>常见问题暂时查不到，请稍后再试</text>
-              <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
-            </view>
-            <view class="lp-help-empty" wx:else>
-              <text>常见问题还在整理中，先问客服吧</text>
-              <view class="lp-help-empty-btn" bind:tap="onHelpContact">联系客服</view>
-            </view>
-          </scroll-view>
-        </block>
+          </block>
+          <view class="lp-help-empty" wx:elif="{{helpFaqState === 'loading'}}">
+            <px-anim name="loader" size="2" />
+            <text>加载中…</text>
+          </view>
+          <view class="lp-help-empty" wx:elif="{{helpFaqState === 'fail'}}">
+            <text>常见问题暂时查不到，请稍后再试</text>
+            <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+          </view>
+          <view class="lp-help-empty" wx:else>
+            <text>常见问题还在整理中，先问客服吧</text>
+            <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+          </view>
+        </scroll-view>
       </block>
     </view>
   </view>
 
-  <!-- 首次成功退出加桌引导（仅展示一次·分端文案·矢量循环动画降级为静态示意区+文案） -->
+  <!-- 首次成功退出加桌引导（仅展示一次·分端文案）：浅色底部 sheet，次操作在上、主键在下 -->
   <view class="lp-dg-mask" wx:if="{{deskGuide}}" catch:touchmove="noop">
-    <view class="lp-dg-dlg">
-      <view class="lp-dg-title">放书签在桌面，下次点开就继续。</view>
-      <view class="lp-dg-guide">
-        <view class="lp-dg-guide-pic"><image class="lp-dg-guide-ico" src="/static/icons/info.svg" mode="aspectFit" /></view>
-        <text class="lp-dg-guide-text">{{deskGuideIOS ? '点右上角 ··· 菜单，选『添加到我的小程序』' : '点右上角 ··· 菜单，选『添加到桌面』'}}</text>
+    <view class="lp-dg-sheet">
+      <view class="lp-help-grab"></view>
+      <view class="lp-dg-head">
+        <text class="lp-dg-title">放书签在桌面，下次点开就继续。</text>
+        <text class="lp-dg-text t-sys">{{deskGuideIOS ? '点右上角 ··· 菜单，选『添加到我的小程序』' : '点右上角 ··· 菜单，选『添加到桌面』'}}</text>
       </view>
-      <view class="lp-dg-stay" bind:tap="onDeskGuideStay">继续学习</view>
-      <view class="lp-dg-quit" bind:tap="onDeskGuideExit">先退出，下次继续</view>
+      <view class="k k-48 k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeskGuideExit" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">先退出，下次继续</view>
+      <view class="k k-48 k-ink" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onDeskGuideStay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续学习</view>
     </view>
   </view>
 </view>
+<!-- 全屏像素特效层：这页只用它接暗场转场的遮罩（进场同色盖住、滑完淡出·见 px-fx.ts） -->
+<px-fx id="fx" />

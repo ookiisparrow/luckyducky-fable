@@ -48,6 +48,7 @@ export const RED_PATHS = [
   'rewrite/mp/pages/checkout/',
   'rewrite/mp/pages/order/',
   'rewrite/mp/pages/order-list/',
+  'rewrite/mp/pages/logistics/',
   'rewrite/mp/pages/paysuccess/',
   'rewrite/mp/pages/aftersales/',
 ]

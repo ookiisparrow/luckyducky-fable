@@ -1,193 +1,199 @@
-<!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
+<!-- 首页（v5「字重」稿 A1）。整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
      滚动/下拉刷新/锚点跳转全部改在 scroll-view 内发生：
        · 下拉刷新 ← 原 enablePullDownRefresh（页面级下拉在 fixed 下失效）→ refresher-enabled + bindrefresherrefresh
        · 锚点跳转 ← 原 wx.pageScrollTo({selector}) （scroll-view 内不生效）→ scroll-into-view（见 home.ts scrollTo）
        · 回顶按钮阈值 ← 原 onPageScroll → bindscroll
-     浮层（回顶按钮/toast/登录半屏/开屏）本就 fixed，留在外层当兄弟不随内容滚。 -->
-<scroll-view class="ld-home-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}"
+     顶栏（状态栏 + 44 logo 条）在 scroll-view 外固定不动；浮层（回顶/toast/登录半屏/开屏）fixed 当兄弟。 -->
+<view class="hm-bar" style="padding-top: {{statusBarHeight}}px">
+  <image class="hm-bar-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
+</view>
+<scroll-view class="hm-scroll" style="top: {{statusBarHeight + 44}}px" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}"
   refresher-enabled="{{true}}" refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresher"
-  refresher-background="#fcfaff" scroll-into-view="{{scrollInto}}" scroll-with-animation="{{scrollAnim}}"
+  refresher-default-style="none" refresher-threshold="{{64}}" bindrefresherpulling="onPulling"
+  refresher-background="#fafaf8" scroll-into-view="{{scrollInto}}" scroll-with-animation="{{scrollAnim}}"
   bindscroll="onScroll">
-<view class="ld-home">
+
+  <!-- 下拉刷新（设计稿物流页 lg.pull）：像素加载器随下拉逐格点亮，松手后转圈；文字 下拉刷新 → 松手刷新 → 正在刷新 -->
+  <view slot="refresher" class="hm-ptr">
+    <px-anim wx:if="{{refreshing}}" name="loader" size="2" />
+    <px-anim wx:else name="loader" size="3" p="{{pullP}}" />
+    <text class="t-sys hm-ptr-t">{{refreshing ? '正在刷新' : pullP >= 1 ? '松手刷新' : '下拉刷新'}}</text>
+  </view>
 
   <!-- 回顶锚点（scroll-into-view 目标·零高度不占版式） -->
   <view id="top"></view>
 
-  <!-- ① HERO：全屏图 + 底部白色渐隐 + 居中文案 + 搜索胶囊/购买 -->
-  <view class="ld-hero" style="padding-top: {{statusBarHeight}}px">
-    <image wx:if="{{content.hero.img}}" class="ld-hero-photo" src="{{content.hero.img}}" mode="aspectFill" />
-    <image class="ld-glogo" src="/static/logo-wordmark.svg" mode="heightFix" style="top: {{statusBarHeight + 14}}px" />
-    <view class="ld-hero-scrim"></view>
-    <view class="ld-hero-copy">
-      <view class="ld-display">{{content.hero.title}}</view>
-      <view class="ld-hero-tag">{{content.hero.tagline}}</view>
-      <view class="ld-hero-cta">
-        <view class="ld-search" hover-class="ld-search-h" bind:tap="toIntro">
-          <text class="ld-search-text">{{content.hero.search}}</text>
-        </view>
-        <view class="ld-btn-buy" hover-class="ld-btn-buy-h" bind:tap="toProducts">购买</view>
+  <!-- ① 首屏：1:1 主图 + 大标题 + 两键（高度＝可视区减底部 TabBar，一屏看完） -->
+  <view class="hm-fold" style="height: calc(100vh - {{statusBarHeight + 44}}px - 52px - max(24px, env(safe-area-inset-bottom)))">
+    <view class="hm-gap-a"></view>
+    <view class="hm-hero">
+      <!-- 裁切焦点照设计稿 object-position 50% 40%：小程序 image 不认 object-position（内部是背景图、样式够不着），
+           故竖图/方图用 widthFix + .focus-img（top 40% 再上移自身 40%＝同一公式），横图由 onImgLoad 记进 wide 退回 aspectFill 居中（横向本就 50%） -->
+      <image wx:if="{{content.hero.img}}" class="hm-hero-img {{wide[content.hero.img] ? '' : 'focus-img'}}" src="{{content.hero.img}}" mode="{{wide[content.hero.img] ? 'aspectFill' : 'widthFix'}}" data-src="{{content.hero.img}}" bindload="onImgLoad" />
+      <view class="hm-fade-top"></view>
+      <view class="hm-fade-bottom"></view>
+    </view>
+    <view class="hm-gap-b"></view>
+    <view class="hm-hero-copy">
+      <text class="hm-display">{{content.hero.title}}</text>
+      <text class="mono hm-tagline">{{content.hero.tagline}}</text>
+    </view>
+    <view class="hm-hero-keys">
+      <view class="k k-light hm-search" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="toIntro" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <text class="hm-search-text">{{content.hero.search}}</text>
+        <px-i name="down" tone="#62625c" />
       </view>
+      <view class="k k-ink hm-buy" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProductsTop" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">购买</view>
+    </view>
+    <view class="hm-gap-c"></view>
+  </view>
+
+  <!-- ② 品牌：logo + 一句话 + 三幕像素小鸭 -->
+  <view class="hm-brand" id="intro">
+    <image class="hm-brand-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
+    <text class="t-sys hm-lead">{{content.brand.lead}}</text>
+  </view>
+  <view class="hm-scenes">
+    <view class="hm-scene" wx:for="{{scenes}}" wx:key="kind">
+      <px-scene kind="{{item.kind}}" />
+      <text class="hm-scene-cap">{{item.caption}}</text>
     </view>
   </view>
 
-  <!-- ② 品牌介绍 -->
-  <view class="ld-intro" id="intro">
-    <image class="ld-intro-logo" src="/static/logo-wordmark.svg" mode="widthFix" />
-    <view class="ld-intro-name">{{content.brand.name}}</view>
-    <view class="ld-intro-lead">{{content.brand.lead}}</view>
+  <!-- ③ 套装：标题 + 商品横滑 -->
+  <view class="hm-sec" id="friends">
+    <text class="hm-h2">{{content.feature.title}}</text>
+    <text class="t-sys hm-sub">{{content.feature.body}}</text>
   </view>
-
-  <!-- ③ 特写 + 商品横向轨 -->
-  <view class="ld-friends" id="friends">
-    <view class="ld-feature-display">
-      <image wx:if="{{content.feature.img}}" class="ld-feature-img" src="{{content.feature.img}}" mode="aspectFill" lazy-load />
-    </view>
-    <view class="ld-feature-copy">
-      <view class="ld-feature-title">{{content.feature.title}}</view>
-      <view class="ld-feature-body">{{content.feature.body}}</view>
-    </view>
-
-    <scroll-view wx:if="{{products.length}}" class="ld-prod-rail" scroll-x enhanced show-scrollbar="{{false}}">
-      <view class="ld-prod-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
-        <view class="ld-prod-media">
-          <image wx:if="{{item.cover}}" class="ld-prod-media-img" src="{{item.cover}}" mode="aspectFill" />
+  <scroll-view wx:if="{{products.length}}" class="hm-rail" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="hm-rail-row">
+      <view class="hm-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct">
+        <view class="hm-card-media">
+          <image wx:if="{{item.cover}}" class="hm-card-img {{wide[item.cover] ? '' : 'focus-img'}}" src="{{item.cover}}" mode="{{wide[item.cover] ? 'aspectFill' : 'widthFix'}}" data-src="{{item.cover}}" bindload="onImgLoad" />
         </view>
-        <view class="ld-prod-body">
-          <view class="ld-prod-name">{{item.name}}</view>
-          <view class="ld-prod-tag {{item.tag ? '' : 'ld-prod-tag-empty'}}">{{item.tag}}</view>
-          <view class="ld-prod-foot">
-            <view class="ld-price-group">
-              <text class="ld-price-was" wx:if="{{item.wasLabel}}">{{item.wasLabel}}</text>
-              <text class="ld-price">{{item.priceLabel}}</text>
-            </view>
-            <view class="ld-add" hover-class="ld-add-h" catch:tap="onAddProduct" data-id="{{item.id}}">
-              <image class="ld-add-ico" src="/static/icons/plus.svg" mode="aspectFit" />
+        <view class="hm-card-info">
+          <text class="hm-card-name">{{item.name}}</text>
+          <view class="hm-card-foot">
+            <text class="mono hm-price">{{item.priceLabel}}</text>
+            <view class="hm-add-hit" catch:tap="onAddProduct" data-id="{{item.id}}">
+              <view class="k k-sm k-light hm-add" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
             </view>
           </view>
         </view>
       </view>
-    </scroll-view>
-
-    <view wx:elif="{{loading}}" class="ld-prod-rail">
-      <view class="ld-prod-card" wx:for="{{[1, 2]}}" wx:key="*this">
-        <view class="ld-prod-media ld-skeleton"></view>
-        <view class="ld-prod-body">
-          <view class="ld-skeleton-text"></view>
-          <view class="ld-skeleton-text short"></view>
-        </view>
-      </view>
     </view>
-
-    <view wx:else class="ld-prod-empty">{{loadFailed ? '货架暂时没连上云端，下拉重试' : '上新在路上，先逛逛别处吧'}}</view>
-  </view>
-
-  <!-- ④ 信任条 -->
-  <view class="ld-trust">
-    <view class="ld-trust-item" wx:for="{{content.trust}}" wx:key="label">
-      <image wx:if="{{item.icon}}" class="ld-trust-ico" src="/static/icons/{{item.icon}}.svg" mode="aspectFit" />
-      <text class="ld-trust-label">{{item.label}}</text>
-    </view>
-  </view>
-
-  <!-- ⑤ 拆门槛（折叠组·首条默认展开） -->
-  <view class="ld-reassure">
-    <view class="ld-reassure-head">
-      <view class="ld-h2 ld-h2-left">{{content.reassure.heading}}</view>
-      <view class="ld-reassure-lead">{{content.reassure.lead}}</view>
-    </view>
-    <view class="ld-collapse">
-      <view class="ld-panel {{openReassure === index ? 'open' : ''}}" wx:for="{{content.reassure.items}}" wx:key="title"
-        data-index="{{index}}" bind:tap="toggleReassure">
-        <view class="ld-panel-head">
-          <image wx:if="{{item.icon}}" class="ld-panel-ico" src="/static/icons/{{item.icon}}.svg" mode="aspectFit" />
-          <text class="ld-panel-title">{{item.title}}</text>
-          <text class="ld-panel-action">{{openReassure === index ? '收起' : '展开'}}</text>
-          <image class="ld-chev" src="/static/icons/chevron-down.svg" mode="aspectFit" />
-        </view>
-        <view class="ld-panel-body" wx:if="{{openReassure === index}}">
-          <view class="ld-panel-text">{{item.body}}</view>
-          <view wx:if="{{item.img}}" class="ld-panel-media">
-            <image class="ld-panel-media-img" src="{{item.img}}" mode="aspectFill" lazy-load />
-          </view>
-        </view>
+  </scroll-view>
+  <view wx:elif="{{loading}}" class="hm-rail hm-rail-skel">
+    <view class="t-sys hm-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="hm-rail-row">
+      <view class="hm-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+        <view class="hm-card-media skel"></view>
+        <view class="hm-skel-line skel"></view>
+        <view class="hm-skel-line short skel"></view>
       </view>
     </view>
   </view>
+  <view wx:else class="t-sys hm-empty">{{loadFailed ? '网络不太好，下拉重试' : '上新在路上，先逛逛别处吧'}}</view>
 
-  <!-- ⑥ 真实买家秀 -->
-  <view class="ld-reviews">
-    <view class="ld-reviews-head"><view class="ld-h2">{{content.reviews.heading}}</view></view>
-    <scroll-view class="ld-review-rail" scroll-x enhanced show-scrollbar="{{false}}">
-      <view class="ld-review-card" wx:for="{{content.reviews.items}}" wx:key="user">
-        <view class="ld-review-media">
-          <image wx:if="{{item.img}}" class="ld-review-media-img" src="{{item.img}}" mode="aspectFill" />
+  <!-- ④ 信任条：三格像素动画 -->
+  <view class="hm-trust">
+    <view class="hm-trust-item" wx:for="{{content.trust}}" wx:key="label">
+      <view class="hm-trust-ico"><px-anim name="{{item.anim}}" size="4" delay="{{index * 600}}" /></view>
+      <text class="hm-trust-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <!-- ⑤ 拆门槛：编号平铺（配图 + 编号标题 + 正文） -->
+  <view class="hm-sec hm-sec-tight">
+    <text class="hm-h2">{{content.reassure.heading}}</text>
+    <text class="t-sys hm-sub">{{content.reassure.lead}}</text>
+  </view>
+  <view class="hm-reassure">
+    <view class="hm-rs" wx:for="{{content.reassure.items}}" wx:key="title">
+      <view wx:if="{{item.img}}" class="hm-rs-media">
+        <image class="hm-rs-img" src="{{item.img}}" mode="aspectFill" lazy-load />
+      </view>
+      <view class="hm-rs-head">
+        <text class="mono hm-no">{{index < 9 ? '0' : ''}}{{index + 1}}</text>
+        <text class="hm-rs-title">{{item.title}}</text>
+      </view>
+      <text class="t-sys hm-body">{{item.body}}</text>
+    </view>
+  </view>
+
+  <!-- ⑥ 真实买家秀：没有后台配置的真实评论（或拉取失败）整块连标题都不显示（拍板 B·不放写死示例） -->
+  <block wx:if="{{content.reviews.items.length}}">
+  <view class="hm-sec"><text class="hm-h2">{{content.reviews.heading}}</text></view>
+  <scroll-view class="hm-rail hm-rail-reviews" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="hm-rail-row">
+      <view class="hm-rv" wx:for="{{content.reviews.items}}" wx:key="user">
+        <view class="hm-rv-media">
+          <image wx:if="{{item.img}}" class="hm-card-img" src="{{item.img}}" mode="aspectFill" />
         </view>
-        <view class="ld-review-body">
-          <text class="ld-stars">★★★★★</text>
-          <view class="ld-review-quote">{{item.quote}}</view>
-          <view class="ld-review-meta">
-            <view class="ld-review-dot"></view>
-            <text class="ld-review-user">{{item.user}}</text>
-            <view class="ld-verified">
-              <image class="ld-verified-ico" src="/static/icons/badge-check.svg" mode="aspectFit" />
+        <view class="hm-rv-body">
+          <view class="hm-stars"><px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:key="*this" wx:for-item="s" name="star5" /></view>
+          <text class="t-sys hm-rv-quote">{{item.quote}}</text>
+          <view class="hm-rv-meta">
+            <text class="t-sys hm-rv-user">{{item.user}}</text>
+            <view class="t-sys hm-verified">
+              <px-i name="led" tone="#3f9a5e" />
               <text>已验证买家</text>
             </view>
           </view>
         </view>
       </view>
-    </scroll-view>
+    </view>
+  </scroll-view>
+  </block>
+
+  <!-- ⑦ 大家都在问：编号行，点开/收起 -->
+  <view class="hm-sec"><text class="hm-h2">大家都在问</text></view>
+  <view class="hm-faq">
+    <view class="hm-faq-item" wx:for="{{content.faq}}" wx:key="title">
+      <view class="hm-faq-row" hover-start-time="20" hover-class="k-row-down" data-index="{{index}}" bind:tap="toggleFaq">
+        <text class="mono hm-no {{openFaq === index ? 'hm-no-on' : ''}}">{{index < 9 ? '0' : ''}}{{index + 1}}</text>
+        <text class="hm-faq-title">{{item.title}}</text>
+        <text class="t-sys hm-faq-act">{{openFaq === index ? '收起' : '展开'}}</text>
+      </view>
+      <text wx:if="{{openFaq === index}}" class="t-sys hm-faq-body enter-rise">{{item.body}}</text>
+    </view>
   </view>
 
-  <!-- ⑦ FAQ（折叠组·首条默认展开） -->
-  <view class="ld-faq">
-    <view class="ld-h1 ld-center">大家都在问</view>
-    <view class="ld-collapse ld-collapse-faq">
-      <view class="ld-panel {{openFaq === index ? 'open' : ''}}" wx:for="{{content.faq}}" wx:key="title"
-        data-index="{{index}}" bind:tap="toggleFaq">
-        <view class="ld-panel-head">
-          <text class="ld-panel-title">{{item.title}}</text>
-          <text class="ld-panel-action">{{openFaq === index ? '收起' : '展开'}}</text>
-          <image class="ld-chev" src="/static/icons/chevron-down.svg" mode="aspectFit" />
-        </view>
-        <view class="ld-panel-body" wx:if="{{openFaq === index}}">
-          <view class="ld-panel-text">{{item.body}}</view>
-        </view>
+  <!-- ⑧ 收尾：大图 + 大字 + 墨黑键（每 3.6s 一道像素紫光扫过·v5 定稿 sheenEl） -->
+  <view class="hm-closing">
+    <view class="hm-closing-media">
+      <image wx:if="{{content.closing.img}}" class="hm-hero-img {{wide[content.closing.img] ? '' : 'focus-img'}}" src="{{content.closing.img}}" mode="{{wide[content.closing.img] ? 'aspectFill' : 'widthFix'}}" lazy-load data-src="{{content.closing.img}}" bindload="onImgLoad" />
+      <view class="hm-fade-top"></view>
+      <view class="hm-fade-bottom hm-fade-short"></view>
+    </view>
+    <view class="hm-closing-copy">
+      <text class="hm-closing-title">{{content.closing.title}}</text>
+      <view class="k k-ink k-48 hm-closing-btn" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="toProducts" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <view class="hm-sheen"><view class="hm-sheen-a"></view><view class="hm-sheen-b"></view><view class="hm-sheen-c"></view></view>
+        <text class="hm-closing-cta">{{content.closing.cta}}</text>
       </view>
     </view>
   </view>
 
-  <!-- ⑧ 收尾 CTA -->
-  <view class="ld-closing">
-    <image wx:if="{{content.closing.img}}" class="ld-closing-img" src="{{content.closing.img}}" mode="aspectFill" lazy-load />
-    <view class="ld-closing-copy">
-      <view class="ld-display ld-closing-title">{{content.closing.title}}</view>
-      <view class="ld-btn-dark ld-closing-btn" hover-class="ld-btn-dark-h" bind:tap="toProducts">{{content.closing.cta}}</view>
-    </view>
-  </view>
-
   <!-- ⑨ 页脚 -->
-  <view class="ld-footer">
-    <image class="ld-footer-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
-    <view class="ld-footer-links">
+  <view class="hm-footer">
+    <image class="hm-footer-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
+    <view class="hm-footer-links">
       <block wx:for="{{content.footer.links}}" wx:key="*this">
-        <text wx:if="{{index > 0}}" class="ld-footer-dot">·</text>
-        <text class="ld-footer-link" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
+        <text wx:if="{{index > 0}}" class="t-sys hm-footer-dot">·</text>
+        <text class="t-sys hm-footer-link" data-label="{{item}}" bind:tap="onTapFooterLink">{{item}}</text>
       </block>
     </view>
-    <view class="ld-footer-copy">{{content.footer.copy}}</view>
+    <text class="mono hm-footer-copy">{{content.footer.copy}}</text>
   </view>
-
-</view>
+  <view class="hm-tab-space"></view>
 </scroll-view>
 
 <!-- 回到顶部（滚过一屏半浮现） -->
-<view wx:if="{{showTop}}" class="ld-backtop" bind:tap="backTop">
-  <image class="ld-backtop-ico" src="/static/icons/chevron-up.svg" mode="aspectFit" />
-  <text class="ld-backtop-label">顶部</text>
+<view wx:if="{{showTop}}" class="k k-light hm-backtop enter-rise"hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+  <px-i name="up" />
+  <text>顶部</text>
 </view>
-
-<!-- 轻提示 -->
-<view class="ld-toast {{toast.show ? 'show' : ''}}"><text>{{toast.text}}</text></view>
 
 <!-- 登录授权半屏（R1·软门槛）：进 App 首个落地页即弹（未同意时·本会话一次）·可「暂不登录」关掉先逛·经 lib/loginGate 单例驱动 -->
 <login-sheet />
@@ -197,3 +203,6 @@
 
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />
+
+<!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

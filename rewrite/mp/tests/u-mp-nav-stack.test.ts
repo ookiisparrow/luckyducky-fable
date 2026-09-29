@@ -1,14 +1,11 @@
-// 互跳页防叠栈（售后↔订单详情、详情→推荐详情）：页面栈逼近微信 10 层上限（≥8）改 redirectTo 替换本页；
-// 否则 navigateTo，失败降级 redirectTo（不静默卡死）。三个入口钉同一行为。Page 桩同 me-cont-failed.test.ts。
+// 互跳页防叠栈（售后↔订单详情）：页面栈逼近微信 10 层上限（≥8）改 redirectTo 替换本页；
+// 否则 navigateTo，失败降级 redirectTo（不静默卡死）。两个入口钉同一行为。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
 vi.mock('../utils/customerService', () => ({ openCustomerService: vi.fn() }))
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
-vi.mock('../lib/cart', () => ({ add: vi.fn() }))
-vi.mock('../lib/checkout', () => ({ prepareBuyNow: vi.fn() }))
-vi.mock('../lib/catalog', () => ({ getAllProducts: vi.fn(), getProductDetail: vi.fn() }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
@@ -32,13 +29,13 @@ beforeEach(() => {
   callAppMock.mockReset()
   depth = 1
   ;(globalThis as any).getCurrentPages = () => Array.from({ length: depth })
-  wxMock = { redirectTo: vi.fn(), navigateTo: vi.fn(), showToast: vi.fn(), showActionSheet: vi.fn(), showModal: vi.fn() }
+  wxMock = { redirectTo: vi.fn(), navigateTo: vi.fn(), showToast: vi.fn(), showActionSheet: vi.fn(), showModal: vi.fn(), showLoading: vi.fn(), hideLoading: vi.fn() }
   ;(globalThis as any).wx = wxMock
 })
 
 const tap = (id: string) => ({ currentTarget: { dataset: { id } } })
 
-// 三个入口：各自触发一次跳转，返回期望的目标 url
+// 两个入口：各自触发一次跳转，返回期望的目标 url
 const ENTRIES: Array<[string, () => Promise<string>]> = [
   [
     '我的售后 → 订单详情',
@@ -46,14 +43,6 @@ const ENTRIES: Array<[string, () => Promise<string>]> = [
       const page = await mount('../pages/aftersales/aftersales')
       page.onTapOrder(tap('o1'))
       return '/pages/order/order?id=o1'
-    },
-  ],
-  [
-    '详情 → 推荐商品详情',
-    async () => {
-      const page = await mount('../pages/detail/detail')
-      page.onTapRec(tap('p2'))
-      return '/pages/detail/detail?id=p2'
     },
   ],
   [
@@ -65,8 +54,7 @@ const ENTRIES: Array<[string, () => Promise<string>]> = [
       const page = await mount('../pages/order/order')
       page.data.vm = { id: 'o1', status: 'done', items: [{ lineId: 'L1', name: '小鸭', spec: '', qty: 1, enteredQty: 0, refundable: true }] }
       await page.onAfterSale()
-      wxMock.showActionSheet.mock.calls[0][0].success({ tapIndex: 0 })
-      await wxMock.showModal.mock.calls[0][0].success({ confirm: true, content: '' })
+      await page.onAsSubmit()
       return '/pages/aftersales/aftersales'
     },
   ],

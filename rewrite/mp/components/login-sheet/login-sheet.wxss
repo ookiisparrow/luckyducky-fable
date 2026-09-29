@@ -1,114 +1,126 @@
-.ls-mask {
+/* v5 半屏（稿 D2）：遮罩/面板动效走 app.wxss .sh-mask/.sh-panel；这里只管摆位与版式。privacy-sheet 同一套。 */
+.ls-root {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 300;
-  background: rgba(22, 15, 32, 0.46);
-  display: flex;
-  align-items: flex-end;
+}
+.ls-mask {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
 }
 .ls-sheet {
-  position: relative;
-  width: 100%;
-  background: var(--ld-bg);
-  border-radius: 44rpx 44rpx 0 0;
-  padding: 0 44rpx calc(56rpx + env(safe-area-inset-bottom));
-  box-sizing: border-box;
-}
-.ls-grab {
-  width: 72rpx;
-  height: 8rpx;
-  border-radius: 4rpx;
-  background: var(--ld-purple-line);
-  opacity: 0.6;
-  margin: 20rpx auto 0;
-}
-.ls-close {
   position: absolute;
-  top: 24rpx;
-  right: 28rpx;
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ls-close-x {
-  font-size: 34rpx;
-  line-height: 1;
-  color: var(--ld-purple-meta);
-}
-.ls-head {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  border-radius: 12px 12px 0 0;
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin: 56rpx 0 44rpx;
+  gap: 16px;
+}
+/* 探头小鸭：13×7 格 ×4 = 52×28，底边压在面板顶边上 */
+.ls-duck {
+  position: absolute;
+  right: 28px;
+  top: -28px;
+  line-height: 0;
+  pointer-events: none;
+}
+.ls-grab {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(17, 17, 17, 0.2);
 }
 .ls-logo {
-  height: 80rpx;
+  align-self: flex-start;
+  height: 22px;
 }
-.ls-sub {
-  margin-top: 24rpx;
-  font-size: 26rpx;
-  color: var(--ld-content-2);
-}
-.ls-foot {
-  padding-top: 0;
+.ls-title {
+  font-size: 20px;
+  font-weight: 700;
 }
 .ls-agree {
   display: flex;
   align-items: center;
-  margin-bottom: 28rpx;
+  gap: 12px;
+}
+/* 勾选框 22×22 浅色键帽，热区扩到 44 */
+.ls-hit {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  margin: -11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .ls-check {
-  flex: 0 0 auto;
-  width: 36rpx;
-  height: 36rpx;
-  margin-right: 16rpx;
-  border-radius: 50%;
-  border: 2rpx solid var(--ld-purple-line);
   box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px var(--v5-hair), 0 1px 2px rgba(17, 17, 17, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
+  line-height: 0;
 }
-.ls-check.on {
-  background: var(--ld-purple);
-  border-color: var(--ld-purple);
+.ls-agree-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 300;
 }
-.ls-check-ico {
-  width: 22rpx;
-  height: 22rpx;
-}
-.ls-agree-text {
-  flex: 1 1 auto;
-  font-size: 24rpx;
-  line-height: 1.5;
-  color: var(--ld-purple-meta);
+.ls-agree-s,
+.ls-link {
+  padding: 8px 0;
 }
 .ls-link {
-  color: var(--ld-purple);
+  font-weight: 700;
 }
-.ls-btn {
-  height: 96rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple-ink);
-  color: var(--ld-bg);
-  font-size: 32rpx;
-  font-weight: 600;
+.ls-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: 8px;
 }
-.ls-btn.disabled {
-  opacity: 0.45;
+.ls-later {
+  flex: 1;
+  min-width: 0;
 }
-.ls-skip {
-  display: block;
-  text-align: center;
-  margin-top: 28rpx;
-  font-size: 26rpx;
-  color: var(--ld-purple-meta);
+.ls-go {
+  flex: 1.6;
+  min-width: 0;
+}
+/* 没勾协议点登录：协议行左右抖（设计稿 shake 360ms） */
+.ls-shake {
+  animation: ls-shake 360ms;
+}
+@keyframes ls-shake {
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
 }

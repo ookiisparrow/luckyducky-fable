@@ -1,0 +1,15 @@
+<page-container show="{{armed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onBeforeLeave" />
+<view wx:if="{{open}}" class="v5-scope lv-root" catch:touchmove="noop">
+  <view class="sh-mask lv-mask {{out ? 'out' : ''}}" bind:tap="onStay"></view>
+  <view class="sh-panel lv-panel {{out ? 'out' : ''}}">
+    <view class="lv-grip"></view>
+    <view class="lv-t">
+      <text class="lv-h">{{title}}</text>
+      <text class="t-sys lv-sub">{{sub}}</text>
+    </view>
+    <view class="lv-ks">
+      <view class="k k-light k-48 lv-go" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGo" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">放弃</view>
+      <view class="k k-ink k-48 lv-stay" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onStay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续编辑</view>
+    </view>
+  </view>
+</view>

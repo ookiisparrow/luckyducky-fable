@@ -2,8 +2,9 @@
 // 钱链纪律：price 云端存「元」（订单链的分整数在云函数内·展示层不做算术、原样标价）。
 // 内容纪律：整档/逐字段/逐块缺失都回退「设计默认文案」，
 //   空块（空字段/空数组/整组脏行）仍用默认——防线上误清空、防半空板块。默认文案 = 重设计首页原稿。
+//   例外：买家秀没有默认评论（拍板 B·不造假评论），缺了整块不显示。
 
-import { BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
+import { BRAND_NAME, BRAND_SLOGAN_EN, LEARNER_KIT } from './brand'
 
 export interface ProductVM {
   id: string
@@ -32,6 +33,7 @@ interface FeatureVM {
 interface TrustVM {
   icon: string
   label: string
+  anim: string // 像素动效图标名（components/px-anim）
 }
 interface ReassureItemVM {
   icon: string
@@ -84,10 +86,20 @@ const HERO_DEFAULT: HeroVM = { title: '创造幸运', tagline: BRAND_SLOGAN_EN, 
 const BRAND_DEFAULT: BrandVM = { name: '小棉鸭', lead: '我们希望每个人都能亲手创造自己的随身幸运物。' }
 const FEATURE_DEFAULT: FeatureVM = { title: '入门钩织的妙趣方案', body: '为了让钩织入门更轻松、更有趣，我们精心设计了这些小家伙。', img: '' }
 const TRUST_DEFAULT: TrustVM[] = [
-  { icon: 'truck', label: '包邮到家' },
-  { icon: 'rotate-ccw', label: '售后无忧' },
-  { icon: 'thumbs-up', label: '多数买家推荐' },
+  { icon: 'truck', label: '包邮到家', anim: 'truck' },
+  { icon: 'rotate-ccw', label: '售后无忧', anim: 'shield' },
+  { icon: 'thumbs-up', label: '多数买家推荐', anim: 'heart' },
 ]
+// 后台信任条仍按旧线性图标名配置（admin 不动）→ v5 像素动画：认得的按义对应，认不得按位置轮流（卡车/盾牌/爱心）。
+const TRUST_ANIM: Record<string, string> = {
+  truck: 'truck',
+  package: 'truck',
+  'rotate-ccw': 'shield',
+  'shield-check': 'shield',
+  'thumbs-up': 'heart',
+  'heart-handshake': 'heart',
+}
+const TRUST_ROTATION = ['truck', 'shield', 'heart']
 const REASSURE_START_BODY =
   '每份' + LEARNER_KIT + '包含初次尝试所需的一切，另含「开始练习」以及「分步交互」视频教程，助你轻松无忧创作。'
 const REASSURE_DEFAULT: ReassureVM = {
@@ -99,14 +111,8 @@ const REASSURE_DEFAULT: ReassureVM = {
     { icon: 'sparkles', title: '幸运随行', body: '每只小棉鸭都附赠一张幸运卡，做完带在身边，把这份手作的幸运一直带着走。', img: '' },
   ],
 }
-const REVIEWS_DEFAULT: ReviewsVM = {
-  heading: '真实买家秀',
-  items: [
-    { quote: '第一次钩织就成功了，教程很细，小鸭子超级可爱，朋友都问在哪买的～', user: '小满', img: '' },
-    { quote: '材料齐全，包邮很快，新手也能做出来，做完很有成就感。', user: '阿橙', img: '' },
-    { quote: '送给闺蜜的生日礼物，她超喜欢，包装也很用心。', user: '柚子', img: '' },
-  ],
-}
+// 买家秀不给默认条目（拍板 B）：「已验证买家」只挂真实评论——没配/拉取失败时 items 为空，首页整块不显示
+const REVIEWS_DEFAULT: ReviewsVM = { heading: '真实买家秀', items: [] }
 const FAQ_DEFAULT: FaqVM[] = [
   { title: '完全没有基础可以做吗？', body: '可以。套装专为零基础设计，附带分步视频，跟着做就能完成第一只小棉鸭。' },
   { title: '材料包里都有什么？', body: '棉线、钩针、填充棉、安全眼、说明卡与幸运卡一应俱全，开盒即可开始。' },
@@ -114,7 +120,7 @@ const FAQ_DEFAULT: FaqVM[] = [
   { title: '大概需要多久完成？', body: '新手平均 3–4 小时即可完成一只，可分多次进行，随时暂停继续。' },
 ]
 const CLOSING_DEFAULT: ClosingVM = { title: '创造幸运', cta: BRAND_SLOGAN_EN, img: '' }
-const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', 'Lucky Ducky小棉鸭'], copy: 'Copyright © 2026 Lucky Ducky · All Rights Reserved.' }
+const FOOTER_DEFAULT: FooterVM = { links: ['关于我们', BRAND_NAME], copy: 'Copyright © 2026 Lucky Ducky · All Rights Reserved.' }
 
 // ── 小工具 ──
 type Dict = Record<string, unknown>
@@ -139,15 +145,13 @@ function arr<T>(raw: unknown, mapItem: (x: unknown) => T | null, def: T[]): T[] 
 
 const priceText = (v: unknown): string => {
   const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? '¥' + String(n) : ''
+  return Number.isFinite(n) && n > 0 ? '¥' + n.toFixed(2) : '' // 老板拍板 1：金额一律两位小数
 }
 
-/** 首页「购买」：货架上第一件名字带「小棉鸭」的套装；没有就不瞎跳旧 id。 */
+/** 首页「购买」/收尾键：货架上第一件名字带「小棉鸭」的套装。
+ *  线上还没上小棉鸭时先拿第一件商品占位（老板拍板 18）——占位＝将来小棉鸭的位置，上架后自动换成它；货架空才给 null。 */
 export function pickDuckKit(products: ProductVM[]): ProductVM | null {
-  for (const p of products) {
-    if (p.id && p.name.includes('小棉鸭')) return p
-  }
-  return null
+  return products.find((p) => p.id && p.name.includes('小棉鸭')) || products[0] || null
 }
 
 /** 商品列表 → 网格视图模型：无名/无价的脏行不进首页（fail-closed 展示面）；cover 空串由模板落占位块。 */
@@ -187,7 +191,7 @@ const trustItem = (raw: unknown): TrustVM | null => {
   const x = obj(raw)
   let label = str(x.label, '')
   if (label.includes('七天无理由')) label = '售后无忧' // CMS 旧稿仍按现口径显示
-  return label ? { icon: str(x.icon, ''), label } : null // 无标签整条剔除
+  return label ? { icon: str(x.icon, ''), label, anim: '' } : null // 无标签整条剔除·anim 在整组定位后补
 }
 const reassureItem = (raw: unknown): ReassureItemVM | null => {
   const x = obj(raw)
@@ -213,7 +217,7 @@ const footerLink = (x: unknown): string | null => {
   if (typeof x !== 'string' && typeof x !== 'number') return null
   const s = String(x).trim()
   if (!s) return null
-  return s === 'Lucky 鸭' ? 'Lucky Ducky小棉鸭' : s
+  return s === 'Lucky 鸭' || s === 'Lucky Ducky小棉鸭' ? BRAND_NAME : s // CMS 旧稿（旧名/没空格）按店名单源显示
 }
 
 /** 首页全板块内容 → 视图模型：整档 / 逐块 / 逐字段缺失都回退设计默认；脏项 fail-closed 剔除。 */
@@ -236,7 +240,7 @@ export function mapHomeContent(home: unknown): HomeContentVM {
       body: str(feature.body, FEATURE_DEFAULT.body),
       img: str(feature.img, ''),
     },
-    trust: arr(h.trust, trustItem, TRUST_DEFAULT),
+    trust: arr(h.trust, trustItem, TRUST_DEFAULT).map((t, i) => ({ ...t, anim: TRUST_ANIM[t.icon] || TRUST_ROTATION[i % 3] })),
     reassure: {
       heading: str(reassure.heading, REASSURE_DEFAULT.heading),
       lead: str(reassure.lead, REASSURE_DEFAULT.lead),

@@ -1,22 +1,28 @@
-<view wx:if="{{visible}}" class="ls-mask" catch:touchmove="noop" bind:tap="onClose">
-  <view class="ls-sheet" catch:tap="noop">
+<!-- 登录半屏（v5「字重」稿 D2）：顶边探头小鸭 + 字标 + 标题 + 协议勾选 + 暂不登录 / 微信一键登录。点遮罩＝暂不登录。
+     遮罩/面板走全局 .sh-mask/.sh-panel（关时加 .out 下滑淡出）。 -->
+<view wx:if="{{visible}}" class="v5-scope ls-root" catch:touchmove="noop">
+  <view class="sh-mask ls-mask {{out ? 'out' : ''}}" bind:tap="onClose"></view>
+  <view class="sh-panel ls-sheet {{out ? 'out' : ''}}">
+    <view class="ls-duck"><px-duck scale="4" /></view>
     <view class="ls-grab"></view>
-    <view class="ls-close" catch:tap="onClose"><text class="ls-close-x">✕</text></view>
+    <image class="ls-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
+    <text class="ls-title">登录后同步订单与学习进度</text>
 
-    <view class="ls-head">
-      <image class="ls-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
-      <text class="ls-sub">登录后同步你的订单 · 学习进度</text>
+    <view class="ls-agree {{shake ? 'ls-shake' : ''}}">
+      <view class="ls-hit" catch:tap="onToggleAgree">
+        <view class="ls-check"><px-i wx:if="{{agreed}}" name="check" tone="#8a5ae0" /></view>
+      </view>
+      <view class="t-sys ls-agree-t">
+        <text class="ls-agree-s" catch:tap="onToggleAgree">已阅读并同意</text>
+        <text class="ls-link" catch:tap="onUserAgreement">《用户协议》</text>
+        <text class="ls-link" catch:tap="onPrivacy">《隐私政策》</text>
+      </view>
     </view>
 
-    <view class="ls-foot">
-      <view class="ls-agree" catch:tap="onToggleAgree">
-        <view class="ls-check {{agreed ? 'on' : ''}}">
-          <image wx:if="{{agreed}}" class="ls-check-ico" src="/static/icons/check.svg" mode="aspectFit" />
-        </view>
-        <text class="ls-agree-text">我已阅读并同意<text class="ls-link" catch:tap="onUserAgreement">《用户协议》</text>和<text class="ls-link" catch:tap="onPrivacy">《隐私政策》</text></text>
-      </view>
-      <view class="ls-btn {{agreed && !submitting ? '' : 'disabled'}}" catch:tap="onLogin">{{submitting ? '登录中…' : '微信一键登录'}}</view>
-      <text class="ls-skip" catch:tap="onClose">暂不登录</text>
+    <view class="ls-row">
+      <view class="k k-flat k-48 ls-later" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">暂不登录</view>
+      <!-- 未勾协议：灰色平面键（老板拍板），点了协议行抖一下并提示先勾选；勾上变墨黑主键 -->
+      <view class="k k-48 ls-go {{agreed ? 'k-ink' : 'k-flat'}}" hover-start-time="20" hover-class="{{agreed ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" catch:tap="onLogin" data-k="{{agreed ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">微信一键登录</view>
     </view>
   </view>
 </view>

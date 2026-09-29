@@ -1,12 +1,15 @@
 // 激活页行为：扫码带码自动兑课、手输码（去空白转大写·空码拦截）、五种结果屏（新激活取背景图与课程名 /
 // 欢迎回来 / 已被使用 / 废码 / 网络类可原码重试）、确认进课成败与跳转、在途防重、退页后迟到回包不动页面、
 // 自绘返回与「先逛逛」出口、CMS 文案到达。只桩云调用（callApp），api/lib 用真的。Page 桩同 p-mp-order-page.test.ts。
+import welcomeWxml from '../pages/welcome/welcome.wxml?raw'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ACTIVATION_ERR_COPY } from '../lib/mapLearning'
 
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
+const { openCsMock } = vi.hoisted(() => ({ openCsMock: vi.fn() }))
+vi.mock('../utils/customerService', () => ({ openCustomerService: openCsMock }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
@@ -67,17 +70,15 @@ describe('激活页：兑课', () => {
     expect(page.data).toMatchObject({ phase: 'result', kind: 'activated', courseId: 'c1', bg: 'https://img/c1-w.png', courseTitle: '小棉鸭入门', busy: false })
   })
 
-  it('大白话：没带码进来停在输入态；空码点激活提示「先输入激活码」；手输的码去空格转大写再兑', async () => {
+  it('大白话：没带码进来——停在「用微信扫卡」提示态，不兑课；页面没有手输入口（老板拍板不做输码/扫码）', async () => {
     const page = await mount()
     await flush()
-    expect(page.data.phase).toBe('input')
-    page.onActivate()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '先输入激活码', icon: 'none' })
-    page.onInput({ detail: { value: ' ldabc123 ' } })
-    expect(page.data.code).toBe('LDABC123')
-    page.onActivate()
-    await flush()
-    expect(calls('activateCourse')).toEqual([{ code: 'LDABC123' }])
+    expect(page.data.phase).toBe('nocode')
+    expect(calls('activateCourse')).toEqual([])
+    const live = welcomeWxml.replace(/<!--[\s\S]*?-->/g, '')
+    expect(live).not.toMatch(/<input/)
+    expect(live).not.toContain('重新输入')
+    expect(live).not.toContain('换一个码')
   })
 
   it('大白话：课程名拉不到、背景配置拉不到——恭喜屏照出，不显课程名、用空背景（不卡住）', async () => {
@@ -96,7 +97,7 @@ describe('激活页：兑课', () => {
     expect(calls('getCourses')).toEqual([])
   })
 
-  it('大白话：码被别人用了 / 码不对——各落各的屏；点「换一个码」清掉码回输入态', async () => {
+  it('大白话：码被别人用了 / 码不对——各落各的屏', async () => {
     handlers.activateCourse = () => ({ ok: false, error: 'CODE_TAKEN', courseId: 'c1' })
     const taken = await mount({ code: 'LD1' })
     await flush()
@@ -106,8 +107,6 @@ describe('激活页：兑课', () => {
     const page = await mount({ code: 'LD2' })
     await flush()
     expect(page.data).toMatchObject({ phase: 'result', kind: 'invalid' })
-    page.onRetry()
-    expect(page.data).toMatchObject({ phase: 'input', code: '', kind: 'invalid', bg: '' })
   })
 
   it('大白话：网络超时 / 太频繁——不说码不对，给对应文案；点「再试一次」用原码重发', async () => {
@@ -116,19 +115,18 @@ describe('激活页：兑课', () => {
     await flush()
     expect(page.data).toMatchObject({ kind: 'error', errCopy: ACTIVATION_ERR_COPY.throttled, code: 'LD1' })
     handlers.activateCourse = () => ({ ok: false, error: 'CALL_TIMEOUT' })
-    page.onActivate()
+    page.onRetryCode()
     await flush()
     expect(page.data.errCopy).toEqual(ACTIVATION_ERR_COPY.network)
     expect(calls('activateCourse')).toEqual([{ code: 'LD1' }, { code: 'LD1' }])
   })
 
-  it('大白话：兑课还没回来就连点激活——只发一次', async () => {
+  it('大白话：兑课还没回来就连点「再试一次」——只发一次', async () => {
     let release!: (v: unknown) => void
     handlers.activateCourse = () => new Promise((r) => (release = r))
-    const page = await mount()
-    page.onInput({ detail: { value: 'LD1' } })
-    page.onActivate()
-    page.onActivate()
+    const page = await mount({ code: 'LD1' })
+    page.onRetryCode()
+    page.onRetryCode()
     expect(calls('activateCourse')).toHaveLength(1)
     release({ ok: true, state: 'mine', courseId: 'c1' })
     await flush()
@@ -142,7 +140,7 @@ describe('激活页：兑课', () => {
     page.onUnload()
     release({ ok: true, state: 'activated', courseId: 'c1' })
     await flush()
-    expect(page.data.phase).toBe('input')
+    expect(page.data.phase).toBe('nocode')
   })
 
   it('大白话：兑课已回、课程名还在路上就退出了页面——迟到的课程名不再写进页面', async () => {
@@ -215,6 +213,12 @@ describe('激活页：出口与文案', () => {
     stack = [{}, {}]
     page.onBack()
     expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：废码 / 码被占屏点「联系客服」打开客服会话（v5 稿 C2 新增出口）', async () => {
+    const page = await mount()
+    page.onContact()
+    expect(openCsMock).toHaveBeenCalledTimes(1)
   })
 
   it('大白话：三件事屏点「先逛逛」回首页', async () => {

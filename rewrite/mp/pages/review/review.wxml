@@ -1,96 +1,74 @@
-<!-- 评价晒单·重设计对齐 Checkout.jsx ReviewSubmit（corev-* 版式·设计 402px→rpx ×1.87）。
-     业务逻辑承接 review.ts：星级(onStar)/标签多选(onTag)/文字(onText)/匿名(onAnon)/提交(onSubmit·busy 闸)。
-     买家秀晒图：选图传云存储 cloud://（picker 直接 <image src=cloud://> 显缩略），内容安全在云端提交时逐张校（fail-closed）。 -->
-<view class="corev">
-  <view class="corev-body">
+<!-- 写评价（v5 稿 B3 · 写评价 · 蛋壳）：半蛋壳地面 → 28 缩略图 +「名称 · 规格」→ 大问句 → 5 颗像素大星键（选中黄、按下态）→ 星级文案；
+     分隔线下「补充一下 · 选填」：标签（选中浅色键/未选平面键）、56 高文字框 + 同行「+」晒图键、晒图缩略、匿名勾选；底部发布（有星＝墨黑键，否则平面键）。
+     业务逻辑承接 review.ts：onStar(换星撒花)/onTag/onText/onAnon/onSubmit(busy 闸·没打分提示 + 星排抖)；晒图传云存储 cloud://，内容安全在云端提交时逐张校（fail-closed）。
+     有改动时 <leave-sheet> 拦返回/侧滑；拦截武装会冻结页面级滚动，故内容套 scroll-view。 -->
+<view class="rv-page">
+  <v5-nav title="订单 · 写评价" guard="{{true}}" bind:back="onBack" />
 
-    <!-- 商品行 + 综合评分（corev-top 卡） -->
-    <view class="corev-card corev-top">
-      <view class="corev-prod" wx:if="{{name}}">
-        <text class="corev-prod-name">{{name}}</text>
+  <scroll-view class="rv-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
+    <view class="rv-egg"><px-ground kind="egg" shell /></view>
+
+    <view class="rv-main">
+      <view class="rv-item" wx:if="{{item}}">
+        <view class="rv-thumb"><image wx:if="{{cover}}" class="rv-thumb-img" src="{{cover}}" mode="aspectFill" /></view>
+        <text class="t-sys rv-item-t">{{item}}</text>
       </view>
-      <view class="corev-rate">
-        <view class="corev-rate-stars">
-          <text
-            wx:for="{{starIdx}}"
-            wx:key="*this"
-            class="corev-star {{rating >= item ? 'on' : ''}}"
-            data-n="{{item}}"
-            bind:tap="onStar"
-          >★</text>
+      <text class="rv-q">{{q}}</text>
+
+      <view class="rv-stars {{shake ? 'rv-shake' : ''}}">
+        <view wx:for="{{starIdx}}" wx:key="*this" id="rv-star-{{item}}" class="k k-light rv-star {{rating >= item ? 'rv-star-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-n="{{item}}" bind:tap="onStar" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+          <px-i name="star9" size="4" tone="{{rating >= item ? '#F4BD3F' : '#C9C9C2'}}" halo="none" />
         </view>
-        <text class="corev-rate-label">{{ratingLabel}}</text>
       </view>
-    </view>
+      <text class="rv-label {{rating ? 'on' : ''}}">{{ratingLabel}}</text>
 
-    <!-- 大家都说·预设标签多选（corev-sec 卡） -->
-    <view class="corev-card corev-sec">
-      <view class="corev-sec-title">大家都说</view>
-      <view class="corev-tags">
-        <text
-          wx:for="{{tags}}"
-          wx:key="t"
-          class="corev-tag {{item.on ? 'on' : ''}}"
-          data-i="{{index}}"
-          bind:tap="onTag"
-        >{{item.t}}</text>
-      </view>
-    </view>
+      <view class="rv-more">
+        <text class="t-sys rv-cap">补充一下 · 选填</text>
+        <view class="rv-tags">
+          <view wx:for="{{tags}}" wx:key="t" class="k k-sm rv-tag {{item.on ? 'k-light rv-tag-on' : 'k-flat'}}"
+            hover-start-time="20" hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag" data-k="{{item.on ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.t}}</view>
+        </view>
 
-    <!-- 文字（corev-sec 卡） -->
-    <view class="corev-card corev-sec">
-      <textarea
-        class="corev-text"
-        value="{{text}}"
-        bind:input="onText"
-        maxlength="500"
-        placeholder="说说你的钩织体验，分享给想入坑的小伙伴吧～"
-        placeholder-class="corev-text-ph"
-      />
-      <view class="corev-count">{{text.length}}/500</view>
-    </view>
-
-    <!-- 买家秀晒图（corev-sec 卡·选图传云存储·内容安全云端逐张校） -->
-    <view class="corev-card corev-sec">
-      <view class="corev-sec-title">晒图（选填·最多 {{maxPhotos}} 张）</view>
-      <view class="corev-photos">
-        <view class="corev-photo" wx:for="{{photos}}" wx:key="*this">
-          <image class="corev-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
-          <view class="corev-photo-del" data-i="{{index}}" catch:tap="onDelPhoto">
-            <image class="corev-photo-del-ico" src="/static/icons/x.svg" mode="aspectFit" />
+        <!-- 文字框固定 56 高 + 同行 56×56「+」晒图键（设计稿）；聚焦 1.5px 紫描边 -->
+        <view class="rv-write">
+          <textarea class="well rv-text t-sys {{focus ? 'well-focus' : ''}}" value="{{text}}" bind:input="onText" bind:focus="onFocus" bind:blur="onBlur" maxlength="500"
+            placeholder="写几句感受…" placeholder-class="rv-ph" />
+          <view wx:if="{{photos.length < maxPhotos}}" class="k k-flat rv-add" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onAddPhotos" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+            <px-anim wx:if="{{uploading}}" name="loader" size="2" />
+            <px-i wx:else name="plus" />
           </view>
         </view>
-        <view class="corev-photo-add" wx:if="{{photos.length < maxPhotos}}" bind:tap="onAddPhotos">
-          <block wx:if="{{uploading}}">
-            <view class="corev-photo-spin"></view>
-          </block>
-          <block wx:else>
-            <image class="corev-photo-add-ico" src="/static/icons/camera-add.svg" mode="aspectFit" />
-            <text class="corev-photo-add-txt">添加</text>
-          </block>
+
+        <text class="t-sys rv-cap">晒图最多 {{maxPhotos}} 张</text>
+
+        <!-- 晒图：最多 maxPhotos 张，点缩略图预览、角标删除（角标外层 44×44 透明热区，看得见的仍是 20×20） -->
+        <view class="rv-photos" wx:if="{{photos.length}}">
+          <view class="rv-photo" wx:for="{{photos}}" wx:key="*this">
+            <image class="rv-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
+            <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><view class="rv-photo-x"><px-i name="times" tone="#ffffff" /></view></view>
+          </view>
+        </view>
+
+        <view class="rv-anon" bind:tap="onAnon">
+          <view class="k k-sm k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="#8A5AE0" /></view>
+          <text class="rv-anon-t">匿名评价</text>
         </view>
       </view>
     </view>
+  </scroll-view>
 
-    <!-- 匿名开关（corev-anon 卡） -->
-    <view class="corev-card corev-anon {{anon ? 'on' : ''}}" bind:tap="onAnon">
-      <text class="corev-anon-text">匿名评价</text>
-      <text class="corev-anon-sub">隐藏你的昵称与头像</text>
-      <view class="corev-switch">
-        <view class="corev-switch-dot"></view>
-      </view>
-    </view>
-
+  <view class="rv-dock">
+    <view wx:if="{{rating && !busy}}" class="k k-ink k-48 rv-pub" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSubmit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">发布评价</view>
+    <view wx:else class="k k-flat k-48 rv-pub" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onSubmit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">发布评价</view>
   </view>
-
-  <!-- 底部发布坞 -->
-  <view class="corev-dock-space"></view>
-  <view class="corev-dock">
-    <view class="corev-dockbar">
-      <view class="corev-publish {{busy ? 'dim' : ''}}" bind:tap="onSubmit">发布评价</view>
-    </view>
-  </view>
-
-  <!-- 隐私授权弹窗（晒图走 wx.chooseMedia 属隐私接口·守卫 rw-mp-privacy-gated） -->
-  <privacy-sheet />
 </view>
+
+<!-- 放弃编辑确认（设计稿 LEAVE.review）：有改动时拦返回/侧滑 -->
+<leave-sheet id="leave" dirty="{{dirty}}" title="放弃这条评价？" sub="星级、文字和照片都不会保存。" />
+
+<!-- 隐私授权弹窗（晒图走 wx.chooseMedia 属隐私接口·守卫 rw-mp-privacy-gated） -->
+<privacy-sheet />
+
+<!-- v5 全屏像素特效层（撒花/转场/提示·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

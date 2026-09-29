@@ -1,11 +1,11 @@
-// 首页（9 板块）：Hero/品牌/特写+商品轨/信任条/拆门槛折叠/买家秀/FAQ/收尾CTA/页脚。
+// 首页（v5「字重」稿 A1·9 板块）：首屏/品牌+像素小鸭三幕/套装商品轨/信任条/拆门槛/买家秀/FAQ/收尾CTA/页脚。
 // 数据经 api/catalog → app 网关；内容拿不到（网络/未部署）逐块回退设计默认文案（mapHomeContent），不空屏。
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
 import { getContent } from '../../api/catalog'
 import { getAllProducts, getProductById } from '../../lib/catalog'
-import { HOME_SHARE_TITLE } from '../../lib/brand'
+import { BRAND_NAME, HOME_SHARE_TITLE } from '../../lib/brand'
 import { mapHomeContent, mapProducts, pickDuckKit, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
 import { decideQuickAdd } from '../../lib/quickAdd'
 import * as cart from '../../lib/cart'
@@ -15,10 +15,14 @@ import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGu
 import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
+import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint, fxParty, fxToast, fxTransit } from '../../lib/pxFx'
 
-let toastTimer: ReturnType<typeof setTimeout> | null = null
+const NAV_LOCK_MS = 800 // 跳转类按钮防连点：跳转发起后 800ms 内不再响应（连点会叠两个详情页）
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
     showSplash: true, // 冷启动品牌开屏：初值 true=首帧即盖上，splash（min-hold+数据就绪 race+硬上限）自撤后经 onSplashDone 置 false。
@@ -28,13 +32,19 @@ Page({
     loadFailed: false,
     content: mapHomeContent(null) as HomeContentVM, // 首帧即默认文案·不空屏
     products: [] as ProductVM[],
-    openReassure: 0, // 折叠默认首条展开（设计 CollapseGroup useState(0)）
-    openFaq: 0,
+    openFaq: 0, // FAQ 默认首条展开
+    // 品牌段三幕像素小鸭（components/px-scene）：写死在包内——这是品牌动画配文，不是后台可管理内容
+    scenes: [
+      { kind: 'hats', caption: '三种颜色的帽子，随心换' },
+      { kind: 'charm', caption: '挂在包上，走到哪带到哪' },
+      { kind: 'share', caption: '帽子也能借给小熊、小蛙' },
+    ],
     showTop: false,
-    toast: { show: false, text: '' },
+    wide: {} as Record<string, boolean>, // 横图（宽>高）的 src：这几张退回 aspectFill 居中，其余按设计稿焦点 50% 40% 裁（见 onImgLoad）
     exitGuardArmed: false, // 误触退出提醒（决策§30）：驱动 <page-container show>·onShow 武装（初值 false·未上屏不拦）
     // 以下三项随「整页套 scroll-view」而来（page-container 武装态冻结页面级滚动·见 utils/exitGuard）：
     refreshing: false, // <scroll-view refresher-triggered>：接管原页面级下拉刷新
+    pullP: 0, // 下拉进度 0–1（按加载器 8 格量化·满 64px＝1＝松手刷新）
     scrollInto: '', // <scroll-view scroll-into-view>：接管原 wx.pageScrollTo({selector}) 锚点跳转
     scrollAnim: true, // 本次 scroll-into-view 是否带动画（意图回顶要瞬时·点击跳转要平滑）
   },
@@ -68,11 +78,9 @@ Page({
   onHide() {
     this.hidden = true
     releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
-    this.hideToast()
   },
   onUnload() {
     releaseExitGuard(this)
-    this.hideToast()
   },
   /** <page-container bindbeforeleave>：拦下第一次返回 →「再按一次退出」（2s 内再按放行·2s 后自动重新武装）。 */
   onExitGuardBeforeLeave() {
@@ -81,13 +89,20 @@ Page({
   /** <scroll-view bindrefresherrefresh>：接管原 onPullDownRefresh（页面级下拉在 page-container 的 fixed 下失效）。 */
   async onRefresher() {
     this.setData({ refreshing: true })
+    let ok = false
     try {
-      await this.reload()
+      ok = await this.reload()
     } finally {
       // 收起下拉圈（等价原 wx.stopPullDownRefresh）。必须 finally——reload 抛异常时若漏收，
       // 下拉圈永远转下去且再也刷不动，且只有真机看得见（根因#8）。
-      this.setData({ refreshing: false })
+      this.setData({ refreshing: false, pullP: 0 })
     }
+    if (ok) fxToast(this, '已是最新') // 设计稿：刷新完像素 ✓ 轻提示；失败不报喜（失败态/快照垫底照旧）
+  },
+  /** <scroll-view bindrefresherpulling>：下拉距离 → 加载器点亮格数（8 格量化，格数变了才 setData）。 */
+  onPulling(e: WechatMiniprogram.CustomEvent<{ dy: number }>) {
+    const p = Math.min(8, Math.floor(Math.max(0, e.detail.dy) / 8)) / 8
+    if (p !== this.data.pullP) this.setData({ pullP: p })
   },
   /** <scroll-view bindscroll>：接管原 onPageScroll（阈值逻辑不变·仍只在跨阈值时 setData）。 */
   onScroll(e: WechatMiniprogram.ScrollViewScroll) {
@@ -106,12 +121,13 @@ Page({
   },
   _seq: 0, // reload 代次（同 order-list 范式）：onLoad + 下拉刷新可能并发触发·丢弃被更晚 reload 取代的过期回包
   _hadSnapshot: false, // onLoad 是否已用首屏快照渲染过（SWR）：为 true 时网络失败不整页翻失败态（已有真内容垫着）
-  async reload() {
+  /** 拉最新首页内容与商品；返回商品是否拉到（下拉刷新据此决定报不报「已是最新」）。 */
+  async reload(): Promise<boolean> {
     const seq = ++this._seq
     // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）；
     // 兼任 SWR revalidate——onLoad 若已用快照渲染过（stale），这趟拉最新数据覆盖（fresh），陈旧即悄悄换新。
     const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
-    if (seq !== this._seq) return // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
+    if (seq !== this._seq) return false // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
     // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动：
     // 无条件 mapProducts(null)⇒[] 会把已有非空商品轨清成空，误导「上新在路上」空态。
@@ -128,22 +144,26 @@ Page({
     if (nextProducts !== null && JSON.stringify(nextProducts) !== JSON.stringify(this.data.products)) patch.products = nextProducts
     this.setData(patch)
     writeSnapshot(products, content.ok ? content.home : null) // 回写快照供下次冷启动首帧即真实内容（products=null 只写 home 半边）
-  },
-  toggleReassure(e: WechatMiniprogram.TouchEvent) {
-    const i = Number(e.currentTarget.dataset.index)
-    this.setData({ openReassure: this.data.openReassure === i ? -1 : i })
+    return products !== null
   },
   toggleFaq(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.index)
     this.setData({ openFaq: this.data.openFaq === i ? -1 : i })
   },
+  _navAt: 0, // 上次发起跳转的时刻（防连点短时锁·NAV_LOCK_MS）
+  /** 防连点短时锁：锁住中返回 false；放行时记下时刻。 */
+  _navOk(): boolean {
+    if (Date.now() - this._navAt < NAV_LOCK_MS) return false
+    this._navAt = Date.now()
+    return true
+  },
   onTapProduct(e: WechatMiniprogram.TouchEvent) {
     const id = String(e.currentTarget.dataset.id || '')
-    if (id) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
+    if (id && this._navOk()) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
-  _addSeq: 0, // onAddProduct 代次（同 reload._seq 范式）：本页是 tabBar 页（onUnload 正常导航
-  // 基本不触发，不适用 checkout 那套 this.unloaded 家族），连点不同商品「+」可并发在途——不设代际复核则更晚一次
-  // 点击的结果可能被更早一次的迟到回包盖掉。切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段。
+  _addSeq: 0, // onAddProduct 代次（同 reload._seq 范式）：连点「+」可并发在途（冷启动快照期共享同一次目录拉取）——
+  // 每次点击的加购都照做（每下独立生效），代次只管提示：过期回包不弹提示/不弹角标，只最后一次提示。
+  // 切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段。
   // 首页「+」快速加购（用户拍板：「+」统一加入购物车，多规格默认加
   // 首个规格·不跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
   // ——决策纯函数见 lib/quickAdd（取不到出 null）。
@@ -152,63 +172,71 @@ Page({
     if (!id) return
     const seq = ++this._addSeq
     const raw = await getProductById(id)
-    if (seq !== this._addSeq) return // 过期回包（被更晚一次 onAddProduct 取代）：丢弃·不提示
+    const stale = seq !== this._addSeq // 过期回包（被更晚一次点击取代）：加购照做，只跳过提示/动画
     const payload = decideQuickAdd(raw)
     if (payload) {
-      cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：即便已切走本 tab 也不该丢单
+      cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：连点每下都算、即便已切走本 tab 也不该丢单
       trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
       if (this.hidden) return // 已切走 home tab：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
-      if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('home') // 角标随动（同 cart.ts refresh() 范式）
-      // 多规格被默认加了首规格时把规格名亮给用户（自绘 ping 不受原生 toast 字数限制）——静默替选规格必须可见
-      this.ping(payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
+      if (typeof this.getTabBar === 'function') {
+        const bar = this.getTabBar() as unknown as LdTabBar
+        bar.setActive('home') // 角标随动（同 cart.ts refresh() 范式·重数一遍，过期回包也要同步，否则乱序回来时角标少算）
+        if (!stale) bar.bump?.() // 设计稿：加购后购物车角标弹一下（scale 1→1.5→1·320ms·动画在 custom-tab-bar 里）
+      }
+      if (stale) return
+      // 多规格被默认加了首规格时把规格名亮给用户（px-fx 自绘提示不受原生 toast 字数限制）——静默替选规格必须可见
+      fxToast(this, payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
     } else {
-      if (this.hidden) return
-      this.ping('商品信息获取失败，请稍后重试')
+      if (this.hidden || stale) return
+      fxHint(this, '商品信息获取失败，请稍后重试')
     }
   },
+  // 页尾「创造幸运」：撒花后进小棉鸭详情（设计稿 party·260ms 后跳）
   toProducts() {
     tapHaptic()
-    const duck = pickDuckKit(this.data.products)
-    if (duck) {
-      wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id })
-      return
-    }
-    this.scrollTo('friends') // 货架上还没有小棉鸭套装：退回商品轨，不瞎跳旧 id
+    const duck = pickDuckKit(this.data.products) // 没上小棉鸭时是第一件商品占位（拍板 18·占位＝将来小棉鸭的位置）
+    if (!duck) return this.scrollTo('friends') // 货架空（还没拉到商品）：退回商品轨，不瞎跳旧 id
+    if (!this._navOk()) return // 撒花 260ms 期间连点会叠两个详情页
+    void fxParty(this, '.hm-closing-btn')
+    setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }), 260)
+  },
+  // 顶部「购买」：黄色像素彩虹从键扩散铺满后进详情（设计稿 fxRainbow）
+  toProductsTop() {
+    tapHaptic()
+    const duck = pickDuckKit(this.data.products) // 同上：占位＝将来小棉鸭的位置
+    if (!duck) return this.scrollTo('friends')
+    if (!this._navOk()) return // 同上：彩虹转场期间连点
+    void fxTransit(this, 'rainbow', '.hm-buy', () => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }))
   },
   toIntro() {
-    this.scrollTo('intro') // 搜索胶囊滚到品牌介绍（设计 scrollToIntro）
+    void fxParty(this, '.hm-search')
+    setTimeout(() => this.scrollTo('intro'), 260) // 搜索胶囊撒花后滚到品牌介绍（设计 a_toIntro）
   },
   backTop() {
     this.scrollTo('top')
+  },
+  /** tab bar 上已在首页时再点「首页」：平滑回顶（custom-tab-bar 的 onTap 在 id===active 时调它）。 */
+  onTabReselect() {
+    this.scrollTo('top')
+  },
+  /** <image bindload>：横图（宽>高）记下来退回 aspectFill 居中——竖图/方图走 widthFix + 40% 焦点（见 home.wxss .focus-img）。 */
+  onImgLoad(e: WechatMiniprogram.CustomEvent<{ width: number; height: number }>) {
+    const src = String(e.currentTarget.dataset.src || '')
+    if (src && e.detail.width > e.detail.height && !this.data.wide[src]) this.setData({ wide: { ...this.data.wide, [src]: true } })
   },
   // 品牌开屏淡出结束（brand-splash 撤场后 triggerEvent('done')·撤场＝min-hold+数据就绪 race+硬上限）：撤下覆盖层露出首页。
   onSplashDone() {
     this.setData({ showSplash: false })
   },
-  // 页脚无 href：默认「关于我们」「Lucky Ducky小棉鸭」都进关于页，不弹敬请期待。
+  // 页脚无 href：默认「关于我们」「Lucky Ducky 小棉鸭」都进关于页，不弹敬请期待。
   // 其余 label 无对应页仍是合法占位（不加配置面/不引 href 机制，运营真需要再配跳转）。
   onTapFooterLink(e: WechatMiniprogram.TouchEvent) {
     const label = String(e.currentTarget.dataset.label || '')
-    if (label === '关于我们' || label === 'Lucky Ducky小棉鸭') {
+    if (label === '关于我们' || label === BRAND_NAME) {
       wx.navigateTo({ url: '/pages/about/about' })
       return
     }
-    this.ping(label + ' · 敬请期待')
-  },
-  ping(text: string) {
-    if (toastTimer) clearTimeout(toastTimer)
-    this.setData({ toast: { show: true, text } })
-    toastTimer = setTimeout(() => {
-      toastTimer = null
-      this.setData({ 'toast.show': false })
-    }, 1600)
-  },
-  // 切走时清定时器必须连 toast 一起收：.ld-toast.show 不会自己淡出，只清定时器回来就一直挂着
-  hideToast() {
-    if (!toastTimer) return
-    clearTimeout(toastTimer)
-    toastTimer = null
-    this.setData({ 'toast.show': false })
+    fxHint(this, label + ' · 敬请期待')
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29）：公开页开转发，私有页（交易/学习/隐私）

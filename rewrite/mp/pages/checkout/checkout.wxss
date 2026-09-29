@@ -1,410 +1,270 @@
-/* 结算·重设计对齐 Checkout.jsx co-* 版式。设计 402px 画板→rpx（×1.87）。
-   页浅灰底、白卡以圆角+浅影分隔；token 见 styles/tokens.wxss。co- 前缀沿设计。 */
+/* 确认订单（v5「字重」稿 A5） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
+/* 整页一列：顶栏 + 小货车 + 滚动内容 + 底坞（设计稿 A5：车在滚动区外不跟着滚） */
 .co {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰（与 detail 同调·tokens 无对应中性灰） */
-  color: var(--ld-content);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
-.co image {
-  display: block;
+/* 小货车：顶栏下 120px 处落地（全站同一条地面线） */
+.co-truck {
+  flex: 0 0 auto;
+  padding: 120px 16px 12px;
 }
-.co-ico {
-  width: 34rpx;
-  height: 34rpx;
+.co-scroll {
+  flex: 1;
+  height: 0;
 }
-.co-ico-lg {
-  width: 44rpx;
-  height: 44rpx;
-}
-
-/* ---------- 内容容器 ---------- */
 .co-body {
-  padding: 22rpx 26rpx 8rpx;
+  padding: 0 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 22rpx;
+  gap: 8px;
 }
-
-/* ---------- 收货地址卡（含彩色针脚底边·设计签名件） ---------- */
-.co-addr {
-  position: relative;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-.co-addr-main {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 34rpx 26rpx 38rpx;
-}
-.co-addr-pin {
-  width: 48rpx;
-  height: 48rpx;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.co-addr-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.co-addr-line1 {
-  display: flex;
-  align-items: baseline;
-  gap: 20rpx;
-}
-.co-addr-name {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
-}
-.co-addr-phone {
-  font-size: 26rpx;
-  color: var(--ld-content);
-  letter-spacing: 0.4rpx;
-}
-.co-addr-line2 {
-  margin-top: 12rpx;
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.co-addr-tag {
-  display: inline-block;
-  font-size: 20rpx;
-  color: var(--ld-purple-tab);
-  background: var(--ld-bg-lilac);
-  border: 1rpx solid var(--ld-purple-line);
-  border-radius: 8rpx;
-  padding: 1rpx 11rpx;
-  margin-right: 12rpx;
-}
-.co-addr-chev {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-}
-/* 空地址状态 */
-.co-addr-empty-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
-}
-.co-addr-empty-sub {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-  line-height: 1.5;
-}
-/* 彩色针脚底边（小鸭橙 + 幸运紫的手作针脚·设计特有意象） */
-.co-stitch {
-  height: 8rpx;
-  background-image: repeating-linear-gradient(
-    72deg,
-    var(--ld-duck-deep) 0 11rpx,
-    transparent 11rpx 13rpx,
-    var(--ld-purple) 13rpx 24rpx,
-    transparent 24rpx 26rpx
-  );
-}
-
-/* ---------- 通用白卡 ---------- */
 .co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--v5-hair);
+}
+.co-k {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 
-/* 店铺行 */
-.co-shop {
+/* 地址 */
+.co-addr {
+  padding: 16px;
+}
+.co-addr-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.co-change {
   display: flex;
   align-items: center;
-  gap: 13rpx;
-  padding: 26rpx 30rpx 8rpx;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 300;
 }
-.co-shop-ico {
-  width: 32rpx;
-  height: 32rpx;
-  flex: 0 0 auto;
+/* 姓名 · 打码手机号一行（设计稿 co.who：17px 黑字） */
+.co-who {
+  display: block;
+  margin-top: 8px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink);
 }
-.co-shop-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
+.co-where {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.co-addr-none {
+  padding: 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.co-addr-add {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 500;
 }
 
-/* 订单商品行 */
-.co-item {
-  display: flex;
-  gap: 22rpx;
-  padding: 26rpx 30rpx;
+/* 商品 / 搭配购 */
+.co-items {
+  padding: 0 16px;
+  overflow: hidden;
 }
-.co-item-img {
-  width: 150rpx;
-  height: 150rpx;
+.co-item {
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
+}
+.co-item:first-child,
+.co-addon-head + .co-item {
+  border-top: 0;
+}
+.co-thumb {
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage);
+  border-radius: 4px;
+  overflow: hidden;
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
+}
+.co-thumb-img {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: 50% 40%;
 }
 .co-item-mid {
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .co-item-name {
-  font-size: 28rpx;
-  color: var(--ld-ink);
-  line-height: 1.35;
-  letter-spacing: -0.3rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.co-item-spec {
-  align-self: flex-start;
-  margin-top: 13rpx;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  background: var(--ld-bg-grey);
-  border-radius: 8rpx;
-  padding: 6rpx 15rpx;
-}
-.co-item-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-top: auto;
-  padding-top: 18rpx;
-}
-.co-price {
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: 0.4rpx;
-}
-.co-price .cny {
-  font-size: 25rpx;
-  font-weight: 600;
-  margin-right: 2rpx;
-}
-.co-item-price {
-  font-size: 36rpx;
-}
-.co-item-qty {
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-  letter-spacing: 0.4rpx;
-}
-
-/* ---------- 搭配购买 ---------- */
-.co-addon-head {
-  display: flex;
-  align-items: baseline;
-  gap: 15rpx;
-  padding: 26rpx 30rpx 4rpx;
-}
-.co-addon-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-}
-.co-addon-sub {
-  font-size: 22rpx;
-  color: var(--ld-duck-deep);
-}
-.co-addon {
-  display: flex;
-  align-items: center;
-  gap: 22rpx;
-  padding: 22rpx 30rpx;
-}
-.co-addon + .co-addon {
-  border-top: 1rpx solid var(--ld-line-soft);
-}
-.co-radio {
-  width: 38rpx;
-  height: 38rpx;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  border: 3rpx solid var(--ld-purple-line);
-  background: var(--ld-bg);
-  box-sizing: border-box;
-}
-.co-radio.on {
-  background: var(--ld-purple-tab);
-  border-color: var(--ld-purple-tab);
-}
-.co-addon-img {
-  width: 105rpx;
-  height: 105rpx;
-  flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage);
-}
-.co-addon-mid {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.co-addon-name {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-  line-height: 1.3;
-  letter-spacing: -0.3rpx;
-}
-.co-addon-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 17rpx;
-}
-.co-addon-price {
-  font-size: 28rpx;
-}
-
-/* ---------- 配送信息行 ---------- */
-.co-rows {
-  padding: 4rpx 0;
-}
-.co-row {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 28rpx 30rpx;
-}
-.co-row-key {
-  flex: 0 0 auto;
-  font-size: 27rpx;
-  color: var(--ld-content);
-}
-.co-row-val {
-  flex: 1 1 auto;
-  text-align: right;
-  font-size: 26rpx;
-  color: var(--ld-ink);
+  font-size: 17px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.co-ship-note {
-  padding: 0 30rpx 24rpx;
-  font-size: 22rpx;
-  line-height: 1.5;
-  color: var(--ld-content-2);
+.co-item-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.co-item-price {
+  font-size: 15px;
+  font-weight: 600;
+}
+/* 改数量（老板拍板 9）：价格在上、−/+ 在下，键帽与热区同购物车（28px 键·44×44 热区） */
+.co-item-right {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.co-step {
+  display: flex;
+  align-items: center;
+}
+.co-step-hit {
+  position: relative;
+  width: 34px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.co-step-l {
+  margin: -8px 0 -8px -3px;
+}
+.co-step-r {
+  margin: -8px -3px -8px 0;
+}
+.co-step-hit::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+}
+.co-step-l::after {
+  left: -10px;
+}
+.co-step-r::after {
+  right: -10px;
+}
+.co-step-key {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+}
+/* 到头（1 件 / 上限）或提交在途：置灰、按了不动 */
+.co-step-off {
+  opacity: 0.35;
+}
+.co-qty {
+  width: 24px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+.co-addon-head {
+  display: block;
+  padding: 12px 0 0;
+}
+.co-addon-name {
+  flex: 1;
+  min-width: 0;
+}
+.co-check {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
 }
 
-/* ---------- 金额明细（灰色内嵌盒） ---------- */
-.co-summary {
-  margin: 8rpx 22rpx 26rpx;
-  background: #f7f7f8; /* 设计明细盒浅灰底·tokens 无对应 */
-  border-radius: var(--ld-radius-md);
-  padding: 26rpx 30rpx;
+/* 明细 */
+.co-sum {
+  padding: 4px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .co-sum-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10rpx 0;
+  gap: 8px;
 }
-.co-sum-row text {
-  font-size: 25rpx;
-  color: var(--ld-content-2);
+.co-leader {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
 }
-.co-sum-v {
-  font-weight: 500;
-  color: var(--ld-content) !important;
-  letter-spacing: 0.4rpx;
+.co-v {
+  font-size: 15px;
 }
-.co-sum-div {
-  height: 1rpx;
-  background: var(--ld-line);
-  margin: 13rpx 0;
-}
-.co-sum-row.total text {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-}
-.co-sum-row.total .co-sum-v {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: var(--ld-ink) !important;
-}
-.co-sum-row.total .cny {
-  font-size: 25rpx;
+.co-policy {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 
-/* ---------- 底部提交坞 ---------- */
-.co-dock-space {
-  height: 170rpx;
-}
+/* 底部：应付 + 提交（主键宽度随设计稿公式：与详情页 加购1:直买1.25 的主键对齐不跳） */
 .co-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--ld-bg);
-  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.co-dockbar {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
+  flex-wrap: wrap; /* 协议小字独占第一行，应付 + 提交在第二行 */
   align-items: center;
-  gap: 26rpx;
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom)) 34rpx;
+  gap: 12px;
+  border-top: 1px solid var(--v5-hair);
+  background: var(--v5-canvas);
 }
-.co-dock-total {
+/* 协议小字（老板拍板 10）：书名号上下各让 8px 扩热区，负外边距抵掉、视觉不变 */
+.co-agree {
+  flex: 0 0 100%;
+  margin: -8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.co-link {
+  padding: 8px 0;
+  color: var(--v5-ink);
+  font-weight: 500;
+}
+.co-total {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
 }
-.co-dock-small {
-  font-size: 20rpx;
-  color: var(--ld-content-2);
-}
-.co-dock-amount {
-  display: flex;
-  align-items: baseline;
-  gap: 14rpx;
-}
-.co-dock-num {
-  font-size: 46rpx;
-  font-weight: 700;
-  color: var(--ld-purple-ink);
-  letter-spacing: 0.2rpx;
-  line-height: 1;
-}
-.co-dock-num .cny {
-  font-size: 28rpx;
+.co-amount {
+  font-size: 22px;
   font-weight: 600;
-  margin-right: 2rpx;
-}
-.co-dock-count {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
 }
 .co-submit {
-  margin-left: auto;
-  flex: 0 0 auto;
-  padding: 26rpx 64rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 600;
-}
-.co-submit.dim {
-  opacity: 0.5;
+  flex: 0 0 calc((100% - 108px) * 1.25 / 2.25 + 24px);
+  gap: 12px;
 }

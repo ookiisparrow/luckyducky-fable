@@ -1,6 +1,14 @@
-// 结算页建单/拉起支付后的去向：成功都进成功页（带订单号与实付分），取消/失败/关闭都弹不可取消的弹窗、
-// 点确定回首页。mapPayResult 用真的（纯函数），其余依赖桩掉。Page 桩同 me-cont-failed.test.ts。
+// 结算页建单/拉起支付后的去向：成功都进成功页（带订单号与实付分）；取消/支付出错都落到该订单详情（拍板 4/A）；
+// 订单已关闭弹窗后回首页。mapPayResult 用真的（纯函数），其余依赖桩掉。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import limitsSrc from '../../shared/src/limits.ts?raw'
+
+// 「15 分钟」是云端付款时限 PAY_WINDOW_MS（小程序进不了 shared，文案手抄）：云端改时限这里就红
+const PAY_WINDOW_MIN = (() => {
+  const m = limitsSrc.match(/PAY_WINDOW_MS = (\d+) \* 60 \* 1000/)
+  if (!m) throw new Error('shared/limits 找不到 PAY_WINDOW_MS')
+  return Number(m[1])
+})()
 
 const { createOrderMock, payMock, goHomeMock } = vi.hoisted(() => ({ createOrderMock: vi.fn(), payMock: vi.fn(), goHomeMock: vi.fn() }))
 vi.mock('../api/orders', () => ({ createOrder: createOrderMock, pay: payMock }))
@@ -49,6 +57,20 @@ beforeEach(() => {
   ;(globalThis as any).wx = wxMock
 })
 
+// 拍板 A：支付出错（非取消）——订单保留，弹窗说明后换到这张订单的详情页（在那里可继续支付），不回首页
+function modalToOrder() {
+  expect(wxMock.showModal).toHaveBeenCalledTimes(1)
+  const opts = wxMock.showModal.mock.calls[0][0]
+  expect(opts.showCancel).toBe(false)
+  expect(opts.title).not.toBe(opts.content)
+  expect(opts.content).toContain('订单已保留，可在订单详情里继续支付')
+  expect(wxMock.redirectTo).not.toHaveBeenCalled()
+  opts.success({ confirm: true })
+  expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: '/pages/order/order?id=o1' })
+  expect(goHomeMock).not.toHaveBeenCalled()
+  return { title: opts.title, content: opts.content }
+}
+
 function modalShown() {
   expect(wxMock.showModal).toHaveBeenCalledTimes(1)
   const opts = wxMock.showModal.mock.calls[0][0]
@@ -90,20 +112,23 @@ describe('结算页 startPay：每种支付结果的去向', () => {
     expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: SUCCESS_URL })
   })
 
-  it('大白话：收银台里点了取消——弹「支付已取消」，订单保留，点确定回首页', async () => {
+  it('大白话：收银台里点了取消（老板拍板 4）——提示「订单已保存，请在 15 分钟内支付」并换到这张订单的详情页，不弹窗不回首页', async () => {
     payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
     const page = await mount()
     await page.startPay('o1', 12800)
     wxMock.requestPayment.mock.calls[0][0].fail({ errMsg: 'requestPayment:fail cancel' })
-    expect(modalShown()).toEqual({ title: '支付已取消', content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。' })
+    expect(wxMock.showToast).toHaveBeenCalledWith(expect.objectContaining({ title: `订单已保存，请在 ${PAY_WINDOW_MIN} 分钟内支付`, icon: 'none' }))
+    expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: '/pages/order/order?id=o1' })
+    expect(wxMock.showModal).not.toHaveBeenCalled()
+    expect(goHomeMock).not.toHaveBeenCalled()
   })
 
-  it('大白话：收银台里付失败（非取消）——弹「支付没成功」，同样保留订单、点确定回首页', async () => {
+  it('大白话：收银台里付失败（非取消·拍板 A）——弹「支付没成功」说明订单已保留，点确定换到这张订单的详情页', async () => {
     payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
     const page = await mount()
     await page.startPay('o1', 12800)
     wxMock.requestPayment.mock.calls[0][0].fail({ errMsg: 'requestPayment:fail' })
-    expect(modalShown()).toEqual({ title: '支付没成功', content: '订单已保留，超时前都可以继续支付。可到「我的-我的订单」继续支付。' })
+    expect(modalToOrder().title).toBe('支付没成功')
   })
 
   it('大白话：订单已超时关闭——弹「订单已关闭」带云端原因，点确定回首页', async () => {
@@ -113,10 +138,32 @@ describe('结算页 startPay：每种支付结果的去向', () => {
     expect(modalShown()).toEqual({ title: '订单已关闭', content: '订单已超时关闭，请重新下单' })
   })
 
-  it('大白话：其它支付错误——弹「支付没成功」带原因，点确定回首页', async () => {
+  it('大白话：拉支付参数失败（拍板 A）——弹「支付没成功」带原因和「订单已保留」，点确定换到订单详情', async () => {
     payMock.mockResolvedValue({ ok: false, error: 'PAY_NOT_ENABLED' })
     const page = await mount()
     await page.startPay('o1', 12800)
-    expect(modalShown()).toEqual({ title: '支付没成功', content: '支付暂未开通' })
+    const m = modalToOrder()
+    expect(m.title).toBe('支付没成功')
+    expect(m.content).toContain('支付暂未开通')
+  })
+
+  it('大白话：云端说不出原因的支付失败——正文不再和标题重复「支付没成功」', async () => {
+    payMock.mockResolvedValue({ ok: false, error: 'WEIRD' })
+    const page = await mount()
+    await page.startPay('o1', 12800)
+    expect(modalToOrder().content).not.toContain('支付没成功')
+  })
+
+  it('大白话：调支付参数期间按键显示「正在拉起支付」转圈，回来后收掉', async () => {
+    let release!: (v: unknown) => void
+    payMock.mockReturnValue(new Promise((r) => (release = r)))
+    const page = await mount()
+    page.data.submitted = true
+    const p = page.startPay('o1', 12800)
+    expect(page.data.paying).toBe(true)
+    expect(page.data.submitted).toBe(false)
+    release({ ok: true, payment: PAYMENT })
+    await p
+    expect(page.data.paying).toBe(false)
   })
 })

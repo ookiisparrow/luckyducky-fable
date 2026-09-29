@@ -1,14 +1,236 @@
 @import './styles/tokens.wxss';
 
 page {
-  background: var(--ld-bg);
-  color: var(--ld-ink);
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
   font-size: 28rpx;
-  font-family: var(--ld-font-brand); /* 品牌字体全局应用——见 tokens.wxss 注释 */
-  font-weight: 500; /* 只注册了 500/700 两档字重（brandFont.ts BRAND_FONT_TIERS），不钉此值会落到默认 400——
-    CSS 字重匹配会就近吃 500 那档渲染（而非回退栈下一个字体族），全站正文视觉变粗且不可预期；
-    显式钉 500 使其命中已注册字重、行为确定 */
+  font-family: var(--v5-font-brand); /* 品牌字体全局应用——见 tokens.wxss 注释 */
+  font-weight: 500; /* 注册字重只有 300/500/700/900（brandFont.ts BRAND_FONT_TIERS），默认 400 没有对应档——
+    显式钉 500 使正文命中已注册字重、行为确定 */
   -webkit-font-smoothing: antialiased;
+}
+/* custom-tab-bar 渲染在 page 节点之外，继承不到上面的字体（真机/工具里 TabBar 字是系统黑体）——.v5-scope 根节点再钉一遍 */
+.v5-scope {
+  font-family: var(--v5-font-brand);
+  font-weight: 500;
+}
+
+/* ── v5 按键（键帽）三档 + 暗色两档 ──
+   用法：<view class="k k-ink" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100">。高 44（.k）/ 48（.k.k-48）；
+   高度 <34 的小键再加 .k-sm。墨黑键每屏最多一颗（主要/重要节点）；浅色键＝默认与次操作；平面键＝弱/未选；dk/inv 只在播放页暗底。
+   动效（设计稿「下沉 · 回弹」PRESS 表）：按下 60ms 下沉（大键 2px、小键 1px）+ 键座变薄；
+   松手 260ms 弹回并略冲过头（约 1px）再落稳——CSS 取「目标态」的 transition，所以按下曲线写在 *-down 上、回弹曲线写在 .k 上。 */
+.k {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: transform 260ms cubic-bezier(0.2, 2.6, 0.5, 1), box-shadow 260ms cubic-bezier(0.25, 0.8, 0.35, 1),
+    background-color 180ms ease-out;
+}
+.k-ink-down,
+.k-light-down,
+.k-flat-down,
+.k-dk-down,
+.k-inv-down,
+.k-card.k-card-down {
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
+}
+.k-48 {
+  height: 48px;
+}
+.k-ink {
+  background: var(--v5-key);
+  color: var(--v5-key-hi);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -3px 0 var(--v5-key-seat), 0 1px 0 #111,
+    0 4px 8px -3px rgba(0, 0, 0, 0.35);
+}
+.k-ink-down {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 var(--v5-key-seat), 0 0 0 #111,
+    0 1px 2px -1px rgba(0, 0, 0, 0.35);
+}
+.k-light {
+  background: #ffffff;
+  color: var(--v5-ink);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px var(--v5-hair), 0 1px 2px rgba(17, 17, 17, 0.08);
+}
+.k-light-down {
+  transform: translateY(2px);
+  background: #f0f0ed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
+}
+.k-flat {
+  background: var(--v5-sunk);
+  color: var(--v5-ink-3);
+}
+.k-flat-down {
+  transform: translateY(2px);
+  background: #e3e3df;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+.k-dk {
+  background: var(--v5-dark-key);
+  color: #f2f2ec;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -3px 0 #000, 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.k-dk-down {
+  transform: translateY(2px);
+  background: #202020;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 #000, 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.k-inv {
+  background: var(--v5-key-hi);
+  color: var(--v5-ink);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -3px 0 var(--v5-ink-4), 0 1px 0 #000, 0 4px 8px -3px rgba(0, 0, 0, 0.6);
+}
+.k-inv-down {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 var(--v5-ink-4), 0 0 0 #000, 0 1px 2px -1px rgba(0, 0, 0, 0.6);
+}
+/* 小键（<34px）只沉 1px（设计稿：offsetHeight<34 → d=1） */
+.k-sm.k-ink-down,
+.k-sm.k-light-down,
+.k-sm.k-flat-down,
+.k-sm.k-dk-down,
+.k-sm.k-inv-down {
+  transform: translateY(1px);
+}
+/* 列表行按下：不下沉，只压暗底色 */
+.k-row-down {
+  background: rgba(17, 17, 17, 0.05);
+}
+/* 白卡按下：沉 1px + 压暗（设计稿 card d=1）；卡片加 .k-card 才有回弹。双类选择器压过页面卡片自身的白底 */
+.k-card {
+  transition: transform 260ms cubic-bezier(0.2, 2.6, 0.5, 1), background-color 180ms ease-out;
+}
+.k-card.k-card-down {
+  transform: translateY(1px);
+  background: #f3f3f0;
+}
+/* 凹槽：输入框、分段选择器底槽 */
+.well {
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: var(--v5-sunk);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+.well-focus {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1.5px var(--v5-violet);
+}
+/* 黑体（系统字）：正文长段、13px 及以下的辅助小字（按键除外）、用户填的内容（昵称/收件人/地址/评价/输入框）
+   一律用它（设计稿 PingFang）；品牌圆体只留给按钮、标题、界面固定文案——字体子集只收这部分字（scripts/lib/brand-font-charset.mjs，
+   .t-sys 子树里的字不收），所以用户内容必须挂 .t-sys，否则生僻字会一个个掉成黑体、同一行里混两种字。 */
+.t-sys,
+input,
+textarea {
+  font-family: 'PingFang SC', -apple-system, system-ui, sans-serif;
+}
+/* v5 骨架屏：凹槽灰底 + 微光扫过（配下方 @keyframes ld-shimmer） */
+.skel {
+  background: linear-gradient(90deg, var(--v5-sunk) 25%, #f3f3f0 50%, var(--v5-sunk) 75%);
+  background-size: 200% 100%;
+  animation: ld-shimmer 1500ms ease-in-out infinite;
+}
+/* 等宽数字：价格、单号、时长、计数 */
+.mono {
+  font-family: var(--v5-font-mono);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+/* 自绘轻提示（设计稿系统层 Toast·页面 .ld-toast + .show 切换；原生 wx.showToast 是系统界面不改） */
+.ld-toast {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 210;
+  transform: translate(-50%, -50%);
+  max-width: 72%;
+  min-width: 96px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(17, 17, 17, 0.82);
+  color: #ffffff;
+  font: 500 15px/1.4 -apple-system, 'PingFang SC', system-ui, sans-serif;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+}
+/* 出场照设计稿 ENTER.toast：0.94 → 1 放大 + 淡入 180ms；退场只淡出 180ms（不缩） */
+.ld-toast.show {
+  opacity: 1;
+  animation: ld-toast-in 180ms ease-out;
+}
+@keyframes ld-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* v5 半屏（设计稿 openSheet/closeSheet·ENTER.sheet）：遮罩 .sh-mask 淡入 200ms、面板 .sh-panel 上滑 320ms；
+   关：两者加 .out ——面板 240ms cubic-bezier(.4,0,1,1) 下滑、遮罩 200ms 淡出，JS 等 240ms 再撤节点。 */
+.sh-mask {
+  background: rgba(17, 17, 17, 0.42);
+  animation: ld-fade 200ms ease-out;
+  transition: opacity 200ms ease-out;
+}
+.sh-mask.out {
+  opacity: 0;
+}
+.sh-panel {
+  animation: ld-sheet-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 240ms cubic-bezier(0.4, 0, 1, 1);
+}
+.sh-panel.out {
+  transform: translateY(100%);
+}
+/* 进场：淡入 200ms（ENTER.fade）/ 下方 8px 上浮 260ms（ENTER.rise） */
+.enter-fade {
+  animation: ld-fade 200ms ease-out;
+}
+.enter-rise {
+  animation: ld-rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes ld-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ld-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes ld-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 骨架屏微光（home/catalog 共用·加载态设计对齐 Claude Design 通过稿）：配 background-size:200% 的

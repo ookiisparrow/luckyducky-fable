@@ -373,3 +373,39 @@ describe('进页与拖动几何', () => {
     expect(page.buildSeekCfg(100, [{ at: 10, name: 'A' }])).toEqual({ rect: { left: 0, width: 300 }, durSec: 100, marks: [{ at: 10, name: 'A' }], edgePx: 32, snapSec: 3 })
   })
 })
+
+describe('学完一节「重看本节」', () => {
+  it('大白话：课时末段播完点重看本节 → 回本课时第一段起播；课时只有一段 → 原地从头重播', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s2'), 'enter')
+    await flush()
+    page.onEnded()
+    expect(page.data.segDone).toBe(true)
+    page.onReplayLesson()
+    await flush()
+    expect(page.data).toMatchObject({ state: 'playing', src: 'https://v/s1', segDone: false })
+    expect(page.data.current.segmentId).toBe('s1')
+
+    await page.playSegment(seg('s3'), 'seg')
+    await flush()
+    page.onEnded()
+    video.calls = []
+    page.onReplayLesson()
+    expect(video.calls).toEqual(['seek', 'play'])
+    expect(page.data).toMatchObject({ src: 'https://v/s3', segDone: false })
+  })
+})
+
+describe('整门课学完「完成课程」', () => {
+  it('大白话：全课最后一段播完没有下一节 → 点「完成课程」换到结业页（带课程 id），不叠栈', async () => {
+    const page = await mount()
+    page.courseId = 'c1'
+    ;(globalThis as any).wx.redirectTo = vi.fn()
+    await page.playSegment(seg('s3'), 'enter')
+    await flush()
+    page.onEnded()
+    expect(page.data.canNext).toBe(false)
+    page.onFinishCourse()
+    expect((globalThis as any).wx.redirectTo).toHaveBeenCalledWith({ url: '/pages/finish/finish?courseId=c1' })
+  })
+})

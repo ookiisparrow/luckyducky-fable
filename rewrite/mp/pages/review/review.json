@@ -1,6 +1,14 @@
 {
   "navigationBarTitleText": "写评价",
+  "navigationStyle": "custom",
+  "backgroundColor": "#fafaf8",
   "usingComponents": {
-    "privacy-sheet": "/components/privacy-sheet/privacy-sheet"
+    "privacy-sheet": "/components/privacy-sheet/privacy-sheet",
+    "v5-nav": "/components/v5-nav/v5-nav",
+    "px-i": "/components/px-i/px-i",
+    "px-anim": "/components/px-anim/px-anim",
+    "px-ground": "/components/px-ground/px-ground",
+    "px-fx": "/components/px-fx/px-fx",
+    "leave-sheet": "/components/leave-sheet/leave-sheet"
   }
 }

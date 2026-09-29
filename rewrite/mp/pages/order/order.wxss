@@ -1,519 +1,548 @@
-/* 订单详情·重设计对齐 Checkout.jsx 的 OrderStatus 版式。设计 402px 画板→rpx（×1.87）。
-   页浅灰底、白卡圆角+浅影分隔；co- 前缀沿设计（与 checkout 同词汇·本页自包含）；
-   coord- 为订单态专属件（状态横幅/物流/申请售后/去评价）。token 见 styles/tokens.wxss。 */
-.co {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰·tokens 无对应中性灰 */
-  color: var(--ld-content);
+/* 订单详情（v5「字重」稿 B2） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-.co image {
-  display: block;
+/* 小货车：顶栏下 120px 处落地（全站同一条地面线） */
+.od-truck {
+  padding: 120px 16px 12px;
 }
-.co-ico {
-  width: 34rpx;
-  height: 34rpx;
-}
-.co-ico-lg {
-  width: 44rpx;
-  height: 44rpx;
-}
-
-/* ---------- 内容容器 ---------- */
-.co-body {
-  padding: 22rpx 26rpx 8rpx;
+.od-body {
+  padding: 0 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 22rpx;
+  gap: 8px;
+}
+.od-card {
+  padding: 16px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px var(--v5-hair);
+}
+.od-k {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 
-/* ---------- 状态横幅（订单态签名件） ---------- */
-.coord-banner {
+/* 状态 + 四步进度 */
+.od-state {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.od-state-l {
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  border-radius: var(--ld-radius-md);
-  padding: 34rpx 30rpx;
+  gap: 12px;
 }
-.coord-lilac {
-  background: var(--ld-bg-lilac);
-  border: 1rpx solid var(--ld-purple-line);
+.od-head {
+  font-size: 20px;
+  font-weight: 700;
 }
-.coord-sage {
-  background: var(--ld-bg-sage);
-  border: 1rpx solid #dde0d6; /* 鼠尾草描边·tokens 无对应 */
-}
-.coord-muted {
-  background: var(--ld-bg-grey);
-  border: 1rpx solid var(--ld-line);
-}
-.coord-banner-ico {
-  width: 78rpx;
-  height: 78rpx;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--ld-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.coord-banner-img {
-  width: 40rpx;
-  height: 40rpx;
-}
-.coord-banner-text {
-  flex: 1 1 auto;
+/* 状态卡右侧小字：次要灰；待支付/待退款琥珀；剩不到 1 分钟 / 支付异常红（设计稿 subC） */
+.od-sub {
+  flex: 0 1 auto;
   min-width: 0;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.coord-banner-head {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
+.od-sub-warn {
+  color: var(--v5-warn-text);
 }
-.coord-banner-sub {
-  margin-top: 8rpx;
-  font-size: 23rpx;
-  color: var(--ld-content-2);
+.od-sub-err {
+  color: var(--v5-err-text);
+}
+/* 待退款 / 支付异常说明行：分隔线 + 状态灯 + 13/300 说明 */
+.od-warn {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--v5-hair);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.od-warn-led {
+  margin-top: 4px;
+}
+.od-warn-t {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 300;
   line-height: 1.5;
 }
-
-/* ---------- 物流卡 ---------- */
-.coord-logi {
+/* 有售后记录：「查看售后进度 →」行（分隔线 + 右对齐小字，同物流卡「查看物流」口径） */
+.od-as-go {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--v5-hair);
+  justify-content: flex-end;
+}
+.od-steps {
+  margin-top: 16px;
   display: flex;
-  align-items: center;
-  gap: 20rpx;
-  padding: 26rpx;
+  align-items: flex-start;
 }
-.coord-logi-ico {
-  width: 56rpx;
-  height: 56rpx;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--ld-bg-lilac);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.coord-logi-img {
-  width: 30rpx;
-  height: 30rpx;
-}
-.coord-logi-text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.coord-logi-line {
-  font-size: 25rpx;
-  color: var(--ld-ink);
-  line-height: 1.45;
-}
-.coord-logi-time {
-  margin-top: 7rpx;
-  font-size: 20rpx;
-  color: var(--ld-content-2);
-  letter-spacing: 0.4rpx;
-}
-.coord-logi-btn {
-  flex: 0 0 auto;
-  height: 52rpx;
-  padding: 0 20rpx;
-  border-radius: var(--ld-radius-pill);
-  border: 1rpx solid var(--ld-purple-line);
-  background: var(--ld-bg-lilac);
-  font-size: 22rpx;
-  color: var(--ld-purple-ink);
-  display: flex;
-  align-items: center;
-}
-
-/* ---------- 收货地址卡（含彩色针脚底边·设计签名件） ---------- */
-.co-addr {
+.od-step {
   position: relative;
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-.co-addr-main {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 34rpx 26rpx 38rpx;
-}
-.co-addr-pin {
-  width: 48rpx;
-  height: 48rpx;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.co-addr-text {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
-.co-addr-line1 {
+/* 步骤连线：2px 虚线（设计规范·像素小元素），走过的墨色、未到的灰 */
+.od-line {
+  position: absolute;
+  top: 6px;
+  right: calc(50% + 10px);
+  width: calc(100% - 20px);
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
+}
+.od-line-on {
+  background: repeating-linear-gradient(90deg, var(--v5-ink) 0 2px, transparent 2px 4px);
+}
+.od-node {
+  position: relative;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+.od-step-t {
+  font-size: 13px;
+  font-weight: 500;
+}
+/* 步骤文字（设计稿 steps fw/c）：走过的黑 500、当前黑 700、未到 #62625c 500 */
+.od-step-cur {
+  font-weight: 700;
+}
+.od-step-todo {
+  color: var(--v5-ink-2);
+}
+
+/* 物流 */
+.od-logi-top,
+.od-logi-bot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.od-logi-bot {
+  margin-top: 8px;
+}
+.od-logi-no {
   display: flex;
   align-items: baseline;
-  gap: 20rpx;
+  gap: 8px;
+  min-width: 0;
 }
-.co-addr-name {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: -0.3rpx;
+.od-track {
+  font-size: 15px;
 }
-.co-addr-phone {
-  font-size: 26rpx;
-  color: var(--ld-content);
-  letter-spacing: 0.4rpx;
-}
-.co-addr-line2 {
-  margin-top: 12rpx;
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-/* 彩色针脚底边（小鸭橙 + 幸运紫的手作针脚·设计特有意象） */
-.co-stitch {
-  height: 8rpx;
-  background-image: repeating-linear-gradient(
-    72deg,
-    var(--ld-duck-deep) 0 11rpx,
-    transparent 11rpx 13rpx,
-    var(--ld-purple) 13rpx 24rpx,
-    transparent 24rpx 26rpx
-  );
-}
-
-/* ---------- 通用白卡 ---------- */
-.co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-
-/* 店铺行 */
-.co-shop {
+.od-more {
   display: flex;
   align-items: center;
-  gap: 13rpx;
-  padding: 26rpx 30rpx 8rpx;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 300;
 }
-.co-shop-ico {
-  width: 32rpx;
-  height: 32rpx;
+.od-mini {
+  position: relative;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
   flex: 0 0 auto;
 }
-.co-shop-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: var(--ld-ink);
+/* 已评价（拍板 6·设计稿灰底标签·不可点，不是键） */
+.od-reviewed {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  background: var(--v5-sunk);
+  color: var(--v5-ink-3);
+}
+/* 热区补到 44 高（上下各让 8px·看不见，视觉仍 28 高） */
+.od-mini::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8px;
+  bottom: -8px;
 }
 
-/* 订单商品行（只读） */
-.co-item {
+/* 地址 */
+.od-who {
+  margin-top: 8px;
   display: flex;
-  gap: 22rpx;
-  padding: 26rpx 30rpx;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 500;
 }
-.co-item-img {
-  width: 150rpx;
-  height: 150rpx;
+.od-phone {
+  font-size: 15px;
+  color: var(--v5-ink-2);
+}
+.od-where {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+
+/* 商品 + 金额 */
+.od-goods {
+  padding-top: 4px;
+}
+.od-item {
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--v5-hair);
+}
+.od-thumb {
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage); /* 无封面时灰底占位 */
+  border-radius: 4px;
+  overflow: hidden;
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
 }
-.co-item-mid {
-  flex: 1 1 auto;
+.od-thumb-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.od-item-mid {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
-.co-item-name {
-  font-size: 28rpx;
-  color: var(--ld-ink);
-  line-height: 1.35;
-  letter-spacing: -0.3rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.co-item-spec {
-  align-self: flex-start;
-  margin-top: 13rpx;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  background: var(--ld-bg-grey);
-  border-radius: 8rpx;
-  padding: 6rpx 15rpx;
-}
-.co-item-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-top: auto;
-  padding-top: 18rpx;
-}
-.co-price {
-  font-weight: 600;
-  color: var(--ld-ink);
-  letter-spacing: 0.4rpx;
-}
-.co-item-price {
-  font-size: 34rpx;
-}
-.co-item-footright {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12rpx;
-}
-.co-item-qty {
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-  letter-spacing: 0.4rpx;
-}
-.coord-review {
-  font-size: 22rpx;
-  color: var(--ld-purple-tab);
-  border: 1rpx solid var(--ld-purple-line);
-  border-radius: var(--ld-radius-pill);
-  padding: 7rpx 22rpx;
-}
-
-/* ---------- 订单信息行 ---------- */
-.co-rows {
-  padding: 4rpx 0;
-}
-.co-row {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 26rpx 30rpx;
-}
-.co-row + .co-row {
-  border-top: 1rpx solid var(--ld-line-soft);
-}
-.co-row-key {
-  flex: 0 0 auto;
-  font-size: 27rpx;
-  color: var(--ld-content);
-}
-.co-row-val {
-  flex: 1 1 auto;
-  text-align: right;
-  font-size: 26rpx;
-  color: var(--ld-ink);
+.od-item-name {
+  font-size: 17px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.co-row-val.muted {
-  color: var(--ld-content-2);
+.od-item-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.co-row-mono {
-  letter-spacing: 0.6rpx;
+/* 商品行售后小标（退款中 / 已退款） */
+.od-as-tag {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 18px;
+  border-radius: 4px;
+  background: var(--v5-sunk);
+  color: var(--v5-ink-2);
 }
-.coord-copy {
-  flex: 0 0 auto;
-  width: 40rpx;
-  height: 40rpx;
+.od-item-r {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.od-item-price {
+  font-size: 15px;
+  font-weight: 600;
+}
+.od-sum {
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.od-sum-row {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
 }
-.coord-copy-img {
-  width: 30rpx;
-  height: 30rpx;
+.od-leader {
+  flex: 1;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #c9c9c2 0 2px, transparent 2px 4px);
 }
-
-/* ---------- 金额明细（灰色内嵌盒） ---------- */
-.co-summary {
-  margin: 8rpx 22rpx 26rpx;
-  background: #f7f7f8; /* 设计明细盒浅灰底·tokens 无对应 */
-  border-radius: var(--ld-radius-md);
-  padding: 26rpx 30rpx;
+.od-v {
+  font-size: 15px;
 }
-.co-sum-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10rpx 0;
-}
-.co-sum-row text {
-  font-size: 25rpx;
-  color: var(--ld-content-2);
-}
-.co-sum-v {
+.od-total-k {
+  font-size: 17px;
   font-weight: 500;
-  color: var(--ld-content) !important;
-  letter-spacing: 0.4rpx;
 }
-.co-sum-div {
-  height: 1rpx;
-  background: var(--ld-line);
-  margin: 13rpx 0;
-}
-.co-sum-row.total text {
-  font-size: 26rpx;
-  color: var(--ld-ink);
-}
-.co-sum-row.total .co-sum-v {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: var(--ld-ink) !important;
+.od-total-v {
+  font-size: 15px;
+  font-weight: 600;
 }
 
-/* 申请售后：金额明细下方独立小按钮 */
-.coord-refund-wrap {
+/* 订单信息 */
+.od-info {
+  padding: 4px 4px 0;
   display: flex;
-  justify-content: flex-end;
-  margin-top: 22rpx;
-  padding-top: 22rpx;
-  border-top: 1rpx solid var(--ld-line-soft);
+  flex-direction: column;
+  gap: 4px;
 }
-.coord-refund {
-  display: inline-flex;
+.od-info-row {
+  min-height: 28px;
+  display: flex;
   align-items: center;
-  gap: 9rpx;
-  height: 60rpx;
-  padding: 0 26rpx;
-  border-radius: var(--ld-radius-pill);
-  border: 1rpx solid var(--ld-purple-line);
-  background: var(--ld-bg);
-  font-size: 24rpx;
-  color: var(--ld-content);
+  gap: 8px;
 }
-.coord-refund-img {
-  width: 28rpx;
-  height: 28rpx;
+.od-info-v {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--v5-ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ---------- 底部坞 ---------- */
-.co-dock-space {
-  height: 170rpx;
+/* 底部：返回 48 + 次 1 : 主 1.6 */
+.od-dock-space {
+  height: calc(72px + max(28px, env(safe-area-inset-bottom)));
 }
-.co-dock {
+.od-dock {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--ld-bg);
-  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.co-dockbar {
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  gap: 26rpx;
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom)) 34rpx;
+  gap: 8px;
+  background: var(--v5-canvas);
 }
-.co-dock-total {
+.od-back {
+  flex: 0 0 48px;
+  padding: 0;
+  font-size: 17px;
+}
+.od-side {
+  flex: 1;
+  min-width: 0;
+}
+.od-main {
+  flex: 1.6;
+  min-width: 0;
+}
+.od-danger {
+  position: relative;
+  overflow: hidden;
+  color: var(--v5-err-text);
+}
+/* 按住取消：浅红从左往右填满（HOLD_MS 700ms·同购物车按住删除写法） */
+.od-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: rgba(217, 72, 59, 0.14);
+}
+.od-hold-on .od-fill {
+  transform: scaleX(1);
+  transition: transform 700ms linear;
+}
+.od-danger-t {
+  position: relative;
+}
+.od-busy {
+  opacity: 0.8;
+}
+
+/* 骨架 / 失败 / 不存在 */
+.od-skel {
+  padding: 136px 16px 0;
   display: flex;
   flex-direction: column;
-  line-height: 1.15;
+  gap: 8px;
 }
-.co-dock-small {
-  font-size: 20rpx;
-  color: var(--ld-content-2);
+.od-skel-bar {
+  height: 14px;
+  margin-top: 8px;
 }
-.co-dock-amount {
+.od-state-page {
+  padding: 120px 16px 0;
   display: flex;
-  align-items: baseline;
-  gap: 14rpx;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
-.co-dock-num {
-  font-size: 46rpx;
+.od-state-t {
+  font-size: 17px;
+  font-weight: 500;
+}
+.od-retry {
+  margin-top: 8px;
+  min-width: 120px;
+}
+
+/* 申请售后半屏（设计稿 main.dc.html 680-688）：z 125、圆角 12、内边距 12/16/28、间距 16 */
+.as-root {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 125;
+}
+.as-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+.as-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--v5-canvas);
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.as-grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(17, 17, 17, 0.2);
+}
+.as-t {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.as-h {
+  font-size: 20px;
   font-weight: 700;
-  color: var(--ld-purple-ink);
-  letter-spacing: 0.2rpx;
-  line-height: 1;
 }
-.co-dock-num .cny {
-  font-size: 28rpx;
-  font-weight: 600;
-  margin-right: 2rpx;
+.as-sub,
+.as-cap {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.co-submit {
-  margin-left: auto;
-  flex: 0 0 auto;
-  padding: 24rpx 56rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 600;
+/* 三段：凹槽里选中＝浅色键带紫灯，其余透明灰字 */
+.as-seg {
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  gap: 4px;
 }
-.co-submit.dim {
-  opacity: 0.5;
+.as-seg-k {
+  flex: 1;
+  height: 36px;
+  padding: 0;
+  color: var(--v5-ink-2);
 }
-/* 取消订单（待支付·次级 ghost·与继续支付并列右侧·margin-left:auto 把按钮组推到右边） */
-.co-cancel {
-  margin-left: auto;
-  flex: 0 0 auto;
-  padding: 24rpx 36rpx;
-  border-radius: var(--ld-radius-pill);
-  background: transparent;
-  border: 1rpx solid var(--ld-line);
-  color: var(--ld-content-2);
-  font-size: 30rpx;
-  font-weight: 600;
+.as-seg-k.as-on {
+  color: var(--v5-ink);
 }
-
-/* ---------- 加载骨架（根因#8·对齐 order-list coolist-skel / detail pdp-skeleton） ---------- */
-.coord-skel-banner,
-.coord-skel-block,
-.coord-skel-bar {
-  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
-  background-size: 200% 100%;
-  animation: ld-shimmer 1500ms ease-in-out infinite;
+/* 没有可退商品：「退款」段置灰（点了提示原因，不切过去） */
+.as-seg-k.as-seg-off {
+  color: var(--v5-ink-4);
 }
-.coord-skel-banner {
-  height: 148rpx;
-  border-radius: var(--ld-radius-md);
+/* 退款不可选 / 被拒说明（+ 联系客服键·拍板 5） */
+.as-note {
+  margin-top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.coord-skel-bar {
-  height: 26rpx;
-  border-radius: 8rpx;
-}
-
-/* ---------- 订单不存在 ---------- */
-.coord-empty {
-  min-height: 100vh;
+.as-note-col {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
+  gap: 2px;
 }
-.coord-empty-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
+.as-block {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.coord-empty-hint {
-  font-size: 24rpx;
-  color: var(--ld-content-2);
+.as-kefu {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
 }
-
-/* 失败态重试钮（根因#14·守卫 rw-mp-list-loadfailed-state·形制同 detail pdp-empty-btn） */
-.coord-retry {
-  display: inline-block;
-  margin-top: 18rpx;
-  padding: 14rpx 46rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 600;
+/* 预计退款（拍板 4·云端试算） */
+.as-est {
+  margin-bottom: -8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+  text-align: right;
+}
+.as-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.as-lines {
+  max-height: 128px;
+}
+.as-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.as-chip {
+  height: auto;
+  min-height: 36px;
+  padding: 4px 12px;
+}
+.as-chip.k-flat {
+  color: var(--v5-ink-2);
+}
+/* 商品名一行 + 规格单独一行：名字再长也只截名字，同款不同色靠规格行分得清 */
+.as-chip-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.as-chip-t,
+.as-chip-spec {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 15px;
+}
+.as-chip-spec {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.as-ks {
+  display: flex;
+  gap: 8px;
+}
+.as-cancel {
+  flex: 1;
+}
+.as-go {
+  flex: 1.6;
 }

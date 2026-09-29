@@ -63,8 +63,8 @@ describe('行身份与加购（黄金 §一）', () => {
     // 分口径必须是精确整数（结算下单同一口径·钱链纪律）：浮点直加得 2006.0000000000002 过不了
     expect(cart.selectedTotalFen()).toBe(2006)
     expect(Number.isInteger(cart.selectedTotalFen())).toBe(true)
-    cart.toggleAll() // 全不选 → 全选
-    expect(cart.allSelected()).toBe(true)
+    cart.toggle('c') // 重新勾上丙（v5 稿去掉了「全选」，逐行勾选）
+    expect(cart.selectedCount()).toBe(3)
     expect(cart.selectedTotalLabel()).toBe('¥119.06')
   })
 

@@ -1,6 +1,24 @@
 // 黄金 learning-content §一（激活三态：新激活/本人回访/他人码/废码）+ §九（背景回退链）。
 import { describe, it, expect } from 'vitest'
-import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos, mapPublicFaq } from '../lib/mapLearning'
+import { activationView, bgFor, mapMyCourses, mapCatalog, mapHelpVideos, mapPublicFaq, mapFinish } from '../lib/mapLearning'
+
+describe('结业页 mapFinish（v5 C10：课程名 / 学完几节 / 视频时长）', () => {
+  const COURSE = {
+    id: 'c1',
+    title: '钩一只小鸭',
+    chapters: [
+      { id: 'ch1', title: '一', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true, dur: 90 }, { id: 's2', hasVideo: true, dur: 150 }] }] },
+      { id: 'ch2', title: '二', lessons: [{ id: 'l2', name: '收针', segments: [{ id: 's3', hasVideo: true, dur: 260 }] }, { id: 'l3', name: '空课时', segments: [] }] },
+    ],
+  }
+  it('大白话：只数有内容的课时；时长按全部段落秒数相加取整分钟', () => {
+    expect(mapFinish(COURSE)).toEqual({ name: '钩一只小鸭', lessonsLabel: '2 节', durLabel: '8 分钟' })
+  })
+  it('大白话：课程没拿到或没有时长数据——名字留空、时长不瞎报', () => {
+    expect(mapFinish(null)).toEqual({ name: '', lessonsLabel: '0 节', durLabel: '' })
+    expect(mapFinish({ title: 'x', chapters: [{ lessons: [{ id: 'l', segments: [{ id: 's' }] }] }] }).durLabel).toBe('')
+  })
+})
 
 describe('激活结果三态 + 废码/网络失败分治（黄金 §一）', () => {
   it('大白话：新激活/本人已进课各归各屏；他人码带课程号（按课取图）；废码与未知错误一律「码不对」不冒充激活', () => {

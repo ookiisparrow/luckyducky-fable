@@ -1,7 +1,7 @@
 import cloud from 'wx-server-sdk'
 import { getDb, throttleLocked, throttleFail, throttleReset, recordAudit, shouldAudit, alert, notifyAlert, err } from '../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { reply, checkKey, issueSession, revokeSession, type Ctx } from './lib'
+import { reply, checkKey, issueSession, revokeSession, isSessionTokenShape, type Ctx } from './lib'
 import * as products from './actions/products'
 import * as courses from './actions/courses'
 import * as cards from './actions/cards'
@@ -390,7 +390,9 @@ export const main = async (event: any) => {
   const auth = await checkKey(db, key, false)
   if (!auth.ok) {
     if (auth.error === 'AUTH_UNAVAILABLE') return reply(503, auth)
-    await authFail(tkey, globalWait) // 泛 action 与 login 打的是同一把口令、同一类爆破，同 tag 'adminLogin' 聚合
+    // 泛 action 与 login 打的是同一把口令、同一类爆破，同 tag 'adminLogin' 聚合。令牌长相的 key 只当令牌查、从不比口令
+    // （checkKey），失效令牌不算爆破：页面并发请求带过期令牌曾一次打开就把本机 IP 锁 5 分钟（2026-09-28）。
+    if (!isSessionTokenShape(String(key || ''))) await authFail(tkey, globalWait)
     return reply(401, auth)
   }
   if (tkey !== GLOBAL_KEY) await throttleReset(tkey)

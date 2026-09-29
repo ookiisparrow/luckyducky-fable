@@ -9,11 +9,13 @@
     "pages/paysuccess/paysuccess",
     "pages/order-list/order-list",
     "pages/order/order",
+    "pages/logistics/logistics",
     "pages/aftersales/aftersales",
     "pages/welcome/welcome",
     "pages/my-courses/my-courses",
     "pages/catalog/catalog",
     "pages/player/player",
+    "pages/finish/finish",
     "pages/reviews/reviews",
     "pages/review/review",
     "pages/me/me",
@@ -26,15 +28,15 @@
   "__usePrivacyCheck__": true,
   "window": {
     "navigationBarTitleText": "小棉鸭",
-    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarBackgroundColor": "#fafaf8",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#ffffff"
+    "backgroundColor": "#fafaf8"
   },
   "tabBar": {
     "custom": true,
-    "color": "#7e6e96",
-    "selectedColor": "#7b5caf",
-    "backgroundColor": "#ffffff",
+    "color": "#62625c",
+    "selectedColor": "#111111",
+    "backgroundColor": "#fafaf8",
     "list": [
       { "pagePath": "pages/home/home", "text": "首页" },
       { "pagePath": "pages/cart/cart", "text": "购物车" },

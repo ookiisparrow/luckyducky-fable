@@ -10,10 +10,10 @@ vi.mock('../lib/homeIntent', () => ({ goHomeTab: vi.fn() }))
 vi.mock('../utils/exitGuard', () => ({ armExitGuard: vi.fn(), releaseExitGuard: vi.fn(), onExitGuardBeforeLeave: vi.fn() }))
 vi.mock('../lib/cart', () => ({
   getItems: () => [{ id: 'p1', sku: '', name: '小鸭', price: 128, qty: 2, selected: true, cover: '' }],
-  allSelected: () => true,
   selectedCount: () => 2,
   selectedTotalLabel: () => '¥256.00',
   freshCover: (it: { cover: string }) => it.cover,
+  syncPrices: () => false,
 }))
 
 let pageOpts: Record<string, any> = {}
@@ -31,7 +31,6 @@ async function mount(): Promise<Record<string, any>> {
     Object.assign(this.data as Record<string, unknown>, patch)
   }
   page.getTabBar = () => ({ setActive })
-  page.ready = true
   return page
 }
 
@@ -51,11 +50,10 @@ describe('购物车 onShow', () => {
     expect(setActive).toHaveBeenCalledTimes(1)
   })
 
-  it('大白话：首拉还没完成（ready=false）——onShow 不刷新也不同步角标，交给 onLoad 收尾', async () => {
+  it('大白话：云目录首拉还没回来就切回购物车——也先把本地车刷出来（不等云目录）', async () => {
     const page = await mount()
-    page.ready = false
     page.onShow()
-    expect(page.data.items).toHaveLength(0)
-    expect(setActive).not.toHaveBeenCalled()
+    expect(page.data.items).toHaveLength(1)
+    expect(setActive).toHaveBeenCalledWith('cart')
   })
 })

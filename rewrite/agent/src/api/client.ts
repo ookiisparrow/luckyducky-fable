@@ -15,6 +15,11 @@ const ENDPOINT = import.meta.env.VITE_AGENT_API || ''
 // 壳层（App.vue）注册为「登出并回登录视图」，各调用点不各写各的 SESSION_LOST 跳转（各写
 // 会漂成卡死「加载中…」/裸显合成码/导登录多种表现）。login/loginByWecomCode 不触发（登录页自己处理错误）。
 let sessionLostHandler: (() => void) | null = null
+// 失效令牌只试一次（同 admin client·2026-09-28 真事故）：云端每个带失效令牌的请求都记一次认证失败，每 IP 5 次锁
+// 5 分钟。令牌没被云端认过（verifiedToken）之前并发请求排在第一个（probe）后面；它回 401 → 令牌已清，排队的直接
+// 判 SESSION_LOST、不再打云端。断网/超时（status 0）没拿到云端答复，不算认过。
+let verifiedToken = ''
+let probe: Promise<unknown> | null = null
 /** 注册会话失效回调（壳层调一次·如 () => { logout(); authed.value = false }）——会话失效导登录的单一出口。 */
 export const onSessionLost = (fn: () => void) => {
   sessionLostHandler = fn
@@ -60,7 +65,10 @@ export async function logout(): Promise<void> {
 export async function login(password: string): Promise<ClientResult> {
   const r = await raw('login', password, {})
   const token = typeof r.sessionToken === 'string' ? r.sessionToken : ''
-  if (r.ok && token) localStorage.setItem(TOKEN_KEY, token)
+  if (r.ok && token) {
+    localStorage.setItem(TOKEN_KEY, token)
+    verifiedToken = token // 刚签发的令牌不必再试
+  }
   if (r.ok && !token) return { ...r, ok: false, error: 'NO_SESSION_TOKEN' }
   return r
 }
@@ -69,19 +77,34 @@ export async function login(password: string): Promise<ClientResult> {
 export async function loginByWecomCode(code: string): Promise<ClientResult> {
   const r = await raw('loginByWecomCode', '', { code })
   const token = typeof r.sessionToken === 'string' ? r.sessionToken : ''
-  if (r.ok && token) localStorage.setItem(TOKEN_KEY, token)
+  if (r.ok && token) {
+    localStorage.setItem(TOKEN_KEY, token)
+    verifiedToken = token
+  }
   if (r.ok && !token) return { ...r, ok: false, error: 'NO_SESSION_TOKEN' }
   return r
 }
 
 export async function post(action: string, data: Record<string, unknown> = {}): Promise<ClientResult> {
-  const token = localStorage.getItem(TOKEN_KEY) || ''
+  let token = localStorage.getItem(TOKEN_KEY) || ''
+  while (token && token !== verifiedToken && probe) {
+    await probe // 排在试令牌的那个请求后面，它落定后按最新令牌再判
+    token = localStorage.getItem(TOKEN_KEY) || ''
+  }
   if (!token) {
     sessionLostHandler?.() // 无令牌调业务＝会话已丢·集中导登录
     return { ok: false, status: 401, error: 'SESSION_LOST' }
   }
-  const r = await raw(action, token, data)
+  const pending = raw(action, token, data)
+  if (token !== verifiedToken) {
+    probe = pending.then((res) => {
+      if (res.status !== 401 && res.status !== 0) verifiedToken = token
+    })
+    void probe.finally(() => (probe = null))
+  }
+  const r = await pending
   if (r.status === 401) {
+    if (verifiedToken === token) verifiedToken = ''
     localStorage.removeItem(TOKEN_KEY)
     sessionLostHandler?.() // 401＝会话失效·清令牌后集中导登录（单源·各调用点不再各跳）
     return { ...r, ok: false, error: 'SESSION_LOST' }

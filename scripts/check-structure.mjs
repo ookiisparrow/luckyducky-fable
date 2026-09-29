@@ -1498,12 +1498,14 @@ export const repoChecks = [
     // 单源 scripts/lib/brand-font-charset.mjs·病根#5 不各写各的）：
     // ① 推导 tier1（tab 首屏闭包+seed 标题）⊆ 已提交 assets/brand-fonts/tier1.txt——顺带机器锁
     //    「me.ts 直引 lib/mapMe、不得把 mapPages 法务长文拖回首屏闭包」（拖回即 tier1 溢出咬红）；
-    // ② 推导三层并集 ⊆ 三个 txt 并集——任何上屏字必有层，不许静默无家。
-    // 红了怎么修：BRAND_FONT_SRC=<源OTF目录> node scripts/build-brand-font.mjs 重建（txt 与 6 个 woff
+    // ② 推导两层并集 ⊆ 两个 txt 并集——任何圆体上屏字必有层，不许静默无家。
+    // 口径（v5·老板 2026-09-28 拍板并授权改本守卫）：只盯真用圆体显示的字；正文长段/用户内容走黑体 .t-sys 不在
+    // 盯防范围，不设 GB2312 兜底层。
+    // 红了怎么修：BRAND_FONT_SRC=<源OTF目录> node scripts/build-brand-font.mjs 重建（txt 与全部 woff
     // 一起换，脚本不允许只改 txt 不建 woff），提交产物并把 woff 重新部署到托管 /fonts/（README 部署节）。
     id: 'rw-mp-font-tier-subset-covers',
     roots: ['#8'],
-    desc: '品牌字体分层子集覆盖上屏字（字体分层批·根因#8）：deriveTierCharsets 推导 tier1 ⊆ assets/brand-fonts/tier1.txt 且三层并集 ⊆ 三 txt 并集——新增文案带来子集外新字即红（真机该字静默掉系统字体）；红了跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建 + 重新部署托管 /fonts/',
+    desc: '品牌字体分层子集覆盖上屏字（字体分层批·根因#8）：deriveTierCharsets 推导 tier1 ⊆ assets/brand-fonts/tier1.txt 且两层并集 ⊆ 两 txt 并集——新增文案带来子集外新字即红（真机该字静默掉系统字体）；红了跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建 + 重新部署托管 /fonts/',
     run() {
       const base = join(ROOT, 'rewrite/mp')
       if (!existsSync(base)) return ['rewrite/mp 缺失——守卫扫描面消失（rw-mp-font-tier-subset-covers）']
@@ -1512,16 +1514,15 @@ export const repoChecks = [
       const readSet = (f) => (existsSync(join(dir, f)) ? new Set([...readFileSync(join(dir, f), 'utf8')]) : null)
       const t1 = readSet('tier1.txt')
       const t2 = readSet('tier2.txt')
-      const t3 = readSet('tier3.txt')
-      if (!t1 || !t2 || !t3) {
-        bad.push('assets/brand-fonts/tier{1,2,3}.txt 缺失——分层子集字符集未提交（BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建后提交）')
+      if (!t1 || !t2) {
+        bad.push('assets/brand-fonts/tier{1,2}.txt 缺失——分层子集字符集未提交（BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建后提交）')
         return bad
       }
       const derived = deriveTierCharsets(ROOT)
       const miss1 = [...derived.tier1].filter((c) => !t1.has(c))
       if (miss1.length)
         bad.push(`tab 首屏上屏字有 ${miss1.length} 个不在 tier1 子集（${miss1.slice(0, 12).join('')}${miss1.length > 12 ? '…' : ''}）——真机将掉系统字体；跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建并重新部署 /fonts/`)
-      const union = new Set([...t1, ...t2, ...t3])
+      const union = new Set([...t1, ...t2])
       const missAll = [...derived.tier1, ...derived.tier2].filter((c) => !union.has(c))
       if (missAll.length)
         bad.push(`上屏字有 ${missAll.length} 个不在任何层子集（${missAll.slice(0, 12).join('')}${missAll.length > 12 ? '…' : ''}）——新增文案带来子集外新字；跑 BRAND_FONT_SRC=<源OTF> node scripts/build-brand-font.mjs 重建并重新部署 /fonts/`)

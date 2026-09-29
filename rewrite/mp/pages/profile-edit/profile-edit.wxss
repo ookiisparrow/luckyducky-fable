@@ -1,167 +1,159 @@
-/* 编辑资料·重设计对齐 Checkout.jsx ProfileEdit + checkout.css coprof/coaddr-* 版式。
-   设计 402px 画板→rpx（×1.87）。页浅灰底、白卡以圆角+浅影分隔·发丝线分行；token 见 styles/tokens.wxss。
-   co-/coaddr-/coprof- 前缀沿设计。 */
-.co {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout 同调·tokens 无对应中性灰） */
-  color: var(--ld-content);
+/* 编辑资料（v5「字重」稿 D3 + 放弃编辑确认） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-.co image {
-  display: block;
-}
-
-/* ---------- 内容容器 ---------- */
-.co-body {
-  padding: 22rpx 26rpx 8rpx;
+/* 整页一列：顶栏 + 滚动内容 + 底坞（同 checkout·放弃确认武装时页面级滚动被冻，只让中间 scroll-view 滚） */
+.pe-page {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 22rpx;
+}
+.pe-scroll {
+  flex: 1;
+  height: 0;
 }
 
-/* ---------- 通用白卡 ---------- */
-.co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
-}
-
-/* ---------- 资料表单（行间发丝线·末行无线） ---------- */
-.coaddr-form {
-  padding: 4rpx 30rpx;
-}
-.coaddr-field {
+/* 头像：84 方块 + 右下角「换」小键；整块是 chooseAvatar 能力按钮（去掉 button 默认样式） */
+.pe-av-wrap {
+  padding: 8px 16px 0;
   display: flex;
-  align-items: center;
-  gap: 22rpx;
-  padding: 28rpx 0;
-  border-bottom: 1rpx solid var(--ld-line-soft);
-}
-.coaddr-field:last-child {
-  border-bottom: none;
-}
-.coaddr-field-area {
-  align-items: flex-start;
-}
-.coaddr-label {
-  flex: 0 0 120rpx;
-  font-size: 27rpx;
-  color: var(--ld-content);
-}
-.coaddr-field-area .coaddr-label {
-  padding-top: 6rpx;
-}
-.coaddr-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 28rpx;
-  color: var(--ld-ink);
-  line-height: 1.5;
-}
-.coaddr-area {
-  width: 100%;
-  min-height: 60rpx;
-}
-.coaddr-ph {
-  color: var(--ld-content-2);
-}
-
-/* ---------- 头像行（整行为 chooseAvatar 能力按钮·重置按钮外观） ---------- */
-.coprof-avatar-field {
-  width: 100%;
-  text-align: left;
-  background: none;
-  padding: 26rpx 0;
-  line-height: inherit;
-}
-.coprof-avatar-field::after {
-  border: none;
-}
-.coprof-avatar {
-  width: 90rpx;
-  height: 90rpx;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  position: relative;
-  background: var(--ld-bg-sage);
-}
-.coprof-avatar-img {
-  width: 90rpx;
-  height: 90rpx;
-  border-radius: 50%;
-}
-.coprof-avatar-empty {
-  box-sizing: border-box;
-  padding: 18rpx 10rpx;
-  background: var(--ld-bg-sage);
-}
-.coprof-cam {
-  position: absolute;
-  right: -4rpx;
-  bottom: -4rpx;
-  width: 38rpx;
-  height: 38rpx;
-  border-radius: 50%;
-  background: var(--ld-purple);
-  border: 4rpx solid var(--ld-bg);
-  display: flex;
-  align-items: center;
   justify-content: center;
 }
-.coprof-cam-ico {
-  width: 20rpx;
-  height: 20rpx;
+.pe-av-btn {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  line-height: normal;
+  overflow: visible;
 }
-
-/* 加载骨架（login 在途·不画可编辑空档）：微光扫过对齐 reviews（@keyframes ld-shimmer·app.wxss） */
-.coprof-skel {
-  height: 28rpx;
-  margin: 28rpx 0;
-  border-radius: 8rpx;
-  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
-  background-size: 200% 100%;
-  animation: ld-shimmer 1500ms ease-in-out infinite;
+.pe-av-btn::after {
+  border: none;
 }
-
-/* 表单下说明 */
-.coprof-tip {
+.pe-av {
+  width: 84px;
+  height: 84px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--v5-sunk);
+}
+.pe-av-img {
+  width: 100%;
+  height: 100%;
   display: block;
-  text-align: center;
-  font-size: 22rpx;
-  color: var(--ld-purple-meta);
-  line-height: 1.6;
-  margin: 30rpx 30rpx 8rpx;
+}
+.pe-av-k {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
+}
+/* 按住头像：「换」键下沉（同 app.wxss .k-sm.k-light-down） */
+.pe-av-down .pe-av-k {
+  transform: translateY(1px);
+  background: #f0f0ed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
 }
 
-/* ---------- 底部保存坞 ---------- */
-.co-dock-space {
-  height: 160rpx;
-}
-.co-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--ld-bg);
-  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.coaddr-dock {
+.pe-form {
+  padding: 24px 16px 0;
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pe-label {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.pe-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink);
+}
+.pe-ph {
+  color: var(--v5-ink-4);
+}
+.pe-skel {
+  height: 44px;
+  border-radius: 6px;
+}
+.pe-fail {
+  padding: 48px 16px 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
+  gap: 12px;
 }
-.co-submit {
-  background: var(--ld-purple);
-  color: #ffffff;
-  border-radius: var(--ld-radius-pill);
-  font-size: 30rpx;
-  font-weight: 600;
-  text-align: center;
+.pe-fail-t {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
 }
-.coaddr-save {
+
+.pe-dock {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  background: var(--v5-canvas);
+}
+.pe-save {
   flex: 1;
-  padding: 26rpx 0;
 }
-.co-submit.dim {
-  opacity: 0.5;
+
+/* 账号操作：按住确认，填充从左往右走满 */
+.pe-acct {
+  padding: 28px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pe-acct-k {
+  position: relative;
+  overflow: hidden;
+}
+.pe-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.pe-fill-del {
+  background: rgba(217, 72, 59, 0.14);
+}
+.pe-hold-on .pe-fill-del {
+  transform: scaleX(1);
+  transition: transform 900ms linear;
+}
+.pe-acct-t {
+  position: relative;
+}
+.pe-danger {
+  color: var(--v5-err-text);
+}
+.pe-acct-note {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }

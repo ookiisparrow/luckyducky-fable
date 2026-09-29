@@ -87,19 +87,12 @@ export function toggle(id: string, sku = ''): void {
   save()
 }
 
-export function toggleAll(): void {
-  const next = !allSelected()
-  load().forEach((it) => (it.selected = next))
-  save()
-}
-
 export function getItems(): Array<CartItem & { lineId: string }> {
   return load().map((it) => ({ ...it, lineId: lineIdOf(it.id, it.sku) }))
 }
 
 export const count = (): number => load().reduce((n, it) => n + it.qty, 0)
 export const selectedCount = (): number => load().reduce((n, it) => (it.selected ? n + it.qty : n), 0)
-export const allSelected = (): boolean => load().length > 0 && load().every((it) => it.selected)
 
 /** 选中合计·分（整数·结算下单用同一口径——0.1 元这类价 ×100 浮点会带尾数，逐行 Math.round 后必为整数）。 */
 export function selectedTotalFen(): number {
@@ -127,6 +120,31 @@ export function consume(lines: Array<{ id: string; sku?: string; qty: number }>)
 /** 仅测试：重置内存态强制下次重新回灌。 */
 export function __resetForTest(): void {
   items = null
+}
+
+/** 这一行的现价（元）：从「当前商品原档」取——有规格按规格名找规格价，无规格用商品价（同云端 createOrder priceItems 口径）。
+ *  商品不在货架（停售/删档/原档未加载）、规格没了、价不合法 → null：调用方不动这一行，
+ *  交给下单时云端拒单（UNLISTED_ITEM/UNKNOWN_ITEM/UNKNOWN_SKU）+ checkout.dropRejectedLine 点名移出，不静默丢。 */
+export function latestPrice(line: { id: string; sku: string }, allRaw: Record<string, unknown>[]): number | null {
+  const p = allRaw.find((x) => String(x.id || x._id || '') === line.id) as Record<string, any> | undefined
+  if (!p) return null
+  const src = line.sku ? (Array.isArray(p.skus) ? p.skus : []).find((s: any) => s && s.name === line.sku) : p
+  const n = Number(src && src.price)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** 用现价覆盖车里各行并写回本地；返回有没有哪行价变了（页面据此提示「价格有变动」）。 */
+export function syncPrices(allRaw: Record<string, unknown>[]): boolean {
+  let changed = false
+  for (const it of load()) {
+    const n = latestPrice(it, allRaw)
+    if (n !== null && Math.round(n * 100) !== Math.round(it.price * 100)) {
+      it.price = n
+      changed = true
+    }
+  }
+  if (changed) save()
+  return changed
 }
 
 /** 展示层覆盖：云端 getProducts 下发的 cover 是约 2h 时效的 https 临时址

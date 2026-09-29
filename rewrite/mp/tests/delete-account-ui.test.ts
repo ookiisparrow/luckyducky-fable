@@ -1,18 +1,16 @@
-// 「我」页删除资料：只在已登录时露出入口；点下去连确认两次才真删，删成清本地地址与登录态，删失败什么都不清。
-// 「我」页不用「注销账户」四字（首屏字体没有注/销/账）由守卫 rw-mp-font-tier-subset-covers 管（tier1 缺字即红）。
-// Page 桩同 me-cont-failed.test.ts。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+// 删除资料（v5 D3·老板拍板放编辑资料页）：按住 0.9s 再弹一次后果确认才真删
+// （删除不可恢复·隐私政策第六条；按住是设计稿交互，确认框讲清后果）。删成清本地地址、登录态、继续学习旧卡；删失败什么都不清。
+// 「退出登录」键老板 2026-09-29 拍板去掉（两页都不再有）。Page 桩同 me-cont-failed.test.ts。
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import meWxml from '../pages/me/me.wxml?raw'
+import peWxml from '../pages/profile-edit/profile-edit.wxml?raw'
 
 const { deleteAccountMock } = vi.hoisted(() => ({ deleteAccountMock: vi.fn() }))
 vi.mock('../api/user', () => ({
-  login: vi.fn().mockResolvedValue({ ok: false }),
-  getMyProgress: vi.fn().mockResolvedValue({ ok: false }),
+  login: vi.fn().mockResolvedValue({ ok: true, user: { nickname: '鸭', avatar: '', phone: '' } }),
+  updateProfile: vi.fn(),
   deleteAccount: deleteAccountMock,
 }))
-vi.mock('../api/learning', () => ({ getMyCourses: vi.fn().mockResolvedValue({ ok: false }) }))
-vi.mock('../lib/courses', () => ({ getCoursesByIds: vi.fn(), getAllCourses: vi.fn() }))
-vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null), __resetForTest: () => {} }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
@@ -22,18 +20,25 @@ let pageOpts: Record<string, any> = {}
 let store: Record<string, unknown> = {}
 let wxMock: Record<string, any>
 beforeEach(() => {
-  store = {}
+  vi.useFakeTimers()
+  store = { 'ld:me-cont': { courseId: 'c1', lessonId: 'l1' }, ld_consent_hint: true }
   wxMock = {
     getStorageSync: (k: string) => store[k],
     setStorageSync: (k: string, v: unknown) => (store[k] = JSON.parse(JSON.stringify(v))),
     removeStorageSync: (k: string) => delete store[k],
     getWindowInfo: () => ({ statusBarHeight: 20 }),
     showModal: vi.fn(),
+    showLoading: vi.fn(),
+    hideLoading: vi.fn(),
     showToast: vi.fn(),
+    navigateBack: vi.fn(),
+    switchTab: vi.fn(),
   }
   ;(globalThis as any).wx = wxMock
+  ;(globalThis as any).getCurrentPages = () => [{}, {}]
   deleteAccountMock.mockReset()
 })
+afterEach(() => vi.useRealTimers())
 
 async function mountLoggedIn() {
   vi.resetModules()
@@ -41,48 +46,85 @@ async function mountLoggedIn() {
   const address = await import('../lib/address')
   loginGate.markAgreed()
   address.saveAddress({ name: '鸭', phone: '13800000000', region: '上海', detail: '1 号', isDefault: true })
-  await import('../pages/me/me')
+  await import('../pages/profile-edit/profile-edit')
   const page = Object.create(pageOpts) as Record<string, any>
   page.data = { ...pageOpts.data }
-  page.setData = function (patch: Record<string, unknown>) {
+  page.setData = function (patch: Record<string, unknown>, cb?: () => void) {
     Object.assign(this.data as Record<string, unknown>, patch)
+    cb?.() // 真运行时渲染落地后回调（退出/删除先撤放弃确认拦截再返回）
   }
+  await page.onLoad()
   return { page, loginGate, address }
 }
 
-const modal = (n: number) => wxMock.showModal.mock.calls[n][0]
-
-describe('删除资料入口（我的页·两次确认）', () => {
-  it('大白话：入口只在已登录时露出（wxml 静态标记）', () => {
-    const wxml = meWxml.replace(/<!--[\s\S]*?-->/g, '')
-    expect(wxml).toContain('删除资料')
-    expect(wxml).toMatch(/wx:if="\{\{loggedIn\}\}"[^>]*onDeleteAccount|onDeleteAccount[^>]*wx:if="\{\{loggedIn\}\}"/)
-  })
-
-  it('大白话：第一次点「继续」、第二次点「删除」才真删；任一步取消都不删', async () => {
+describe('入口位置', () => {
+  it('大白话：「我」页没有退出登录/删除资料；编辑资料页只有删除资料（没有退出登录），且用按住（touchstart/touchend）触发、不是轻点', async () => {
+    const me = meWxml.replace(/<!--[\s\S]*?-->/g, '')
+    expect(me).not.toContain('删除资料')
+    expect(me).not.toContain('退出登录')
+    const pe = peWxml.replace(/<!--[\s\S]*?-->/g, '')
+    expect(pe).toContain('删除资料')
+    expect(pe).not.toContain('退出登录')
+    expect(pe).not.toMatch(/onLogout/)
+    expect(pe).toMatch(/touchstart="onDeleteStart"/)
+    expect(pe).not.toMatch(/bind:tap="onDelete/)
     const { page } = await mountLoggedIn()
-    deleteAccountMock.mockResolvedValue({ ok: true })
-    page.onDeleteAccount()
-    expect(modal(0).confirmText).toBe('继续')
-    modal(0).success({ confirm: false })
-    expect(wxMock.showModal).toHaveBeenCalledTimes(1)
+    expect(page.onLogoutStart).toBeUndefined()
+    expect(page.doLogout).toBeUndefined()
+    expect('holdOut' in page.data).toBe(false)
+  })
+})
 
-    modal(0).success({ confirm: true })
-    expect(modal(1).confirmText).toBe('删除')
-    modal(1).success({ confirm: false })
+describe('删除资料（按住 0.9s + 一次确认）', () => {
+  it('大白话：按满后弹确认；点取消不删', async () => {
+    const { page } = await mountLoggedIn()
+    page.onDeleteStart({ touches: [{ clientX: 0, clientY: 0 }] })
+    vi.advanceTimersByTime(900)
+    const m = wxMock.showModal.mock.calls[0][0]
+    expect(m.confirmText).toBe('删除')
+    expect(m.content).toContain('订单还在')
+    m.success({ confirm: false })
     expect(deleteAccountMock).not.toHaveBeenCalled()
   })
 
-  it('大白话：两次都确认——删成后清掉本地地址和登录态，提示已删除', async () => {
+  it('大白话：确认后删成——清掉本地地址、登录态、继续学习旧卡，提示已删除并回上一页', async () => {
     const { page, loginGate, address } = await mountLoggedIn()
     deleteAccountMock.mockResolvedValue({ ok: true })
-    page.onDeleteAccount()
-    modal(0).success({ confirm: true })
-    modal(1).success({ confirm: true })
+    page.onDeleteStart({ touches: [{ clientX: 0, clientY: 0 }] })
+    vi.advanceTimersByTime(900)
+    wxMock.showModal.mock.calls[0][0].success({ confirm: true })
     await vi.waitFor(() => expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已删除', icon: 'none' }))
     expect(deleteAccountMock).toHaveBeenCalledTimes(1)
     expect(address.getList()).toEqual([])
     expect(loginGate.hasAgreed()).toBe(false)
+    expect(store['ld:me-cont']).toBeUndefined()
+    expect(store['ld_consent_hint']).toBeNull() // 服务端已重置数据共享授权：本机旧的「已同意」一并清
+    expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：确认框的「删除」是警示红；删除在途挂「删除中」遮罩，连点只发一次，回包后收起遮罩', async () => {
+    const { page } = await mountLoggedIn()
+    page.onDeleteStart({ touches: [{ clientX: 0, clientY: 0 }] })
+    vi.advanceTimersByTime(900)
+    expect(wxMock.showModal.mock.calls[0][0].confirmColor).toBe('#D9483B')
+    let release!: (v: unknown) => void
+    deleteAccountMock.mockImplementation(() => new Promise((r) => (release = r)))
+    const first = page.runDeleteAccount()
+    void page.runDeleteAccount()
+    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '删除中', mask: true })
+    expect(deleteAccountMock).toHaveBeenCalledTimes(1)
+    expect(wxMock.hideLoading).not.toHaveBeenCalled()
+    release({ ok: false })
+    await first
+    expect(wxMock.hideLoading).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：按住时手指滑开超过 10px——作废，不弹确认', async () => {
+    const { page } = await mountLoggedIn()
+    page.onDeleteStart({ touches: [{ clientX: 100, clientY: 100 }] })
+    page.onDeleteMove({ touches: [{ clientX: 100, clientY: 120 }] })
+    vi.advanceTimersByTime(900)
+    expect(wxMock.showModal).not.toHaveBeenCalled()
   })
 
   it('大白话：云端没删成——提示稍后再试，地址和登录态都不动', async () => {

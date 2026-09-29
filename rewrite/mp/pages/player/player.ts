@@ -27,6 +27,7 @@ import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer, type CatalogPlayerVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
+import { keyDown, keyUp } from '../../lib/keyFx'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 拖动文案刷新节流（ms）：位置由 seek.wxs 渲染层 60fps 跟手，curClock/snapName 文案经 onSeekTick 回逻辑层
@@ -60,10 +61,10 @@ function buildCapText(strip: LessonStrip | null, segDone: boolean, course: Cours
 }
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
-    capsuleBottom: 0, // 原生胶囊底边 y（px·onLoad 取 getMenuButtonBoundingClientRect().bottom）：段落进度条按此动态避让落胶囊下方
-    videoRatio: 168, // 播放框比例 padding-top%（默认 1:1.68·onVideoMeta 拿素材真实宽高后贴合·去左右黑边）
     title: '',
     current: null as FlatSegment | null,
     src: '',
@@ -104,7 +105,6 @@ Page({
   course: null as CoursePub | null,
   srcSetAt: 0,
   windowWidthPx: 0, // rpx→px 换算基准（onLoad 存·750rpx = windowWidthPx px）
-  windowHeightPx: 0, // 视频框比例封顶基准（onLoad 存·防超高素材撑破屏·见 onVideoMeta）
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
   playToken: 0, // 切段请求令牌（防乱序回包覆盖）
@@ -138,21 +138,8 @@ Page({
   async onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
     this.windowWidthPx = info.windowWidth || 0 // rpx→px 换算基准（750rpx = 本机 windowWidth px），供拖动预览浮层防出屏边距用
-    this.windowHeightPx = info.windowHeight || 0 // 视频框比例封顶基准（防超高素材撑破屏·见 onVideoMeta）
-    // 原生胶囊 rect（屏幕左上原点·px，与 .lp-stage inset:0 同坐标系）：段落进度条 top 按胶囊底边动态避让，
-    // 逐机型胶囊位不同·statusBarHeight 近似不可靠。
-    // 防御：PC/mac 客户端与部分安卓冷启动下该 API 可返回全 0 rect 甚至异常（社区反复确认的平台怪癖）——
-    // 裸取 .bottom 会让段条 top:8px 撞状态栏、极端态 TypeError 打断 onLoad 整页死在加载骨架。
-    // 兜底 statusBarHeight+36（常规胶囊 top≈sbh+4·高 32；sbh 自身也可为空，Number()||0 后 PC 上退化 36px）。
-    const sbh = Number(info.statusBarHeight) || 0
-    let capsuleBottom = 0
-    try {
-      const capsule = wx.getMenuButtonBoundingClientRect()
-      if (capsule && Number.isFinite(capsule.bottom) && capsule.bottom > 0) capsuleBottom = capsule.bottom
-    } catch {
-      /* 无胶囊环境（PC 等）·走兜底 */
-    }
-    this.setData({ statusBarHeight: sbh, capsuleBottom: capsuleBottom || sbh + 36 })
+    // 顶栏按状态栏高度下移（v5 顶栏在文档流里、右侧 104px 固定留白给胶囊，不再按胶囊 rect 动态避让浮层）
+    this.setData({ statusBarHeight: Number(info.statusBarHeight) || 0 })
     this.courseId = String(query.courseId || '')
     void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     this._wantSeg = String(query.segmentId || '')
@@ -327,8 +314,8 @@ Page({
     this.setData({ paused: true })
   },
 
-  // 段落播完（设计拍板）：不自动切下一段——停在完成态，通栏「重播本段」+ segstrip
-  // 文案三态（见 buildCapText）由用户自己选重播/上一段/下一段（需求 R38）。
+  // 段落播完（设计拍板）：不自动切下一段——停在完成态（课时内＝「段间」浮层重播本段/继续下一段；课时末段＝C9
+  // 学完一节重看本节/继续下一节），文案三态见 buildCapText，由用户自己选（需求 R38）。
   onEnded() {
     const cur = this.data.current
     if (!cur) return
@@ -345,6 +332,19 @@ Page({
     ctx.seek(0)
     ctx.play()
     this.exitSegDone()
+  },
+
+  // 整门课最后一节播完「完成课程」→ C10 结业页（孵化小鸭）；redirect 不叠栈，返回回到进播放页之前那页
+  onFinishCourse() {
+    wx.redirectTo({ url: '/pages/finish/finish?courseId=' + this.courseId })
+  },
+  // C9 学完一节「重看本节」：回本课时第一段可播段起播；本课时只有这一段就原地重播（不重挂 <video>）。
+  onReplayLesson() {
+    const cur = this.data.current
+    if (!cur) return
+    const first = flattenSegments(this.course).find((s) => s.lessonId === cur.lessonId && s.hasVideo)
+    if (!first || first.segmentId === cur.segmentId) this.onReplay()
+    else void this.playSegment(first, 'seg')
   },
 
   // error 态手动重试：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
@@ -426,27 +426,17 @@ Page({
     if (Math.abs(pct - this.data.bufferPct) >= 2) this.setData({ bufferPct: pct })
   },
 
-  // 视频框贴合素材真实比例：loadedmetadata 拿到真实宽高后把播放框 padding-top 设成
-  // height/width——竖版素材比默认 1:1.68 框更窄，contain 会在左右留黑；框贴合素材比例后恰好铺满、不裁切、无左右黑边。
-  // 封顶到屏幕比例防超高素材撑破屏（.ld-player overflow:hidden·封顶后素材比框更瘦高，contain 高度顶满、
-  // 宽度不足→退化为左右留黑不裁切·「去左右黑边」性质在此极端分支保不住，合的是「不裁切」诉求）。
-  onVideoMeta(e: WechatMiniprogram.CustomEvent<{ width: number; height: number; duration: number }>) {
+  // 元数据就绪（v5 视频铺满弹性舞台 object-fit:contain，不再按素材比例改框高）。
+  onVideoMeta() {
     // 续播秒双保险（根因#15）：initial-time 只在 <video> 首挂载读一次、平台偶有不生效（官方 issue #83 变体）。
     // 本段有未消费续播位置（_resumeAt>0）时，元数据就绪即兜底——离目标 >2s 判为未落位、seek 一次；消费清零（一次性）。
     // 无同步读 currentTime 的 API，用最近 timeupdate 的 _at 近似（元数据就绪时通常仍为 0→触发一次幂等 seek 到目标·
-    // 已在目标则平台自 no-op）；initial-time 生效则实际位置≈目标、距离判定自动 no-op。置于比例分支之前（脏元数据早退不漏兜底）。
+    // 已在目标则平台自 no-op）；initial-time 生效则实际位置≈目标、距离判定自动 no-op。
     if (this._resumeAt > 0) {
       const target = this._resumeAt
       this._resumeAt = 0
       if (Math.abs((this._at || 0) - target) > 2) wx.createVideoContext('lp-video', this).seek(target)
     }
-    const w = Number(e.detail && e.detail.width)
-    const h = Number(e.detail && e.detail.height)
-    if (!(w > 0) || !(h > 0)) return // 脏元数据：保持默认 168%·不算比例
-    const raw = (h / w) * 100
-    const cap = this.windowWidthPx > 0 && this.windowHeightPx > 0 ? (this.windowHeightPx / this.windowWidthPx) * 100 : raw
-    const ratio = Math.min(raw, cap) // 封顶屏幕比例·不撑破屏
-    if (Math.abs(ratio - this.data.videoRatio) > 0.5) this.setData({ videoRatio: ratio }) // 有意义变化才 setData（免抖动）
   },
 
   // 全屏单击播放/暂停：只调用视频上下文 play()/pause()，真实态由 bind:play/bind:pause 回报（不臆断本地态）。

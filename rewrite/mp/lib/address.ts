@@ -85,6 +85,15 @@ export function setDefault(id: number): void {
   save()
 }
 
+/** 手机号（老板拍板 6·设计稿规则）：正好 11 位数字才算数。云端下单闸更宽（≥7 位），前端更严无妨。 */
+export const phoneOk = (p: string): boolean => /^\d{11}$/.test(p)
+
+/** 手机号还差几位（驱动「手机号少了 N 位」）；空的或已够 11 位返回 0。 */
+export const phoneShort = (p: string): number => (p.length > 0 && p.length < 11 ? 11 - p.length : 0)
+
+/** 展示打码（设计稿 mask）：正好 11 位数字 →「138 **** 0428」；其余（旧座机/带横杠）原样，不硬打码。 */
+export const maskPhone = (p: string): string => (phoneOk(p) ? p.slice(0, 3) + ' **** ' + p.slice(7) : p)
+
 /** 删除资料：清本地地址簿（本机才有这份·云端不存地址本）。 */
 export function clearAll(): void {
   list = []

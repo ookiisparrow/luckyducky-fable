@@ -1,31 +1,34 @@
+<!-- 数据共享授权（v5 稿 D7）：大标题 + 声明正文（原样）+ 状态牌（LED）；底部 撤回 / 同意 两键始终都在、都是轻点。
+     合规：撤回同意须与给出同意同样便捷（个人信息保护法），故不照设计稿做「按住撤回」、也不按本机状态藏键
+     （本机状态只是提示·服务端为准，跨设备改过时藏键会让人撤不回）。q2-mp-pages-consent 测试钉住。 -->
+<v5-nav title="数据共享授权" />
+
 <view class="cs">
-  <view class="cs-card">
-    <view class="cs-head">
-      <view class="cs-head-ico">
-        <image class="cs-head-img" src="/static/icons/shield-check.svg" mode="aspectFit" />
-      </view>
-      <text class="cs-h">关于外包/第三方客服访问你的数据</text>
-    </view>
+  <text class="cs-h">关于外包/第三方客服访问你的数据</text>
+  <text class="cs-p t-sys">为向你提供客服与售后支持，我们可能安排外包或第三方客服（受托客服人员）在为你服务所必需的范围内，查看你的订单、物流、学习进度与咨询记录等数据，以更准确地响应你的请求。</text>
+  <text class="cs-p t-sys">此类第三方受托客服访问以你的同意为前提。你可在本页随时同意或撤回该数据共享授权；撤回后，外包坐席将无法再查看你的上述数据（不影响此前已依约进行的处理）。</text>
 
-    <text class="cs-p">为向你提供客服与售后支持，我们可能安排外包或第三方客服（受托客服人员）在为你服务所必需的范围内，查看你的订单、物流、学习进度与咨询记录等数据，以更准确地响应你的请求。</text>
-    <text class="cs-p">此类第三方受托客服访问以你的同意为前提。你可在本页随时同意或撤回该数据共享授权；撤回后，外包坐席将无法再查看你的上述数据（不影响此前已依约进行的处理）。</text>
-
-    <view class="cs-div"></view>
-
-    <view class="cs-state {{state === true ? 'on' : ''}} {{state === false ? 'off' : ''}}">
-      <view class="cs-dot"></view>
-      <text class="cs-state-t">{{stateLabel}}</text>
-    </view>
-
-    <view class="cs-acts">
-      <view class="cs-btn primary {{busy ? 'dim' : ''}}" bind:tap="onAgree"><text class="cs-btn-t on">同意共享</text></view>
-      <view class="cs-btn ghost {{busy ? 'dim' : ''}}" bind:tap="onRevoke"><text class="cs-btn-t">撤回授权</text></view>
-    </view>
+  <view class="k k-light cs-state">
+    <px-i name="led" tone="{{state === true ? '#3F9A5E' : 'rgba(17,17,17,.28)'}}" halo="{{state === true ? '' : 'none'}}" />
+    <text class="cs-state-t">{{stateLabel}}</text>
   </view>
 
-  <view class="cs-row" hover-class="cs-row-h" bind:tap="onPolicy">
-    <text class="cs-row-t">查看完整隐私政策 ›</text>
+  <view class="cs-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onPolicy">
+    <text class="cs-row-t">查看完整隐私政策</text>
+    <px-i name="arrow" tone="#62625c" />
   </view>
 
-  <text class="cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
+  <text class="t-sys cs-note">以服务端记录为准；如需协助可通过本小程序客服与我们联系。</text>
+  <view class="cs-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">
+    <text class="cs-row-t">联系客服</text>
+    <px-i name="arrow" tone="#62625c" />
+  </view>
 </view>
+
+<view class="cs-dock-space"></view>
+<view class="cs-dock">
+  <view class="k k-light k-48 cs-revoke {{busy ? 'cs-dim' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRevoke" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">撤回授权</view>
+  <view class="k k-ink k-48 cs-main {{busy ? 'cs-dim' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAgree" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">同意共享</view>
+</view>
+
+<px-fx id="fx" />

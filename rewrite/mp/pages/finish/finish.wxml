@@ -1,0 +1,23 @@
+<!-- 结业页（v5「字重」稿 C10）：孵化小鸭 + 课程名 + 祝贺 + 学完几节/视频时长；底部 课程目录 / 去评价。 -->
+<v5-nav />
+
+<view class="fn">
+  <view class="fn-egg"><px-ground kind="egg" hatched hatch-key="{{courseId}}" /></view>
+  <view class="fn-copy">
+    <text class="fn-name" wx:if="{{name}}">{{name}}</text>
+    <text class="fn-title">恭喜，整门课学完了</text>
+    <text class="t-sys fn-sub">小鸭孵出来了，以后就在「我」页陪着你。</text>
+  </view>
+  <view class="fn-stats" wx:if="{{name}}">
+    <view class="fn-row"><text class="t-sys fn-k">学完</text><view class="fn-leader"></view><text class="mono fn-v">{{lessonsLabel}}</text></view>
+    <view class="fn-row" wx:if="{{durLabel}}"><text class="t-sys fn-k">视频时长</text><view class="fn-leader"></view><text class="mono fn-v">{{durLabel}}</text></view>
+  </view>
+</view>
+
+<view class="fn-dock">
+  <view class="k k-light k-48 fn-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onCatalog" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">课程目录</view>
+  <view class="k k-ink k-48 fn-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onReview" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去评价</view>
+</view>
+
+<!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

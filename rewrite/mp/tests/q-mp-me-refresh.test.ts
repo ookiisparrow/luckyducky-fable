@@ -89,11 +89,11 @@ describe('「我」tab onShow 短时去重', () => {
     expect(loginMock).toHaveBeenCalledTimes(2)
   })
 
-  it('大白话：去改资料 / 激活 / 看课回来——切回强制重拉（昵称、继续学习卡可能变了）', async () => {
+  it('大白话：去改资料 / 看课回来——切回强制重拉（昵称、继续学习卡可能变了）', async () => {
     const page = await mountMe()
     await show(page)
     let n = 1
-    for (const go of ['onEditProfile', 'onActivate', 'onCourses', 'onContinue']) {
+    for (const go of ['onEditProfile', 'onCourses', 'onContinue']) {
       page[go]()
       await show(page)
       expect(loginMock, go).toHaveBeenCalledTimes(++n)
@@ -101,7 +101,7 @@ describe('「我」tab onShow 短时去重', () => {
   })
 
   it('大白话：刚进「我」页还在加载就点去改资料——那趟加载晚到也不能把「回来要重拉」抵消掉', async () => {
-    for (const go of ['onEditProfile', 'onActivate', 'onCourses', 'onContinue']) {
+    for (const go of ['onEditProfile', 'onCourses', 'onContinue']) {
       loginMock.mockReset()
       let resolveLogin: (v: unknown) => void = () => {}
       loginMock.mockImplementationOnce(() => new Promise((r) => (resolveLogin = r))).mockResolvedValue({ ok: true, user: { nickname: '鸭' } })
@@ -122,5 +122,51 @@ describe('「我」tab onShow 短时去重', () => {
     page.onRetryCont()
     page.onLoggedIn()
     expect(loginMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('大白话：去订单列表 / 售后回来——切回重拉（订单格数字要跟上）', async () => {
+    const page = await mountMe()
+    await show(page)
+    page.onOrders({ currentTarget: { dataset: { tab: 'pending' } } })
+    await show(page)
+    expect(loginMock).toHaveBeenCalledTimes(2)
+    page.onAfterSales()
+    await show(page)
+    expect(loginMock).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('「我」页资料显示', () => {
+  it('大白话：已登录但这次资料没拉到——名字和头像保留刚才显示的，不刷回「钩织新手」', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉', avatar: 'cloud://a' } })
+    const page = await mountMe()
+    await show(page)
+    expect(page.data).toMatchObject({ nickname: '棉棉', avatar: 'cloud://a' })
+    loginMock.mockResolvedValue({ ok: false, error: 'CALL_FAIL' })
+    await page.refresh()
+    expect(page.data).toMatchObject({ nickname: '棉棉', avatar: 'cloud://a', loggedIn: true })
+  })
+
+  it('大白话：退出登录后照常回默认名（不是保留旧资料）', async () => {
+    loginMock.mockResolvedValue({ ok: true, user: { nickname: '棉棉' } })
+    const page = await mountMe()
+    await show(page)
+    store.ld_login_hint = false
+    loginMock.mockResolvedValue({ ok: false, error: 'CALL_FAIL' })
+    await page.refresh()
+    expect(page.data).toMatchObject({ nickname: '钩织新手', loggedIn: false })
+  })
+
+  it('大白话：半屏里登录成功——头部马上切成登录态，不等资料回来', async () => {
+    store.ld_login_hint = false
+    const page = await mountMe()
+    loginMock.mockImplementation(() => new Promise(() => undefined))
+    page.onLoggedIn()
+    expect(page.data.loggedIn).toBe(true)
+  })
+
+  it('大白话：客服入口叫「联系客服」', async () => {
+    const { mapMe } = await import('../lib/mapMe')
+    expect(mapMe(null).entries.kefu.label).toBe('联系客服')
   })
 })

@@ -26,15 +26,17 @@ export interface MeVM {
 
 const ME_DEFAULT_NICKNAME = '钩织新手' // me.ts 登录零资料回灌兜底名
 const ME_ENTRY_LABELS: Record<MeEntryKey, string> = {
-  courses: '全部教程', // 学习卡「全部教程」跳转链
-  orders: '全部订单', // 我的订单卡「全部订单」跳转链
-  aftersales: '售后', // 订单四格「售后」
-  address: '收货地址', // 入口列各行
-  activate: '输入激活码',
-  feedback: '意见反馈',
+  // 默认文字＝v5 设计稿 D1 原文（后台 CMS 配了则用后台）。activate/consent 两键保留给后台兼容，
+  // activate 不再显示（老板拍板不做手动输码/扫码）；consent 设计稿未画但合规守卫要求「我」页可直达，保留在入口行末。
+  courses: '我的课程',
+  orders: '全部订单', // 订单格第四格
+  aftersales: '售后',
+  address: '收货地址',
+  activate: '扫码激活课程',
+  feedback: '反馈',
   kefu: '联系客服',
   consent: '数据共享授权',
-  about: '关于我们',
+  about: '关于',
 }
 const ME_KEYS = Object.keys(ME_ENTRY_LABELS) as MeEntryKey[]
 
@@ -54,4 +56,17 @@ export function mapMe(content: unknown): MeVM {
     }
   }
   return { defaultNickname: str(c.defaultNickname, ME_DEFAULT_NICKNAME), entries }
+}
+
+/** 继续学习卡下行（设计稿 D1 contLesson）：整课每段都看完 →「全部学完 · 可以重看」；
+ *  否则「章.节 课时名」（节号按课程目录里的位置数·同目录页 1.1 口径）；课程还没拉到/课时已不在目录 → 只写课时名。 */
+export function contMainLine(cont: { lessonId: string; lessonName: string }, course: unknown, finished: boolean): string {
+  if (finished) return '全部学完 · 可以重看'
+  const chapters = Array.isArray(obj(course).chapters) ? (obj(course).chapters as unknown[]) : []
+  for (let ci = 0; ci < chapters.length; ci++) {
+    const lessons = obj(chapters[ci]).lessons
+    const li = Array.isArray(lessons) ? lessons.findIndex((l) => String(obj(l).id || '') === cont.lessonId) : -1
+    if (li >= 0) return `${ci + 1}.${li + 1} ${cont.lessonName}`
+  }
+  return cont.lessonName
 }

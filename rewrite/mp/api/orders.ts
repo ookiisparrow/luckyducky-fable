@@ -23,4 +23,8 @@ export const confirmReceive = (id: string): Promise<ApiResult> => callApp('confi
 export const cancelOrder = (id: string): Promise<ApiResult> => callApp('cancelOrder', { id })
 
 export const applyRefund = (orderId: string, lineId: string, reason: string): Promise<ApiResult> => callApp('applyRefund', { orderId, lineId, reason })
+// 退款试算（只读·与 applyRefund 同一份云端算额）：回 { refundFen }（分整数），前端只做展示
+export const estimateRefund = (orderId: string, lineId: string): Promise<ApiResult> => callApp('estimateRefund', { orderId, lineId })
+// 撤回申请中的售后（仅本人·仅申请中，最终裁决在云端；失败回 BAD_STATUS:<此刻状态>）
+export const withdrawRefund = (orderId: string, lineId: string): Promise<ApiResult> => callApp('withdrawRefund', { orderId, lineId })
 export const getMyAfterSales = (cursor?: unknown, limit = 20): Promise<ApiResult> => callApp('getMyAfterSales', { cursor, limit })

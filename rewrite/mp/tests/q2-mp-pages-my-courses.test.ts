@@ -117,10 +117,9 @@ describe('我的课程：加载', () => {
 })
 
 describe('我的课程：跳转', () => {
-  it('大白话：点课卡进该课目录；空态点「输入激活码」进激活页', async () => {
+  it('大白话：点课卡进该课目录（不再有应用内激活入口：老板拍板只用微信扫实体卡）', async () => {
     const page = await mount()
     page.onTapCourse({ currentTarget: { dataset: { id: 'c1' } } })
-    page.onActivate()
-    expect(wxMock.navigateTo.mock.calls.map((c: any[]) => c[0].url)).toEqual(['/pages/catalog/catalog?courseId=c1', '/pages/welcome/welcome'])
+    expect(wxMock.navigateTo.mock.calls.map((c: any[]) => c[0].url)).toEqual(['/pages/catalog/catalog?courseId=c1'])
   })
 })

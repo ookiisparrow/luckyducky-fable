@@ -1,220 +1,216 @@
-/* 全部评价·重设计对齐 ProductDetail.jsx ReviewsPage（评分摘要+分布条+标签 chip+评价列表）。
-   设计 402px 画板→rpx（×1.87）。灰底全宽白卡·发丝线分隔行；token 见 styles/tokens.wxss。 */
-.ld-rv-page {
-  min-height: 100vh;
-  background: var(--ld-bg-grey);
-  padding-bottom: 40rpx;
-  /* box-sizing 必写：min-height:100vh 与 padding 并存时，默认 content-box
-     会让页面总高 = 一屏 + padding，内容明明放得下却能多滚出一截空白（三页同病）。 */
-  box-sizing: border-box;
+/* 商品评价（v5「字重」稿 A3） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
+}
+.rv {
+  padding-bottom: 24px;
 }
 
-/* 评分摘要（白卡全宽） */
-.ld-rv-summary {
-  background: var(--ld-bg);
-}
-.ld-rv-head {
+/* 摘要：大号均分 + 分布条 */
+.rv-sum {
+  padding: 4px 16px 0;
   display: flex;
   align-items: center;
-  gap: 36rpx;
-  padding: 28rpx 38rpx 16rpx;
+  gap: 16px;
 }
-.ld-rv-score {
+.rv-score {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rv-num {
+  font-size: 43px;
+  font-weight: 600;
+  line-height: normal; /* 设计稿 A3 未设行高 */
+}
+.rv-count {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.rv-bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rv-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rv-bar-lbl {
+  font-size: 11px;
+  color: var(--v5-ink-2);
+}
+/* 分段条：高 4、每段 4 间隔 2、直角（设计规范·像素小元素） */
+.rv-track {
+  position: relative;
   flex: 0 0 auto;
+  width: 142px; /* 24 格 × 6px − 2（亮条宽按格取整，见 mapReviews mapSummary） */
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #e0e1d9 0 4px, transparent 4px 6px);
+}
+.rv-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(90deg, var(--v5-ink) 0 4px, transparent 4px 6px);
+}
+
+/* 标签 */
+.rv-tags {
+  padding: 16px 16px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rv-tags .rv-tag {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
+  color: var(--v5-ink); /* 未选中是凹键底，但字不置灰（设计稿 A3 标签一律 #111） */
+}
+.rv-tag-n {
+  font-size: 11px;
+  color: var(--v5-ink-2);
+}
+
+/* 列表 */
+.rv-list {
+  padding: 12px 16px 0;
+}
+.rv-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--v5-hair);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 8px;
 }
-.ld-rv-num {
-  font-size: 64rpx;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--ld-ink);
-}
-.ld-rv-count {
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ld-rv-bars {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-}
-.ld-rv-bar {
+.rv-top {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 8px;
 }
-.ld-rv-bar-lbl {
-  width: 60rpx;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ld-rv-track {
-  flex: 1;
-  height: 10rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-line);
+.rv-name {
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 500;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.ld-rv-fill {
-  height: 100%;
-  background: var(--ld-duck-deep);
-  border-radius: var(--ld-radius-pill);
+.rv-stars {
+  flex: 1;
+  display: flex;
+  gap: 2px;
 }
-
-/* 星（鸭黄暖点） */
-.ld-rv-stars {
-  color: var(--ld-duck-deep);
-  font-size: 24rpx;
-  letter-spacing: 3rpx;
+.rv-date {
+  font-size: 13px;
+  color: var(--v5-ink-2);
 }
-.ld-rv-stars-lg {
-  margin-top: 8rpx;
-  font-size: 26rpx;
+.rv-spec {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-
-/* 标签 chip */
-.ld-rv-chips {
+.rv-text {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+/* 单条评价自带标签：只读小字，灰底小块（不是按键） */
+.rv-itags {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
-  padding: 12rpx 38rpx 26rpx;
+  gap: 4px;
 }
-.ld-rv-chip {
-  padding: 12rpx 22rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-bg-grey);
-  font-size: 24rpx;
-  color: var(--ld-content);
+.rv-itag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--v5-sunk);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.ld-rv-chip-n {
-  margin-left: 6rpx;
-  color: var(--ld-content-2);
-}
-
-/* 评价列表（白卡全宽·行间发丝线） */
-.ld-rv-list {
-  margin-top: 20rpx;
-  background: var(--ld-bg);
-}
-.ld-rv-item {
+.rv-pics-row {
   display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-  padding: 26rpx 38rpx;
-  border-top: 2rpx solid var(--ld-line-soft);
+  gap: 4px;
+  width: max-content;
 }
-.ld-rv-item:first-child {
-  border-top: none;
+.rv-pic {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px); /* 设计稿 A3 占位斜纹 */
 }
-.ld-rv-item-top {
+/* 标签筛选后为空（设计稿 A3） */
+.rv-none {
+  padding: 32px 0;
+  border-top: 1px solid var(--v5-hair);
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
+}
+.rv-loading {
+  padding: 2px 0 4px;
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.ld-rv-av {
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  width: 52rpx;
-  height: 52rpx;
-  padding: 10rpx 6rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-bg-sage);
-}
-.ld-rv-name {
-  flex: 1;
-  font-size: 26rpx;
-  color: var(--ld-ink);
-}
-.ld-rv-date {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ld-rv-spec {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.ld-rv-text {
-  font-size: 26rpx;
-  line-height: 1.6;
-  color: var(--ld-content);
-}
-/* 买家秀晒图（评价卡内九宫格·点开大图） */
-.ld-rv-photos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-.ld-rv-photo {
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: var(--ld-radius-sm);
-  background: var(--ld-bg-sage);
-}
-.ld-rv-tagrow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-.ld-rv-tag {
-  padding: 8rpx 18rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-bg-grey);
-  font-size: 22rpx;
-  color: var(--ld-content-2);
+.rv-skel-bar {
+  height: 17px;
+  border-radius: 4px;
 }
 
-/* 空态 / 加载更多 */
-.ld-rv-empty {
-  padding: 140rpx 0;
+/* 失败 / 空 / 翻页 */
+.rv-state {
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   text-align: center;
 }
-.ld-empty-title {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: var(--ld-purple-ink);
+.rv-state-title {
+  font-size: 17px;
+  font-weight: 500;
 }
-.ld-empty-hint {
-  margin-top: 10rpx;
-  font-size: 24rpx;
-  color: var(--ld-content-2);
+.rv-state-hint {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
-.ld-rv-more {
-  padding: 24rpx 0;
-  text-align: center;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
+.rv-retry {
+  margin-top: 8px;
+  width: 120px;
 }
-
-/* 骨架占位（加载中·根因#8）：微光扫过对齐 home/catalog（@keyframes ld-shimmer·app.wxss 全局）。
-   头像走真卡店标、.ld-rv-skel-block 只复用 .ld-rv-photo（200rpx）尺寸覆盖微光渐变。 */
-.ld-rv-skel-block,
-.ld-rv-skel-bar {
-  background: linear-gradient(90deg, var(--ld-bg-sage) 25%, var(--ld-bg-faint) 50%, var(--ld-bg-sage) 75%);
-  background-size: 200% 100%;
-  animation: ld-shimmer 1500ms ease-in-out infinite;
+/* 失败态（设计稿 E2）：上边距落在信号动画上＝88，间距 12 */
+.rv-fail {
+  padding-top: 0;
+  gap: 12px;
 }
-.ld-rv-skel-bar {
-  height: 24rpx;
-  border-radius: 8rpx;
-}
-.ld-rv-skel-photos {
+.rv-signal {
+  padding-top: 88px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
 }
-
-/* 失败态重试钮（根因#14·守卫 rw-mp-list-loadfailed-state·形制同 detail pdp-empty-btn） */
-.ld-rv-retry {
-  display: inline-block;
-  margin-top: 18rpx;
-  padding: 14rpx 46rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 600;
+.rv-more {
+  padding: 16px 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }

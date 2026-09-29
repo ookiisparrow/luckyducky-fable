@@ -28,8 +28,8 @@ describe('详情映射（fail-closed：脏档回 null·脏行剔除·图册回�
     const vm = mapDetail(FULL)!
     expect(vm.gallery).toEqual(['cloud://x/cover.jpg', 'cloud://x/1.jpg', 'cloud://x/2.jpg']) // cover 领衔·空项剔除
     expect(vm.skus).toEqual([
-      { name: '经典黄', price: 128, priceLabel: '¥128' },
-      { name: '云朵白', price: 138, priceLabel: '¥138' },
+      { name: '经典黄', price: 128, priceLabel: '¥128.00' },
+      { name: '云朵白', price: 138, priceLabel: '¥138.00' },
     ]) // 脏 SKU 剔除·数值价随行（加购用）
     expect(vm.params).toEqual([{ k: '尺寸', v: '18cm' }]) // 坏行剔除
     expect(vm.sections).toEqual([{ lead: '缝合要点', body: '藏线收尾' }]) // 全空段剔除
@@ -42,7 +42,7 @@ describe('详情映射（fail-closed：脏档回 null·脏行剔除·图册回�
     const seed = mapDetail({ id: 'prod-1', name: '小棉鸭幸运礼盒', tag: '送礼首选', price: 198, was: 258 })!
     expect(seed.gallery).toEqual([])
     expect(seed.skus).toEqual([])
-    expect(seed.priceLabel).toBe('¥198')
+    expect(seed.priceLabel).toBe('¥198.00') // 老板拍板 1：金额一律两位小数
     expect(mapDetail({ id: 'x', price: 100 })).toBeNull() // 无名
     expect(mapDetail({ id: 'x', name: 'y', price: 'abc' })).toBeNull() // 价非法
     expect(mapDetail(null)).toBeNull()

@@ -2,6 +2,7 @@
 // 缺地址、建单失败可重试（同一幂等键）、建单成功扣车并拉支付、提交在途退页的收尾。
 // 草稿/购物车/地址用真的（wx 存储桩），只桩云调用。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import wxmlSrc from '../pages/checkout/checkout.wxml?raw'
 
 const { createOrderMock, payMock, goHomeMock, getAllProductsMock } = vi.hoisted(() => ({
   createOrderMock: vi.fn(),
@@ -66,6 +67,31 @@ async function mount(seed: Seed = 'cart', withAddress = true): Promise<Record<st
   return page
 }
 
+describe('结算页：旧价与空地址簿（UX 修复）', () => {
+  it('大白话：加购后商品降价了——结算页按最新价算应付，并提示「价格有变动，已按最新价计算」', async () => {
+    getAllProductsMock.mockImplementation(async () => [{ id: 'p1', price: 99 }, { id: 'p2', price: 22 }])
+    const page = await mount()
+    await page.refresh()
+    expect(page.data.items.map((l: any) => l.priceNum)).toEqual(['99.00', '22.00'])
+    expect(page.data.amountNum).toBe('220.00')
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '价格有变动，已按最新价计算', icon: 'none' })
+    wxMock.showToast.mockReset()
+    await page.refresh()
+    expect(wxMock.showToast).not.toHaveBeenCalled() // 已是最新：不重复提示
+  })
+
+  it('大白话：地址簿是空的——点「添加收货地址」直接进新增页（存完退一页回来）；有地址时照旧去选址列表', async () => {
+    const none = await mount('cart', false)
+    await none.refresh()
+    none.onPickAddress()
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/address-edit/address-edit?pick=1' })
+    const has = await mount()
+    await has.refresh()
+    has.onPickAddress()
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith({ url: '/pages/address/address?pick=1' })
+  })
+})
+
 describe('结算页：渲染', () => {
   it('大白话：进页画出默认地址、条目两位小数单价、合计件数与实付；包邮', async () => {
     const page = await mount()
@@ -94,6 +120,18 @@ describe('结算页：渲染', () => {
     await page.refresh()
     expect(ck.getDraft().items.map((l) => l.id)).toEqual(['p1', 'p2', 'hook'])
     expect(wxMock.navigateTo).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('结算页：地址卡展示（v5 A5）', () => {
+  it('大白话：姓名和打码手机号一行「鸭 · 138 **** 0428」；省市区去掉空格和详址连起来；下单仍用原始手机号和地区', async () => {
+    const page = await mount('cart', false)
+    ;(await import('../lib/address')).saveAddress({ name: '鸭', phone: '13800000428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号', isDefault: true })
+    await page.refresh()
+    expect(page.data.address).toMatchObject({ who: '鸭 · 138 **** 0428', where: '上海市上海市徐汇区漕溪北路 1 号' })
+    createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
+    await page.onSubmit()
+    expect(createOrderMock.mock.calls[0][1]).toEqual({ name: '鸭', phone: '13800000428', region: '上海市 上海市 徐汇区', detail: '漕溪北路 1 号' })
   })
 })
 
@@ -130,7 +168,7 @@ describe('结算页：提交', () => {
     const page = await mount('cart', false)
     await page.refresh()
     await page.onSubmit()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '请先添加收货地址', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '先添加收货地址', icon: 'none' })
     expect(createOrderMock).not.toHaveBeenCalled()
   })
 
@@ -188,6 +226,24 @@ describe('结算页：提交', () => {
     expect(wxMock.navigateBack).not.toHaveBeenCalled()
   })
 
+  it('大白话：建单成功——按键先打勾「已提交」停 0.6 秒再拉支付；支付只发一次，期间连点不会再建单', async () => {
+    vi.useFakeTimers()
+    const page = await mount()
+    await page.refresh()
+    createOrderMock.mockResolvedValue({ ok: true, order: { id: 'o9', status: 'pending', amount: 278 } })
+    payMock.mockResolvedValue({ ok: false, error: 'PAY_NOT_ENABLED' })
+    const p = page.onSubmit()
+    await vi.advanceTimersByTimeAsync(599)
+    expect(page.data.submitted).toBe(true)
+    expect(payMock).not.toHaveBeenCalled()
+    await page.onSubmit()
+    await vi.advanceTimersByTimeAsync(1)
+    await p
+    expect(payMock).toHaveBeenCalledTimes(1)
+    expect(payMock).toHaveBeenCalledWith('o9')
+    expect(createOrderMock).toHaveBeenCalledTimes(1)
+  })
+
   it('大白话：刷新等商品数据期间用户点了提交（草稿被清空）——刷新回来不能拿空草稿重画页面', async () => {
     const page = await mount()
     await page.refresh()
@@ -217,7 +273,7 @@ describe('结算页：提交', () => {
     await p
     expect(cart.getItems()).toEqual([])
     expect(ck.getDraft().items).toEqual([])
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到「我 → 我的订单」继续支付', icon: 'none' })
     expect(payMock).not.toHaveBeenCalled()
     expect(wxMock.redirectTo).not.toHaveBeenCalled()
   })
@@ -236,7 +292,7 @@ describe('结算页：提交', () => {
     expect(wxMock.showToast).not.toHaveBeenCalled()
   })
 
-  it('大白话：拉支付在途时退出了结算页——不拉收银台，只提示去订单列表继续支付', async () => {
+  it('大白话：拉支付在途时退出了结算页——不拉收银台，只提示去「我的订单」继续支付', async () => {
     const page = await mount()
     let release!: (v: unknown) => void
     payMock.mockReturnValue(new Promise((r) => (release = r)))
@@ -245,6 +301,94 @@ describe('结算页：提交', () => {
     release({ ok: true, payment: { timeStamp: '1', nonceStr: 'n', package: 'prepay_id=x', signType: 'RSA', paySign: 's' } })
     await p
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到订单列表继续支付', icon: 'none' })
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '订单已生成，可到「我 → 我的订单」继续支付', icon: 'none' })
+  })
+})
+
+describe('结算页：改数量（老板拍板 9）', () => {
+  const tap = (line: string) => ({ currentTarget: { dataset: { line } } })
+
+  it('大白话：点 +/− 改本次草稿，件数和应付跟着变；购物车里的数量不变（不回写）', async () => {
+    const page = await mount()
+    await page.refresh()
+    page.onQtyInc(tap(page.data.items[1].lineId)) // 云朵鸭 1→2
+    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    expect(page.data.items.map((l: any) => l.qty)).toEqual([2, 2])
+    expect(page.data.amountNum).toBe('300.00')
+    page.onQtyDec(tap(page.data.items[0].lineId)) // 小鸭 2→1
+    await vi.waitFor(() => expect(page.data.count).toBe(3))
+    expect(page.data.amountNum).toBe('172.00')
+    expect(cart.getItems().map((it) => it.qty)).toEqual([2, 1])
+  })
+
+  it('大白话：只剩 1 件再按 − 不动；行上带出能不能再减/再加', async () => {
+    const page = await mount()
+    await page.refresh()
+    expect(page.data.items.map((l: any) => [l.canDec, l.canInc])).toEqual([
+      [true, true],
+      [false, true],
+    ])
+    page.onQtyDec(tap(page.data.items[1].lineId))
+    await page.refresh()
+    expect(page.data.items[1].qty).toBe(1)
+  })
+
+  it('大白话：提交在途时按 +/− 没反应，草稿数量不变', async () => {
+    const page = await mount()
+    await page.refresh()
+    page.data.submitting = true
+    page.onQtyInc(tap(page.data.items[0].lineId))
+    page.onQtyDec(tap(page.data.items[0].lineId))
+    expect(ck.getDraft().items.map((l) => l.qty)).toEqual([2, 1])
+  })
+
+  it('大白话：改了数量再提交——按新数量下单，并用新的幂等键', async () => {
+    const page = await mount()
+    await page.refresh()
+    createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
+    await page.onSubmit()
+    page.onQtyInc(tap(page.data.items[1].lineId))
+    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    await page.onSubmit()
+    expect(createOrderMock.mock.calls[1][0]).toEqual([
+      { id: 'p1', sku: '', qty: 2 },
+      { id: 'p2', sku: '', qty: 2 },
+    ])
+    expect(createOrderMock.mock.calls[1][2]).not.toBe(createOrderMock.mock.calls[0][2])
+  })
+
+  it('大白话：进页时价格刚同步过，接着改数量——新价和新数量都保留、应付按两者重算', async () => {
+    getAllProductsMock.mockImplementation(async () => [{ id: 'p1', price: 99 }, { id: 'p2', price: 22 }])
+    const page = await mount()
+    await page.refresh()
+    page.onQtyInc(tap(page.data.items[0].lineId))
+    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    expect(page.data.items.map((l: any) => [l.qty, l.priceNum])).toEqual([
+      [3, '99.00'],
+      [1, '22.00'],
+    ])
+    expect(page.data.amountNum).toBe('319.00')
+  })
+})
+
+describe('结算页：协议小字（老板拍板 10）', () => {
+  it('大白话：点《用户协议》《隐私政策》打开对应协议页；提交在途不跳（否则下单成功的换页会替掉协议页、结算页残留在栈里）', async () => {
+    const page = await mount()
+    await page.refresh()
+    page.onAgreement({ currentTarget: { dataset: { type: 'user' } } })
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/pages/agreement/agreement?type=user' }))
+    page.onAgreement({ currentTarget: { dataset: { type: 'privacy' } } })
+    expect(wxMock.navigateTo).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/pages/agreement/agreement?type=privacy' }))
+    const n = wxMock.navigateTo.mock.calls.length
+    page.data.submitting = true
+    page.onAgreement({ currentTarget: { dataset: { type: 'user' } } })
+    expect(wxMock.navigateTo.mock.calls.length).toBe(n)
+  })
+
+  it('大白话：页面上真有这行字，两个书名号各绑到对应协议', () => {
+    const w = wxmlSrc.replace(/<!--[\s\S]*?-->/g, '')
+    expect(w).toContain('提交订单即表示同意')
+    expect(w).toMatch(/data-type="user"[^>]*bind:tap="onAgreement"[^>]*>《用户协议》/)
+    expect(w).toMatch(/data-type="privacy"[^>]*bind:tap="onAgreement"[^>]*>《隐私政策》/)
   })
 })

@@ -1,0 +1,15 @@
+:host {
+  display: inline-block;
+  flex: 0 0 auto;
+  line-height: 0;
+  pointer-events: none;
+}
+.pxc {
+  position: relative;
+  overflow: hidden;
+}
+.pxr {
+  position: absolute;
+  left: 0;
+  right: 0;
+}

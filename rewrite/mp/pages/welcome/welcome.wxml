@@ -1,130 +1,116 @@
-<!-- 激活欢迎页·对齐设计 Welcome.jsx 变体A「沉浸全屏」+ W1/W2 lilac 壳。
-     业务态：phase 'input'（输入激活码）/ 'result'（兑课结果）/ 'w2'（W2 三件事屏·仅新激活可达）。
-     kind==='mine'/'taken'/'invalid' 三态与输入态一律走沉浸全屏照片壳（第一个 view）；
-     唯独 kind==='activated' 走 W1（恭喜屏）→ W2（三件事屏）两屏 lilac 壳（第二/三个 view）。
-     handler：activate/onEnter/onRetry/onGoHome，onNextWelcome（W1→W2 纯前端翻屏）。 -->
-
-<!-- 沉浸全屏照片壳：input 态 + result 态里 kind !== 'activated'（mine/欢迎回来·taken/已被使用·invalid/废码） -->
-<view class="ld-welcome" wx:if="{{phase === 'input' || (phase === 'result' && kind !== 'activated')}}">
-  <image wx:if="{{bg}}" class="ld-w-photo" src="{{bg}}" mode="aspectFill" />
-  <view wx:else class="ld-w-photo ld-w-photo-empty"></view>
-  <view class="ld-w-scrim"></view>
-
-  <image class="ld-w-logo" src="/static/logo-wordmark.svg" mode="heightFix" style="top: {{statusBarHeight + 40}}px" />
-
-  <!-- 自绘返回：custom 导航无原生返回箭头，否则输入态/废码态
-       只有「重新输入」、退不出去（W2 屏另有「先逛逛，稍后再进课」逃逸链接）。
-       照片壳是深色压暗底，故用半透明黑底＋反白箭头（与 lilac 壳的 W1/W2 无关，那两屏不加）。 -->
-  <view class="ld-w-back" style="top: calc({{statusBarHeight}}px + 24rpx)" bind:tap="onBack" hover-class="ld-w-back-h" hover-stay-time="80">
-    <image class="ld-w-back-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-  </view>
-
-  <view class="ld-w-body">
-    <block wx:if="{{phase === 'input'}}">
-      <view class="ld-w-eyebrow">ACTIVATION · 激活课程</view>
-      <view class="ld-w-display">激活你的课程</view>
-      <view class="ld-w-lead">输入初学者钩织学习套装里激活卡上的激活码，一针一线开启你的钩织之旅。</view>
-      <input class="ld-w-input" value="{{code}}" bind:input="onInput" placeholder="LD 开头的激活码" placeholder-class="ld-w-ph" confirm-type="done" bind:confirm="onActivate" />
-      <view class="ld-w-cta {{busy ? 'dim' : ''}}" bind:tap="onActivate">
-        <text>激活</text>
-        <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
-      </view>
-    </block>
-
-    <block wx:elif="{{kind === 'mine'}}">
-      <view class="ld-w-eyebrow">WELCOME BACK · 欢迎回来</view>
-      <view class="ld-w-display">欢迎回来</view>
-      <view class="ld-w-lead">这个码已经是你的了，接着上次继续钩就好，慢慢来。</view>
-      <view class="ld-w-cta" bind:tap="onEnter">
-        <text>继续学习</text>
-        <image class="ld-w-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
-      </view>
-    </block>
-
-    <block wx:elif="{{kind === 'taken'}}">
-      <view class="ld-w-eyebrow">NOTICE · 已被使用</view>
-      <view class="ld-w-display">这个码已被使用</view>
-      <view class="ld-w-lead">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过初学者钩织学习套装想自己学，用套装里你自己的码。</view>
-      <view class="ld-w-cta ghost" bind:tap="onRetry">
-        <text>换一个码试试</text>
-        <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
-      </view>
-    </block>
-
-    <!-- 没兑成但码可能是好的（网络/频控/服务繁忙·文案见 lib/mapLearning ACTIVATION_ERR_COPY）：重试用原码再发，不清码不误导 -->
-    <block wx:elif="{{kind === 'error'}}">
-      <view class="ld-w-eyebrow">{{errCopy.eyebrow}}</view>
-      <view class="ld-w-display">{{errCopy.display}}</view>
-      <view class="ld-w-lead">{{errCopy.lead}}</view>
-      <view class="ld-w-cta ghost {{busy ? 'dim' : ''}}" bind:tap="onActivate">
-        <text>再试一次</text>
-        <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
-      </view>
-    </block>
-
-    <block wx:else>
-      <view class="ld-w-eyebrow">OOPS · 激活码有误</view>
-      <view class="ld-w-display">激活码不对哦</view>
-      <view class="ld-w-lead">检查一下大小写和有没有抄漏——找不到码可以联系客服帮你确认。</view>
-      <view class="ld-w-cta ghost" bind:tap="onRetry">
-        <text>重新输入</text>
-        <image class="ld-w-cta-ico" src="/static/icons/rotate-ccw-on.svg" mode="aspectFit" />
-      </view>
-    </block>
-  </view>
-</view>
-
-<!-- W1 恭喜屏（kind==='activated' 的 result 屏）：lilac 底·产品主图卡·课程名·「下一步」纯前端翻屏 -->
-<view class="ld-wl" wx:elif="{{phase === 'result' && kind === 'activated'}}">
-  <view class="ld-wl-body" style="padding-top: {{statusBarHeight + 24}}px">
-    <view class="ld-wl-brand">LUCKY DUCKY · 小棉鸭课堂</view>
-    <image wx:if="{{bg}}" class="ld-wl-hero" src="{{bg}}" mode="aspectFill" />
-    <view wx:else class="ld-wl-hero ld-wl-hero-empty"></view>
-    <view class="ld-wl-copy">
-      <view class="ld-wl-title">{{welcome.w1.title}}</view>
-      <view class="ld-wl-course" wx:if="{{courseTitle}}">{{courseTitle}}</view>
-      <view class="ld-wl-lead">{{welcome.w1.sub}}</view>
+<!-- 激活页（v5「字重」稿 C2 激活码无效 / C3 激活成功·开课须知）。只从「微信扫实体激活卡二维码」带 ?code= 进来——
+     老板拍板不做应用内手动输码（设计稿 C1）与扫码按钮：
+     phase 'nocode'（没带码直接进来）→ 提示用微信扫卡；'result' 且 kind mine/taken/invalid/error → C2 各变体（无「重新输入」）；
+     'result' 且 kind==='activated' → W1（C3 上半）；'w2' → W2（C3 下半：三件事 + 不可退货 + 进课）。
+     handler：onBack/onRetryCode/onEnter/onContact/onNextWelcome/onGoHome。 -->
+<view class="wl">
+  <!-- 自绘返回：custom 导航无原生返回箭头；带 tapHaptic 故不用 v5-nav（onBack 走 goBackOrHome） -->
+  <view class="wl-nav" style="padding-top:{{statusBarHeight}}px">
+    <view class="wl-hit" bind:tap="onBack">
+      <view class="k k-sm k-light wl-back" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
     </view>
-    <view class="ld-wl-foot">
-      <view class="ld-wl-dots">
-        <view class="ld-wl-dot on"></view>
-        <view class="ld-wl-dot"></view>
+    <text wx:if="{{phase === 'nocode' || (phase === 'result' && kind !== 'activated')}}" class="t-sys wl-nav-t">激活课程</text>
+  </view>
+
+  <!-- 没带码进来：只能用微信扫激活卡（不给输入框） -->
+  <block wx:if="{{phase === 'nocode'}}">
+    <view class="wl-body">
+      <view class="wl-head wl-head-tight">
+        <text class="wl-h1">扫码激活课程</text>
       </view>
-      <view class="ld-wl-cta" bind:tap="onNextWelcome">
-        <text>下一步</text>
-        <image class="ld-wl-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      <view class="wl-msg">
+        <view class="wl-msg-led"><px-i name="dot" tone="rgba(17,17,17,.28)" /></view>
+        <text class="t-sys wl-msg-t">激活卡在初学者钩织学习套装里。用微信「扫一扫」扫卡上的二维码，就会回到这里开课。</text>
       </view>
     </view>
-  </view>
-</view>
+    <view class="wl-dock">
+      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBack" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">返回</view>
+    </view>
+  </block>
 
-<!-- W2 三件事屏：lilac 底·三点卡·不可退货警示·「进入课程」走既有 onEnter -->
-<view class="ld-wl" wx:elif="{{phase === 'w2'}}">
-  <view class="ld-wl-body" style="padding-top: {{statusBarHeight + 24}}px">
-    <view class="ld-wl-brand">LUCKY DUCKY · 小棉鸭课堂</view>
-    <view class="ld-wl-points">
-      <view class="ld-wl-points-title">开始前，想让你知道三件事</view>
-      <!-- 三点位固定 onboarding·图标与位置绑定（CMS 只覆盖 title/desc，图标恒取默认槽位·见 lib/mapPages mapWelcome） -->
-      <view class="ld-wl-point" wx:for="{{welcome.w2.items}}" wx:key="icon">
-        <image class="ld-wl-point-ico" src="/static/icons/{{item.icon}}.svg" mode="aspectFit" />
-        <view class="ld-wl-point-tx">
-          <view class="ld-wl-point-h">{{item.title}}</view>
-          <view class="ld-wl-point-p">{{item.desc}}</view>
+  <!-- C2 兑课结果（非新激活）：标题 + 回显激活码 + 状态灯说明 + 底部两键 -->
+  <block wx:elif="{{phase === 'result' && kind !== 'activated'}}">
+    <view class="wl-body">
+      <view class="wl-head wl-head-tight">
+        <text wx:if="{{kind === 'mine'}}" class="wl-h1">欢迎回来</text>
+        <text wx:elif="{{kind === 'taken'}}" class="wl-h1">这个码已被使用</text>
+        <text wx:elif="{{kind === 'error'}}" class="wl-h1">{{errCopy.display}}</text>
+        <text wx:else class="wl-h1">激活码不对哦</text>
+      </view>
+      <view wx:if="{{code}}" class="well mono wl-code wl-code-ro wl-code-{{kind}}">{{code}}</view>
+      <view class="wl-msg">
+        <!-- mine 绿·error（网络/频控/繁忙，码可能没问题）黄·taken/invalid 红 -->
+        <view class="wl-msg-led"><px-i name="led" tone="{{kind === 'mine' ? '#3f9a5e' : kind === 'error' ? '#f4bd3f' : '#d9483b'}}" /></view>
+        <text wx:if="{{kind === 'mine'}}" class="t-sys wl-msg-t wl-msg-mine">这个码已经是你的了，接着上次继续钩就好，慢慢来。</text>
+        <text wx:elif="{{kind === 'taken'}}" class="t-sys wl-msg-t wl-msg-bad">它已经被别的账号激活了。如果是家人朋友，让 TA 用自己的手机继续学；买过初学者钩织学习套装想自己学，用套装里你自己的码。</text>
+        <text wx:elif="{{kind === 'error'}}" class="t-sys wl-msg-t wl-msg-error">{{errCopy.lead}}</text>
+        <text wx:else class="t-sys wl-msg-t wl-msg-bad">这张激活卡没认出来，可以联系客服帮你确认。</text>
+      </view>
+    </view>
+    <view class="wl-dock">
+      <view class="wl-row" wx:if="{{kind === 'mine'}}">
+        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onEnter" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续学习</view>
+      </view>
+      <!-- 没兑成但码可能是好的：「再试一次」用原码重发，不清码不误导 -->
+      <view class="wl-row" wx:elif="{{kind === 'error'}}">
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onRetryCode" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">再试一次</view>
+      </view>
+      <view class="wl-row" wx:else>
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onGoHome" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">回首页</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- W1（C3 上半）：1:1 主图（本课激活背景·缺席留凹槽灰）+ 绿灯标题 + 课程名（取不到不渲染）+ 说明 -->
+  <block wx:elif="{{phase === 'result'}}">
+    <view class="wl-body">
+      <view class="wl-hero">
+        <image wx:if="{{bg}}" class="wl-hero-img" src="{{bg}}" mode="aspectFill" />
+        <view class="wl-fade-t"></view>
+        <view class="wl-fade-b"></view>
+      </view>
+      <view class="wl-ok">
+        <view class="wl-ok-row">
+          <px-i name="led" tone="#3f9a5e" />
+          <text class="wl-h0">{{welcome.w1.title}}</text>
+        </view>
+        <text wx:if="{{courseTitle}}" class="wl-meta">{{courseTitle}}</text>
+        <text class="t-sys wl-lead">{{welcome.w1.sub}}</text>
+      </view>
+    </view>
+    <view class="wl-dock">
+      <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onNextWelcome" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">下一步</view>
+    </view>
+  </block>
+
+  <!-- W2（C3 下半·开课须知）：三件事（CMS 覆盖 title/desc）+ 不可退货警示 + 先逛逛 / 进入课程 -->
+  <block wx:elif="{{phase === 'w2'}}">
+    <view class="wl-body">
+      <view class="wl-head wl-head-tight">
+        <text class="wl-h1">开始前，记住三件事</text>
+      </view>
+      <view class="wl-list">
+        <view class="wl-item" wx:for="{{welcome.w2.items}}" wx:key="icon">
+          <text class="mono wl-no">0{{index + 1}}</text>
+          <view class="wl-item-tx">
+            <text class="wl-item-h">{{item.title}}</text>
+            <text class="t-sys wl-item-p">{{item.desc}}</text>
+          </view>
         </view>
       </view>
     </view>
-    <view class="ld-wl-foot">
-      <view class="ld-wl-dots">
-        <view class="ld-wl-dot"></view>
-        <view class="ld-wl-dot on"></view>
-      </view>
+    <view class="wl-dock wl-dock-col">
       <!-- 不可退货警示（业务告知义务·需求 R4，不省）·空则强制回默认（mapWelcome·不允许被清空） -->
-      <view class="ld-wl-warn">{{welcome.w1.warning}}</view>
-      <view class="ld-wl-cta {{busy ? 'dim' : ''}}" bind:tap="onEnter">
-        <text>进入课程</text>
-        <image class="ld-wl-cta-ico" src="/static/icons/arrow-right.svg" mode="aspectFit" />
+      <view class="wl-warn">
+        <view class="wl-msg-led"><px-i name="led" tone="#f4bd3f" /></view>
+        <text class="t-sys wl-warn-t">{{welcome.w1.warning}}</text>
       </view>
-      <view class="ld-wl-link" bind:tap="onGoHome">先逛逛，稍后再进课</view>
+      <view class="wl-row">
+        <view class="k k-light k-48 wl-alt" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">先逛逛</view>
+        <view class="k k-48 wl-main {{busy ? 'k-flat' : 'k-ink'}}" hover-start-time="20" hover-class="{{busy ? 'none' : 'k-ink-down'}}" hover-stay-time="100" bind:tap="onEnter" data-k="{{busy ? 'none' : 'ink'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">进入课程</view>
+      </view>
     </view>
-  </view>
+  </block>
 </view>

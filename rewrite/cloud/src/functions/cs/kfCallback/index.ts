@@ -60,8 +60,16 @@ export const main = async (event: any) => {
   })(event)
 }
 
+// 诊断行（2026-09-28 真事故：正式客服收到通知全回 200 却一句不回、会话库不见，日志里一行业务输出都没有）：
+// 每次事件记「哪套配置（尾号）→ 拉消息返回码与条数 → 每条走的分支 → 回复返回码」。只记类型、码、计数与尾号，
+// 绝不记消息原文、访问令牌、应用密钥（tests/q-cs-kf-diag.test.ts 钉）。
+const tail = (v: unknown) => '…' + String(v || '').slice(-4)
+const diag = (stage: string, fields: Record<string, unknown>) =>
+  console.log('[kf-diag] ' + stage + ' ' + Object.entries(fields).map(([k, v]) => k + '=' + v).join(' '))
+
 async function onEvent(syncToken: string, openKfId: string, f: Record<string, string>): Promise<void> {
-  // 失败采样走已有 alert（SENDMSG_FAILED / SYNCMSG_FAILED），不常开 debug 喷日志
+  // 失败采样走已有 alert（SENDMSG_FAILED / SYNCMSG_FAILED）；过程只留一行行 [kf-diag] 计数（见上）
+  diag('event', { kf: tail(openKfId), corp: tail(f.corpId) })
   let token: string
   try {
     token = await getAccessToken({ corpid: f.corpId, secret: f.secret })
@@ -78,14 +86,27 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
   if (cur && cur.data && typeof cur.data.cursor === 'string') cursor = cur.data.cursor
 
   // 单条消息处理（防吞单经 processKfBatch 包 try/catch·见 dispatch）：进会话欢迎 / 文本分流
+  let handled = 0
   const handleOne = async (msg: any) => {
+    handled++
+    let route = 'unknown'
+    let bound = 0
+    try {
+      await handleOneInner(msg, (r: string) => (route = r), (b: number) => (bound = b))
+    } finally {
+      diag('msg', { type: msg?.msgtype, origin: msg?.origin, ev: msg?.event?.event_type || '-', bound, route })
+    }
+  }
+  const handleOneInner = async (msg: any, setRoute: (r: string) => void, setBound: (b: number) => void) => {
     const euid = extUserId(msg)
     // 本条消息的 kfIdentity 只读这一次：送审、入站/出站归档、分流（ctx.openid：查单/评分/有无近单）、身份桥接共用。
     // 桥接写入在本条末尾，之后本条不再读。
     const openid = (await resolveOpenid(db, euid)) || ''
+    setBound(openid ? 1 : 0)
     // send 收口结果检查（补盲点：send 失败静默无痕，气泡发不出也查不到）。发给别的顾客时不套用本条身份。
     const send = async (payload: any) => {
       const res = await sendMsg(token, payload)
+      diag('send', { errcode: (res && res.errcode) || 0, type: payload?.msgtype })
       if (res && res.errcode) alert('security', 'kfCallback', 'SENDMSG_FAILED', { errcode: res.errcode, msgtype: payload?.msgtype })
       else await archiveOutbound(db, payload, openKfId, payload?.touser === euid ? openid : undefined) // 出站回复落档（仅记真发出的·fail-soft 不反噬发送）
       return res
@@ -99,6 +120,7 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
       if (openid) {
         const sec = await msgSecCheck(String((msg.text && msg.text.content) || ''), openid, SCENE_COMMENT, 'open')
         if (!sec.ok) {
+          setRoute('sec-block')
           if (euid)
             await send({
               touser: euid,
@@ -116,6 +138,7 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
     if (euid) {
       const gate = await ensureSmartAssistant(token, { openKfId, externalUserId: euid })
       if (gate === 'skip') {
+        setRoute('held-skip') // 人工/排队态：bot 不抢话
         await ensureKfIdentity(db, token, euid, openid)
         return
       }
@@ -124,10 +147,13 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
     if (msg.msgtype === 'event' && msg.event?.event_type === 'enter_session') {
       // 排队/接待中顾客重开聊天窗（enter_session）不发欢迎菜单——bot 抢话且顾客点菜单又被
       // held 闸静默＝发了菜单点了没反应；「谁在接待」判定单源 heldStatus（与 handleMessage 同口径）。
-      if (!(euid && (await heldStatus(db, openKfId, euid))))
+      if (!(euid && (await heldStatus(db, openKfId, euid)))) {
+        setRoute('welcome')
         await send(buildMsgMenu(euid, openKfId, await welcomeMenu(db))) // 进会话欢迎（euid 在 event 子对象·根因#8）
+      } else setRoute('welcome-held')
     } else {
       const incoming = normalize(msg)
+      setRoute(incoming ? 'reply' : 'no-incoming') // 非文本（图片/语音/其他事件）本期不进分流
       if (incoming) await handleMessage(ctx, incoming)
     }
     await ensureKfIdentity(db, token, euid, openid) // 查订单·回复后再 batchget 反查建 ext→openid 映射（best-effort·不延迟回复）
@@ -147,12 +173,14 @@ async function onEvent(syncToken: string, openKfId: string, f: Record<string, st
       break // 临近超时：保留上次已落游标，剩余 backlog 下次续拉
     }
     const r = await syncMsg(token, { cursor, token: syncToken, openKfId, limit: KF_BATCH_LIMIT })
+    diag('sync', { errcode: r.errcode || 0, n: (r.msg_list || []).length, more: r.has_more ? 1 : 0, cursor: cursor ? 'y' : 'n' })
     if (r.errcode) {
       alert('security', 'kfCallback', 'SYNCMSG_FAILED', { errcode: r.errcode })
       break
     }
     // 防吞单：单条失败不中断整批、撤回认领；本批没处理完（失败或预算用尽）则**保留旧游标**下次重拉
     const unfinished = await processKfBatch(db, r.msg_list, handleOne, startedAt + KF_TIME_BUDGET_MS)
+    diag('batch', { handled, unfinished: unfinished ? 1 : 0 })
     if (unfinished) {
       break // 不推进游标：下次重拉，成功项 seen 去重、失败项和没轮到的重试
     }

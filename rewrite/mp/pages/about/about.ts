@@ -2,14 +2,14 @@
 import { BRAND_NAME } from '../../lib/brand'
 import { getPageContent } from '../../lib/pageContent'
 import { mapAbout } from '../../lib/mapPages'
-import { currentAppVersionLine } from '../../lib/appVersion'
+import { currentAppVersionDetail, currentAppVersionLine } from '../../lib/appVersion'
 
 Page({
   data: {
     brand: BRAND_NAME, // 品牌名恒引 lib/brand 单源（不经 CMS·病根#5）
     lead: mapAbout(null).lead, // 首帧默认（CMS 到达覆盖·不空屏）
     sections: mapAbout(null).sections,
-    version: currentAppVersionLine(), // 与「我」页同一行（lib/appVersion 单源）
+    version: [currentAppVersionLine(), currentAppVersionDetail()].filter(Boolean).join(' · '), // 设计稿 D5：版本号 · 更新 日期（lib/appVersion 单源）
   },
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome 范式）
   onUnload() {

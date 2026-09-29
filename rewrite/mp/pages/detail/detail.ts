@@ -1,4 +1,4 @@
-// 商品详情（对齐设计 ProductDetail.jsx 方案A）：图册 swiper + 计数 + SKU 价格联动 + 加购/直买 + 客服 + 为你推荐。
+// 商品详情（v5「字重」稿 A2）：图册 swiper + 方格页码 + SKU 价格联动 + 加购/直买 + 客服。
 import { BRAND_SLOGAN_CN } from '../../lib/brand'
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
@@ -8,9 +8,12 @@ import { getAllProducts, getProductDetail } from '../../lib/catalog'
 import { getRatingSummary } from '../../api/reviews'
 import { mapDetail, type DetailVM } from '../../lib/mapDetail'
 import { mapSummary, type SummaryVM } from '../../lib/mapReviews'
-import { mapProducts, type ProductVM } from '../../lib/mapHome'
 import { openCustomerService } from '../../utils/customerService'
-import { navigateOrRedirect } from '../../lib/nav'
+import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint, fxToast } from '../../lib/pxFx'
+import { goHomeTab } from '../../lib/homeIntent'
+
+const NAV_LOCK_MS = 800 // 跳转类按钮防连点：跳转发起后 800ms 内不再响应
 
 // 图册窗口（病根#15 图片面）：current±1 才渲染，circular 时首尾邻接也算窗口内——
 // swiper 内 lazy-load 真机不生效，全量 swiper-item 会让画廊全部图并发下载抢首屏带宽。
@@ -24,18 +27,22 @@ function computeGalleryWindow(len: number, current: number): boolean[] {
 }
 
 Page({
+  onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
+  onKeyUp: keyUp,
   data: {
     loading: true,
     loadFailed: false, // 网络/取数失败——不伪装成已下架，给重试
     vm: null as DetailVM | null,
     skuIndex: -1,
-    currentPriceNum: 0, // 数字部分（¥ 小、数字大）
+    currentPriceNum: '', // 数字部分（¥ 小、数字大·两位小数串）
     galleryIndex: 0,
     galleryWindow: [] as boolean[], // 随 galleryIndex 同步重算，详见 computeGalleryWindow
-    recs: [] as ProductVM[],
     rating: null as SummaryVM | null, // 评分摘要（旁挂·异步·count=0 或失败→null 回退静态入口）
+    wide: {} as Record<string, boolean>, // 横图 src（退回 aspectFill 居中·见 onImgLoad）
+    added: false, // 本款式已加购：底栏「加入购物车」「立即购买」合并成「去结算」（老板拍板 8）；换款式恢复
   },
   productId: '',
+  _navAt: 0, // 上次发起跳转的时刻（防连点短时锁·NAV_LOCK_MS）
   _seq: 0, // loadProduct 代次（同 order-list/home 范式）：连点「重试」可并发在途·丢弃被更晚一次取代的过期回包
   onLoad(query: Record<string, string | undefined>) {
     this.productId = String(query.id || '')
@@ -63,9 +70,8 @@ Page({
       loading: false,
       vm,
       skuIndex: i,
-      currentPriceNum: i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price,
+      currentPriceNum: (i >= 0 && vm.skus[i] ? vm.skus[i].price : vm.price).toFixed(2), // 两位小数（老板拍板 1）
       galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
-      recs: mapProducts(all).filter((p) => p.id !== id).slice(0, 4), // 同一份全量表·排除本商品取 4 个
     })
     trackEvent('view_product', 'detail', vm.id, { price: vm.price }) // 电商漏斗埋点（R41）
     void this.loadDetail(id, seq)
@@ -111,13 +117,22 @@ Page({
       galleryWindow: vm ? computeGalleryWindow(vm.gallery.length, e.detail.current) : [],
     })
   },
+  /** <image bindload>：横图（宽>高）记下来退回 aspectFill 居中——竖图/方图走 widthFix + 40% 焦点（见 detail.wxss .focus-img）。 */
+  onImgLoad(e: WechatMiniprogram.CustomEvent<{ width: number; height: number }>) {
+    const src = String(e.currentTarget.dataset.src || '')
+    if (src && e.detail.width > e.detail.height && !this.data.wide[src]) this.setData({ wide: { ...this.data.wide, [src]: true } })
+  },
   onSelectSku(e: WechatMiniprogram.TouchEvent) {
     const idx = Number(e.currentTarget.dataset.index)
     const vm = this.data.vm
     if (!vm) return
+    // 换款式图集回第 1 张：swiper current 绑 galleryIndex，改它 swiper 自己带动画滑回（平滑）
     this.setData({
+      ...(idx !== this.data.skuIndex ? { added: false } : {}), // 换了别的款式：恢复加购/直买两颗键
       skuIndex: idx,
-      currentPriceNum: vm.skus[idx] ? vm.skus[idx].price : vm.price,
+      currentPriceNum: (vm.skus[idx] ? vm.skus[idx].price : vm.price).toFixed(2),
+      galleryIndex: 0,
+      galleryWindow: computeGalleryWindow(vm.gallery.length, 0),
     })
   },
   // 当前选中规格的成交行（加购/直买同源·价用规格价·双键行身份）。划线价是商品级、现价可能取了规格级：
@@ -132,28 +147,44 @@ Page({
     if (!vm) return
     tapHaptic()
     const line = this._line(vm)
-    cart.add(line)
+    try {
+      cart.add(line)
+    } catch {
+      fxHint(this, '没加进购物车，请重试') // 失败不合并底栏
+      return
+    }
     trackEvent('add_to_cart', 'detail', line.id, { sku: line.sku, price: line.price }) // 电商漏斗埋点（R41）
-    wx.showToast({ title: '已加入购物车', icon: 'success' })
+    this.setData({ added: true })
+    fxToast(this, '已加入购物车')
+  },
+  // 合并后的「去结算」：切到购物车页结算（购物车是 tab 页，只能 switchTab）
+  onGoCheckout() {
+    if (Date.now() - this._navAt < NAV_LOCK_MS) return
+    this._navAt = Date.now()
+    tapHaptic()
+    wx.switchTab({ url: '/pages/cart/cart' })
   },
   onService() {
     openCustomerService()
   },
   onViewReviews() {
     const vm = this.data.vm
-    if (vm) wx.navigateTo({ url: '/pages/reviews/reviews?productId=' + vm.id })
+    if (vm) wx.navigateTo({ url: '/pages/reviews/reviews?productId=' + vm.id + '&name=' + encodeURIComponent(vm.name) })
   },
   onBuyNow() {
     const vm = this.data.vm
     if (!vm) return
+    if (Date.now() - this._navAt < NAV_LOCK_MS) return // 连点叠两个确认订单页
+    this._navAt = Date.now()
     tapHaptic()
     prepareBuyNow(this._line(vm)) // 直买不动购物车（草稿不收划线价）
     wx.navigateTo({ url: '/pages/checkout/checkout' })
   },
-  onTapRec(e: WechatMiniprogram.TouchEvent) {
-    const id = String(e.currentTarget.dataset.id || '')
-    if (!id) return
-    navigateOrRedirect('/pages/detail/detail?id=' + id)
+
+  // 「商品不存在或已下架」态的出路：回首页从头逛起（goHomeTab 防 tab 实例旧滚动位置残留）
+  onGoHome() {
+    tapHaptic()
+    goHomeTab()
   },
 
   // 转发/朋友圈钩子（分发前置·决策§29）：路径带 ?id= 保证收到的人打开的是

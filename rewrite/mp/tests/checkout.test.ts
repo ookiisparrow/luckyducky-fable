@@ -5,6 +5,7 @@ import * as addr from '../lib/address'
 import * as cart from '../lib/cart'
 import * as checkout from '../lib/checkout'
 import { COUPON } from '../lib/checkoutConst'
+import limitsSrc from '../../shared/src/limits.ts?raw'
 
 let storage: Record<string, unknown> = {}
 ;(globalThis as any).wx = {
@@ -138,13 +139,18 @@ describe('结算幂等键（批E·P1 防网络超时重试双建单）', () => {
     const k1 = checkout.getIdemKey()
     expect(k1).toBeTruthy()
     expect(checkout.getIdemKey()).toBe(k1) // 同一草稿多次取键不变（重试复用）
-    checkout.toggleAddon('hook') // 草稿内容变化（勾搭配购）不影响键——仍是同一次结算
-    expect(checkout.getIdemKey()).toBe(k1)
+    // 草稿内容变了（勾/取消搭配购，同改数量）就不再是「同一次提交的重试」→ 换新键：否则网络超时（单其实已建）
+    // 后改了内容再提交，云端按旧键折回那张旧内容的单（2026-09-29 与拍板 9 改数量同口径）
+    checkout.toggleAddon('hook')
+    const kAddon = checkout.getIdemKey()
+    expect(kAddon).toBeTruthy()
+    expect(kAddon).not.toBe(k1)
+    expect(checkout.getIdemKey()).toBe(kAddon) // 内容不再变：重试复用
 
     checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 }) // 新开一次结算 → 换新键
     const k2 = checkout.getIdemKey()
     expect(k2).toBeTruthy()
-    expect(k2).not.toBe(k1)
+    expect(k2).not.toBe(kAddon)
 
     checkout.finishSubmitted() // 提交成功清草稿 → 键随之失效
     expect(checkout.getIdemKey()).toBe('')
@@ -169,5 +175,68 @@ describe('建单失败错误码 → 人话文案（bug sweep R1 #2·不吞成通
     expect(checkout.mapCreateOrderError('OUT_OF_STOCK:p1')).toBe('有商品库存不足')
     expect(checkout.mapCreateOrderError('WEIRD_CODE')).toBe('下单没成功，稍后再试')
     expect(checkout.mapCreateOrderError('')).toBe('下单没成功，稍后再试')
+  })
+})
+
+describe('结算页改数量（老板拍板 9·只改本次草稿）', () => {
+  it('大白话：下单单行上限和云端同一个数（shared MAX_QTY）——云端改上限这里就红', () => {
+    const m = limitsSrc.match(/export const MAX_QTY = (\d+)/)
+    expect(m).toBeTruthy()
+    expect(checkout.MAX_QTY).toBe(Number(m![1]))
+  })
+
+  it('大白话：购物车来的草稿 +/− 只改草稿、重算应付；购物车里的数量一件不动（不回写）', () => {
+    cart.add({ id: 'p1', name: '小鸭', price: 128 })
+    checkout.prepareFromCart()
+    const line = checkout.getDraft().items[0].lineId
+    expect(checkout.bumpQty(line, 1)).toBe(true)
+    expect(checkout.bumpQty(line, 1)).toBe(true)
+    expect(checkout.getDraft().items[0].qty).toBe(3)
+    expect(checkout.summaryFen().amountFen).toBe(38400)
+    expect(checkout.bumpQty(line, -1)).toBe(true)
+    expect(checkout.summaryFen().goodsFen).toBe(25600)
+    expect(cart.getItems()[0].qty).toBe(1) // 不回写购物车
+  })
+
+  it('大白话：立即购买也能改；最少 1 件、最多 MAX_QTY 件，到头了按了不动', () => {
+    checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 })
+    const line = checkout.getDraft().items[0].lineId
+    expect(checkout.bumpQty(line, -1)).toBe(false)
+    expect(checkout.getDraft().items[0].qty).toBe(1)
+    for (let i = 1; i < checkout.MAX_QTY; i++) checkout.bumpQty(line, 1)
+    expect(checkout.getDraft().items[0].qty).toBe(checkout.MAX_QTY)
+    expect(checkout.bumpQty(line, 1)).toBe(false)
+    expect(checkout.getDraft().items[0].qty).toBe(checkout.MAX_QTY)
+    expect(checkout.bumpQty('nope', 1)).toBe(false)
+  })
+
+  it('大白话：搭配购恒 1 件，不参与改数量', () => {
+    checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 })
+    checkout.toggleAddon('hook')
+    const addon = checkout.getDraft().items.find((l) => l.id === 'hook')!
+    expect(checkout.bumpQty(addon.lineId, 1)).toBe(false)
+    expect(checkout.getDraft().items.find((l) => l.id === 'hook')!.qty).toBe(1)
+  })
+
+  it('大白话：数量真改了就换幂等键（草稿变了不算「同一次提交的重试」，否则超时后改量再提交会被云端折回旧单）；到头没改则不换', () => {
+    checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 })
+    const line = checkout.getDraft().items[0].lineId
+    const k1 = checkout.getIdemKey()
+    checkout.bumpQty(line, -1) // 到下限没改
+    expect(checkout.getIdemKey()).toBe(k1)
+    checkout.bumpQty(line, 1)
+    expect(checkout.getIdemKey()).not.toBe(k1)
+    expect(checkout.getIdemKey()).toBeTruthy()
+  })
+
+  it('大白话：价格同步和改数量互不覆盖——先改量再同步价、再改量，两样都在', () => {
+    checkout.prepareBuyNow({ id: 'p1', name: '小鸭', price: 128 })
+    const line = checkout.getDraft().items[0].lineId
+    checkout.bumpQty(line, 1)
+    expect(checkout.syncDraftPrices([{ id: 'p1', price: 99 }])).toBe(true)
+    expect(checkout.getDraft().items[0]).toMatchObject({ qty: 2, price: 99 })
+    checkout.bumpQty(line, 1)
+    expect(checkout.getDraft().items[0]).toMatchObject({ qty: 3, price: 99 })
+    expect(checkout.summaryFen().amountFen).toBe(29700)
   })
 })

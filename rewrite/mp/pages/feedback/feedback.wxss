@@ -1,120 +1,96 @@
-/* 意见反馈·一致性对齐 profile-edit/checkout co-* 白卡版式（本屏无设计源·按已建立设计语言重排）。
-   设计语言：页浅灰底、白卡圆角+浅影、发丝线 field 行、底部提交坞；token 见 styles/tokens.wxss。
-   业务逻辑一字未动：cats/cat→onCat、content→onContent、contact→onContact、busy/onSubmit 全承接 feedback.ts。 */
-.co {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout/profile-edit 同调·tokens 无对应中性灰） */
-  color: var(--ld-content);
+/* 意见反馈（v5「字重」稿 D4） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-
-/* ---------- 内容容器 ---------- */
-.co-body {
-  padding: 22rpx 26rpx 8rpx;
+/* 整页一列：顶栏 + 滚动内容 + 底坞（同 checkout·放弃确认武装时页面级滚动被冻，只让中间 scroll-view 滚） */
+.fb-page {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 22rpx;
 }
-
-/* ---------- 通用白卡 ---------- */
-.co-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  overflow: hidden;
+.fb-scroll {
+  flex: 1;
+  height: 0;
 }
-
-/* ---------- 反馈类型·分段 pill ---------- */
-.fb-cats {
+.fb {
+  padding: 4px 16px 16px;
   display: flex;
-  gap: 16rpx;
+  flex-direction: column;
+  gap: 12px;
+}
+.fb-title {
+  padding-bottom: 4px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.fb-cats {
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  gap: 4px;
 }
 .fb-cat {
-  padding: 14rpx 40rpx;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-bg);
-  border: 2rpx solid var(--ld-line);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
-  font-size: 26rpx;
-  color: var(--ld-content-2);
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
 }
-.fb-cat.on {
-  background: var(--ld-bg-lilac);
-  border-color: var(--ld-purple-tab);
-  color: var(--ld-purple-tab);
-  font-weight: 600;
+.fb-cat-off {
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
+  color: var(--v5-ink-2);
 }
-
-/* ---------- 反馈正文卡 ---------- */
-.fb-card {
-  padding: 26rpx 30rpx 18rpx;
+.fb-area-wrap {
+  position: relative;
 }
-.fb-text {
+.fb-area {
+  display: block;
   width: 100%;
-  min-height: 260rpx;
-  box-sizing: border-box;
-  font-size: 28rpx;
+  height: 140px;
+  padding: 12px 12px 28px;
+  font-size: 17px;
+  font-weight: 500;
   line-height: 1.6;
-  color: var(--ld-ink);
+  color: var(--v5-ink);
 }
 .fb-count {
-  text-align: right;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  letter-spacing: 0.4rpx;
-}
-.fb-ph {
-  color: var(--ld-content-2);
-}
-
-/* ---------- 联系方式行 field（发丝线风格·单行末行无线） ---------- */
-.fb-form {
-  padding: 4rpx 30rpx;
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  color: var(--v5-ink-2);
+  pointer-events: none;
 }
 .fb-field {
   display: flex;
-  align-items: center;
-  gap: 22rpx;
-  padding: 30rpx 0;
+  flex-direction: column;
+  gap: 8px;
 }
 .fb-label {
-  flex: 0 0 140rpx;
-  font-size: 27rpx;
-  color: var(--ld-content);
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
 }
 .fb-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 28rpx;
-  color: var(--ld-ink);
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink);
 }
-
-/* ---------- 底部提交坞 ---------- */
-.co-dock-space {
-  height: 160rpx;
+.fb-ph {
+  color: var(--v5-ink-4);
 }
-.co-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--ld-bg);
-  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.co-dockbar {
+.fb-dock {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
-  align-items: center;
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom));
+  gap: 8px;
+  background: var(--v5-canvas);
 }
-.co-submit {
+.fb-submit {
   flex: 1;
-  padding: 26rpx 0;
-  text-align: center;
-  background: var(--ld-purple);
-  color: #ffffff;
-  border-radius: var(--ld-radius-pill);
-  font-size: 30rpx;
-  font-weight: 600;
-}
-.co-submit.dim {
-  opacity: 0.5;
 }

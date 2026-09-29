@@ -15,9 +15,11 @@ vi.mock('../api/orders', () => ({
   pay: vi.fn(),
   confirmReceive: vi.fn(),
   cancelOrder: vi.fn(),
+  getMyAfterSales: vi.fn(async () => ({ ok: false })), // 售后叠加：拉失败＝不叠加（本测试只钉翻页 setData 形状）
 }))
 vi.mock('../lib/payFlow', () => ({ mapPayResult: vi.fn() }))
-vi.mock('../lib/mapOrders', () => ({
+vi.mock('../lib/mapOrders', async (orig) => ({
+  ...(await orig<typeof import('../lib/mapOrders')>()), // 卡片装饰（状态名/状态灯/右上角）用真的
   mapOrders: (list: Array<{ id: string }>) =>
     list.map((o) => ({ id: o.id, status: 'pending', amountLabel: '¥1', items: [], createdAtLabel: '', statusLabel: '', count: 1 })),
 }))
@@ -27,6 +29,7 @@ vi.mock('../api/reviews', () => ({ getReviews: getReviewsMock }))
 vi.mock('../lib/mapReviews', () => ({
   mapReviews: (list: Array<Record<string, unknown>>) => list.map((r) => ({ ...r })),
   mapSummary: () => null,
+  hiddenByTag: (list: unknown[]) => list.map(() => false),
 }))
 // 两页共用：haptics
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
@@ -114,7 +117,33 @@ describe('列表翻页增量 setData（根因#7·翻页只追加新行·不整�
     const keys = Object.keys(patch)
     expect(keys.some((k) => /^list\[\d+\]$/.test(k))).toBe(true)
     expect(keys).not.toContain('list')
+    expect(keys).not.toContain('hidden') // 标签筛选的藏行表同样按路径键追加
     expect(patch['list[2]']).toBeTruthy()
+    expect(patch['hidden[2]']).toBe(false)
     expect(page.data.list.length).toBe(3)
+  })
+})
+
+describe('评价列表：找不到商品 / 翻页加载行（UX 修复轮）', () => {
+  it('大白话：云端回 NO_PRODUCT——落「找不到这个商品」，不当成网络失败亮重试', async () => {
+    getReviewsMock.mockResolvedValueOnce({ ok: false, error: 'NO_PRODUCT' })
+    const page = await mountReviews()
+    await page.reload()
+    expect(page.data).toMatchObject({ loading: false, loadFailed: false, notFound: true })
+  })
+
+  it('大白话：翻页在途亮加载行、再触底不重复拉；回包后收起', async () => {
+    getReviewsMock.mockResolvedValueOnce({ ok: true, list: [{ id: 'r1' }], summary: null, nextCursor: 'c1', hasMore: true })
+    const page = await mountReviews()
+    await page.reload()
+    let release!: (v: unknown) => void
+    getReviewsMock.mockImplementationOnce(() => new Promise((r) => (release = r)))
+    const more = page.onReachBottom()
+    expect(page.data.paging).toBe(true)
+    await page.onReachBottom()
+    release({ ok: true, list: [{ id: 'r2' }], summary: null, nextCursor: null, hasMore: false })
+    await more
+    expect(getReviewsMock).toHaveBeenCalledTimes(2)
+    expect(page.data).toMatchObject({ paging: false, hasMore: false })
   })
 })

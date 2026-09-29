@@ -103,7 +103,7 @@ describe('关单评分自由文本（p-cs）', () => {
   })
 
   it('人工接待中（active）发纯数字：bot 静默，不记分、不消费标记', async () => {
-    control.seed('csSession', [{ _id: 'wxkf:kf1:euF', status: 'active' }])
+    control.seed('csSession', [{ _id: 'wxkf:kf1:euF', status: 'active', updatedAt: Date.now() }])
     control.seed('kfState', [{ _id: 'csatask:euF', at: Date.now() }])
     const { sent, ctx } = collector('oF')
     await handleMessage(ctx, { externalUserId: 'euF', menuId: '', text: '3' })

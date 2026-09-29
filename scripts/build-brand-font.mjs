@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * 品牌字体分层子集构建——把文源圆体（WenYuan Rounded SC，OFL-1.1）按「首屏优先」分三层子集成 WebFont。
+ * 品牌字体分层子集构建——把文源圆体（WenYuan Rounded SC，OFL-1.1）按「首屏优先」分两层子集成 WebFont。
  *
  * 为什么分层（字体分层批·2026-07-16 工作流实测定档）：源 OTF 单字重 ~14MB 塞不进 2MB 主包（远程加载
  * 不变）；旧产物「GB2312 一级 3755 字整包」每档 ~965KB、冷启动两档 ~1.9MB 全下完首屏才换字。真实上屏
  * 只 ~890 字，其中 tab 首屏闭包仅 ~430 字——分层后首屏所需从 1.9MB 降到 ~220KB（-88%）：
  *   tier1（每档 ~110KB）= tab 页闭包+custom-tab-bar+brand-splash+app 闭包+seed 商品/课程标题+ASCII+标点
- *   tier2（每档 ~111KB）= 其余 20 页闭包+云端可上屏文案+高频补字（圳）
- *   tier3（每档 ~765KB）= GB2312 一级剩余（UGC 昵称/评价/地址兜底·空闲加载）
+ *   tier2 = 其余页闭包
+ * v5（老板 2026-09-28 拍板）：圆体只留给按钮/标题/界面固定文案，正文长段和用户内容走黑体——只收真用圆体显示
+ * 的字，不设 GB2312 兜底层。挑字口径见 lib/brand-font-charset.mjs。
  * 分层归属单源 scripts/lib/brand-font-charset.mjs（守卫 rw-mp-font-tier-subset-covers 同源盯漂移）。
  * 加载侧三层字族回退栈+持久缓存见 rewrite/mp/utils/brandFont.ts。
  *
@@ -24,7 +25,7 @@
  *
  * 前置（一次性·非运行时依赖，不入 package.json）：
  *   · Python + fonttools（pip install fonttools brotli）→ 提供 pyftsubset。
- *   · 源 OTF：WenYuanRoundedSC-Medium.otf / -Bold.otf（84MB·不入仓·授权见上）。
+ *   · 源 OTF：WenYuanRoundedSC-{Medium,Bold,Heavy}.otf（不入仓·授权见上）。
  *
  * 用法：
  *   BRAND_FONT_SRC=/path/to/otf-dir [PYFTSUBSET=/path/to/pyftsubset] node scripts/build-brand-font.mjs
@@ -42,30 +43,31 @@ const ROOT = resolve(import.meta.dirname, '..')
 const OUT_DIR = join(ROOT, 'assets/brand-fonts')
 
 // 产物版本（进文件名·CDN 缓存失效靠改名）：字符集/分层口径变更时 +1，并同步 rewrite/mp/utils/brandFont.ts。
-const V = 'v2'
+const V = 'v9'
 
-// 设计 --font-display 实际只用 Medium(500)/Bold(700) 两档（600 就近落 700、400 就近落 500）。
+// v5 视觉（Claude Design「字重」稿）：500 正文/700 标题/900 首屏大标题，两层都出三档。稿里 300 细字只用在 13px 以下的
+// 辅助小字上，这类小字走黑体（老板 2026-09-28），圆体不出细体。
 const WEIGHTS = [
   { src: 'WenYuanRoundedSC-Medium.otf', tag: 'medium', weight: 500 },
   { src: 'WenYuanRoundedSC-Bold.otf', tag: 'bold', weight: 700 },
+  { src: 'WenYuanRoundedSC-Heavy.otf', tag: 'heavy', weight: 900 },
 ]
 
 function run() {
   const srcDir = process.env.BRAND_FONT_SRC
   if (!srcDir) {
-    console.error('✗ 需设 BRAND_FONT_SRC=源 OTF 目录（含 WenYuanRoundedSC-Medium.otf / -Bold.otf·84MB 不入仓）')
+    console.error('✗ 需设 BRAND_FONT_SRC=源 OTF 目录（含 WenYuanRoundedSC-{Light,Medium,Bold,Heavy}.otf·84MB 不入仓）')
     process.exit(1)
   }
   const pyftsubset = process.env.PYFTSUBSET || 'pyftsubset'
 
-  const { tier1, tier2, tier3 } = deriveTierCharsets(ROOT)
+  const { tier1, tier2 } = deriveTierCharsets(ROOT)
   // ASCII+标点只进 tier1（后层不重复·三层互斥）
   const tiers = [
     { name: 'tier1', text: [...tier1].join('') + ASCII + CJK_PUNCT, cjk: tier1.size },
     { name: 'tier2', text: [...tier2].join(''), cjk: tier2.size },
-    { name: 'tier3', text: [...tier3].join(''), cjk: tier3.size },
   ]
-  console.log(`分层字符集：tier1=${tier1.size} CJK（+ASCII/标点）· tier2=${tier2.size} · tier3=${tier3.size}（GB2312 一级兜底）`)
+  console.log(`分层字符集：tier1=${tier1.size} CJK（+ASCII/标点）· tier2=${tier2.size}`)
 
   mkdirSync(OUT_DIR, { recursive: true })
   const tmp = mkdtempSync(join(tmpdir(), 'ld-font-'))

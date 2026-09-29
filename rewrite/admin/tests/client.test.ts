@@ -81,6 +81,42 @@ describe('登录与令牌（fail-closed）', () => {
   })
 })
 
+describe('失效令牌只试一次（2026-09-28 真事故：看板并发 5 个请求带失效令牌，一次打开就把本机 IP 锁 5 分钟）', () => {
+  it('大白话：令牌还没被云端认过时，并发请求排在第一个后面；第一个 401 → 其余直接判会话失效、不再打云端（只记 1 次失败）', async () => {
+    store.ldrw_admin_token = 'stale-token-000000'
+    let calls = 0
+    const c = createClient({ endpoint: 'https://api.test', storage, fetchImpl: (() => (calls++, respond(401, { ok: false, error: 'BAD_KEY' }))) as unknown as typeof fetch })
+    const rs = await Promise.all([c.post('getDashboard'), c.post('refundCounts'), c.post('listInventory'), c.post('listDrafts'), c.post('getInspectStatus')])
+    expect(calls).toBe(1)
+    expect(rs.every((r) => r.ok === false && r.error === 'SESSION_LOST')).toBe(true)
+  })
+
+  it('大白话：令牌有效时照常并发——第一个认过令牌后其余全放行，之后的请求不再排队', async () => {
+    store.ldrw_admin_token = 'good-token-000000'
+    let calls = 0
+    const c = createClient({ endpoint: 'https://api.test', storage, fetchImpl: (() => (calls++, respond(200, { ok: true }))) as unknown as typeof fetch })
+    const rs = await Promise.all([c.post('a'), c.post('b'), c.post('c')])
+    expect(rs.every((r) => r.ok)).toBe(true)
+    expect(calls).toBe(3)
+    await c.post('d')
+    expect(calls).toBe(4)
+  })
+
+  it('大白话：第一个请求断网（没拿到云端答复）不算认过，下一次还是先试一个', async () => {
+    store.ldrw_admin_token = 'tok-000000'
+    let calls = 0
+    const c = createClient({
+      endpoint: 'https://api.test',
+      storage,
+      fetchImpl: (() => (calls++ === 0 ? Promise.reject(new Error('offline')) : respond(401, { ok: false }))) as unknown as typeof fetch,
+    })
+    expect((await c.post('a')).error).toMatch(/^NETWORK:/)
+    const rs = await Promise.all([c.post('b'), c.post('c')])
+    expect(calls).toBe(2)
+    expect(rs.every((r) => r.error === 'SESSION_LOST')).toBe(true)
+  })
+})
+
 describe('会话失效集中导登录（单源·病根#5 各页漂移收口 / #14 失败可见）', () => {
   it('大白话：业务调用遇 401 清令牌后触发一次会话失效回调——壳层据此统一导登录，各页不再各写各的', async () => {
     let fired = 0

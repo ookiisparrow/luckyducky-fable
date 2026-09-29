@@ -1,249 +1,229 @@
-/* 评价晒单·重设计对齐 Checkout.jsx corev-* 版式。设计 402px 画板→rpx（×1.87）。
-   页浅灰底、白卡以圆角+浅影分隔；token 见 styles/tokens.wxss。corev- 前缀沿设计。 */
-.corev {
-  min-height: 100vh;
-  background: #f4f4f5; /* 设计 co 页底浅灰（与 checkout/detail 同调·tokens 无对应中性灰） */
-  color: var(--ld-content);
+/* 写评价（v5 稿 B3） */
+page {
+  background: var(--v5-canvas);
+  color: var(--v5-ink);
 }
-
-/* ---------- 内容容器 ---------- */
-.corev-body {
-  padding: 22rpx 26rpx 8rpx;
+/* 整页纵向三段：顶栏占位 / 滚动内容 / 底部发布栏（放弃拦截武装会冻结页面级滚动，滚动放 scroll-view 里） */
+.rv-page {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 22rpx;
 }
-.corev-card {
-  background: var(--ld-bg);
-  border-radius: var(--ld-radius-md);
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.05);
+.rv-scroll {
+  flex: 1;
+  min-height: 0;
 }
-
-/* ---------- 商品行 + 评分（corev-top） ---------- */
-.corev-top {
-  padding: 30rpx;
+/* 蛋壳地面：顶栏下 120px 处落地（与其它地面场景同一条地面线） */
+.rv-egg {
+  padding: 120px 16px 12px;
 }
-.corev-prod {
-  padding-bottom: 30rpx;
-  border-bottom: 2rpx solid var(--ld-line);
+.rv-main {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
 }
-.corev-prod-name {
-  font-size: 28rpx;
-  color: var(--ld-ink);
-  line-height: 1.35;
-}
-.corev-rate {
+.rv-item {
   display: flex;
   align-items: center;
-  gap: 26rpx;
-  padding-top: 30rpx;
+  gap: 8px;
 }
-.corev-rate-stars {
-  display: flex;
-  gap: 12rpx;
-}
-.corev-star {
-  font-size: 56rpx;
-  line-height: 1;
-  color: #d8d5dd; /* 未选星灰（设计 line-strong·tokens 无中性灰） */
-}
-.corev-star.on {
-  color: var(--ld-duck-deep);
-}
-.corev-rate-label {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: var(--ld-duck-deep); /* 设计 duck-orange 暖点·tokens 无 orange 用 duck-deep 近似 */
-}
-
-/* ---------- 分区卡（corev-sec） ---------- */
-.corev-sec {
-  padding: 30rpx;
-}
-.corev-sec-title {
-  font-size: 24rpx;
-  color: var(--ld-content-2);
-  margin-bottom: 22rpx;
-}
-.corev-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-}
-.corev-tag {
-  font-size: 24rpx;
-  color: var(--ld-content);
-  background: var(--ld-bg-grey);
-  border: 2rpx solid transparent;
-  border-radius: var(--ld-radius-pill);
-  padding: 12rpx 26rpx;
-  line-height: 1;
-}
-.corev-tag.on {
-  background: var(--ld-bg-lilac);
-  color: var(--ld-purple);
-  border-color: var(--ld-purple-line);
-}
-
-/* ---------- 文字 ---------- */
-.corev-text {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 190rpx;
-  font-size: 28rpx;
-  line-height: 1.55;
-  color: var(--ld-ink);
-}
-.corev-text-ph {
-  color: var(--ld-content-2);
-}
-.corev-count {
-  text-align: right;
-  font-size: 20rpx;
-  color: var(--ld-content-2);
-  margin-top: 8rpx;
-}
-
-/* ---------- 买家秀晒图（corev-photos） ---------- */
-.corev-photos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-}
-.corev-photo {
-  position: relative;
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: var(--ld-radius-sm);
+.rv-thumb {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 4px;
   overflow: hidden;
-  background: var(--ld-bg-sage);
+  background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, #e3e3df 5px 10px);
 }
-.corev-photo-img {
+.rv-thumb-img {
+  display: block;
   width: 100%;
   height: 100%;
 }
-.corev-photo-del {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 40rpx;
-  height: 40rpx;
+.rv-item-t {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rv-q {
+  margin-top: 24px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+/* 5 颗大星键：等分一行、56 高 */
+.rv-stars {
+  margin-top: 16px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(36, 23, 51, 0.55);
-  border-bottom-left-radius: var(--ld-radius-sm);
+  gap: 8px;
 }
-.corev-photo-del-ico {
-  width: 22rpx;
-  height: 22rpx;
+.rv-star {
+  flex: 1;
+  height: 56px;
+  padding: 0;
 }
-.corev-photo-add {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: var(--ld-radius-sm);
-  border: 2rpx dashed var(--ld-line-strong, #d8d5dd);
-  background: var(--ld-bg-grey);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
+/* 选中星键＝按下态（设计稿 stars：底 #f0f0ed、内阴影、下沉 1px） */
+.rv-star-on {
+  transform: translateY(1px);
+  background: #f0f0ed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
 }
-.corev-photo-add-ico {
-  width: 44rpx;
-  height: 44rpx;
+/* 没打分点发布：星排左右抖 360ms（设计稿 shake -6,6,-4,3,0） */
+.rv-shake {
+  animation: rv-shake 360ms linear;
 }
-.corev-photo-add-txt {
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-}
-.corev-photo-spin {
-  width: 40rpx;
-  height: 40rpx;
-  border: 4rpx solid var(--ld-line);
-  border-top-color: var(--ld-purple);
-  border-radius: 50%;
-  animation: corev-spin 0.8s linear infinite;
-}
-@keyframes corev-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes rv-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
   }
 }
+.rv-label {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
+}
+.rv-label.on {
+  color: var(--v5-ink);
+}
 
-/* ---------- 匿名开关（corev-anon） ---------- */
-.corev-anon {
+.rv-more {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v5-hair);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rv-cap {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.rv-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rv-tag {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500; /* 圆体不出细体字重（只 500/700/900·字体瘦身） */
+  color: var(--v5-ink-2); /* 未选灰字（设计稿 chip off） */
+}
+.rv-tag-on {
+  color: var(--v5-ink);
+}
+/* 文字框固定 56 高 + 右侧 56×56「+」晒图键同一行 */
+.rv-write {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.rv-text {
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  padding: 12px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--v5-ink);
+}
+.rv-ph {
+  color: var(--v5-ink-4);
+}
+.rv-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 不再 overflow:hidden：删除角标的 44 热区要伸出图外；圆角改由图片自己裁 */
+.rv-photo {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  background: var(--v5-sunk);
+}
+.rv-photo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+}
+/* 44×44 透明热区：向上伸 12px、向右伸 6px（右侧只 8px 间距，少伸免得压到下一张） */
+.rv-photo-del {
+  position: absolute;
+  top: -12px;
+  right: -6px;
+  width: 44px;
+  height: 44px;
+}
+/* 看得见的角标：仍贴图片右上角 20×20（右上圆角跟图片走） */
+.rv-photo-x {
+  position: absolute;
+  top: 12px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  padding: 30rpx;
+  justify-content: center;
+  background: rgba(17, 17, 17, 0.55);
+  border-bottom-left-radius: 6px;
+  border-top-right-radius: 6px;
 }
-.corev-anon-text {
-  font-size: 28rpx;
-  color: var(--ld-ink);
-}
-.corev-anon-sub {
-  flex: 1;
-  font-size: 22rpx;
-  color: var(--ld-content-2);
-  margin-left: 18rpx;
-}
-.corev-switch {
-  position: relative;
+.rv-add {
+  width: 56px;
+  height: 56px;
   flex: 0 0 auto;
-  width: 82rpx;
-  height: 48rpx;
-  border-radius: var(--ld-radius-pill);
-  background: #d8d5dd; /* 关态轨灰（设计 line-strong） */
-  transition: background 0.18s;
+  padding: 0;
+  color: var(--v5-ink-2);
 }
-.corev-anon.on .corev-switch {
-  background: var(--ld-purple);
+.rv-anon {
+  align-self: flex-start;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.corev-switch-dot {
-  position: absolute;
-  top: 6rpx;
-  left: 6rpx;
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 2rpx 4rpx rgba(54, 58, 80, 0.2);
-  transition: transform 0.18s;
+.rv-box {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
 }
-.corev-anon.on .corev-switch-dot {
-  transform: translateX(34rpx);
+.rv-anon-t {
+  font-size: 17px;
+  font-weight: 500;
 }
 
-/* ---------- 底部发布坞 ---------- */
-.corev-dock-space {
-  /* 占位高度须覆盖吸底栏真实高度：栏内 padding 18+18 + 按钮 26×2 + 字行
-     ≈ 166rpx，再加 iPhone 安全区——不够的话滚到底最后一张「匿名评价」卡会被切掉一截。 */
-  height: calc(176rpx + env(safe-area-inset-bottom));
-}
-.corev-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--ld-bg);
-  box-shadow: 0 -2rpx 0 var(--ld-line), 0 -8rpx 24rpx rgba(54, 58, 80, 0.06);
-}
-.corev-dockbar {
+.rv-dock {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
-  padding: 18rpx 30rpx calc(18rpx + env(safe-area-inset-bottom)) 30rpx;
+  background: var(--v5-canvas);
 }
-.corev-publish {
+.rv-pub {
   flex: 1;
-  text-align: center;
-  padding: 26rpx 0;
-  border-radius: var(--ld-radius-pill);
-  background: var(--ld-purple);
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 600;
-}
-.corev-publish.dim {
-  opacity: 0.5;
 }

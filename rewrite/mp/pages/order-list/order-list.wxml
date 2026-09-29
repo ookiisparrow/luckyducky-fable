@@ -1,95 +1,97 @@
-<!-- 我的订单·重设计对齐 Checkout.jsx OrderList / coolist-* 版式（设计 402px 画板→rpx ×1.87）。
-     业务逻辑不动：状态筛选 tab(onTab)/点单进详情(onTapOrder)/继续支付(onPay)/确认收货(onConfirm)/
-     游标分页(onReachBottom) 全部承接 order-list.ts；本文件只重排结构与视觉。
-     原生标题栏承担返回/标题（navigationBarTitleText），故不渲染设计的 co-nav 返回条，只保留下沉筛选 tab。
-     有封面画缩略图；没有就灰底占位。 -->
-<!-- 手势滑动换 tab 绑在全高根容器 .coolist（min-height:100vh）上，不绑内层 .coolist-body：
-     body 高度只到内容底部，订单少时下半屏落在 body 外→下半屏滑动无效（真机实测）。
-     bind 不 catch，不影响纵向滚动/上拉翻页与卡片点按；判定见 order-list.ts onSwipeStart/onSwipeEnd。 -->
-<view class="coolist" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
+<!-- 我的订单（v5「字重」稿 B1 / E2 加载失败 / E3 订单空）：凹槽分段筛选 + 订单卡（状态灯/像素小货车 + 缩略图 + 等宽金额 + 操作键）。
+     状态筛选(onTab)/左右滑换 tab(onSwipeStart/End)/点单进详情(onTapOrder)/继续支付(onPay)/确认收货(onConfirm)/查看物流(onLogistics)/
+     写评价(onReview)/取消（按住 700ms·onCancelStart/End·拍板 7）/游标分页(onReachBottom) 全部承接 order-list.ts。
+     手势滑动换 tab 绑在全高根容器上（订单少时下半屏也能滑·真机实测）；bind 不 catch，不影响纵向滚动与卡片点按。 -->
+<v5-nav title="我的订单" />
 
-  <!-- 状态筛选（下划线指示器·设计签名 tab） -->
-  <view class="coolist-tabs">
-    <view
-      wx:for="{{tabs}}"
-      wx:key="key"
-      class="coolist-tab {{tabKey === item.key ? 'on' : ''}}"
-      data-key="{{item.key}}"
-      bind:tap="onTab"
-    >{{item.label}}</view>
+<view class="ol" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
+  <view class="well ol-tabs">
+    <view wx:for="{{tabs}}" wx:key="key" data-key="{{item.key}}" bind:tap="onTab"
+      class="k ol-tab {{tabKey === item.key ? 'k-light ol-tab-on' : ''}}"
+      hover-start-time="20" hover-class="{{tabKey === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-k="{{tabKey === item.key ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.label}}</view>
   </view>
 
   <!-- {{anim}}：切 tab 时按方向（anim-next 自右入 / anim-prev 自左入）播一次滑入动画，见 order-list.ts switchTab -->
-  <view class="coolist-body {{anim}}">
-
-    <!-- 骨架占位（钱链后回访最高频·加载中且列表空时不再整页空白·根因#8）：微光扫过对齐 home/catalog
-         （@keyframes ld-shimmer·app.wxss）。尺寸照真卡量：图 142rpx 复用 .coolist-img、卡圆角/内距沿用
-         .coolist-card/top/item/foot——高度贴近真卡、落地少跳变。 -->
+  <view class="ol-body {{anim}}">
+    <!-- 加载中且列表空：像素 loader + 骨架卡（尺寸照真卡，落地少跳变） -->
     <block wx:if="{{loading && !shown.length}}">
-      <view class="coolist-card coolist-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-        <view class="coolist-top">
-          <view class="coolist-skel-bar" style="width: 190rpx"></view>
-          <view class="coolist-skel-bar" style="width: 92rpx"></view>
-        </view>
-        <view class="coolist-item">
-          <view class="coolist-img coolist-skel-block"></view>
-          <view class="coolist-mid">
-            <view class="coolist-skel-bar" style="width: 300rpx"></view>
-            <view class="coolist-skel-bar" style="width: 160rpx; margin-top: 18rpx"></view>
+      <view class="t-sys ol-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
+      <view class="ol-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+        <view class="ol-skel-bar skel" style="width: 96px"></view>
+        <view class="ol-row">
+          <view class="ol-thumb skel"></view>
+          <view class="ol-skel-col">
+            <view class="ol-skel-bar skel" style="width: 60%"></view>
+            <view class="ol-skel-bar skel" style="width: 36%"></view>
           </view>
-        </view>
-        <view class="coolist-foot">
-          <view class="coolist-skel-bar" style="width: 200rpx; margin-left: auto"></view>
         </view>
       </view>
     </block>
 
     <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state）：网络失败≠真没有订单 -->
-    <view class="coolist-empty" wx:if="{{!loading && loadFailed}}">
-      <view>网络开小差，订单没加载出来</view>
-      <view class="coolist-retry" bind:tap="onRetryLoad">重试</view>
+    <view class="ol-state" wx:if="{{!loading && loadFailed}}">
+      <view class="ol-signal"><px-anim name="signal" size="4" /></view>
+      <text class="ol-state-t">网络开小差</text>
+      <text class="t-sys ol-state-h">订单没加载出来，请重试</text>
+      <view class="k k-light ol-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
     </view>
-    <view class="coolist-empty" wx:elif="{{!loading && !shown.length}}">该分类下暂无订单</view>
-
-    <!-- 订单卡 -->
-    <view
-      class="coolist-card"
-      wx:for="{{shown}}"
-      wx:key="id"
-      data-id="{{item.id}}"
-      bind:tap="onTapOrder"
-    >
-      <!-- 顶行：下单时间 + 状态标（按状态染色） -->
-      <view class="coolist-top">
-        <text class="coolist-time">{{item.createdAtLabel}}</text>
-        <text class="coolist-status coolist-{{item.tint}}">{{item.statusLabel}}</text>
-      </view>
-
-      <!-- 商品行（每单可多行） -->
-      <view class="coolist-item" wx:for="{{item.items}}" wx:for-item="line" wx:key="lineId">
-        <image wx:if="{{line.cover}}" class="coolist-img" src="{{line.cover}}" mode="aspectFill" lazy-load />
-        <view wx:else class="coolist-img"></view>
-        <view class="coolist-mid">
-          <text class="coolist-name">{{line.name}}</text>
-          <text class="coolist-tag" wx:if="{{line.spec}}">{{line.spec}}</text>
-          <text class="coolist-price co-price" wx:if="{{line.priceNum}}"><text class="cny">¥</text>{{line.priceNum}}</text>
-        </view>
-        <text class="coolist-qty">×{{line.qty}}</text>
-      </view>
-
-      <!-- 底行：操作钮（如有）+ 件数实付合计 -->
-      <view class="coolist-foot">
-        <view class="coolist-actions" wx:if="{{item.status === 'pending' || item.status === 'shipped'}}">
-          <view class="coolist-btn ghost" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onCancel">取消订单</view>
-          <view class="coolist-btn primary {{payingId === item.id ? 'dim' : ''}}" wx:if="{{item.status === 'pending'}}" data-id="{{item.id}}" catch:tap="onPay">继续支付</view>
-          <view class="coolist-btn ghost" wx:if="{{item.status === 'shipped'}}" data-id="{{item.id}}" catch:tap="onConfirm">确认收货</view>
-        </view>
-        <text class="coolist-sum">共 {{item.count}} 件 · {{item.amountTitle}}<text class="coolist-sum-b"><text class="cny">¥</text>{{item.amountNum}}</text></text>
-      </view>
+    <view class="ol-state ol-empty" wx:elif="{{!loading && !shown.length}}">
+      <px-ground kind="box" />
+      <text class="ol-state-t">该分类下暂无订单</text>
+      <view class="k k-light ol-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去逛逛</view>
     </view>
 
-    <!-- 尾注：分页可加载 / 到底 -->
-    <view class="coolist-more" wx:if="{{hasMore}}">上拉加载更多</view>
+    <view class="k-card ol-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
+      <view class="ol-head">
+        <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
+        <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
+        <text class="ol-status" style="{{item.labelColor ? 'color:' + item.labelColor : ''}}">{{item.label}}</text>
+        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后自动取消</text></view>
+        <text wx:elif="{{item.right}}" class="t-sys ol-time">{{item.right}}</text>
+      </view>
+      <view class="ol-row">
+        <view class="ol-thumbs">
+          <view class="ol-thumb" wx:for="{{item.thumbs}}" wx:for-item="line" wx:key="lineId">
+            <image wx:if="{{line.cover}}" class="ol-thumb-img" src="{{line.cover}}" mode="aspectFill" lazy-load />
+          </view>
+        </view>
+        <view class="ol-amt">
+          <text class="mono ol-total">¥{{item.amountNum}}</text>
+          <text class="t-sys ol-amt-t">{{item.amountTitle}} · 共 {{item.count}} 件</text>
+        </view>
+      </view>
+      <!-- 操作键：待支付＝按住取消 + 去支付；待收货＝查看物流 + 确认收货；已完成＝写评价（浅色键），
+           每行都评过＝灰底「已评价」标签不可点（拍板 6·云端订单接口带 reviewedLineIds） -->
+      <view class="ol-acts" wx:if="{{item.status === 'pending'}}">
+        <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条）：外层接按住手势 + 吞掉 tap 不进详情，内层是键帽 -->
+        <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
+          <view class="k k-sm k-light ol-act ol-danger {{holding === item.id ? 'ol-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+            data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="ol-fill"></view><text class="ol-act-t">取消订单</text></view>
+        </view>
+        <!-- 倒计时归零（expired）：藏「去支付」，右上角写「已超时」并自动刷新一次 -->
+        <view wx:if="{{!item.expired}}" class="k k-sm k-ink ol-act {{payingId === item.id ? 'ol-act-busy' : ''}}"
+          hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去支付</view>
+      </view>
+      <view class="ol-acts" wx:elif="{{item.status === 'shipped'}}">
+        <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-id="{{item.id}}" catch:tap="onLogistics" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看物流</view>
+        <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-id="{{item.id}}" catch:tap="onConfirm" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
+      </view>
+      <view class="ol-acts" wx:elif="{{item.status === 'done' && item.reviewedAll}}">
+        <text class="ol-act ol-reviewed">已评价</text>
+      </view>
+      <view class="ol-acts" wx:elif="{{item.status === 'done'}}">
+        <view class="k k-sm k-light ol-act" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
+          data-id="{{item.id}}" catch:tap="onReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
+      </view>
+    </view>
 
+    <view class="t-sys ol-loading ol-more" wx:if="{{paging}}"><px-anim name="loader" size="2" /><text>加载中</text></view>
+    <view class="t-sys ol-more" wx:elif="{{hasMore}}">上拉加载更多</view>
+    <view class="t-sys ol-more" wx:elif="{{shown.length && !loading}}">没有更多了</view>
   </view>
 </view>
+
+<!-- v5 全屏像素特效层（撒花/转场/轻提示·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />

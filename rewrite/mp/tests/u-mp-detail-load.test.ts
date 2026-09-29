@@ -1,4 +1,4 @@
-// 详情页加载：推荐取同一份全量表、排除本商品取 4 个；取数失败给重试，点重试先回到加载态。
+// 详情页加载：从全量表里取本商品渲染；取数失败给重试，点重试先回到加载态；已下架灭加载不亮重试。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -34,8 +34,8 @@ beforeEach(() => {
   getAllMock.mockReset()
 })
 
-describe('详情页加载与推荐', () => {
-  it('大白话：进页后渲染本商品，推荐是同一份全量表里排除本商品的前 4 个', async () => {
+describe('详情页加载', () => {
+  it('大白话：进页后渲染本商品', async () => {
     getAllMock.mockResolvedValue(ALL)
     const page = await mount()
     page.onLoad({ id: 'p2' })
@@ -43,7 +43,6 @@ describe('详情页加载与推荐', () => {
     expect(page.data.loading).toBe(false)
     expect(page.data.loadFailed).toBe(false)
     expect(page.data.vm.id).toBe('p2')
-    expect(page.data.recs.map((p: { id: string }) => p.id)).toEqual(['p1', 'p3', 'p4', 'p5'])
   })
 
   it('大白话：取数失败亮重试；点重试立刻回到加载态，成功后正常渲染', async () => {
@@ -59,15 +58,13 @@ describe('详情页加载与推荐', () => {
     await flush()
     expect(page.data).toMatchObject({ loading: false, loadFailed: false })
     expect(page.data.vm.id).toBe('p2')
-    expect(page.data.recs).toHaveLength(4)
   })
 
-  it('大白话：商品已下架（全量表里没有）→ 灭加载、不亮重试、不出推荐', async () => {
+  it('大白话：商品已下架（全量表里没有）→ 灭加载、不亮重试', async () => {
     getAllMock.mockResolvedValue(ALL)
     const page = await mount()
     page.onLoad({ id: 'gone' })
     await flush()
     expect(page.data).toMatchObject({ loading: false, loadFailed: false, vm: null })
-    expect(page.data.recs).toEqual([])
   })
 })

@@ -4,6 +4,8 @@
 // 须用户拍板并同步 mp 后台《用户隐私保护指引》）。「管理数据共享授权」入口已接真实 consent 页（同 me.ts）。
 import { getPageContent } from '../../lib/pageContent'
 import { mapAgreement, type AgreementDocVM } from '../../lib/mapPages'
+import { navigateOrRedirect } from '../../lib/nav'
+import { openCustomerService } from '../../utils/customerService'
 
 Page({
   data: {
@@ -30,6 +32,9 @@ Page({
     this.setData({ doc: isPrivacy ? vm.privacy : vm.user })
   },
   onConsent() {
-    wx.navigateTo({ url: '/pages/consent/consent' })
+    navigateOrRedirect('/pages/consent/consent') // 协议↔授权可反复互跳：栈满改替换，不无响应
+  },
+  onKefu() {
+    openCustomerService()
   },
 })

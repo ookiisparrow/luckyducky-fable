@@ -1,4 +1,7 @@
 {
   "navigationStyle": "custom",
-  "backgroundColor": "#14121a"
+  "backgroundColor": "#fafaf8",
+  "usingComponents": {
+    "px-i": "/components/px-i/px-i"
+  }
 }

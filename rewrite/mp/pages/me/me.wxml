@@ -1,168 +1,122 @@
-<!-- 整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
+<!-- 我（v5「字重」稿 D1）：标题 → 小鸭蛋（学完一门课孵化）→ 身份行 → 继续学习卡 → 订单四格 → 入口行 → 客服/反馈/关于 → 账号操作。
+     整页内容套 <scroll-view>：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard），
      滚动须发生在 scroll-view 内部。login-sheet/page-container 留在外层当兄弟（浮层不随内容滚）。 -->
-<scroll-view class="ld-me-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-<view class="ld-me">
-  <!-- 头部·大字问候（editorial）：品牌 logo + 欢迎回来大字 + 安静的编辑链接。
-       沉浸式：浅丁香头部底色上延填满状态栏区（padding-top 叠状态栏高度·用户需求） -->
-  <view class="ld-me-header" style="padding-top: calc({{statusBarHeight}}px + 24rpx)">
-    <view class="ld-me-brandrow">
-      <image class="ld-me-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
-    </view>
-    <view class="ld-me-greet">
-      <view class="ld-me-greet-text">
-        <view class="ld-me-eyebrow">{{loggedIn ? '欢迎回来' : '欢迎来到小棉鸭'}}</view>
-        <view class="ld-me-greet-name">{{nickname}}</view>
-        <view wx:if="{{bio}}" class="ld-me-greet-bio">{{bio}}</view>
+<!-- 顶栏（状态栏 + 44 标题条）固定在滚动容器外：内容往上滚时不钻到状态栏/胶囊底下（同首页 hm-bar） -->
+<view class="me-bar" style="padding-top: {{statusBarHeight}}px"><view class="me-head"><text class="me-title">我</text></view></view>
+<scroll-view class="me-scroll" style="top: {{statusBarHeight + 44}}px" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
+<view class="me">
+
+  <!-- 小鸭蛋：hatchKey 非空＝有一门课全部看完 → 孵化；按 hatchKey 做 key，孵化/换课时整个重挂（组件只在 ready 读参数） -->
+  <view class="me-egg">
+    <block wx:for="{{[hatchKey]}}" wx:key="*this">
+      <px-ground kind="egg" hatched="{{!!item}}" hatch-key="{{item}}" />
+    </block>
+  </view>
+
+  <!-- 身份行：已登录＝头像昵称 + 编辑；登出态＝占位 + 登录 -->
+  <view class="me-id">
+    <!-- 已登录：头像＝换头像能力键（open-type=chooseAvatar·隐私能力·页尾挂 privacy-sheet），选完直接上传保存；
+         按头像任意处「换」角标下沉（同编辑资料页）。未登录：占位，点了打开登录半屏（先登录再换）。 -->
+    <button wx:if="{{loggedIn}}" class="me-av-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" hover-start-time="20" hover-class="me-av-down" hover-stay-time="100">
+      <view class="me-av">
+        <image class="me-av-img" src="{{avatar || '/static/hero-full.jpg'}}" mode="aspectFill" />
       </view>
-      <image wx:if="{{avatar}}" class="ld-me-avatar" src="{{avatar}}" mode="aspectFill" />
-      <image wx:else class="ld-me-avatar ld-me-avatar-empty" src="/static/logo-wordmark.svg" mode="aspectFit" />
+      <view class="k k-sm k-light me-av-k">换</view>
+    </button>
+    <view wx:else class="me-av me-av-out" bind:tap="onLoginTap"></view>
+    <view class="me-id-t">
+      <text class="t-sys me-nick">{{nickname}}</text>
+      <text wx:if="{{!loggedIn}}" class="t-sys me-id-sub">登录后同步订单与学习进度</text>
     </view>
-    <view wx:if="{{loggedIn}}" class="ld-me-edit" bind:tap="onEditProfile" hover-class="ld-me-edit-h">
-      <text>编辑资料</text>
+    <view wx:if="{{loggedIn}}" class="k k-sm k-flat me-mini me-mini-weak" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onEditProfile" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">编辑</view>
+    <view wx:else class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onLoginTap" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">登录</view>
+  </view>
+
+  <!-- 继续学习（只给已登录的人看·设计稿 me.cont 以 loggedIn 为前提）：有卡 / 取数失败（失败≠没进度，不显假空态）/ 真无课（contLoaded 后）/ 加载中骨架。
+       按卡片＝右侧播放键下沉（设计稿按卡时下沉卡内的 data-k 键，整卡不变灰）。
+       缩略图：课程数据（publicCourse）不带封面图，这里一直是斜纹占位。 -->
+  <block wx:if="{{loggedIn}}">
+  <view wx:if="{{cont}}" class="me-card" hover-start-time="20" hover-class="me-card-down" hover-stay-time="100" bind:tap="onContinue">
+    <view class="me-thumb"></view>
+    <view class="me-card-t">
+      <text class="t-sys me-card-sub">继续学习 · {{cont.courseTitle}}</text>
+      <text class="me-card-main">{{contMain || cont.lessonName}}</text>
     </view>
-    <view wx:else class="ld-me-edit" bind:tap="onLoginTap" hover-class="ld-me-edit-h">
-      <text>点击登录</text>
+    <view class="k k-ink me-play"><px-i name="play" /></view>
+  </view>
+  <view wx:elif="{{contFailed}}" class="me-card">
+    <px-anim name="signal" size="2" />
+    <text class="me-card-main me-card-grow">没连上网络</text>
+    <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryCont" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
+  </view>
+  <!-- 无学习记录：设计稿此处有「扫码激活」键——老板拍板不做应用内扫码/输码（用微信扫实体激活卡进入），只留文字 -->
+  <view wx:elif="{{contLoaded}}" class="me-card">
+    <text class="me-card-main me-card-grow">还没有学习记录</text>
+  </view>
+  <view wx:else class="me-card">
+    <view class="me-thumb skel"></view>
+    <view class="me-card-t">
+      <view class="skel me-skel-l"></view>
+      <view class="skel me-skel-s"></view>
+    </view>
+  </view>
+  </block>
+
+  <!-- 订单四格（v5 D1）：数字 + 标签；三格有单都亮紫灯；「全部」格换箭头。三格带 data-tab 直落分栏（order-list.ts query.tab 契约） -->
+  <view class="me-grid">
+    <view class="k k-flat me-cell" data-tab="pending" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="me-cell-top">
+        <text class="me-cell-n {{counts.pending && counts.pending !== '0' ? '' : 'me-cell-zero'}}">{{counts.pending || '-'}}</text>
+        <px-i wx:if="{{counts.pending && counts.pending !== '0'}}" name="led" tone="#8a5ae0" />
+      </view>
+      <text class="t-sys me-cell-l">待支付</text>
+    </view>
+    <view class="k k-flat me-cell" data-tab="paid" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="me-cell-top">
+        <text class="me-cell-n {{counts.paid && counts.paid !== '0' ? '' : 'me-cell-zero'}}">{{counts.paid || '-'}}</text>
+        <px-i wx:if="{{counts.paid && counts.paid !== '0'}}" name="led" tone="#8a5ae0" />
+      </view>
+      <text class="t-sys me-cell-l">待发货</text>
+    </view>
+    <view class="k k-flat me-cell" data-tab="shipped" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="me-cell-top">
+        <text class="me-cell-n {{counts.shipped && counts.shipped !== '0' ? '' : 'me-cell-zero'}}">{{counts.shipped || '-'}}</text>
+        <px-i wx:if="{{counts.shipped && counts.shipped !== '0'}}" name="led" tone="#8a5ae0" />
+      </view>
+      <text class="t-sys me-cell-l">待收货</text>
+    </view>
+    <view wx:if="{{entries.orders.visible}}" class="k k-flat me-cell" bind:tap="onOrders" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="me-cell-top me-cell-arrow"><px-i name="arrow" /></view>
+      <text class="t-sys me-cell-l">{{entries.orders.label}}</text>
     </view>
   </view>
 
-  <view class="ld-me-stack">
-    <!-- 继续学习 / 学习记录 -->
-    <view class="ld-me-card ld-me-card-pad">
-      <view class="ld-me-sec-head">
-        <view class="ld-me-sec-title">
-          <image class="ld-me-sec-ico" src="/static/icons/graduation-cap.svg" mode="aspectFit" />
-          <text>{{cont ? '继续学习' : '学习记录'}}</text>
-        </view>
-        <view wx:if="{{cont && entries.courses.visible}}" class="ld-me-sec-more" bind:tap="onCourses">
-          <text>{{entries.courses.label}}</text>
-          <image class="ld-me-sec-more-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-        </view>
-      </view>
-
-      <block wx:if="{{cont}}">
-        <view class="ld-me-video" bind:tap="onContinue" hover-class="ld-me-video-h">
-          <view class="ld-me-play">
-            <image class="ld-me-play-ico" src="/static/icons/play.svg" mode="aspectFit" />
-          </view>
-          <view class="ld-me-video-cap">
-            <view class="ld-me-video-ep">{{cont.courseTitle}}</view>
-            <view class="ld-me-video-name">{{cont.lessonName}}</view>
-          </view>
-        </view>
-        <view class="ld-me-resume">
-          <view class="ld-me-resume-btn" bind:tap="onContinue" hover-class="ld-me-resume-btn-h">
-            <text>继续观看</text>
-          </view>
-        </view>
-      </block>
-
-      <!-- 取数失败态（同 aftersales/order-list loadFailed 分治）：失败≠没进度，不显「还没有学习记录」假空态 -->
-      <view wx:elif="{{contFailed}}" class="ld-me-empty">
-        <view class="ld-me-empty-ico">
-          <image class="ld-me-empty-img" src="/static/icons/play-circle.svg" mode="aspectFit" />
-        </view>
-        <view class="ld-me-empty-title">没连上网络</view>
-        <view class="ld-me-empty-sub">学习记录暂时没拉下来，检查网络后再试一次。</view>
-        <view class="ld-me-resume-btn" bind:tap="onRetryCont" hover-class="ld-me-resume-btn-h">
-          <text>重新加载</text>
-        </view>
-      </view>
-
-      <!-- 空态只在「首次取数已落地(contLoaded)且真无课」时出现——避免加载中 cont=null 就渲染假空态（先空后有闪烁） -->
-      <view wx:elif="{{contLoaded}}" class="ld-me-empty">
-        <view class="ld-me-empty-ico">
-          <image class="ld-me-empty-img" src="/static/icons/play-circle.svg" mode="aspectFit" />
-        </view>
-        <view class="ld-me-empty-title">还没有学习记录</view>
-        <view class="ld-me-empty-sub">看过的钩织教程会出现在这里。先挑一只喜欢的小棉鸭，开箱就能跟着视频一步步钩。</view>
-        <view class="ld-me-resume-btn" bind:tap="onContinue" hover-class="ld-me-resume-btn-h">
-          <text>去首页挑套装</text>
-        </view>
-      </view>
-
-      <!-- 加载中骨架（首次 refresh 未落地·contLoaded 前）：占位不放任何「暂无/没有」文案，切真卡零高度跳变 -->
-      <view wx:else class="ld-me-cont-skeleton">
-        <view class="ld-me-cont-skeleton-video"></view>
-        <view class="ld-me-cont-skeleton-btn"></view>
-      </view>
+  <!-- 入口行（标题/可见性走 CMS entries） -->
+  <view class="me-rows">
+    <view wx:if="{{entries.courses.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onCourses">
+      <text class="me-row-t">{{entries.courses.label}}</text><px-i name="arrow" />
     </view>
-
-    <!-- 我的订单四格 -->
-    <view class="ld-me-card ld-me-card-pad">
-      <view class="ld-me-sec-head">
-        <view class="ld-me-sec-title"><text>我的订单</text></view>
-        <view wx:if="{{entries.orders.visible}}" class="ld-me-sec-more" bind:tap="onOrders">
-          <text>{{entries.orders.label}}</text>
-          <image class="ld-me-sec-more-ico" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-        </view>
-      </view>
-      <view class="ld-me-orders">
-        <view class="ld-me-order" data-tab="pending" bind:tap="onOrders" hover-class="ld-me-order-h">
-          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/wallet.svg" mode="aspectFit" /></view>
-          <text class="ld-me-order-label">待支付</text>
-        </view>
-        <view class="ld-me-order" data-tab="paid" bind:tap="onOrders" hover-class="ld-me-order-h">
-          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/package.svg" mode="aspectFit" /></view>
-          <text class="ld-me-order-label">待发货</text>
-        </view>
-        <view class="ld-me-order" data-tab="shipped" bind:tap="onOrders" hover-class="ld-me-order-h">
-          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/truck.svg" mode="aspectFit" /></view>
-          <text class="ld-me-order-label">待收货</text>
-        </view>
-        <view wx:if="{{entries.aftersales.visible}}" class="ld-me-order" bind:tap="onAfterSales" hover-class="ld-me-order-h">
-          <view class="ld-me-order-ico"><image class="ld-me-order-img" src="/static/icons/rotate-ccw.svg" mode="aspectFit" /></view>
-          <text class="ld-me-order-label">{{entries.aftersales.label}}</text>
-        </view>
-      </view>
+    <view wx:if="{{entries.aftersales.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAfterSales">
+      <text class="me-row-t">{{entries.aftersales.label}}</text><px-i name="arrow" />
     </view>
-
-    <!-- 常用入口列 -->
-    <view class="ld-me-card ld-me-list">
-      <view wx:if="{{entries.address.visible}}" class="ld-me-row" bind:tap="onAddress" hover-class="ld-me-row-h">
-        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/map-pin.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">{{entries.address.label}}</text>
-        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <view wx:if="{{entries.activate.visible}}" class="ld-me-row" bind:tap="onActivate" hover-class="ld-me-row-h">
-        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/ticket.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">{{entries.activate.label}}</text>
-        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <view wx:if="{{entries.feedback.visible}}" class="ld-me-row" bind:tap="onFeedback" hover-class="ld-me-row-h">
-        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/message-circle.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">{{entries.feedback.label}}</text>
-        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <view wx:if="{{entries.kefu.visible}}" class="ld-me-row" bind:tap="onKefu" hover-class="ld-me-row-h">
-        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/headphones.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">{{entries.kefu.label}}</text>
-        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <view wx:if="{{entries.consent.visible}}" class="ld-me-row" bind:tap="onConsent" hover-class="ld-me-row-h">
-        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/shield-check.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">{{entries.consent.label}}</text>
-        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
-      <view wx:if="{{entries.about.visible}}" class="ld-me-row" bind:tap="onAbout" hover-class="ld-me-row-h">
-        <view class="ld-me-row-ico"><image class="ld-me-row-img" src="/static/icons/info.svg" mode="aspectFit" /></view>
-        <text class="ld-me-row-label">{{entries.about.label}}</text>
-        <image class="ld-me-row-chev" src="/static/icons/chevron-right.svg" mode="aspectFit" />
-      </view>
+    <view wx:if="{{entries.address.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAddress">
+      <text class="me-row-t">{{entries.address.label}}</text><px-i name="arrow" />
     </view>
-
-    <!-- 退出登录（登出即清本地登录 hint·转登出态·R1）：仅已登录时显示；openid 身份与服务端订单/学习不受影响 -->
-    <view wx:if="{{loggedIn}}" class="ld-me-logout" bind:tap="onLogout" hover-class="ld-me-logout-h">
-      <text>退出登录</text>
-    </view>
-    <!-- 删除资料（隐私政策第六条·两次确认在 ts）：仅已登录时显示。文案不用「注销账户」——那三字不在「我」页首屏字体。 -->
-    <view wx:if="{{loggedIn}}" class="ld-me-logout" bind:tap="onDeleteAccount" hover-class="ld-me-logout-h">
-      <text>删除资料</text>
+    <!-- 数据共享授权：设计稿未画，但合规守卫要求「我」页可直达（隐私政策承诺随时可撤回·M5 前置闸1），放入口行末 -->
+    <view wx:if="{{entries.consent.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onConsent">
+      <text class="me-row-t">{{entries.consent.label}}</text><px-i name="arrow" />
     </view>
   </view>
 
-  <view class="ld-me-ver">{{versionLine}}</view>
-  <view wx:if="{{versionDetail}}" class="ld-me-ver-n">{{versionDetail}}</view>
-  <view class="ld-me-pad-bottom"></view>
+  <view class="me-links">
+    <view wx:if="{{entries.kefu.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">{{entries.kefu.label}}</view>
+    <view wx:if="{{entries.kefu.visible && entries.feedback.visible}}" class="me-sep"></view>
+    <view wx:if="{{entries.feedback.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onFeedback">{{entries.feedback.label}}</view>
+    <view wx:if="{{(entries.kefu.visible || entries.feedback.visible) && entries.about.visible}}" class="me-sep"></view>
+    <view wx:if="{{entries.about.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onAbout">{{entries.about.label}}</view>
+  </view>
+
+  <view class="me-tab-space"></view>
 </view>
 </scroll-view>
 
@@ -171,3 +125,9 @@
 
 <!-- 误触退出提醒（决策§30）：隐形容器武装拦第一次返回 →「再按一次退出」·仅安卓返回键·见 utils/exitGuard -->
 <page-container show="{{exitGuardArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onExitGuardBeforeLeave" />
+
+<!-- v5 全屏像素特效层（撒花/转场·lib/pxFx）：页面根下、不进滚动容器 -->
+<px-fx id="fx" />
+
+<!-- 隐私授权弹窗：头像键 chooseAvatar 属隐私接口，未授权时由 lib/privacyGate 唤起（守卫 rw-mp-privacy-gated） -->
+<privacy-sheet />

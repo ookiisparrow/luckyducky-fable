@@ -1,5 +1,4 @@
-// 品牌启动 splash（冷启动开屏·对齐 Claude Design 通过稿）：淡紫渐变底 + 居中品牌字标（轻浮动）+
-// 「创造幸运~」+ 脚注。撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（不用纯计时器固定时长）：
+// 品牌启动 splash（冷启动开屏·v5 稿 data-splash）：#fafaf8 底 + 居中品牌字标 + 等宽英文口号。撤场＝**min-hold 保底停留 + 数据就绪 race + 硬上限兜底**（不用纯计时器固定时长）：
 //  · 至少停 MIN_HOLD_MS——低于此一闪而过、观感差；
 //  · 过了 min-hold 后，父级 ready（首页数据就绪）即淡出——好网络下 splash 撤得比死等 1.5s 更快；
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
@@ -21,6 +20,7 @@ const timers = new WeakMap<object, ReturnType<typeof setTimeout>[]>()
 const starts = new WeakMap<object, number>()
 
 Component({
+  options: { styleIsolation: 'apply-shared' }, // 吃 app.wxss 的 .mono 与 .v5-scope 色票
   properties: {
     // 父级（home）数据就绪信号：置 true 触发 observer → maybeLeave（过了 min-hold 即淡出）
     ready: { type: Boolean, value: false, observer() { this.maybeLeave() } },
@@ -35,7 +35,13 @@ Component({
       const hardCap = setTimeout(() => this.leave(), HARD_CAP_MS) // 无条件兜底撤场
       timers.set(this, [minHold, hardCap])
     },
+    // 开屏期间让底部 TabBar 让位（自定义 TabBar 是框架独立层、z-index 盖不住·同 px-fx 转场做法）。
+    // ready 才调：attached 时 TabBar 可能还没挂上。⚠ 真机待验：TabBar 是否真在开屏期间露出、此处能否压住。
+    ready() {
+      this.tabBar(true)
+    },
     detached() {
+      this.tabBar(false)
       for (const t of timers.get(this) || []) clearTimeout(t)
       timers.delete(this)
       starts.delete(this)
@@ -47,10 +53,17 @@ Component({
       if (t0 == null) return // attached 尚未记 t0（property observer 早于 attached 的保险）
       if (shouldLeave(Date.now(), t0, this.properties.ready)) this.leave()
     },
+    tabBar(covered: boolean) {
+      const owner = this.selectOwnerComponent() as unknown as { getTabBar?: () => { setCovered?: (v: boolean) => void } | null } | null
+      owner?.getTabBar?.()?.setCovered?.(covered)
+    },
     leave() {
       if (this.data.leaving) return // 幂等：淡出已启动不重入（min-hold/ready/hard-cap 三处都可能触发）
       this.setData({ leaving: true })
-      const fade = setTimeout(() => this.triggerEvent('done'), FADE_MS) // 淡出动画结束请父级撤下
+      const fade = setTimeout(() => {
+        this.tabBar(false) // 淡出完 TabBar 回来
+        this.triggerEvent('done') // 淡出动画结束请父级撤下
+      }, FADE_MS)
       const arr = timers.get(this)
       if (arr) arr.push(fade)
       else timers.set(this, [fade])

@@ -1,0 +1,9 @@
+{
+  "navigationStyle": "custom",
+  "backgroundColor": "#fafaf8",
+  "usingComponents": {
+    "v5-nav": "/components/v5-nav/v5-nav",
+    "px-ground": "/components/px-ground/px-ground",
+    "px-fx": "/components/px-fx/px-fx"
+  }
+}

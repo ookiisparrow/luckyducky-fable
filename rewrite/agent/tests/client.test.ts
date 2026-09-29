@@ -108,3 +108,25 @@ describe('会话失效集中导登录（单源·病根#5·对照 admin client �
     expect(fired).toBe(0)
   })
 })
+
+describe('失效令牌只试一次（对照 admin 同一事故：并发请求带失效令牌一次打开就把本机 IP 锁 5 分钟）', () => {
+  it('大白话：令牌没被云端认过时并发请求排队；第一个 401 → 其余直接判会话失效、不再打云端', async () => {
+    storage.setItem('ldrw_agent_token', 'stale-token-000000')
+    const fetchMock = vi.fn(() => Promise.resolve({ status: 401, json: () => Promise.resolve({ ok: false, error: 'BAD_KEY' }) }))
+    ;(globalThis as unknown as { fetch: typeof fetchMock }).fetch = fetchMock
+    const { post } = await import('../src/api/client')
+    const rs = await Promise.all([post('listQueue'), post('listKb'), post('whoami')])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(rs.every((r) => r.error === 'SESSION_LOST')).toBe(true)
+  })
+
+  it('大白话：令牌有效时认过一次后照常并发', async () => {
+    storage.setItem('ldrw_agent_token', 'good-token-000000')
+    const fetchMock = vi.fn(() => Promise.resolve({ status: 200, json: () => Promise.resolve({ ok: true }) }))
+    ;(globalThis as unknown as { fetch: typeof fetchMock }).fetch = fetchMock
+    const { post } = await import('../src/api/client')
+    const rs = await Promise.all([post('a'), post('b'), post('c')])
+    expect(rs.every((r) => r.ok)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+})

@@ -1,0 +1,4 @@
+<view class="px" style="width:{{w}}px;height:{{h}}px;{{tone ? 'color:' + tone : ''}}">
+  <view class="px-dot" style="width:{{cell}}px;height:{{cell}}px;left:-{{cell}}px;top:-{{cell}}px;box-shadow:{{solid}}"></view>
+  <view wx:if="{{soft}}" class="px-dot px-halo" style="width:{{cell}}px;height:{{cell}}px;left:-{{cell}}px;top:-{{cell}}px;box-shadow:{{soft}}"></view>
+</view>

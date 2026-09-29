@@ -1,8 +1,12 @@
 {
   "navigationStyle": "custom",
-  "backgroundColor": "#fcfaff",
+  "backgroundColor": "#fafaf8",
   "usingComponents": {
     "brand-splash": "/components/brand-splash/brand-splash",
-    "login-sheet": "/components/login-sheet/login-sheet"
+    "login-sheet": "/components/login-sheet/login-sheet",
+    "px-i": "/components/px-i/px-i",
+    "px-anim": "/components/px-anim/px-anim",
+    "px-scene": "/components/px-scene/px-scene",
+    "px-fx": "/components/px-fx/px-fx"
   }
 }

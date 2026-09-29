@@ -1,54 +1,34 @@
-<!-- 地址管理·重设计对齐 Checkout.jsx AddressManage（coam-* 版式，设计 402px 画板→rpx ×1.87）。
-     业务逻辑承接 address.ts / lib/address 不动：
-       ?pick=1 结算选地址 → 点行或点选中圈=设默认+navigateBack；
-       管理态 → 点行进编辑页、点选中圈=设默认、点笔=编辑、长按=删除确认、底坞=新增。
-     原生导航栏（address.json 标题「收货地址」）管标题与返回，故无页内 header。 -->
-<view class="co">
-  <view class="co-body">
+<!-- 收货地址（v5「字重」稿 A6）：管理 + 选择两用。
+       ?pick=1 结算选地址 → 行首单选圆键，点行＝设默认并返回（结算页 onShow 取默认）；
+       管理态 → 点行或「编辑」进编辑页；删除在编辑页按住删除（设计稿：危险操作收进下一级）。 -->
+<!-- 顶栏只留返回键：页名由下面的大标题说（原来顶栏小字和大标题重复「收货地址」） -->
+<v5-nav />
 
-    <block wx:if="{{list.length}}">
-      <view class="co-card coam-card" wx:for="{{list}}" wx:key="id"
-            data-id="{{item.id}}" bind:longpress="onLongPressRow">
-        <!-- 主区：点选（结算态选中返回 / 管理态进编辑） -->
-        <view class="coam-main" data-id="{{item.id}}" bind:tap="onTapRow">
-          <view class="coam-radio {{item.isDefault ? 'on' : ''}}" data-id="{{item.id}}" catch:tap="onRadioTap">
-            <image wx:if="{{item.isDefault}}" class="coam-check" src="/static/icons/check.svg" mode="aspectFit" />
-          </view>
-          <view class="coam-text">
-            <view class="coam-line1">
-              <text class="coam-name">{{item.name}}</text>
-              <text class="coam-phone">{{item.phone}}</text>
-              <text class="co-addr-tag" wx:if="{{item.isDefault}}">默认</text>
-            </view>
-            <text class="coam-addr">{{item.region}} {{item.detail}}</text>
-          </view>
-        </view>
-        <!-- 编辑笔（独立分栏，与主区分隔线） -->
-        <view class="coam-edit" data-id="{{item.id}}" catch:tap="onEdit">
-          <image class="coam-edit-ico" src="/static/icons/square-pen.svg" mode="aspectFit" />
-        </view>
+<view class="ad">
+  <text class="ad-title">{{picking ? '选择收货地址' : '收货地址'}}</text>
+  <view class="ad-list">
+    <view class="ad-row" wx:for="{{list}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onTapRow">
+      <view wx:if="{{picking}}" class="k k-sm k-light ad-radio">
+        <px-i wx:if="{{item.isDefault}}" name="node" tone="#8a5ae0" />
       </view>
-    </block>
-
-    <!-- 空态 -->
-    <view class="coam-empty" wx:else>
-      <view class="coam-empty-ico">
-        <image class="coam-empty-svg" src="/static/icons/map-pin-off.svg" mode="aspectFit" />
+      <view class="ad-text">
+        <view class="ad-line1">
+          <text class="t-sys ad-name">{{item.name}}</text>
+          <text class="mono ad-phone">{{item.phoneMasked}}</text>
+          <text class="t-sys ad-def" wx:if="{{item.isDefault}}">默认</text>
+        </view>
+        <text class="t-sys ad-where">{{item.where}}</text>
       </view>
-      <view class="coam-empty-title">还没有收货地址</view>
-      <view class="coam-empty-sub">添加一个常用地址，下单时一键带入</view>
+      <view class="k k-sm k-flat ad-edit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onEdit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">编辑</view>
     </view>
-
-    <view class="co-dock-space"></view>
-  </view>
-
-  <!-- 底部固定坞：新增收货地址 -->
-  <view class="co-dock">
-    <view class="coam-dock">
-      <view class="co-submit coam-add" hover-class="co-submit-hover" bind:tap="onAdd">
-        <image class="coam-add-ico" src="/static/icons/plus.svg" mode="aspectFit" />
-        <text>新增收货地址</text>
-      </view>
+    <view wx:if="{{!list.length}}" class="ad-empty">
+      <px-ground kind="pin" />
+      <text class="ad-empty-t">还没有收货地址</text>
     </view>
   </view>
+  <view class="ad-dock-space"></view>
+</view>
+
+<view class="ad-dock">
+  <view class="k k-ink k-48 ad-add" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onAdd" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">新增收货地址</view>
 </view>

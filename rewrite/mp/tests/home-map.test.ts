@@ -1,7 +1,7 @@
 // 黄金 learning-content §九「首页内容公开读·无记录前端回退默认文案·空块仍用默认防误清空」
 // + 展示面 fail-closed（防「¥undefined」类真机事故·根因#8 展示层半边）。
 import { describe, it, expect } from 'vitest'
-import { BRAND_SLOGAN_CN, HOME_SHARE_TITLE, LEARNER_KIT } from '../lib/brand'
+import { BRAND_NAME, BRAND_SLOGAN_CN, HOME_SHARE_TITLE, LEARNER_KIT } from '../lib/brand'
 import { mapHero, mapProducts, mapHomeContent, pickDuckKit } from '../lib/mapHome'
 
 describe('首页 hero 映射（黄金 §九：缺档回退默认文案·不空屏不半空）', () => {
@@ -33,8 +33,8 @@ describe('商品网格映射（展示面 fail-closed：脏行不上首页）', (
       null, // 脏元素不崩
     ])
     expect(vm.map((p) => p.id)).toEqual(['p1', 'p2'])
-    expect(vm[0]).toEqual({ id: 'p1', name: '小棉鸭礼盒', tag: '送礼首选', priceLabel: '¥198', wasLabel: '¥258', cover: 'cloud://x/cover.png' })
-    expect(vm[1].priceLabel).toBe('¥98')
+    expect(vm[0]).toEqual({ id: 'p1', name: '小棉鸭礼盒', tag: '送礼首选', priceLabel: '¥198.00', wasLabel: '¥258.00', cover: 'cloud://x/cover.png' })
+    expect(vm[1].priceLabel).toBe('¥98.00') // 老板拍板 1：金额一律两位小数
     expect(vm[1].wasLabel).toBe('') // 无划线价→空串·模板按空隐藏
     expect(JSON.stringify(vm)).not.toContain('undefined')
     expect(mapProducts(undefined)).toEqual([]) // 非数组入参安全
@@ -57,16 +57,29 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(d.reassure.heading).toBeTruthy()
     expect(d.reassure.items.length).toBe(3) // 放心开始/难以失败/幸运随行
     expect(d.reviews.heading).toBeTruthy()
-    expect(d.reviews.items.length).toBe(3)
+    expect(d.reviews.items).toEqual([]) // 拍板 B：没有后台真评论就没有买家秀（不写死示例）
     expect(d.faq.length).toBe(4)
     expect(d.closing.title).toBeTruthy()
     expect(d.closing.cta).toBeTruthy()
     expect(d.footer.links.length).toBeGreaterThan(0)
     expect(d.footer.copy).toBeTruthy()
-    // 每条 trust/reassure 项都带图标 + 文案（模板 <image> 引 static/icons/<icon>.svg）
+    // 每条 trust/reassure 项都带图标名 + 文案（图标名只用来挑像素动画）
     expect(d.trust.every((t) => t.icon && t.label)).toBe(true)
     expect(d.reassure.items.every((r) => r.icon && r.title && r.body)).toBe(true)
     expect(JSON.stringify(d)).not.toContain('undefined')
+  })
+
+  it('大白话：信任条每项配一个像素动画——后台图标名认得就对应（卡车/盾牌/爱心），认不得按位置轮流', () => {
+    expect(mapHomeContent(null).trust.map((t) => t.anim)).toEqual(['truck', 'shield', 'heart'])
+    const got = mapHomeContent({
+      trust: [
+        { icon: 'thumbs-up', label: '推荐' },
+        { icon: 'rocket', label: '极速' },
+        { icon: 'shield-check', label: '保障' },
+        { label: '无图标' },
+      ],
+    }).trust.map((t) => t.anim)
+    expect(got).toEqual(['heart', 'shield', 'shield', 'truck'])
   })
 
   it('大白话：配了某板块的一部分 → 配的用配置、没配的字段/条目回退默认（不半空）', () => {
@@ -96,7 +109,7 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     const def = mapHomeContent(null)
     // trust 缺 label、review 缺 quote、faq 缺 title、footer link 缺 label → 全脏
     expect(mapHomeContent({ trust: [{ icon: 'truck' }] }).trust).toEqual(def.trust)
-    expect(mapHomeContent({ reviews: { items: [{ user: '小明' }] } }).reviews.items).toEqual(def.reviews.items)
+    expect(mapHomeContent({ reviews: { items: [{ user: '小明' }] } }).reviews.items).toEqual([])
     expect(mapHomeContent({ faq: [{ body: '只有答案没问题' }] }).faq).toEqual(def.faq)
     // 部分脏：干净的留下、脏的剔除
     const mixed = mapHomeContent({ faq: [{ title: 'Q1', body: 'A1' }, { body: '无题剔除' }] })
@@ -136,7 +149,7 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
     expect(d.faq[1].title).toBe('材料包里都有什么？')
     expect(d.faq[2].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
     expect(d.faq[2].body).not.toContain('七天')
-    expect(d.footer.links).toEqual(['关于我们', 'Lucky Ducky小棉鸭'])
+    expect(d.footer.links).toEqual(['关于我们', BRAND_NAME]) // 设计稿页脚「Lucky Ducky 小棉鸭」中间带空格＝店名单源
     expect(JSON.stringify(d)).not.toContain('七天无理由')
   })
 
@@ -147,17 +160,26 @@ describe('首页全板块映射 mapHomeContent（缺档/空块逐块回退设计
       faq: [{ title: '做坏了可以补料吗？', body: '可以。线材用尽或钩错都能在社群申请补料，七天内不满意还可无理由退货。' }],
     })
     expect(d.trust[0].label).toBe('售后无忧')
-    expect(d.footer.links).toEqual(['Lucky Ducky小棉鸭'])
+    expect(d.footer.links).toEqual([BRAND_NAME])
+    expect(mapHomeContent({ footer: { links: ['Lucky Ducky小棉鸭'] } }).footer.links).toEqual([BRAND_NAME]) // 旧稿没空格也补上
     expect(d.faq[0].body).toBe('可以。线材用尽或钩错都能在社群申请补料，售后无忧。')
   })
 })
 
+describe('买家秀（拍板 B）', () => {
+  it('大白话：没配真评论/拉取失败——一条示例评论都不给（整块不显示）；配了真评论就用它', () => {
+    expect(JSON.stringify(mapHomeContent(null))).not.toMatch(/小满|阿橙|柚子/)
+    expect(mapHomeContent({ reviews: { items: [] } }).reviews.items).toEqual([])
+    expect(mapHomeContent({ reviews: { items: [{ quote: '好看', user: '阿木' }] } }).reviews.items).toEqual([{ quote: '好看', user: '阿木', img: '' }])
+  })
+})
+
 describe('首页购买跳小棉鸭详情 pickDuckKit', () => {
-  it('大白话：货架上第一件名字带小棉鸭的就用它；没有就不瞎给旧 id', () => {
+  it('大白话：货架上第一件名字带小棉鸭的就用它；还没上小棉鸭就先拿第一件商品占位（拍板 18）；货架空才给 null', () => {
     const duck = { id: 'kit-2', name: '小棉鸭入门套装', tag: '', priceLabel: '¥128', wasLabel: '', cover: '' }
     const other = { id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }
     expect(pickDuckKit([other, duck])).toEqual(duck)
-    expect(pickDuckKit([other])).toBeNull()
+    expect(pickDuckKit([other])).toEqual(other)
     expect(pickDuckKit([])).toBeNull()
   })
 })
