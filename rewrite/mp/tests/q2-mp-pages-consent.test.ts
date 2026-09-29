@@ -102,14 +102,14 @@ describe('授权页：进页', () => {
 })
 
 describe('授权页：同意 / 撤回', () => {
-  it('大白话：点同意——发 agree:true，成功后显示已同意、本机记下、提示已同意', async () => {
+  it('大白话：点重新开启——发 agree:true，成功后显示已同意、本机记下、提示已重新开启', async () => {
     const page = await mount()
     page.onAgree()
     await flush()
     expect(callAppMock).toHaveBeenCalledWith('dataConsent', { agree: true })
     expect(page.data).toMatchObject({ state: true, stateLabel: '当前状态：已同意共享' })
     expect(storage[HINT_KEY]).toBe(true)
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已同意数据共享', icon: 'success' }) // 页面挂 px-fx 时走自绘 ✓；测试桩没挂退回原生
+    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已重新开启', icon: 'success' }) // 页面挂 px-fx 时走自绘 ✓；测试桩没挂退回原生
     expect(hapticMock).toHaveBeenCalledTimes(1)
   })
 
@@ -164,14 +164,5 @@ describe('授权页：同意 / 撤回', () => {
   })
 })
 
-describe('授权页：撤回与同意一样便捷（合规·个人信息保护法）', () => {
-  it('大白话：「撤回授权」是轻点就撤、不藏在任何条件后面；「同意共享」同样常驻', () => {
-    const live = consentWxml.replace(/<!--[\s\S]*?-->/g, '')
-    const revoke = live.match(/<view[^>]*bind:tap="onRevoke"[^>]*>/)
-    expect(revoke, '撤回键要用 bind:tap 轻点触发').not.toBeNull()
-    expect(revoke![0]).not.toMatch(/wx:if|wx:elif|wx:else|touchstart="(?!onKeyDown")|longpress/)
-    const agree = live.match(/<view[^>]*bind:tap="onAgree"[^>]*>/)
-    expect(agree).not.toBeNull()
-    expect(agree![0]).not.toMatch(/wx:if|wx:elif|wx:else/)
-  })
-})
+// 「撤回任何时候都点得到」的约束（原两键常驻）改由 consent-default-0930.test.ts 钉：
+// 老板 2026-09-30 定只放一颗键，服务端确认已撤回才换「重新开启」，其余一律「撤回授权」（决策记录 §40）。

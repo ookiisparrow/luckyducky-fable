@@ -84,6 +84,12 @@
 .ls-link {
   padding: 8px 0;
 }
+/* 数据共享默认开启告知（老板 2026-09-30·§40）：紧跟协议勾选 */
+.ls-cs-note {
+  margin-top: -8px;
+  font-size: 13px;
+  color: var(--v5-ink-2);
+}
 .ls-link {
   font-weight: 700;
 }

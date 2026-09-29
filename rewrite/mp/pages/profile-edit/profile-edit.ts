@@ -49,7 +49,7 @@ Page({
     })
     let user: Record<string, any> | null = null
     try {
-      const u = await login()
+      const u = await login(loginGate.hasAgreed())
       user = (u.ok ? u.user : null) as Record<string, any> | null
     } catch {
       // 抛错与 ok:false 同落失败态：不把空白表单当档案（根因#14）

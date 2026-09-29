@@ -1,7 +1,8 @@
 // 用户域 api（经 app 网关·身份=可信 openid·登录零资料采集）
 import { callApp, type ApiResult } from '../utils/cloud'
 
-export const login = (): Promise<ApiResult> => callApp('login')
+// agreed＝本机已同意协议（登录半屏刚勾选传 true）：云端据此给从没选过的用户默认开启数据共享（§40）；静默识别不带
+export const login = (agreed = false): Promise<ApiResult> => callApp('login', { agreed })
 export const updateProfile = (patch: { nickname?: string; bio?: string; avatar?: string; phone?: string }): Promise<ApiResult> => callApp('updateProfile', patch)
 export const deleteAccount = (): Promise<ApiResult> => callApp('deleteAccount')
 export const getMyProgress = (): Promise<ApiResult> => callApp('getMyProgress')

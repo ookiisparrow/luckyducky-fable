@@ -64,11 +64,8 @@ page {
   background: var(--v5-canvas);
 }
 /* 撤回：普通浅色键、轻点即撤（撤回同意须与同意同样便捷·不做长按） */
-.cs-revoke {
-  flex: 1;
-}
 .cs-main {
-  flex: 1.6;
+  flex: 1;
 }
 .cs-dim {
   opacity: 0.55;

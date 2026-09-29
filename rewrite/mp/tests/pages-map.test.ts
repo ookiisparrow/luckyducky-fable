@@ -169,6 +169,14 @@ describe('隐私政策第六条与「退出登录 / 删除个人资料」对齐�
   })
 })
 
+describe('隐私政策第三条：受托客服数据共享登录即默认开启、可撤回（老板 2026-09-30 定稿·§40）', () => {
+  it('大白话：写明登录即默认开启、在「我 → 数据共享授权」撤回；不再说「以你的同意为前提」', () => {
+    const three = mapAgreement(null).privacy.articles.find((a) => a.title.startsWith('第三条'))?.body ?? ''
+    expect(three).toContain('你登录即默认开启此项数据共享授权，可随时在小程序「我 → 数据共享授权」中撤回（撤回后不影响此前已依约进行的处理）。')
+    expect(three).not.toContain('以你的同意为前提')
+  })
+})
+
 describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·intro 固定合规文本）', () => {
   it('大白话：整档 null → user/privacy 两文档默认全文（含引言 + ≥8 条条款）', () => {
     const d = mapAgreement(null)
