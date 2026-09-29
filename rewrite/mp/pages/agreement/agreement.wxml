@@ -12,7 +12,7 @@
   <!-- 条款正文（逐条法律文本原样） -->
   <view class="ag-art" wx:for="{{doc.articles}}" wx:key="title">
     <text class="t-sys ag-h">{{item.title}}</text>
-    <text class="ag-p t-sys">{{item.body}}</text>
+    <text class="ag-p t-sys {{item.important ? 'ag-p-key' : ''}}">{{item.body}}</text>
   </view>
 
   <text class="t-sys ag-note">如对本条款有任何疑问，可通过本小程序客服与我们联系。</text>

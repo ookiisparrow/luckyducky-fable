@@ -49,10 +49,12 @@
 
       <!-- 全屏单击播放/暂停（透明点击层·paused 以 bind:play/bind:pause 回报为准）；暂停大圆/缓冲角标是它的子节点，点它们冒泡到 tapzone。 -->
       <view wx:if="{{src && !segDone}}" class="lp-tapzone" bind:tap="onTapVideo">
-        <view wx:if="{{state === 'playing' && !hintDismissed}}" class="t-sys lp-tap-hint">单击画面 播放 / 暂停</view>
-        <view wx:if="{{paused}}" class="lp-pause-badge"><px-i name="playL" tone="var(--v5-dark-ink)" /></view>
+        <!-- 首帧前转圈（不加字·老板 2026-09-29 选定）；被拦自动播放时换下方播放键 -->
+        <view wx:if="{{!started && !blocked}}" class="lp-first-loader"><px-anim name="loader" size="2" dark /></view>
+        <view wx:if="{{state === 'playing' && started && !hintDismissed}}" class="t-sys lp-tap-hint">单击画面 播放 / 暂停</view>
+        <view wx:if="{{paused || blocked}}" class="lp-pause-badge"><px-i name="playL" tone="var(--v5-dark-ink)" /></view>
         <!-- 缓冲失速角标·见 ts onVideoWaiting -->
-        <view wx:if="{{buffering && !paused}}" class="t-sys lp-buffering">
+        <view wx:if="{{buffering && !paused && started}}" class="t-sys lp-buffering">
           <px-anim name="loader" size="2" dark />
           <text>正在缓冲…</text>
         </view>

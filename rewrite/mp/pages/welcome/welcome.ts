@@ -20,7 +20,7 @@ Page({
   onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
-    phase: 'nocode' as 'nocode' | 'result' | 'w2',
+    phase: 'nocode' as 'nocode' | 'loading' | 'result' | 'w2', // loading＝带码兑课在途（不闪 nocode 的「去扫卡」）
     kind: 'invalid' as ActivationKind,
     code: '',
     courseId: '',
@@ -45,7 +45,7 @@ Page({
     void this.loadPageContent() // W1/W2 文案·与激活流程互不依赖，并行发起（不阻塞首帧·默认已在 data）
     const code = String(query.code || '').trim()
     if (code) {
-      this.setData({ code })
+      this.setData({ code, phase: 'loading' })
       void this.activate(code)
     }
   },
