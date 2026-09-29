@@ -73,6 +73,9 @@ page {
   font-size: 17px;
   font-weight: 500;
 }
+.ct-ch-title {
+  font-weight: 600; /* 后台来的文本走黑体（UI 审查 6 问 3a） */
+}
 .ct-ch-no {
   color: var(--v5-ink-2);
 }
@@ -105,7 +108,7 @@ page {
   flex: 1;
   min-width: 0;
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -127,7 +130,7 @@ page {
   color: var(--v5-violet-text);
 }
 .ct-lesson.current .ct-name {
-  font-weight: 700;
+  font-weight: 600;
 }
 .ct-toc-end {
   border-top: 1px solid var(--v5-hair);

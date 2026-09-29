@@ -38,7 +38,7 @@ describe('点击区透明补到 44（外观不变）', () => {
   })
   it('大白话：订单页签、去支付、播放页拖动条都挂上了', () => {
     expect(classOf(orderListWxml, 'ol-tab ')).toContain('hit44')
-    expect(classOf(orderListWxml, 'k-ink ol-act')).toContain('hit44')
+    expect(classOf(orderListWxml, 'k-light ol-act hit44 {{payingId')).toContain('hit44')
     expect(classOf(playerWxml, 'lp-seek')).toContain('hit44')
   })
 })

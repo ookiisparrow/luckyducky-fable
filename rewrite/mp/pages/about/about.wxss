@@ -25,7 +25,7 @@ page {
 }
 .ab-h {
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .ab-p {
   font-size: 17px;

@@ -5,11 +5,17 @@ import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { groundGap } from '../../lib/ground'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
-  data: { orderId: '', amountYuan: '', hasAmount: false },
+  data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
+    orderId: '',
+    amountYuan: '',
+    hasAmount: false,
+  },
   onLoad(query: Record<string, string | undefined>) {
     const orderId = String(query.id || '')
     const fen = query.amount ? Number(query.amount) : NaN // 缺/空串 → NaN → 隐去金额行

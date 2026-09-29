@@ -5,6 +5,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { submitReview } from '../../api/reviews'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxParty, fxHint } from '../../lib/pxFx'
+import { groundGap } from '../../lib/ground'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 预设标签
 const REV_LABEL = ['点亮星星打个分', '很差', '较差', '一般', '满意', '超赞'] // 星级文案随 v5 稿 B3（STAR_L）
@@ -26,6 +27,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     item: '', // 商品行「名称 · 规格」
     q: '这只小鸭钩得开心吗？', // 问句（有商品名时「{名}钩得开心吗？」）
     cover: '',

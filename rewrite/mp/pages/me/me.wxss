@@ -30,9 +30,9 @@ page {
   font-size: 20px;
   font-weight: 700;
 }
-/* 小鸭蛋：顶栏下 120px 处落地（全站同一条地面线·同 cart .ca-truck） */
+/* 小鸭蛋：顶栏下 groundGap 处落地（屏高<700 为 56、其余 120·lib/ground·全站同一条地面线） */
 .me-egg {
-  padding: 120px 16px 12px;
+  padding: 0 16px 12px;
 }
 
 /* 身份行 */
@@ -251,7 +251,7 @@ page {
 .me-row-t {
   flex: 1;
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--v5-ink);
 }
 
@@ -269,6 +269,7 @@ page {
   display: flex;
   align-items: center;
   font-size: 15px;
+  font-weight: 400;
 }
 .me-sep {
   width: 1px;

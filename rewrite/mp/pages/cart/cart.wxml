@@ -3,7 +3,7 @@
      列表在 <scroll-view> 里滚：退出提醒的 page-container 武装态会冻结页面级滚动（决策§30·见 utils/exitGuard）。 -->
 <view class="ca" style="padding-top: {{statusBarHeight}}px">
   <view class="ca-head"><text class="ca-title">购物车</text></view>
-  <view class="ca-truck"><px-truck id="truck" cargo="{{cargo}}" /></view>
+  <view class="ca-truck" style="padding-top: {{groundGap}}px"><px-truck id="truck" cargo="{{cargo}}" /></view>
 
   <block wx:if="{{items.length}}">
     <scroll-view class="ca-list" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">

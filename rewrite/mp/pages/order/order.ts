@@ -9,6 +9,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxToast, fxHint } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { openCustomerService } from '../../utils/customerService'
+import { groundGap } from '../../lib/ground'
 
 const HOLD_MS = 700 // 按住多久算取消订单/撤回售后（设计稿 data-ms=700·拍板 7）
 const SHEET_OUT_MS = 240 // 半屏关：面板 240ms 下滑后撤节点（app.wxss .sh-panel.out）
@@ -31,6 +32,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     loading: true,
     loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
     vm: null as OrderVM | null,

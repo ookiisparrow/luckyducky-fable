@@ -124,7 +124,7 @@
     <view class="lp-info">
       <view class="lp-info-l">
         <text class="t-sys lp-seg-no">{{strip ? '段落 ' + strip.segIndex + ' / ' + strip.segTotal : ''}}</text>
-        <text class="lp-seg-title">{{current ? current.segName : ''}}</text>
+        <text class="t-sys lp-seg-title">{{current ? current.segName : ''}}</text>
       </view>
       <text class="lp-time mono {{seeking ? 'on' : ''}}">{{curClock}} / {{durClock}}</text>
     </view>
@@ -172,14 +172,14 @@
       <block wx:if="{{helpPanel === 'menu'}}">
         <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideos" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">{{help.videosTitle}}</text>
+            <text class="t-sys lp-help-card-title">{{help.videosTitle}}</text>
             <text class="t-sys lp-help-card-sub">小段讲解都在这里</text>
           </view>
           <px-i name="chev" tone="var(--v5-ink-2)" />
         </view>
         <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpFaq" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
           <view class="lp-help-card-tx">
-            <text class="lp-help-card-title">{{help.faqTitle}}</text>
+            <text class="t-sys lp-help-card-title">{{help.faqTitle}}</text>
             <text class="t-sys lp-help-card-sub">高频问题都在这里</text>
           </view>
           <px-i name="chev" tone="var(--v5-ink-2)" />
@@ -196,7 +196,7 @@
           <block wx:if="{{helpVideosState === 'ok'}}">
             <view class="t-sys lp-help-group-title">全部课程通用</view>
             <view class="lp-help-topic" wx:for="{{helpTopics}}" wx:key="id">
-              <view class="lp-help-topic-title">{{item.title}}</view>
+              <view class="t-sys lp-help-topic-title">{{item.title}}</view>
               <view class="lp-help-topic-sub t-sys" wx:if="{{item.sub}}">{{item.sub}}</view>
               <view
                 class="k lp-help-seg {{seg.url ? 'k-light' : 'k-flat k-off'}}"
@@ -210,7 +210,7 @@
                 bind:tap="onHelpPlaySegment"
                data-k="{{seg.url ? 'light' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
                 <view class="lp-help-card-tx">
-                  <text class="lp-help-card-title">{{seg.name}}</text>
+                  <text class="t-sys lp-help-card-title">{{seg.name}}</text>
                   <text class="t-sys lp-help-seg-dur {{seg.url ? 'mono' : ''}}">{{seg.url ? seg.dur : '整理中'}}</text>
                 </view>
                 <px-i wx:if="{{seg.url}}" name="chev" tone="var(--v5-ink-2)" />
@@ -233,14 +233,14 @@
       <block wx:if="{{helpPanel === 'faq'}}">
         <scroll-view wx:if="{{help.faq.length > 0}}" class="lp-help-scroll" scroll-y>
           <view class="lp-help-faq" wx:for="{{help.faq}}" wx:key="q">
-            <view class="lp-help-faq-q">{{item.q}}</view>
+            <view class="t-sys lp-help-faq-q">{{item.q}}</view>
             <view class="lp-help-faq-a t-sys">{{item.a}}</view>
           </view>
         </scroll-view>
         <scroll-view wx:else class="lp-help-scroll" scroll-y>
           <block wx:if="{{helpFaqState === 'ok'}}">
             <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
-              <view class="lp-help-faq-q">{{item.title}}</view>
+              <view class="t-sys lp-help-faq-q">{{item.title}}</view>
               <view class="lp-help-faq-a t-sys">{{item.content}}</view>
             </view>
           </block>

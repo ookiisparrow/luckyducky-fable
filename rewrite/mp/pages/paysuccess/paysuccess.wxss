@@ -5,7 +5,7 @@ page {
 }
 /* 金币：落在与小货车同一条地面线（顶栏下 120px）——结算页开走的车与这枚金币接得上 */
 .ps-coin {
-  padding: 120px 16px 12px;
+  padding: 0 16px 12px;
 }
 .ps-body {
   padding: 4px 16px 16px;

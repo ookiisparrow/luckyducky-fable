@@ -255,7 +255,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
   })
 
   it('大白话：脏 course/progressList 不崩，安全空', () => {
-    expect(mapCatalog(null, [], 'c1')).toEqual({ chapters: [], continueTarget: null })
+    expect(mapCatalog(null, [], 'c1')).toEqual({ chapters: [], continueTarget: null, resumeLabel: '' })
     expect(() => mapCatalog(COURSE, '坏值', 'c1')).not.toThrow()
     expect(() => mapCatalog(COURSE, null, 'c1')).not.toThrow()
     expect(() => mapCatalog({ chapters: [{ lessons: null }, null] }, [], 'c1')).not.toThrow()

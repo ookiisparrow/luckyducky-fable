@@ -11,7 +11,7 @@
 
   <!-- 条款正文（逐条法律文本原样） -->
   <view class="ag-art" wx:for="{{doc.articles}}" wx:key="title">
-    <text class="ag-h">{{item.title}}</text>
+    <text class="t-sys ag-h">{{item.title}}</text>
     <text class="ag-p t-sys">{{item.body}}</text>
   </view>
 

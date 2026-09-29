@@ -76,11 +76,12 @@
           <px-i name="led" tone="var(--v5-ok)" />
           <text class="wl-h0">{{welcome.w1.title}}</text>
         </view>
-        <text wx:if="{{courseTitle}}" class="wl-meta">{{courseTitle}}</text>
+        <text wx:if="{{courseTitle}}" class="t-sys wl-meta">{{courseTitle}}</text>
         <text class="t-sys wl-lead">{{welcome.w1.sub}}</text>
       </view>
     </view>
-    <view class="wl-dock">
+    <view class="wl-dock-space"></view>
+    <view class="wl-dock wl-dock-fix">
       <view class="k k-ink k-48 wl-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onNextWelcome" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">下一步</view>
     </view>
   </block>
@@ -95,7 +96,7 @@
         <view class="wl-item" wx:for="{{welcome.w2.items}}" wx:key="icon">
           <text class="mono wl-no">0{{index + 1}}</text>
           <view class="wl-item-tx">
-            <text class="wl-item-h">{{item.title}}</text>
+            <text class="t-sys wl-item-h">{{item.title}}</text>
             <text class="t-sys wl-item-p">{{item.desc}}</text>
           </view>
         </view>

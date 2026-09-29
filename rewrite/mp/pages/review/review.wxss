@@ -13,9 +13,9 @@ page {
   flex: 1;
   min-height: 0;
 }
-/* 蛋壳地面：顶栏下 120px 处落地（与其它地面场景同一条地面线） */
+/* 蛋壳地面：顶栏下 groundGap 处落地（屏高<700 为 56、其余 120·lib/ground·全站同一条地面线） */
 .rv-egg {
-  padding: 120px 16px 12px;
+  padding: 0 16px 12px;
 }
 .rv-main {
   padding: 0 16px 16px;
@@ -136,13 +136,11 @@ page {
 /* 文字框固定 56 高 + 右侧 56×56「+」晒图键同一行 */
 .rv-write {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
 }
 .rv-text {
   flex: 1;
   min-width: 0;
-  height: 56px;
+  height: 150px;
   padding: 12px;
   font-size: 17px;
   font-weight: 500;
@@ -151,6 +149,18 @@ page {
 }
 .rv-ph {
   color: var(--v5-ink-4);
+}
+.rv-count {
+  align-self: flex-end;
+  margin-top: -4px;
+  font-size: 13px;
+  color: var(--v5-ink-2);
+}
+.rv-count-warn {
+  color: var(--v5-warn-text);
+}
+.rv-count-full {
+  color: var(--v5-err-text);
 }
 .rv-photos {
   display: flex;

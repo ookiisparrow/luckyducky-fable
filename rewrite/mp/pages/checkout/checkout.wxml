@@ -5,7 +5,7 @@
      整页一列（设计稿 L212-213）：顶栏 + 小货车固定在滚动区外，只有中间内容滚，底部应付/提交也不动。 -->
 <view class="co">
   <v5-nav title="确认订单" />
-  <view class="co-truck"><px-truck id="truck" pose="drive" arrive="160" cargo="{{cargo}}" /></view>
+  <view class="co-truck" style="padding-top: {{groundGap}}px"><px-truck id="truck" pose="drive" arrive="160" cargo="{{cargo}}" /></view>
 
   <scroll-view class="co-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
   <view class="co-body">

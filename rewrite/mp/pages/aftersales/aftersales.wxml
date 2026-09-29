@@ -6,7 +6,7 @@
   <text class="as-title">售后记录</text>
 
   <block wx:if="{{list.length}}">
-    <view class="as-truck"><px-truck pose="reverse" arrive="160" cargo="1" /></view>
+    <view class="as-truck" style="padding-top: {{groundGap - 36}}px"><px-truck pose="reverse" arrive="160" cargo="1" /></view>
     <view class="as-list">
       <view class="as-row" wx:for="{{list}}" wx:key="id">
         <view class="as-ico">
@@ -59,13 +59,13 @@
 
   <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
   <view class="as-state" wx:if="{{!loading && loadFailed}}">
-    <view class="as-signal"><px-anim name="signal" size="4" /></view>
+    <view class="as-signal" style="padding-top: {{groundGap - 32}}px"><px-anim name="signal" size="4" /></view>
     <text class="as-state-t">网络开小差</text>
     <text class="t-sys as-note">售后记录没加载出来，请重试</text>
     <view class="k k-light as-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
   <view class="as-state" wx:elif="{{!loading && !list.length}}">
-    <view class="as-box"><px-ground kind="box" /></view>
+    <view class="as-box" style="padding-top: {{groundGap - 36}}px"><px-ground kind="box" /></view>
     <text class="as-state-t">还没有售后记录</text>
   </view>
   <view class="as-dock-space"></view>

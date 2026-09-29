@@ -29,7 +29,7 @@ page {
 }
 .ag-h {
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .ag-p {
   font-size: 17px;

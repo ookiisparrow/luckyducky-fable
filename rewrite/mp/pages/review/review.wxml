@@ -6,7 +6,7 @@
   <v5-nav title="订单 · 写评价" guard="{{true}}" bind:back="onBack" />
 
   <scroll-view class="rv-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-    <view class="rv-egg"><px-ground kind="egg" shell /></view>
+    <view class="rv-egg" style="padding-top: {{groundGap}}px"><px-ground kind="egg" shell /></view>
 
     <view class="rv-main">
       <view class="rv-item" wx:if="{{item}}">
@@ -30,23 +30,25 @@
             hover-start-time="20" hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag" data-k="{{item.on ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.t}}</view>
         </view>
 
-        <!-- 文字框固定 56 高 + 同行 56×56「+」晒图键（设计稿）；聚焦 1.5px 紫描边 -->
+        <!-- 文字框固定约 4 行（150 高·超出框内滚）+ 框下右侧字数，≥450 黄、满 500 红（UI 审查 6 问 5b）；聚焦 1.5px 紫描边 -->
         <view class="rv-write">
           <textarea class="well rv-text t-sys {{focus ? 'well-focus' : ''}}" value="{{text}}" bind:input="onText" bind:focus="onFocus" bind:blur="onBlur" maxlength="500"
             placeholder="写几句感受…" placeholder-class="rv-ph" />
-          <view wx:if="{{photos.length < maxPhotos}}" class="k k-flat rv-add" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onAddPhotos" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-            <px-anim wx:if="{{uploading}}" name="loader" size="2" />
-            <px-i wx:else name="plus" />
-          </view>
         </view>
 
+        <text class="t-sys rv-count {{text.length >= 500 ? 'rv-count-full' : text.length >= 450 ? 'rv-count-warn' : ''}}">{{text.length}}/500</text>
         <text class="t-sys rv-cap">晒图最多 {{maxPhotos}} 张</text>
 
         <!-- 晒图：最多 maxPhotos 张，点缩略图预览、角标删除（角标外层 44×44 透明热区，看得见的仍是 20×20） -->
-        <view class="rv-photos" wx:if="{{photos.length}}">
+        <!-- 缩略图 +「＋」同一行：「＋」是最后一格，加满 maxPhotos 张后消失（UI 审查 6 问 5b） -->
+        <view class="rv-photos">
           <view class="rv-photo" wx:for="{{photos}}" wx:key="*this">
             <image class="rv-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
             <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><view class="rv-photo-x"><px-i name="times" tone="var(--v5-surface)" /></view></view>
+          </view>
+          <view wx:if="{{photos.length < maxPhotos}}" class="k k-flat rv-add" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onAddPhotos" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+            <px-anim wx:if="{{uploading}}" name="loader" size="2" />
+            <px-i wx:else name="plus" />
           </view>
         </view>
 

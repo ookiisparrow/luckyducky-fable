@@ -7,6 +7,7 @@ import { mapOrder } from '../../lib/mapOrders'
 import { expressCode } from '../../lib/express'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { goBackOrHome } from '../../lib/nav'
+import { groundGap } from '../../lib/ground'
 
 const POSE: Record<string, string> = { paid: 'drive', shipped: 'drive', done: 'unload' }
 
@@ -14,6 +15,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     loading: true,
     loadFailed: false, // 失败≠没有运单（根因#14）
     notFound: false, // 缺单号 / 查无此单：「找不到这个订单」+ 返回（不亮重试、不误报没发货）

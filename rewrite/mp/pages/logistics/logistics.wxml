@@ -2,7 +2,7 @@
      「查看物流详情」进快递100 插件（打不开复制运单号兜底）。不做假时间轴；逻辑承接 logistics.ts。 -->
 <v5-nav title="物流信息" />
 
-<view class="lg-truck"><px-truck pose="{{pose}}" cargo="{{cargo}}" /></view>
+<view class="lg-truck" style="padding-top: {{groundGap}}px"><px-truck pose="{{pose}}" cargo="{{cargo}}" /></view>
 
 <block wx:if="{{trackingNo}}">
   <view class="lg-no">
