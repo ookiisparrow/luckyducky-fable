@@ -6,3 +6,10 @@ export function groundGap(): number {
   const h = w && w.getWindowInfo ? w.getWindowInfo().screenHeight : 0
   return h > 0 && h < 700 ? 56 : 120
 }
+
+// 自绘导航栏下缘（状态栏 + 44·与 components/v5-nav 同口径）：固定在导航栏下方的条（如订单列表页签）用它定 top。
+export function navBottom(): number {
+  const w = (globalThis as { wx?: { getWindowInfo?: () => { statusBarHeight: number } } }).wx
+  const sb = w && w.getWindowInfo ? w.getWindowInfo().statusBarHeight || 0 : 0
+  return sb + 44
+}

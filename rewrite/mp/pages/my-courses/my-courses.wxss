@@ -135,9 +135,6 @@ page {
 .mc-fail {
   padding-top: 88px;
 }
-.mc-empty {
-  padding-top: 64px;
-}
 .mc-state-t {
   font-size: 17px;
   font-weight: 500;

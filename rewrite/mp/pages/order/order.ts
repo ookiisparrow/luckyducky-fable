@@ -2,7 +2,7 @@
 import { tapHaptic } from '../../lib/haptics'
 import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, estimateRefund, getMyAfterSales, withdrawRefund } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
-import { mapOrder, orderSteps, cardLabel, detailSub, reviewUrl, payLeftMs, money, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
+import { mapOrder, orderSteps, statusHead, detailSub, reviewUrl, payLeftMs, money, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, rejectedLineIdsOf, REFUND_REJECTED, withdrawableLines, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
 import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
@@ -20,11 +20,8 @@ type AsLine = { lineId: string; name: string; spec: string }
 const asLineOf = (l: OrderLineVM): AsLine => ({ lineId: l.lineId, name: l.name, spec: l.spec })
 const lineText = (l: { name: string; spec: string }): string => l.name + (l.spec ? ' · ' + l.spec : '')
 
-// 待退款 / 支付异常：状态卡内说明行（设计稿 WARN·文案与 admin 同口径，不承诺不存在的自动化流程）
-const WARN: Record<string, { text: string; tone: string }> = {
-  refund_required: { text: '该订单需人工处理退款，请联系客服协助处理', tone: 'var(--v5-warn)' },
-  payment_exception: { text: '到账金额与订单金额不一致，请联系客服处理退款', tone: 'var(--v5-err)' },
-}
+// 待退款 / 支付异常：状态卡出「联系客服」（说明句已含原因·UI 审查 15 问 6a 起不再另起警示行）
+const HELP = new Set(['refund_required', 'payment_exception'])
 // 小货车姿态（设计稿 tpose）：待发货/待收货在路上、完成卸货、待退款倒车，其余停着
 const POSE: Record<string, string> = { paid: 'drive', shipped: 'drive', done: 'unload', refund_required: 'reverse' }
 
@@ -37,7 +34,7 @@ Page({
     loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
     vm: null as OrderVM | null,
     head: '', // 状态卡左侧短状态名（设计稿 ST）；有售后时叠加「售后中 / 已退款」（lib/mapAftersales afterSaleOverlay）
-    headColor: '', // 状态名字色（已退款绿字），空＝默认
+    headColor: '', // 状态名字色：一律墨（空）·颜色只在灯上
     asLed: null as { tone: string; halo: string } | null, // 售后叠加状态灯（售后中紫 / 已退款绿），null＝不出灯
     asHas: false, // 该单有任何售后记录：出「查看售后进度」入口
     lineTags: {} as Record<string, string>, // 行标 lineId→「退款中 / 已退款」
@@ -46,7 +43,6 @@ Page({
     wdLines: [] as string[],
     wdHold: false, // 正在按住撤回（驱动键内红色进度条）
     sub: { text: '', tone: '' } as { text: string; tone: string }, // 状态卡右侧小字（倒计时/签收日期…）
-    warn: null as { text: string; tone: string } | null,
     help: false, // 待退款/支付异常：底部「返回 + 联系客服」
     dock: false, // 已关闭不出底部栏
     amountNum: '',
@@ -108,7 +104,8 @@ Page({
     if (sub.text !== this.data.sub.text || sub.tone !== this.data.sub.tone) this.setData({ sub })
     // 首次归零：先藏「去支付」，再自动刷新一次看云端是否已关单（刷回来仍待支付时 reload 按时间重算 expired 仍为真，不会再触发）
     if (payLeftMs(vm, now) === 0 && !this.data.expired) {
-      this.setData({ expired: true })
+      const sh = statusHead(vm, now)
+      this.setData({ expired: true, head: sh.label, asLed: sh.led })
       void this.reload()
     }
   },
@@ -166,15 +163,14 @@ Page({
       loading: false,
       loadFailed: false,
       vm,
-      head: ov ? ov.head : cardLabel(s),
-      headColor: ov ? ov.color : '',
-      asLed: ov ? ov.led : null,
+      head: ov ? ov.head : statusHead(vm, Date.now()).label,
+      headColor: '', // 状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）
+      asLed: ov ? ov.led : statusHead(vm, Date.now()).led,
       asHas: !!asOf,
       lineTags: asOf ? asOf.lines : {},
       wdLines: vm.items.map((it) => it.lineId).filter((id) => wd[id]),
-      sub: ov ? { text: ov.sub, tone: '' } : detailSub(vm, Date.now()),
-      warn: WARN[s] || null,
-      help: !!WARN[s],
+      sub: ov ? { text: ov.detail, tone: '' } : detailSub(vm, Date.now()),
+      help: HELP.has(s),
       dock: s !== 'closed',
       amountNum: (vm.amountLabel || '').replace(/[^0-9.]/g, ''),
       canAfterSale: ['paid', 'shipped', 'done'].includes(s),

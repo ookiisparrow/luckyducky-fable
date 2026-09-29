@@ -7,6 +7,21 @@ page {
   min-height: 100vh;
   box-sizing: border-box;
 }
+/* 页签条固定在导航栏下方（UI 审查 15 问 5a）：44 页签 + 下留 8 ＝ 52；滚动后下缘 1px 发丝线 */
+.ol-tabs-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 19;
+  padding-bottom: 8px;
+  background: var(--v5-canvas);
+}
+.ol-tabs-bar-line {
+  box-shadow: 0 1px 0 var(--v5-hair);
+}
+.ol-tabs-space {
+  height: 52px;
+}
 /* 凹槽分段筛选：选中＝浅色键，其余透明 */
 .ol-tabs {
   margin: 0 16px;
@@ -169,7 +184,7 @@ page {
 .ol-danger {
   position: relative;
   overflow: hidden;
-  color: var(--v5-err-text);
+  color: var(--v5-ink); /* 危险感只在按住时的红色进度填充里表达（UI 审查 15 问 4b） */
 }
 /* 按住取消：浅红从左往右填满（HOLD_MS 700ms·同购物车按住删除写法） */
 .ol-fill {

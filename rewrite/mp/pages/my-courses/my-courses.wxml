@@ -1,4 +1,4 @@
-<!-- 我的课程（v5「字重」稿 C5）：课卡（缩略占位 + 课名 + 像素分段进度 + 已学/百分比）+ 底部激活键 -->
+<!-- 我的课程（v5「字重」稿 C5）：课卡（缩略占位 + 课名 + 像素分段进度 + 已学/百分比）；空态给「去逛逛」（不做应用内扫码·15 问 12b） -->
 <v5-nav title="我的课程" />
 
 <view class="mc">
@@ -54,10 +54,12 @@
     </view>
   </view>
 
-  <!-- 空态 -->
-  <view class="mc-state mc-empty" wx:else>
-    <text class="mc-state-t">还没有进行中的课程</text>
-    <text class="t-sys mc-state-h">扫包装盒内的二维码，就能开始学</text>
+  <!-- 空态（15 问 12b）：全站统一叫「激活卡」；小程序里不做扫码/输码入口，给「去逛逛」出口 -->
+  <view class="mc-state" wx:else>
+    <view style="padding-top: {{groundGap - 36}}px"><px-ground kind="box" /></view>
+    <text class="mc-state-t">还没有课程</text>
+    <text class="t-sys mc-state-h">用微信「扫一扫」材料包里的激活卡，课程会出现在这里</text>
+    <view class="k k-light mc-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoShop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去逛逛</view>
   </view>
 
 </view>

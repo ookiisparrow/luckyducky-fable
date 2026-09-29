@@ -2,7 +2,6 @@
 <view wx:if="{{open}}" class="v5-scope lv-root" catch:touchmove="noop">
   <view class="sh-mask lv-mask {{out ? 'out' : ''}}" bind:tap="onStay"></view>
   <view class="sh-panel lv-panel {{out ? 'out' : ''}}">
-    <view class="lv-grip"></view>
     <view class="lv-t">
       <text class="lv-h">{{title}}</text>
       <text class="t-sys lv-sub">{{sub}}</text>

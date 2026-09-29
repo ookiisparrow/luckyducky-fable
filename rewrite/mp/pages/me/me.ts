@@ -177,6 +177,10 @@ Page({
     if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
     return true
   },
+  // 没有课程时的「去逛逛」：回首页（15 问 13a）
+  onGoShop() {
+    goHomeTab()
+  },
   onRetryCont() {
     tapHaptic()
     void this.refresh() // 继续学习区失败态重试入口（me 页未开下拉刷新·按钮重试同 detail onRetryLoad 范式）

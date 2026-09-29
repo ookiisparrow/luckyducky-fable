@@ -15,8 +15,9 @@
         <text class="t-sys co-k">收货地址</text>
         <view class="t-sys co-change"><text>更换</text><px-i name="arrow" /></view>
       </view>
+      <text class="t-sys co-region">{{address.region}}</text>
+      <text class="t-sys co-detail">{{address.detail}}</text>
       <text class="t-sys co-who">{{address.who}}</text>
-      <text class="t-sys co-where">{{address.where}}</text>
     </view>
     <view wx:else class="k-card co-card co-addr-none" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
       <px-i name="led" tone="var(--v5-warn)" />

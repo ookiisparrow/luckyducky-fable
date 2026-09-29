@@ -4,7 +4,6 @@
   <view class="sh-mask ls-mask {{out ? 'out' : ''}}" bind:tap="onClose"></view>
   <view class="sh-panel ls-sheet {{out ? 'out' : ''}}">
     <view class="ls-duck"><px-duck scale="4" /></view>
-    <view class="ls-grab"></view>
     <image class="ls-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
     <text class="ls-title">登录后同步订单与学习进度</text>
 

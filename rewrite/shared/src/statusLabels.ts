@@ -38,7 +38,7 @@ export const ORDER_STATUS_LABEL_CUSTOMER: Record<OrderStatus, string> = {
   done: '已完成',
   closed: '已关闭',
   refund_required: '待退款',
-  payment_exception: '支付异常待处理',
+  payment_exception: '支付异常', // 标签是名词，「待处理」由灯和说明句表达（UI 审查 15 问 6a）
 }
 
 /** 售后状态·运营向标签（admin 消费：rewrite/admin/src/lib/format.ts）。 */

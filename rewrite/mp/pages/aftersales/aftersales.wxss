@@ -127,36 +127,6 @@ page {
   font-weight: 300;
   color: var(--v5-ink-2);
 }
-.as-skel {
-  margin: 8px 16px 0;
-  padding: 16px;
-  border-radius: 8px;
-  background: var(--v5-surface);
-  box-shadow: 0 0 0 1px var(--v5-hair);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.as-skel-bar {
-  height: 12px;
-}
-.as-skel-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.as-skel-thumb {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  border-radius: 4px;
-}
-.as-skel-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 .as-state {
   padding: 0 16px;
   display: flex;
@@ -196,4 +166,24 @@ page {
 }
 .as-cs {
   flex: 1;
+}
+/* 列表骨架（15 问 8b）：与真实行同结构、静止不闪 */
+.as-sk {
+  background: var(--v5-sunk);
+}
+.as-sk-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 2px;
+}
+.as-sk-top {
+  height: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.as-sk-line {
+  height: 18px;
+  display: flex;
+  align-items: center;
 }

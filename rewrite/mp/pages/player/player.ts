@@ -90,6 +90,7 @@ Page({
     snapName: '', // 拖动磁吸命中的关键动作节点名（seeking 时气泡文案·onSeekTick 刷新·未命中为空串）
     markVMs: [] as { at: number; pct: number; name: string }[], // 关键动作节点位图（onTimeUpdate 首次拿到非零 durSec 时算一次，durSec 已有值后不重算）
     seekCfg: null as { rect: { left: number; width: number }; durSec: number; marks: { at: number; name: string }[]; edgePx: number; snapSec: number } | null, // 拖动几何下发 seek.wxs（change:cfg 观察者接收·rect 量轨后 + durSec 首个 timeupdate 后组装·换段 durSec 归 0 拦 WXS 不响应）
+    helpOut: false, // 求助面板退场动画中（240ms 后真关·15 问 11a）
     helpPanel: '' as '' | 'menu' | 'videos' | 'faq', // 求助面板状态机：''=关闭·不阻断主视频播放
     helpVideosState: 'loading' as 'loading' | 'ok' | 'empty', // 帮助视频子层拉取态（每次进入 videos 层重拉·短时 URL 过期特性）
     helpTopics: [] as HelpTopicVM[], // 帮助视频主题分组 VM（mapHelpVideos 产出）
@@ -667,8 +668,14 @@ Page({
     this.setData({ helpPanel: 'menu' })
   },
   // 关面板：scrim 点击 / grab 区关闭钮共用——helpSrc 一并清（卸载内嵌 <video>，防后台仍在解码占用流量）。
+  // 点遮罩/关闭键：先播退场（面板下滑 240ms·同全站半屏 closeSheet），再真关。返回键逐层收口不走这里（onBack 直接改状态）。
   onHelpClose() {
-    this.setData({ helpPanel: '', helpSrc: '', helpSegName: '' })
+    if (this.data.helpOut) return
+    this.setData({ helpOut: true })
+    setTimeout(() => {
+      if (this.unloaded) return
+      this.setData({ helpOut: false, helpPanel: '', helpSrc: '', helpSegName: '' })
+    }, 240)
   },
   // 点可播段（url 非 null）→ 同一 sheet 内切到内嵌播放视图；先暂停主视频防双声（简化决策：
   // 辅助内容用原生 <video controls>，不做自绘控制条，见 wxml 头注）。
@@ -729,7 +736,7 @@ Page({
     }
     goBackOrHome()
   },
-  // 加桌引导：继续学习＝关弹窗留下（不退）；先退出＝执行真退。
+  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下（不退）；「知道了」＝继续原本的退出。
   onDeskGuideStay() {
     this.setData({ deskGuide: false })
   },

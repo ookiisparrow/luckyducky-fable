@@ -73,18 +73,18 @@ describe('订单详情：加载', () => {
     page.onHide()
     expect(callAppMock).toHaveBeenCalledWith('getOrderById', { id: 'o1' })
     expect(page.data).toMatchObject({ loading: false, loadFailed: false, amountNum: '128.00', canAfterSale: false, head: '待支付', truckPose: 'park' })
-    expect(page.data.sub.text).toMatch(/^1[34]:\d{2} 后自动取消$/)
+    expect(page.data.sub.text).toMatch(/^1[34]:\d{2} 后自动取消，请尽快支付$/)
     expect(page.data.sub.tone).toBe('warn')
     expect(page.data.steps.map((x: { state: string }) => x.state)).toEqual(['cur', 'todo', 'todo', 'todo'])
     expect(page.data.vm.id).toBe('o1')
   })
 
-  it('大白话：小货车姿态——待发货开着走、待收货开着走、待退款倒车、完成卸货；待退款/支付异常出说明行 + 底部联系客服；已关闭不出底部栏', async () => {
+  it('大白话：小货车姿态——待发货开着走、待收货开着走、待退款倒车、完成卸货；待退款/支付异常说明句写原因 + 底部联系客服；已关闭不出底部栏（UI 审查 15 问 6a）', async () => {
     const cases: Array<[string, Record<string, unknown>]> = [
-      ['paid', { truckPose: 'drive', head: '正在发货', warn: null, help: false, dock: true }],
-      ['shipped', { truckPose: 'drive', head: '待收货', warn: null, help: false, dock: true }],
+      ['paid', { truckPose: 'drive', head: '待发货', help: false, dock: true }],
+      ['shipped', { truckPose: 'drive', head: '待收货', help: false, dock: true }],
       ['refund_required', { truckPose: 'reverse', head: '待退款', help: true, dock: true }],
-      ['payment_exception', { truckPose: 'park', help: true, dock: true }],
+      ['payment_exception', { truckPose: 'park', head: '支付异常', help: true, dock: true }],
       ['done', { truckPose: 'unload', help: false, dock: true }],
       ['closed', { truckPose: 'park', help: false, dock: false }],
     ]
@@ -97,7 +97,8 @@ describe('订单详情：加载', () => {
     handlers.getOrderById = () => ({ ok: true, order: ORDER({ status: 'refund_required' }) })
     const page = await mount()
     await page.reload()
-    expect(page.data.warn).toEqual({ text: '该订单需人工处理退款，请联系客服协助处理', tone: 'var(--v5-warn)' })
+    expect(page.data.sub).toEqual({ text: '需人工退款，请联系客服处理', tone: '' })
+    expect(page.data.asLed).toEqual({ tone: 'var(--v5-warn)', halo: '' })
     page.onKefu()
     expect(kefuMock).toHaveBeenCalledTimes(1)
     // 带上下文：订单号 + 商品 + 原因先复制，客服那边直接粘贴
@@ -548,7 +549,8 @@ describe('订单详情：UX 修复轮', () => {
     vi.setSystemTime(T + 2000)
     page.tick()
     expect(page.data.expired).toBe(true)
-    expect(page.data.sub.text).toBe('已超时')
+    expect(page.data.sub.text).toBe('15 分钟内未支付，订单已关闭')
+    expect(page.data).toMatchObject({ head: '已超时', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' } })
     await flush()
     expect(callAppMock.mock.calls.filter((c: unknown[]) => c[0] === 'getOrderById')).toHaveLength(1)
     expect(page.data.expired).toBe(true) // 云端还没关单：仍按超时展示，不回显去支付

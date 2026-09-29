@@ -8,11 +8,11 @@
   <view class="od-truck" style="padding-top: {{groundGap}}px"><px-truck pose="{{truckPose}}" cargo="{{cargo}}" /></view>
 
   <view class="od-body">
-    <!-- 状态卡：左短状态名 20/700，右 13/300 小字（待支付琥珀倒计时、剩不到 1 分钟变红） -->
+    <!-- 状态卡（UI 审查 15 问 6a）：灯 + 状态名（墨 17/500·与列表同名），下一行完整说明句（灰；只有待支付倒计时深黄） -->
     <view class="od-card">
       <view class="od-state">
         <view class="od-state-l">
-          <px-anim wx:if="{{vm.status === 'pending'}}" name="hourglass" size="2" />
+          <px-anim wx:if="{{vm.status === 'pending' && !expired}}" name="hourglass" size="2" />
           <px-i wx:elif="{{asLed}}" name="led" tone="{{asLed.tone}}" halo="{{asLed.halo}}" />
           <text class="od-head" style="{{headColor ? 'color:' + headColor : ''}}">{{head}}</text>
         </view>
@@ -28,11 +28,6 @@
           </view>
           <text class="t-sys od-step-t {{item.state === 'cur' ? 'od-step-cur' : ''}} {{item.state === 'todo' ? 'od-step-todo' : ''}}">{{item.label}}</text>
         </view>
-      </view>
-      <!-- 待退款 / 支付异常：分隔线 + 状态灯 + 说明行 -->
-      <view class="od-warn" wx:if="{{warn}}">
-        <px-i class="od-warn-led" name="led" tone="{{warn.tone}}" />
-        <text class="t-sys od-warn-t">{{warn.text}}</text>
       </view>
       <!-- 有售后记录（含被拒）：进我的售后看进度（云端退款不改订单状态，进度在售后页） -->
       <view class="t-sys od-more od-as-go hit44" wx:if="{{asHas}}" bind:tap="onGoAfterSales" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100"><text>查看售后进度</text><px-i name="arrow" /></view>
@@ -56,11 +51,12 @@
     <!-- 收货地址（历史快照·只读） -->
     <view class="od-card" wx:if="{{vm.address}}">
       <text class="t-sys od-k">收货地址</text>
+      <text class="t-sys od-region">{{vm.address.region}}</text>
+      <text class="t-sys od-detail">{{vm.address.detail}}</text>
       <view class="od-who">
         <text class="t-sys">{{vm.address.name}}</text>
         <text class="mono od-phone">{{vm.address.phone}}</text>
       </view>
-      <text class="t-sys od-where">{{vm.address.region}} {{vm.address.detail}}</text>
     </view>
 
     <!-- 商品（只读 ×N）+ 金额 -->
@@ -163,7 +159,6 @@
 <view wx:if="{{asOpen}}" class="as-root" catch:touchmove="noop">
   <view class="sh-mask as-mask {{asOut ? 'out' : ''}}" bind:tap="onAsClose"></view>
   <view class="sh-panel as-panel {{asOut ? 'out' : ''}}">
-    <view class="as-grip"></view>
     <view class="as-t">
       <text class="as-h">申请售后</text>
       <block wx:for="{{asLines}}" wx:key="lineId"><text wx:if="{{item.lineId === asLine}}" class="t-sys as-sub">{{item.name}}{{item.spec ? ' · ' + item.spec : ''}}</text></block>

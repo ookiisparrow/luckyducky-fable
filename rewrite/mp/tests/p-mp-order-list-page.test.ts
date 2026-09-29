@@ -352,7 +352,7 @@ describe('订单列表：卡片（v5 B1）', () => {
     const page = await mount()
     await page.reload()
     expect(page.data.shown[0].cd).toMatch(/^1[34]:\d{2}$/)
-    expect(page.data.shown[1]).toMatchObject({ label: '正在发货', right: '48 小时内发货' })
+    expect(page.data.shown[1]).toMatchObject({ label: '待发货', right: '48 小时内发货' })
     expect(page.data.shown[1].thumbs).toHaveLength(3)
   })
 
@@ -429,7 +429,7 @@ describe('订单列表：UX 修复轮', () => {
     callAppMock.mockClear()
     vi.setSystemTime(T + 2000)
     page.tick()
-    expect(page.data.shown[0]).toMatchObject({ expired: true, cd: '', right: '已超时' })
+    expect(page.data.shown[0]).toMatchObject({ expired: true, cd: '', right: '未按时支付', label: '已超时', led: { tone: 'rgba(17,17,17,.28)', halo: 'none' } })
     await flush()
     expect(calls('getMyOrders')).toHaveLength(1)
     expect(page.data.shown[0].expired).toBe(true)

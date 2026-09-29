@@ -5,11 +5,14 @@ import { getMyProgress } from '../../api/user'
 import { getAllCourses } from '../../lib/courses'
 import { mapMyCourses, type MyCourseVM } from '../../lib/mapLearning'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { groundGap } from '../../lib/ground'
+import { goHomeTab } from '../../lib/homeIntent'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 空态纸箱落地线（同售后页·本页多一行大标题故 −36）
     list: [] as MyCourseVM[],
     loading: true,
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「输入激活码」引导分治——付费用户弱网一次失败不该被引导输码
@@ -42,6 +45,10 @@ Page({
       // 课程列表本身照常渲染（进度只是卡上一行，不该因它失败把整页打成失败态）。
       list: mapMyCourses(mine.list, courses || [], progress.ok ? progress.list : null),
     })
+  },
+  // 空态「去逛逛」：回首页（从首屏购买区看起·15 问 12b）
+  onGoShop() {
+    goHomeTab()
   },
   onRetryLoad() {
     tapHaptic()

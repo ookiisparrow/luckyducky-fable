@@ -12,12 +12,13 @@
         <px-i wx:if="{{item.isDefault}}" name="node" tone="var(--v5-violet)" />
       </view>
       <view class="ad-text">
+        <text class="t-sys ad-region">{{item.region}}</text>
+        <text class="t-sys ad-detail">{{item.detail}}</text>
         <view class="ad-line1">
           <text class="t-sys ad-name">{{item.name}}</text>
           <text class="mono ad-phone">{{item.phoneMasked}}</text>
           <text class="t-sys ad-def" wx:if="{{item.isDefault}}">默认</text>
         </view>
-        <text class="t-sys ad-where">{{item.where}}</text>
       </view>
       <view class="k k-sm k-flat ad-edit" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onEdit" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">编辑</view>
     </view>

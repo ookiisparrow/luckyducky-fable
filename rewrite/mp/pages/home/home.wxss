@@ -400,9 +400,13 @@ page {
   gap: 2px;
 }
 .hm-rv-quote {
-  flex: 1;
+  flex: 1; /* 撑满剩余高度 → 署名贴底（整排卡片等高＝最高那张） */
   font-size: 15px;
   line-height: 1.6;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; /* 最多 3 行（UI 审查 15 问 3a·全文是下一级信息） */
+  overflow: hidden;
 }
 .hm-rv-meta {
   display: flex;

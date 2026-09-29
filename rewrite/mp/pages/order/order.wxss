@@ -26,11 +26,12 @@ page {
 }
 
 /* 状态 + 四步进度 */
+/* 灯 + 状态名一行，完整说明句另起一行（UI 审查 15 问 6a） */
 .od-state {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 .od-state-l {
   display: flex;
@@ -38,14 +39,12 @@ page {
   gap: 12px;
 }
 .od-head {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 500;
 }
 /* 状态卡右侧小字：次要灰；待支付/待退款琥珀；剩不到 1 分钟 / 支付异常红（设计稿 subC） */
 .od-sub {
-  flex: 0 1 auto;
   min-width: 0;
-  text-align: right;
   font-size: 13px;
   font-weight: 300;
   color: var(--v5-ink-2);
@@ -55,24 +54,6 @@ page {
 }
 .od-sub-err {
   color: var(--v5-err-text);
-}
-/* 待退款 / 支付异常说明行：分隔线 + 状态灯 + 13/300 说明 */
-.od-warn {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--v5-hair);
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.od-warn-led {
-  margin-top: 4px;
-}
-.od-warn-t {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 300;
-  line-height: 1.5;
 }
 /* 有售后记录：「查看售后进度 →」行（分隔线 + 右对齐小字，同物流卡「查看物流」口径） */
 .od-as-go {
@@ -171,23 +152,32 @@ page {
 /* 热区补到 44 高（上下各让 8px·看不见，视觉仍 28 高） */
 
 /* 地址 */
-.od-who {
+/* 地址卡三行（UI 审查 15 问 1c：手打的详细地址是全卡唯一重点） */
+.od-region {
+  display: block;
   margin-top: 8px;
+  font-size: 13px;
+  color: var(--v5-ink-2);
+}
+.od-detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--v5-ink);
+}
+.od-who {
+  margin-top: 4px;
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 17px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--v5-ink-2);
 }
 .od-phone {
   font-size: 15px;
-  color: var(--v5-ink-2);
-}
-.od-where {
-  display: block;
-  margin-top: 2px;
-  font-size: 13px;
-  font-weight: 300;
   color: var(--v5-ink-2);
 }
 
@@ -410,17 +400,10 @@ page {
   bottom: 0;
   border-radius: 12px 12px 0 0;
   background: var(--v5-canvas);
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  padding: 20px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-.as-grip {
-  align-self: center;
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--v5-grab);
 }
 .as-t {
   display: flex;

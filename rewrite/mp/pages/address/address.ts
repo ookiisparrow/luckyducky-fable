@@ -8,7 +8,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
-    list: [] as Array<ReturnType<typeof addr.getList>[number] & { phoneMasked: string; where: string }>,
+    list: [] as Array<ReturnType<typeof addr.getList>[number] & { phoneMasked: string }>,
     picking: false,
   },
   leaving: false, // 选中后等 140ms 才退回：期间连点不再退第二次（否则连退两页）
@@ -23,8 +23,8 @@ Page({
     this.draw()
   },
   draw() {
-    // where：省市区去空格直接接详址（与结算页地址卡同口径）
-    this.setData({ list: addr.getList().map((a) => ({ ...a, phoneMasked: addr.maskPhone(a.phone), where: a.region.replace(/ /g, '') + a.detail })) })
+    // 省市区 / 详细地址分行显示（UI 审查 15 问 1c·与结算页地址卡同结构）
+    this.setData({ list: addr.getList().map((a) => ({ ...a, phoneMasked: addr.maskPhone(a.phone) })) })
   },
   // 主区点选：结算态选中即默认并返回；管理态进编辑页（原语义不变）。
   onTapRow(e: WechatMiniprogram.TouchEvent) {
