@@ -2,7 +2,7 @@
      「查看物流详情」进快递100 插件（打不开复制运单号兜底）。不做假时间轴；逻辑承接 logistics.ts。 -->
 <v5-nav title="物流信息" />
 
-<view class="lg-truck" style="padding-top: {{groundGap}}px"><px-truck pose="{{pose}}" cargo="{{cargo}}" /></view>
+<view wx:if="{{!loadFailed}}" class="lg-truck" style="padding-top: {{groundGap}}px"><px-truck pose="{{pose}}" cargo="{{cargo}}" /></view>
 
 <block wx:if="{{trackingNo}}">
   <view class="lg-no">
@@ -29,8 +29,11 @@
   <view class="k k-light lg-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">返回</view>
 </view>
 <!-- 失败态与「还没有运单」分治（根因#14）：弱网给重试，不误报没发货 -->
+<!-- 标准失败块（15 问 9b·同订单列表/售后）；失败时不画小货车，免得像「还没发货」 -->
 <view class="lg-state" wx:elif="{{loadFailed}}">
+  <view style="padding-top: {{groundGap - 32}}px"><px-anim name="signal" size="4" /></view>
   <text class="lg-state-t">网络开小差</text>
+  <text class="t-sys lg-note">物流信息没加载出来，请重试</text>
   <view class="k k-light lg-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
 </view>
 <view class="lg-state" wx:else>

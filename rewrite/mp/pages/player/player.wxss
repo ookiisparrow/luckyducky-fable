@@ -339,7 +339,8 @@
 .lp-ctl {
   flex: 1;
   min-width: 0;
-  padding: 0 8px;
+  padding: 0;
+  gap: 2px; /* 像素双箭头（15 问 10a·颜色随键：可用亮字、首末段置灰） */
 }
 .lp-ctl-main {
   flex: 1.2;
@@ -423,17 +424,10 @@
   border-radius: 12px 12px 0 0;
   background: var(--v5-canvas);
   color: var(--v5-ink);
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  padding: 20px 16px max(28px, env(safe-area-inset-bottom)); /* 去拖动条后上边距 12→20（15 问 14a） */
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-.lp-help-grab {
-  align-self: center;
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--v5-grab);
 }
 .lp-help-nav {
   display: flex;
@@ -600,24 +594,38 @@
   border-radius: 12px 12px 0 0;
   background: var(--v5-canvas);
   color: var(--v5-ink);
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  padding: 20px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
-.lp-dg-head {
+/* 加桌引导两步（15 问 11a）：序号 28 方块 + 说明 */
+.lp-dg-steps {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px 0 16px;
+  gap: 12px;
 }
-.lp-dg-title {
-  font-size: 20px;
-  font-weight: 700;
+.lp-dg-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.lp-dg-text {
+.lp-dg-no {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: var(--v5-sunk);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+.lp-dg-t {
   font-size: 17px;
   font-weight: 500;
-  line-height: 1.5;
-  color: var(--v5-ink-2);
+}
+.lp-dg-ok {
+  margin-top: 8px; /* 与步骤间距 16+8＝24 */
 }

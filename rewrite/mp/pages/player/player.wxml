@@ -130,9 +130,9 @@
     </view>
 
     <view class="lp-controls">
-      <view class="k k-48 lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">上一段</view>
+      <view class="k k-48 lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /><px-i name="back" /></view>
       <view class="k k-48 k-inv lp-ctl-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onTapVideo" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="{{paused ? 'play' : 'pause'}}" tone="var(--v5-ink)" /></view>
-      <view class="k k-48 lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext" data-k="{{canNext ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">下一段</view>
+      <view class="k k-48 lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext" data-k="{{canNext ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="chev" /><px-i name="chev" /></view>
       <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">求助</view>
     </view>
   </view>
@@ -156,9 +156,9 @@
 
   <!-- 求助面板：浅色底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。
        scrim 与 sheet 均锁背景滚动（catch:touchmove="noop"）；列表用 scroll-view 自滚。 -->
-  <view class="lp-help-mask" wx:if="{{helpPanel}}" bind:tap="onHelpClose" catch:touchmove="noop">
-    <view class="lp-help-sheet" style="top: {{statusBarHeight + 44}}px" catch:tap="noop" catch:touchmove="noop">
-      <view class="lp-help-grab" bind:tap="onHelpClose"></view>
+  <!-- 求助面板（15 问 11a）：全站浅色半屏，高度按内容、超出面板内滚；帮助视频播放子页才撑到导航栏下 -->
+  <view class="lp-help-mask sh-mask {{helpOut ? 'out' : ''}}" wx:if="{{helpPanel}}" bind:tap="onHelpClose" catch:touchmove="noop">
+    <view class="lp-help-sheet sh-panel {{helpOut ? 'out' : ''}}" style="{{helpSrc ? 'top: ' + (statusBarHeight + 44) + 'px' : 'max-height: calc(100% - ' + (statusBarHeight + 44) + 'px)'}}" catch:tap="noop" catch:touchmove="noop">
       <view class="lp-help-nav">
         <view wx:if="{{helpPanel === 'videos' && helpSrc}}" class="k k-sm k-light lp-help-sq hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideoBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
         <view wx:elif="{{helpPanel !== 'menu'}}" class="k k-sm k-light lp-help-sq hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpBackMenu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
@@ -261,16 +261,22 @@
     </view>
   </view>
 
-  <!-- 首次成功退出加桌引导（仅展示一次·分端文案）：浅色底部 sheet，次操作在上、主键在下 -->
-  <view class="lp-dg-mask" wx:if="{{deskGuide}}" catch:touchmove="noop">
-    <view class="lp-dg-sheet">
-      <view class="lp-help-grab"></view>
-      <view class="lp-dg-head">
-        <text class="lp-dg-title">放书签在桌面，下次点开就继续。</text>
-        <text class="lp-dg-text t-sys">{{deskGuideIOS ? '点右上角 ··· 菜单，选『添加到我的小程序』' : '点右上角 ··· 菜单，选『添加到桌面』'}}</text>
+  <!-- 首次退出加桌引导（仅一次·分端文案·15 问 11a）：同全站浅色半屏。知道了＝继续退出；关闭键/遮罩＝留在播放页。
+       iOS 标题含子集外的「序」，走黑体；两步说明是说明句，一律黑体。 -->
+  <view class="lp-dg-mask sh-mask" wx:if="{{deskGuide}}" bind:tap="onDeskGuideStay" catch:touchmove="noop">
+    <view class="lp-dg-sheet sh-panel" catch:tap="noop">
+      <view class="lp-help-nav">
+        <text wx:if="{{deskGuideIOS}}" class="t-sys lp-help-title">加到我的小程序，下次一点就开</text>
+        <text wx:else class="lp-help-title">加到桌面，下次一点就开</text>
+        <view class="lp-help-close" bind:tap="onDeskGuideStay">
+          <view class="k k-sm k-light lp-help-sq hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="times" /></view>
+        </view>
       </view>
-      <view class="k k-48 k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onDeskGuideExit" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">先退出，下次继续</view>
-      <view class="k k-48 k-ink" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onDeskGuideStay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续学习</view>
+      <view class="lp-dg-steps">
+        <view class="lp-dg-step"><text class="mono lp-dg-no">1</text><text class="t-sys lp-dg-t">点右上角的 ···</text></view>
+        <view class="lp-dg-step"><text class="mono lp-dg-no">2</text><text class="t-sys lp-dg-t">{{deskGuideIOS ? '选「添加到我的小程序」' : '选「添加到桌面」'}}</text></view>
+      </view>
+      <view class="k k-48 k-ink lp-dg-ok" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onDeskGuideExit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">知道了</view>
     </view>
   </view>
 </view>

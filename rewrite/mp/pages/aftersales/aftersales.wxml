@@ -5,8 +5,10 @@
 <view class="as">
   <text class="as-title">售后记录</text>
 
+  <!-- 小货车（15 问 8b）：加载中就先画空车停好，数据回来只把 cargo 0→1（车不重挂载、不重播入场·页面不跳）；失败隐藏、空态换纸箱 -->
+  <view wx:if="{{!loadFailed && (loading || list.length)}}" class="as-truck" style="padding-top: {{groundGap - 36}}px"><px-truck pose="park" cargo="{{list.length ? 1 : 0}}" /></view>
+
   <block wx:if="{{list.length}}">
-    <view class="as-truck" style="padding-top: {{groundGap - 36}}px"><px-truck pose="reverse" arrive="160" cargo="1" /></view>
     <view class="as-list">
       <view class="as-row" wx:for="{{list}}" wx:key="id">
         <view class="as-ico">
@@ -42,20 +44,16 @@
     <view class="t-sys as-more" wx:else>没有更多了</view>
   </block>
 
-  <!-- 骨架占位（首次加载中间空白·根因#8）：不误报空态 -->
-  <block wx:if="{{loading && !list.length}}">
-    <view class="t-sys as-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
-    <view class="as-skel" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-      <view class="as-skel-bar skel" style="width: 96px"></view>
-      <view class="as-skel-row">
-        <view class="as-skel-thumb skel"></view>
-        <view class="as-skel-col">
-          <view class="as-skel-bar skel" style="width: 60%"></view>
-          <view class="as-skel-bar skel" style="width: 36%"></view>
-        </view>
+  <!-- 骨架占位（首次加载·根因#8·不误报空态）：行结构与真实行一致、静止不闪（15 问 8b） -->
+  <view wx:if="{{loading && !list.length}}" class="as-list">
+    <view class="as-row" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="as-ico"><view class="as-sk as-sk-dot"></view></view>
+      <view class="as-mid">
+        <view class="as-sk-top"><view class="as-sk" style="width: 45%; height: 14px"></view><view class="as-sk" style="width: 40px; height: 10px"></view></view>
+        <view class="as-sk-line"><view class="as-sk" style="width: 60%; height: 10px"></view></view>
       </view>
     </view>
-  </block>
+  </view>
 
   <!-- 失败态与空态分治（根因#14·守卫 rw-mp-list-loadfailed-state） -->
   <view class="as-state" wx:if="{{!loading && loadFailed}}">

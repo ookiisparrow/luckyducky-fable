@@ -159,7 +159,6 @@
 <view wx:if="{{asOpen}}" class="as-root" catch:touchmove="noop">
   <view class="sh-mask as-mask {{asOut ? 'out' : ''}}" bind:tap="onAsClose"></view>
   <view class="sh-panel as-panel {{asOut ? 'out' : ''}}">
-    <view class="as-grip"></view>
     <view class="as-t">
       <text class="as-h">申请售后</text>
       <block wx:for="{{asLines}}" wx:key="lineId"><text wx:if="{{item.lineId === asLine}}" class="t-sys as-sub">{{item.name}}{{item.spec ? ' · ' + item.spec : ''}}</text></block>
