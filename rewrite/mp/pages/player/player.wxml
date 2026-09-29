@@ -32,6 +32,8 @@
         autoplay
         initial-time="{{initialTime}}"
         controls="{{false}}"
+        show-center-play-btn="{{false}}"
+        show-loading="{{false}}"
         object-fit="contain"
         bind:play="onVideoPlay"
         bind:pause="onVideoPause"

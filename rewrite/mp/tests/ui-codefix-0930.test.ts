@@ -146,3 +146,14 @@ describe('静态小修', () => {
     expect(tagOf(addressEditWxml, 'data-field="phone"')).toContain(`focus="{{focusNext === 'phone'}}"`)
   })
 })
+
+describe('像素化清点顺手修（2026-09-30）', () => {
+  it('大白话：播放页主视频关掉微信自带的中间播放键和加载转圈——我们已有像素转圈和暂停键，别撞在一起', () => {
+    const v = tagOf(playerWxml, 'id="lp-video"')
+    expect(v).toContain('show-center-play-btn="{{false}}"')
+    expect(v).toContain('show-loading="{{false}}"')
+  })
+  it('大白话：首页收尾大图后台没配图时，整块图框不渲染，不留空灰方块', () => {
+    expect(tagOf(homeWxml, 'class="hm-closing-media"')).toContain('wx:if="{{content.closing.img}}"')
+  })
+})

@@ -161,8 +161,8 @@
 
   <!-- ⑧ 收尾：大图 + 大字 + 墨黑键（每 3.6s 一道像素紫光扫过·v5 定稿 sheenEl） -->
   <view class="hm-closing">
-    <view class="hm-closing-media">
-      <image wx:if="{{content.closing.img}}" class="hm-hero-img {{wide[content.closing.img] ? '' : 'focus-img'}}" src="{{content.closing.img}}" mode="{{wide[content.closing.img] ? 'aspectFill' : 'widthFix'}}" lazy-load data-src="{{content.closing.img}}" bindload="onImgLoad" />
+    <view class="hm-closing-media" wx:if="{{content.closing.img}}">
+      <image class="hm-hero-img {{wide[content.closing.img] ? '' : 'focus-img'}}" src="{{content.closing.img}}" mode="{{wide[content.closing.img] ? 'aspectFill' : 'widthFix'}}" lazy-load data-src="{{content.closing.img}}" bindload="onImgLoad" />
       <view class="hm-fade-top"></view>
       <view class="hm-fade-bottom hm-fade-short"></view>
     </view>
