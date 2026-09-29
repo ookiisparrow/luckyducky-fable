@@ -123,7 +123,7 @@ Page({
     this._freshAt = 0
     const contP = this.refreshCont(seq) // 继续学习卡不等人资料/CMS（那两路只喂头像昵称/入口）
     void this.refreshCounts(seq) // 订单格数字：独立一路，失败只是不显示数字
-    const [u, meContent] = await Promise.all([login(), getPageContent('mePage')])
+    const [u, meContent] = await Promise.all([login(loginGate.hasAgreed()), getPageContent('mePage')])
     if (seq !== this._seq) return
     const user = (u.ok ? u.user : null) as Record<string, any> | null
     const me = mapMe(meContent)

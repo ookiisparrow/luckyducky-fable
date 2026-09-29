@@ -7,6 +7,7 @@ import { readConsentHint, writeConsentHint, clearConsentHint, consentLabel } fro
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint, fxToast } from '../../lib/pxFx'
 import { navigateOrRedirect } from '../../lib/nav'
+import { loginGate } from '../../lib/loginGate'
 import { openCustomerService } from '../../utils/customerService'
 
 Page({
@@ -16,6 +17,7 @@ Page({
     state: null as boolean | null,
     stateLabel: consentLabel(null),
     busy: false,
+    serverState: null as boolean | null, // 服务端确认的授权态：false 才给「重新开启」，其余（已开启/未知/拉取失败）一律「撤回授权」（§40）
   },
   unloaded: false, // 页面已退出标记（同 checkout/order-list 范式）
   submitted: false, // 本页点过同意/撤回：进页的服务端读回包晚到时不再覆盖
@@ -27,14 +29,14 @@ Page({
   /** 以服务端为准（跨设备改过/删过资料时本机提示会旧）：login 回包带本人 users 档，csDataShare.agreed 即真值；
    *  档里没有＝从没选过。拉不到就留本机提示，不把失败当「尚未选择」。 */
   async syncFromServer() {
-    const u = await login().catch(() => null)
+    const u = await login(loginGate.hasAgreed()).catch(() => null)
     const user = u && u.ok ? (u.user as { csDataShare?: { agreed?: unknown } } | undefined) : undefined
     if (!user || typeof user !== 'object' || this.unloaded || this.submitted) return // 没拿到本人档＝不算服务端答复
     const cs = user.csDataShare
     const s = cs && typeof cs.agreed === 'boolean' ? cs.agreed : null
     if (s === null) clearConsentHint()
     else writeConsentHint(s)
-    this.setData({ state: s, stateLabel: consentLabel(s) })
+    this.setData({ state: s, stateLabel: consentLabel(s), serverState: s })
   },
   onUnload() {
     this.unloaded = true
@@ -49,8 +51,8 @@ Page({
     if (this.unloaded) return // 页面已退出：不再对已退页 setData/toast（静默，无钱副作用，本页无需像 checkout 那样补提示）
     this.setData({ busy: false })
     if (r.ok) {
-      this.setData({ state: agree, stateLabel: consentLabel(agree) })
-      fxToast(this, agree ? '已同意数据共享' : '已撤回授权')
+      this.setData({ state: agree, stateLabel: consentLabel(agree), serverState: agree })
+      fxToast(this, agree ? '已重新开启' : '已撤回授权')
     } else {
       fxHint(this, '操作失败，请稍后重试')
     }

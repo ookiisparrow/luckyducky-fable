@@ -76,7 +76,7 @@ Component({
       tapHaptic() // 禁用/未勾选早退之后、动作提交前（同 lib/haptics 调用纪律）
       this.setData({ submitting: true })
       wx.showLoading({ title: '登录中', mask: true }) // 设计稿「登录中」加载框：原生 showLoading（带遮罩·挡连点）
-      const res = await login() // 静默 openid 直接登录（零资料采集）+ 服务端记账
+      const res = await login(true) // 静默 openid 直接登录（零资料采集）+ 服务端记账；true＝刚勾了协议（云端默认开启数据共享·§40）
       wx.hideLoading() // 先收加载框再提示（原生 loading 与 toast 互斥）
       this.setData({ submitting: false })
       if (!res.ok) {

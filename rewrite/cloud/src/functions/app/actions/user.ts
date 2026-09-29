@@ -23,7 +23,7 @@ const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
  * unionid 桥接 best-effort：有则存进用户档（客服查订单反查用），绝不反噬登录。
  */
 export const login = withOpenId(
-  withRateLimit('login', { max: 30, windowMs: 60_000 }, async ({ db, OPENID }) => {
+  withRateLimit('login', { max: 30, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
     const users = db.collection(COLLECTIONS.users)
     const found = await users.where({ _openid: OPENID }).limit(1).get()
     const isNew = !found.data.length
@@ -38,9 +38,27 @@ export const login = withOpenId(
         })
       : found.data[0]
     await storeUnionId(db, OPENID, user).catch(() => {})
+    // 数据共享授权「登录即默认开启、可随时撤回」（老板 2026-09-30·决策记录 §40）：只在已同意协议的登录（agreed:true·
+    // 静默识别不带）且用户从没自己选过时写；写失败不挡登录（授权页照常可开可撤）。
+    if ((event as any)?.agreed === true && needsDefaultConsent(user)) {
+      const csDataShare = { agreed: true, at: Date.now(), via: 'login' }
+      const done = await db
+        .collection(COLLECTIONS.users)
+        .doc(user._id)
+        .update({ data: { csDataShare } })
+        .catch(() => null)
+      if (done) return ok({ isNew, user: { ...user, csDataShare } })
+    }
     return ok({ isNew, user })
   })
 )
+
+/** 从没自己选过＝没有授权记录；删资料时被重置的（at===deletedAt·同一时刻写）也按新用户算。主动撤回/开启过的不动。 */
+function needsDefaultConsent(user: any): boolean {
+  const cs = user && user.csDataShare
+  if (!cs || typeof cs.agreed !== 'boolean') return true
+  return cs.agreed === false && !!user.deletedAt && cs.at === user.deletedAt
+}
 
 async function storeUnionId(db: any, OPENID: string, user: any): Promise<void> {
   const unionid = currentUnionId()
