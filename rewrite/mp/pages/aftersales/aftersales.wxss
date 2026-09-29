@@ -12,7 +12,7 @@ page {
 }
 /* 倒车进场的小货车：大标题下留出场景空间，地面线与其它带车页一致（顶栏下 120px 起算） */
 .as-truck {
-  padding: 84px 16px 12px;
+  padding: 0 16px 12px;
 }
 .as-list {
   margin: 0 16px 16px;
@@ -165,13 +165,13 @@ page {
   gap: 12px;
   text-align: center;
 }
-/* 空态纸箱：与有记录时的小货车同一条地面线（.as-truck 同样下移 84px） */
+/* 空态纸箱：与有记录时的小货车同一条地面线（.as-truck 同样 groundGap−36：本页多一行 24px 大标题） */
 .as-box {
   align-self: stretch;
-  padding-top: 84px;
+  padding-top: 0;
 }
 .as-signal {
-  padding-top: 88px;
+  padding-top: 0;
   display: flex;
 }
 .as-state-t {

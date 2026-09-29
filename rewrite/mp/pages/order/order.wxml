@@ -5,7 +5,7 @@
 <v5-nav title="订单详情" />
 
 <view class="od" wx:if="{{vm}}">
-  <view class="od-truck"><px-truck pose="{{truckPose}}" cargo="{{cargo}}" /></view>
+  <view class="od-truck" style="padding-top: {{groundGap}}px"><px-truck pose="{{truckPose}}" cargo="{{cargo}}" /></view>
 
   <view class="od-body">
     <!-- 状态卡：左短状态名 20/700，右 13/300 小字（待支付琥珀倒计时、剩不到 1 分钟变红） -->
@@ -70,7 +70,7 @@
           <image wx:if="{{item.cover}}" class="od-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         </view>
         <view class="od-item-mid">
-          <text class="od-item-name">{{item.name}}</text>
+          <text class="t-sys od-item-name">{{item.name}}</text>
           <text class="t-sys od-item-sub">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
           <text wx:if="{{lineTags[item.lineId]}}" class="t-sys od-as-tag">{{lineTags[item.lineId]}}</text>
         </view>
@@ -145,7 +145,7 @@
 </view>
 
 <!-- 失败态与不存在分治（根因#14·守卫 rw-mp-list-loadfailed-state）：弱网失败给重试，不误报「订单不存在」 -->
-<view class="od-state-page" wx:elif="{{!loading && loadFailed}}">
+<view class="od-state-page" style="padding-top: {{groundGap}}px" wx:elif="{{!loading && loadFailed}}">
   <px-anim name="signal" size="4" />
   <text class="od-state-t">网络开小差</text>
   <text class="t-sys od-k">订单没加载出来，请重试</text>
@@ -153,7 +153,7 @@
 </view>
 
 <!-- 订单不存在 -->
-<view class="od-state-page" wx:elif="{{!loading}}">
+<view class="od-state-page" style="padding-top: {{groundGap}}px" wx:elif="{{!loading}}">
   <text class="od-state-t">订单不存在</text>
   <text class="t-sys od-k">可能已被删除或不属于当前账号</text>
 </view>

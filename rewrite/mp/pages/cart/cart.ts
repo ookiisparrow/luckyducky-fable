@@ -11,6 +11,7 @@ import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGu
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint } from '../../lib/pxFx'
+import { groundGap } from '../../lib/ground'
 
 let allRaw: Record<string, any>[] = [] // 全商品原档（刷新封面临时址·onLoad 拉一次）
 let hold: Hold | null = null // 当前按住删除的那一行（lib/hold）
@@ -23,6 +24,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     statusBarHeight: 0, // 沉浸式自绘导航：内容让开状态栏（navigationStyle:custom·用户需求）
     items: cart.getItems().map(withPrice), // 首帧走本地车，不等云目录（有货时不闪「这里还没有东西」）
     selectedCount: cart.selectedCount(),

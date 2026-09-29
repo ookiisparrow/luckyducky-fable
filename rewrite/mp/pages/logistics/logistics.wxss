@@ -3,9 +3,9 @@ page {
   background: var(--v5-canvas);
   color: var(--v5-ink);
 }
-/* 小货车：顶栏下 120px 处落地（全站同一条地面线） */
+/* 小货车：顶栏下 groundGap 处落地（屏高<700 为 56、其余 120·lib/ground·全站同一条地面线） */
 .lg-truck {
-  padding: 120px 16px 12px;
+  padding: 0 16px 12px;
 }
 .lg-no {
   padding: 4px 16px 0;

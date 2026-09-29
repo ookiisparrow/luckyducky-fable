@@ -4,7 +4,7 @@
 <v5-nav back="{{false}}" />
 
 <view class="ps">
-  <view class="ps-coin"><px-ground kind="pay" /></view>
+  <view class="ps-coin" style="padding-top: {{groundGap}}px"><px-ground kind="pay" /></view>
   <view class="ps-body">
     <view class="ps-title-row">
       <px-i name="led" tone="var(--v5-ok)" />

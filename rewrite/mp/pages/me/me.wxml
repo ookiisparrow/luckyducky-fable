@@ -7,7 +7,7 @@
 <view class="me">
 
   <!-- 小鸭蛋：hatchKey 非空＝有一门课全部看完 → 孵化；按 hatchKey 做 key，孵化/换课时整个重挂（组件只在 ready 读参数） -->
-  <view class="me-egg">
+  <view class="me-egg" style="padding-top: {{groundGap}}px">
     <block wx:for="{{[hatchKey]}}" wx:key="*this">
       <px-ground kind="egg" hatched="{{!!item}}" hatch-key="{{item}}" />
     </block>
@@ -40,7 +40,7 @@
     <view class="me-thumb"></view>
     <view class="me-card-t">
       <text class="t-sys me-card-sub">继续学习 · {{cont.courseTitle}}</text>
-      <text class="me-card-main">{{contMain || cont.lessonName}}</text>
+      <text class="t-sys me-card-main">{{contMain || cont.lessonName}}</text>
     </view>
     <view class="k k-ink me-play"><px-i name="play" /></view>
   </view>
@@ -94,26 +94,26 @@
   <!-- 入口行（标题/可见性走 CMS entries） -->
   <view class="me-rows">
     <view wx:if="{{entries.courses.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onCourses">
-      <text class="me-row-t">{{entries.courses.label}}</text><px-i name="arrow" />
+      <text class="t-sys me-row-t">{{entries.courses.label}}</text><px-i name="arrow" />
     </view>
     <view wx:if="{{entries.aftersales.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAfterSales">
-      <text class="me-row-t">{{entries.aftersales.label}}</text><px-i name="arrow" />
+      <text class="t-sys me-row-t">{{entries.aftersales.label}}</text><px-i name="arrow" />
     </view>
     <view wx:if="{{entries.address.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onAddress">
-      <text class="me-row-t">{{entries.address.label}}</text><px-i name="arrow" />
+      <text class="t-sys me-row-t">{{entries.address.label}}</text><px-i name="arrow" />
     </view>
     <!-- 数据共享授权：设计稿未画，但合规守卫要求「我」页可直达（隐私政策承诺随时可撤回·M5 前置闸1），放入口行末 -->
     <view wx:if="{{entries.consent.visible}}" class="me-row" hover-start-time="20" hover-class="k-row-down" bind:tap="onConsent">
-      <text class="me-row-t">{{entries.consent.label}}</text><px-i name="arrow" />
+      <text class="t-sys me-row-t">{{entries.consent.label}}</text><px-i name="arrow" />
     </view>
   </view>
 
   <view class="me-links">
-    <view wx:if="{{entries.kefu.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">{{entries.kefu.label}}</view>
+    <view wx:if="{{entries.kefu.visible}}" class="t-sys me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onKefu">{{entries.kefu.label}}</view>
     <view wx:if="{{entries.kefu.visible && entries.feedback.visible}}" class="me-sep"></view>
-    <view wx:if="{{entries.feedback.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onFeedback">{{entries.feedback.label}}</view>
+    <view wx:if="{{entries.feedback.visible}}" class="t-sys me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onFeedback">{{entries.feedback.label}}</view>
     <view wx:if="{{(entries.kefu.visible || entries.feedback.visible) && entries.about.visible}}" class="me-sep"></view>
-    <view wx:if="{{entries.about.visible}}" class="me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onAbout">{{entries.about.label}}</view>
+    <view wx:if="{{entries.about.visible}}" class="t-sys me-link" hover-start-time="20" hover-class="k-row-down" bind:tap="onAbout">{{entries.about.label}}</view>
   </view>
 
   <view class="me-tab-space"></view>

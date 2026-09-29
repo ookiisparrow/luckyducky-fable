@@ -69,8 +69,8 @@
             data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="ol-fill"></view><text class="ol-act-t">取消订单</text></view>
         </view>
         <!-- 倒计时归零（expired）：藏「去支付」，右上角写「已超时」并自动刷新一次 -->
-        <view wx:if="{{!item.expired}}" class="k k-sm k-ink ol-act hit44 {{payingId === item.id ? 'ol-act-busy' : ''}}"
-          hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去支付</view>
+        <view wx:if="{{!item.expired}}" class="k k-sm k-light ol-act hit44 {{payingId === item.id ? 'ol-act-busy' : ''}}"
+          hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-id="{{item.id}}" catch:tap="onPay" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去支付</view>
       </view>
       <view class="ol-acts" wx:elif="{{item.status === 'shipped'}}">
         <view class="k k-sm k-light ol-act hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"

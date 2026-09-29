@@ -23,6 +23,7 @@ Page({
     bg: '',
     chapters: [] as (CatalogChapterVM & { cur: boolean })[], // cur＝本章含当前课时（章序号标紫）
     continueTarget: null as { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null,
+    resumeLabel: '', // 有学习记录时系统生成的续学文案（mapCatalog·优先于 resumeCta）
     resumeCta: mapCatalogPlayer(null).catalog.resumeCta, // 「开始学习」CTA 文案·首帧默认（CMS 到达覆盖）
   },
   home: null as unknown,
@@ -78,8 +79,8 @@ Page({
       this.setData({ state: 'missing' })
       return
     }
-    const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
-    this.setData({ state: 'ok', chapters: chapters.map((ch) => ({ ...ch, cur: ch.lessons.some((l) => l.status === 'current') })), continueTarget })
+    const { chapters, continueTarget, resumeLabel } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
+    this.setData({ state: 'ok', chapters: chapters.map((ch) => ({ ...ch, cur: ch.lessons.some((l) => l.status === 'current') })), continueTarget, resumeLabel })
     // 续播段取址预热（根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；
     // 纯 cache 暖（不 setData·新鲜命中 no-op·在途去重·err 吞掉）。段为空（全课无可播）时 prefetch 自 no-op。
     if (continueTarget) void playbackCache.prefetch(courseId, continueTarget.segmentId)

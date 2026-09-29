@@ -504,7 +504,7 @@
 }
 .lp-help-topic-title {
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .lp-help-topic-sub {
   margin-top: 4px;

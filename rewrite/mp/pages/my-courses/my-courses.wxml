@@ -33,7 +33,7 @@
       <view class="mc-row">
         <view class="mc-thumb"></view>
         <view class="mc-body">
-          <text class="mc-name">{{item.title}}</text>
+          <text class="t-sys mc-name">{{item.title}}</text>
           <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。
                本页没有下拉刷新，点这一行走已有 onRetryLoad；catch 住，避免连课卡一起点进目录。 -->
           <view class="mc-meta" wx:if="{{item.totalSegments && item.progressUnknown}}" catch:tap="onRetryLoad" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100">

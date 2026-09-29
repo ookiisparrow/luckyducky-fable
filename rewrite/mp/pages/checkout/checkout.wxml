@@ -5,7 +5,7 @@
      整页一列（设计稿 L212-213）：顶栏 + 小货车固定在滚动区外，只有中间内容滚，底部应付/提交也不动。 -->
 <view class="co">
   <v5-nav title="确认订单" />
-  <view class="co-truck"><px-truck id="truck" pose="drive" arrive="160" cargo="{{cargo}}" /></view>
+  <view class="co-truck" style="padding-top: {{groundGap}}px"><px-truck id="truck" pose="drive" arrive="160" cargo="{{cargo}}" /></view>
 
   <scroll-view class="co-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
   <view class="co-body">
@@ -32,7 +32,7 @@
           <view wx:if="{{item.cover}}" class="co-thumb-img" style="background-image: url('{{item.cover}}')"></view>
         </view>
         <view class="co-item-mid">
-          <text class="co-item-name">{{item.name}}</text>
+          <text class="t-sys co-item-name">{{item.name}}</text>
           <text wx:if="{{item.step}}" class="t-sys co-item-sub">{{item.sku || item.tag}}</text>
           <text wx:else class="t-sys co-item-sub">{{item.sku || item.tag}}{{item.sku || item.tag ? ' · ' : ''}}×{{item.qty}}</text>
         </view>
@@ -57,7 +57,7 @@
       <text class="t-sys co-k co-addon-head">搭配购买</text>
       <view class="co-item" wx:for="{{addons}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onToggleAddon">
         <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
-        <text class="co-item-name co-addon-name">{{item.name}}</text>
+        <text class="t-sys co-item-name co-addon-name">{{item.name}}</text>
         <text class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>
     </view>

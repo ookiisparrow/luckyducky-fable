@@ -19,6 +19,7 @@ import { loginGate } from '../../lib/loginGate'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxTransit, fxToast, fxHint } from '../../lib/pxFx'
 import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
+import { groundGap } from '../../lib/ground'
 
 // 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
 // ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
@@ -65,6 +66,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     statusBarHeight: 0, // 沉浸式自绘导航：头部让开状态栏（navigationStyle:custom·用户需求）
     hatchKey: '', // 小鸭蛋：非空＝已学完这门课（孵化·小鸭按课 id 定样子）；空＝未孵化蛋（取数失败/加载中也是蛋）
     nickname: seededMe.defaultNickname, // 默认名先上屏；云端真昵称 refresh 覆盖

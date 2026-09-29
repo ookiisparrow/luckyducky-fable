@@ -2,9 +2,9 @@
 <v5-nav />
 
 <view class="fn">
-  <view class="fn-egg"><px-ground kind="egg" hatched hatch-key="{{courseId}}" /></view>
+  <view class="fn-egg" style="padding-top: {{groundGap}}px"><px-ground kind="egg" hatched hatch-key="{{courseId}}" /></view>
   <view class="fn-copy">
-    <text class="fn-name" wx:if="{{name}}">{{name}}</text>
+    <text class="t-sys fn-name" wx:if="{{name}}">{{name}}</text>
     <text class="fn-title">恭喜，整门课学完了</text>
     <text class="t-sys fn-sub">小鸭孵出来了，以后就在「我」页陪着你。</text>
   </view>
@@ -14,6 +14,7 @@
   </view>
 </view>
 
+<view class="fn-dock-space"></view>
 <view class="fn-dock">
   <view class="k k-light k-48 fn-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onCatalog" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">课程目录</view>
   <view class="k k-ink k-48 fn-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onReview" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去评价</view>

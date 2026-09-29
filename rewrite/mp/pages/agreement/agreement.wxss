@@ -29,7 +29,7 @@ page {
 }
 .ag-h {
   font-size: 17px;
-  font-weight: 700; /* 标题加粗、正文常规：字号相同时靠字重分层 */
+  font-weight: 600; /* 条款标题走黑体（后台可改·§37 第 3 条）；字号同正文时靠字重分层 */
 }
 .ag-p {
   font-size: 17px;

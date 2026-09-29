@@ -72,7 +72,7 @@
           <image wx:if="{{item.cover}}" class="hm-card-img {{wide[item.cover] ? '' : 'focus-img'}}" src="{{item.cover}}" mode="{{wide[item.cover] ? 'aspectFill' : 'widthFix'}}" data-src="{{item.cover}}" bindload="onImgLoad" />
         </view>
         <view class="hm-card-info">
-          <text class="hm-card-name">{{item.name}}</text>
+          <text class="t-sys hm-card-name">{{item.name}}</text>
           <view class="hm-card-foot">
             <text class="mono hm-price">{{item.priceLabel}}</text>
             <view class="hm-add-hit" catch:tap="onAddProduct" data-id="{{item.id}}">

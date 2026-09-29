@@ -6,7 +6,7 @@
   <text class="ab-lead t-sys">{{lead}}</text>
   <!-- wx:key 用 title（CMS 段落·标题唯一）：mapAbout 产出 {title,body} 对象 -->
   <view class="ab-sec" wx:for="{{sections}}" wx:key="title">
-    <text class="ab-h">{{item.title}}</text>
+    <text class="t-sys ab-h">{{item.title}}</text>
     <text class="ab-p t-sys">{{item.body}}</text>
   </view>
 </view>

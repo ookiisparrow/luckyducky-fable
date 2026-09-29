@@ -39,6 +39,7 @@ describe('mapCatalog 未覆盖分支锁定', () => {
         ] },
       ],
       continueTarget: { segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 30 },
+      resumeLabel: '继续第 2 课 · 段落 2',
     })
   })
 

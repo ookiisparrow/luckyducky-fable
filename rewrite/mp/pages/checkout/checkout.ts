@@ -11,6 +11,7 @@ import { getAllProducts } from '../../lib/catalog'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint } from '../../lib/pxFx'
+import { groundGap } from '../../lib/ground'
 
 const SUBMITTED_MS = 600 // 设计稿 submitOrder：建单成功后按键打勾「已提交」停 600ms 再拉起支付
 // 取消支付提示（老板拍板 4·设计稿 payClose）。15 分钟＝云端付款时限 shared PAY_WINDOW_MS（小程序进不了 shared，
@@ -27,6 +28,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     address: null as (Addr & { who: string; where: string }) | null,
     items: [] as Array<checkout.DraftLine & { priceNum: string; step: boolean; canDec: boolean; canInc: boolean }>,
     addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),

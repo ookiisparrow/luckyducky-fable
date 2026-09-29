@@ -7,6 +7,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { tapHaptic } from '../../lib/haptics'
 import { fxToast, fxHint } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
+import { groundGap } from '../../lib/ground'
 
 const HOLD_MS = 700 // 按住多久算撤回（同订单页按住取消·设计稿 data-ms=700）
 let hold: Hold | null = null
@@ -15,6 +16,7 @@ Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
   onKeyUp: keyUp,
   data: {
+    groundGap: groundGap(), // 地面线上方留白（屏高<700 用 56·UI 审查 6 问 2a）
     list: [] as AfterSaleVM[],
     loading: true,
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「还没有售后记录」分治

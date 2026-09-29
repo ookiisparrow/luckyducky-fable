@@ -50,7 +50,7 @@
     <view class="ct-cta-wrap">
       <view class="k ct-start {{continueTarget ? 'k-ink' : 'k-flat k-off'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="play" />
-        <text>{{resumeCta}}</text>
+        <text>{{resumeLabel || resumeCta}}</text>
       </view>
     </view>
 
@@ -58,7 +58,7 @@
       <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch" wx:for-index="ci">
         <view class="ct-ch">
           <text class="ct-ch-no {{ch.cur ? 'cur' : ''}}">{{ci + 1}}</text>
-          <text class="ct-ch-title">{{ch.title}}</text>
+          <text class="t-sys ct-ch-title">{{ch.title}}</text>
         </view>
         <view
           class="ct-lesson {{lesson.status}}"
@@ -75,7 +75,7 @@
             <px-i wx:elif="{{lesson.status === 'done'}}" name="node" tone="var(--v5-ink)" />
             <px-i wx:else name="ring" tone="var(--v5-ink-4)" />
           </view>
-          <text class="ct-name">{{lesson.name}}</text>
+          <text class="t-sys ct-name">{{lesson.name}}</text>
           <text class="mono ct-dur" wx:if="{{lesson.minutes}}">{{lesson.minutes}} 分钟</text>
         </view>
       </block>
