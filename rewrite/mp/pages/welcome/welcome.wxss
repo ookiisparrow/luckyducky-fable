@@ -48,6 +48,17 @@ page {
 .wl-body {
   flex: 1;
 }
+.wl-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.wl-loading-t {
+  font-size: 13px;
+  color: var(--v5-ink-2);
+}
 .wl-head {
   padding: 8px 16px 0;
   display: flex;

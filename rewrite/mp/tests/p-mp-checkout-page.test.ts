@@ -67,6 +67,15 @@ async function mount(seed: Seed = 'cart', withAddress = true): Promise<Record<st
   return page
 }
 
+describe('结算页：首帧不闪「添加收货地址」（UI 审查 2026-09-29）', () => {
+  it('大白话：有默认地址——商品数据还在路上时，地址卡已经显示出来，不先闪黄灯「添加收货地址」', async () => {
+    getAllProductsMock.mockImplementation(() => new Promise(() => {}))
+    const page = await mount()
+    void page.refresh()
+    expect(page.data.address?.who).toBe('鸭 · 138 **** 0000')
+  })
+})
+
 describe('结算页：旧价与空地址簿（UX 修复）', () => {
   it('大白话：加购后商品降价了——结算页按最新价算应付，并提示「价格有变动，已按最新价计算」', async () => {
     getAllProductsMock.mockImplementation(async () => [{ id: 'p1', price: 99 }, { id: 'p2', price: 22 }])
