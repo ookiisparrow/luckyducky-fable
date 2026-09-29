@@ -7,7 +7,7 @@ page {
   padding: 4px 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px; /* 条与条拉开（UI 审查 2026-09-29·扫读找得到每条起点） */
 }
 .ag-head {
   display: flex;
@@ -25,17 +25,22 @@ page {
 .ag-art {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 .ag-h {
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 700; /* 标题加粗、正文常规：字号相同时靠字重分层 */
 }
 .ag-p {
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 400; /* 黑体（.t-sys）长文用常规字重更好读 */
   line-height: 1.65;
   color: var(--v5-ink-2);
+}
+/* 重要条款（正文含「重要条款」·mapPages markImportant）：墨色加粗、不加色（老板 2026-09-29 选定） */
+.ag-p-key {
+  color: var(--v5-ink);
+  font-weight: 600;
 }
 .ag-note {
   font-size: 13px;

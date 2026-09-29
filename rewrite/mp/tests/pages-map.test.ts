@@ -43,6 +43,14 @@ describe('mapWelcome（W1 恭喜屏 + W2 三件事·缺档回退默认·不空�
   })
 })
 
+describe('W2「求助」说明对得上播放页真实位置（UI 审查 2026-09-29）', () => {
+  it('大白话：播放页中间是播放键、求助在底栏最右——默认文案指右下角，不再说「中间那颗」「永远在」', () => {
+    const help = mapWelcome(null).w2.items.find((p) => p.icon === 'life-buoy')
+    expect(help?.desc).toContain('右下角')
+    expect(help?.desc).not.toMatch(/中间|永远在/)
+  })
+})
+
 describe('mapCatalogPlayer（目录页 hero/CTA/空态 + 播放页求助三卡/FAQ·缺档回退默认）', () => {
   it('大白话：整档 null → CTA/空态默认、三卡标题默认、FAQ 空数组、heroImage undefined（页面走 bgFor）', () => {
     const d = mapCatalogPlayer(null)
@@ -140,6 +148,15 @@ describe('mapAbout（lead + 三段自述·缺档回退默认全文）', () => {
   })
 })
 
+describe('协议「重要条款」显著提示（UI 审查 2026-09-29·民法典§496 格式条款提示义务）', () => {
+  it('大白话：正文写着「重要条款」的那条（第四条·进课后失去七天无理由）打上重点标记，其余不打；后台覆盖的条款同样按原文认', () => {
+    const user = mapAgreement(null).user.articles
+    expect(user.filter((a) => a.important).map((a) => a.title.slice(0, 3))).toEqual(['第四条'])
+    const cms = mapAgreement({ user: { sections: [{ title: '甲', body: '普通' }, { title: '乙', body: '此为重要条款，请注意' }] } }).user.articles
+    expect(cms.map((a) => a.important)).toEqual([false, true])
+  })
+})
+
 describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·intro 固定合规文本）', () => {
   it('大白话：整档 null → user/privacy 两文档默认全文（含引言 + ≥8 条条款）', () => {
     const d = mapAgreement(null)
@@ -197,7 +214,7 @@ describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·in
       user: { effectiveDate: '2026-08', sections: [{ title: '第一条 新', body: '新正文' }] },
     })
     expect(d.user.updated).toBe('2026-08')
-    expect(d.user.articles).toEqual([{ title: '第一条 新', body: '新正文' }])
+    expect(d.user.articles).toEqual([{ title: '第一条 新', body: '新正文', important: false }])
     expect(d.user.intro).toBe(def.user.intro) // 引言固定·不被 CMS 覆盖
     expect(d.user.title).toBe(def.user.title) // 标题固定
   })
