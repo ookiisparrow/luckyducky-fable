@@ -9,7 +9,7 @@ const obj = (v: unknown): Record<string, any> => (v && typeof v === 'object' ? (
 const arr = (v: unknown): any[] => (Array.isArray(v) ? v : [])
 
 // ———————————————————————————— welcome（欢迎与激活）————————————————————————————
-export interface WelcomeModel {
+interface WelcomeModel {
   w1: { title: string; sub: string; warning: string }
   w2: { items: Array<{ title: string; desc: string }> }
 }
@@ -25,7 +25,7 @@ export function normalizeWelcome(raw: unknown): WelcomeModel {
 export const welcomePayload = (m: WelcomeModel): Record<string, unknown> => ({ ...normalizeWelcome(m) })
 
 // ———————————————————————————— catalogPlayer（目录与播放）————————————————————————————
-export interface CatalogPlayerModel {
+interface CatalogPlayerModel {
   catalog: { heroImage: string; resumeCta: string; emptyLesson: string }
   help: { contactTitle: string; videosTitle: string; faqTitle: string; faq: Array<{ q: string; a: string }> }
 }
@@ -58,7 +58,7 @@ export const ME_ENTRIES: Array<{ key: string; label: string }> = [
   { key: 'consent', label: '数据共享授权' },
   { key: 'about', label: '关于我们' },
 ]
-export interface MePageModel {
+interface MePageModel {
   defaultNickname: string
   entries: Array<{ key: string; label: string; visible: boolean }>
 }
@@ -76,7 +76,7 @@ export function normalizeMePage(raw: unknown): MePageModel {
 export const mePagePayload = (m: MePageModel): Record<string, unknown> => ({ ...normalizeMePage(m) })
 
 // ———————————————————————————— about（关于我们）————————————————————————————
-export interface AboutModel {
+interface AboutModel {
   lead: string
   sections: Array<{ title: string; body: string }>
 }
@@ -108,7 +108,7 @@ export interface AgreementClause {
   effectiveDate: string
   sections: Array<{ title: string; body: string }>
 }
-export interface AgreementModel {
+interface AgreementModel {
   user: AgreementClause
   privacy: AgreementClause
   history: Array<{ part: string; version: string; at: string }> // 只读
