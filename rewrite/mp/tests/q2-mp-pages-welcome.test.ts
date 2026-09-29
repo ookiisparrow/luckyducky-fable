@@ -70,6 +70,17 @@ describe('激活页：兑课', () => {
     expect(page.data).toMatchObject({ phase: 'result', kind: 'activated', courseId: 'c1', bg: 'https://img/c1-w.png', courseTitle: '小棉鸭入门', busy: false })
   })
 
+  it('大白话：扫码带码进来、兑课还没回——先显示「正在激活」加载态，不闪「去扫卡」提示（UI 审查 2026-09-29）', async () => {
+    handlers.activateCourse = () => new Promise(() => {})
+    const page = await mount({ code: 'LD1' })
+    expect(page.data.phase).toBe('loading')
+    const live = welcomeWxml.replace(/<!--[\s\S]*?-->/g, '')
+    const loading = live.match(/<block wx:elif="\{\{phase === 'loading'\}\}">([\s\S]*?)<\/block>/)
+    expect(loading?.[1]).toMatch(/<px-anim name="loader"/)
+    expect(loading?.[1]).toMatch(/class="t-sys[^"]*">正在激活…</)
+    expect(loading?.[1]).not.toMatch(/class="k /) // 加载中不给任何键（老板选「居中转圈+一行小字」）
+  })
+
   it('大白话：没带码进来——停在「用微信扫卡」提示态，不兑课；页面没有手输入口（老板拍板不做输码/扫码）', async () => {
     const page = await mount()
     await flush()
@@ -140,7 +151,7 @@ describe('激活页：兑课', () => {
     page.onUnload()
     release({ ok: true, state: 'activated', courseId: 'c1' })
     await flush()
-    expect(page.data.phase).toBe('nocode')
+    expect(page.data.phase).toBe('loading')
   })
 
   it('大白话：兑课已回、课程名还在路上就退出了页面——迟到的课程名不再写进页面', async () => {

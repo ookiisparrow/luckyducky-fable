@@ -2,6 +2,7 @@
   "navigationStyle": "custom",
   "backgroundColor": "#fafaf8",
   "usingComponents": {
-    "px-i": "/components/px-i/px-i"
+    "px-i": "/components/px-i/px-i",
+    "px-anim": "/components/px-anim/px-anim"
   }
 }

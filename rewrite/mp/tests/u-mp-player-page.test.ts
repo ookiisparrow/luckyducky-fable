@@ -2,6 +2,7 @@
 // 松手 seek 的 play 时机、进页并行暖取期望段地址。取址缓存用真实 lib/playbackCache，只桩云端 getPlaybackUrl。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import playerWxml from '../pages/player/player.wxml?raw'
 
 const { urlMock, trackMock, courseMock, goBackMock, faqMock } = vi.hoisted(() => ({
   urlMock: vi.fn(),
@@ -76,6 +77,50 @@ beforeEach(() => {
   courseMock.mockReset().mockResolvedValue({ failed: false, course: COURSE })
   goBackMock.mockReset()
   faqMock.mockReset()
+})
+
+describe('首帧前不黑屏：起播前转圈、iOS 拦自动播放换播放键（UI 审查 2026-09-29·老板选「只转圈不加字」）', () => {
+  it('大白话：地址到了还没真开播——started 为假（显示转圈）；真开播置真；换段重新复位', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s1'), 'enter')
+    await flush()
+    expect(page.data.started).toBe(false)
+    page.onVideoPlay()
+    expect(page.data.started).toBe(true)
+    await page.playSegment(seg('s2'), 'seg')
+    await flush()
+    expect(page.data).toMatchObject({ started: false, blocked: false })
+  })
+
+  it('大白话：视频信息到了 1 秒还没开播（iOS 拦了自动播放）——转圈换成播放键；正常起播则不换', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s1'), 'enter')
+    await flush()
+    vi.useFakeTimers()
+    try {
+      page.onVideoMeta()
+      vi.advanceTimersByTime(999)
+      expect(page.data.blocked).toBe(false)
+      vi.advanceTimersByTime(1)
+      expect(page.data.blocked).toBe(true)
+      page.onVideoPlay() // 用户点了播放键真起播：播放键撤掉
+      expect(page.data.blocked).toBe(false)
+      page.onVideoMeta() // 已起播：再来元数据也不再判拦截
+      vi.advanceTimersByTime(1000)
+      expect(page.data.blocked).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：画面层——起播前只有转圈（不加字）；「单击画面」提示条与缓冲角标都等真开播后才出；被拦时显示播放键', () => {
+    const live = playerWxml.replace(/<!--[\s\S]*?-->/g, '')
+    const zone = live.match(/<view wx:if="\{\{src && !segDone\}\}" class="lp-tapzone"[\s\S]*?\n {6}<\/view>/)?.[0] ?? ''
+    expect(zone).toMatch(/<view wx:if="\{\{!started && !blocked\}\}" class="lp-first-loader"><px-anim name="loader" size="2" dark \/><\/view>/)
+    expect(zone).toMatch(/wx:if="\{\{state === 'playing' && started && !hintDismissed\}\}" class="t-sys lp-tap-hint"/)
+    expect(zone).toMatch(/wx:if="\{\{paused \|\| blocked\}\}" class="lp-pause-badge"/)
+    expect(zone).toMatch(/wx:if="\{\{buffering && !paused && started\}\}"/)
+  })
 })
 
 describe('切段落点：上/下一段按钮态 + 下一段预热', () => {
