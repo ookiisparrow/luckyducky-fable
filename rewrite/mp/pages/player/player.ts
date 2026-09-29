@@ -83,6 +83,8 @@ Page({
     segDone: false, // 段落播完：不自动切下一段，停在完成态给用户看通栏重播/自己切段
     strip: null as LessonStrip | null, // 顶条两行标题 + 分段进度条浮层数据源（lib/player lessonStrip）
     capText: '', // segstrip 左侧文案（三态，见 buildCapText）
+    started: false, // 本段是否已真开播（bind:play 置真·换段复位）：假时画面叠转圈，防首帧前黑屏（UI 审查 2026-09-29）
+    blocked: false, // 元数据到了 1s 仍未开播＝iOS 拦了自动播放：转圈换成播放键（点画面即 play·见 onTapVideo）
     hintDismissed: false, // 单击提示条是否已被首次 tap 关闭（页面实例级·不持久化·无定时器）
     seekPct: 0, // 自绘 seek 条填充百分比（0–100·非拖动期 onTimeUpdate 低频维护·驱动 fill 宽/handle left；拖动期由 seek.wxs setStyle 接管·seeking 冻结此字段不抢写）
     snapName: '', // 拖动磁吸命中的关键动作节点名（seeking 时气泡文案·onSeekTick 刷新·未命中为空串）
@@ -213,6 +215,8 @@ Page({
       canPrev: !!navSegment(this.course, seg.segmentId, -1),
       canNext: !!next,
       paused: false,
+      started: false,
+      blocked: false,
       curSec: 0,
       durSec: 0,
       curClock: '0:00',
@@ -298,7 +302,7 @@ Page({
   onVideoPlay() {
     this.onFirstPlay()
     this.clearBuffering() // 恢复播放＝缓冲已过（waiting 的恢复信号之一）
-    this.setData({ paused: false })
+    this.setData({ paused: false, started: true, blocked: false })
     // 用户经系统手势/重播外路径恢复播放时，完成态不该残留：常规路径已由 onReplay/playSegment 复位，
     // 这里兜底任何其他恢复播放的入口。
     if (this.data.segDone) this.exitSegDone()
@@ -429,6 +433,15 @@ Page({
 
   // 元数据就绪（v5 视频铺满弹性舞台 object-fit:contain，不再按素材比例改框高）。
   onVideoMeta() {
+    // 自动播放被拦兜底：元数据到了再等 1s 仍没 bind:play → 显示播放键（等 1s 防正常起播时播放键一闪）。
+    // 退页/换段后回调复核即返回，无需清理定时器。
+    if (!this.firstFrameReported) {
+      const token = this.playToken
+      setTimeout(() => {
+        if (this.unloaded || token !== this.playToken || this.firstFrameReported) return
+        this.setData({ blocked: true })
+      }, 1000)
+    }
     // 续播秒双保险（根因#15）：initial-time 只在 <video> 首挂载读一次、平台偶有不生效（官方 issue #83 变体）。
     // 本段有未消费续播位置（_resumeAt>0）时，元数据就绪即兜底——离目标 >2s 判为未落位、seek 一次；消费清零（一次性）。
     // 无同步读 currentTime 的 API，用最近 timeupdate 的 _at 近似（元数据就绪时通常仍为 0→触发一次幂等 seek 到目标·

@@ -83,6 +83,10 @@ Page({
     // 封面时效兜底（同 lib/cart freshCover·病根#15）：草稿里的 cover 可能是
     // 结算前很久（购物车页/详情页）快照下的持久化临时址（约 2h 时效），到本页展示时可能已过期挂图；
     // allRaw 命中会话缓存零云调用（miss 兜底重拉一次，同 cart.ts onLoad 写法）。
+    // 默认地址是同步本地读：先上屏，不等 await——否则首帧先闪黄灯「添加收货地址」（UI 审查 2026-09-29）。
+    // 商品行/金额仍等最新价再渲染：宁可短暂留空，也不在付款页先显旧价再跳金额。
+    const a0 = addr.defaultAddress()
+    this.setData({ address: a0 && view(a0) })
     const allRaw = (await getAllProducts()) || []
     if (this.data.submitting || this.unloaded) return // 恢复点复核：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
     // 草稿里是加购/进页时的价，云端按现价扣：按最新商品档覆盖后再算应付（不在货架的行不动，提交时云端拒单点名移出）

@@ -49,7 +49,7 @@ const WELCOME_W1_DEFAULT = {
 }
 const WELCOME_W2_DEFAULT: WelcomePointVM[] = [
   { icon: 'clapperboard', title: '跟着分段视频，一步一步来', desc: '每节课拆成了很短的小段落，看一段钩一段，不用倒来倒去找位置。' },
-  { icon: 'life-buoy', title: '卡住了，随时按「求助」', desc: '播放页中间那颗按钮永远在——联系客服、帮助视频、常见问题都在里面。' },
+  { icon: 'life-buoy', title: '卡住了，随时按「求助」', desc: '播放页右下角那颗「求助」键——联系客服、帮助视频、常见问题都在里面。' },
   { icon: 'bookmark-check', title: '进度自动保存', desc: '随时离开随时回来，下次打开直接接着上次的位置继续。' },
 ]
 
@@ -172,14 +172,19 @@ export interface AgreementDocVM {
   title: string
   updated: string
   intro: string
-  articles: AboutSectionVM[]
+  articles: AgreementArticleVM[]
 }
+/** important＝正文含「重要条款」：按原文认（CMS 覆盖的条款也生效），页面据此墨色加粗（民法典§496 显著提示）。 */
+type AgreementArticleVM = AboutSectionVM & { important: boolean }
+/** 默认全文（条款不带 important·由 markImportant 在映射时统一算）。 */
+type AgreementDefault = Omit<AgreementDocVM, 'articles'> & { articles: AboutSectionVM[] }
+const markImportant = (a: AboutSectionVM): AgreementArticleVM => ({ ...a, important: a.body.includes('重要条款') })
 interface AgreementVM {
   user: AgreementDocVM
   privacy: AgreementDocVM
 }
 
-const USER_DEFAULT: AgreementDocVM = {
+const USER_DEFAULT: AgreementDefault = {
   title: '用户协议',
   updated: '2026-06',
   intro: `欢迎使用 ${BRAND_NAME}（以下称“本小程序”）。本协议是你与本小程序经营者之间就使用本小程序服务所订立的协议。请你在使用前仔细阅读，特别是关于退货权、免除或限制责任的条款。你勾选同意或开始使用本小程序，即视为已阅读并接受本协议全部内容。`,
@@ -197,7 +202,7 @@ const USER_DEFAULT: AgreementDocVM = {
   ],
 }
 
-const PRIVACY_DEFAULT: AgreementDocVM = {
+const PRIVACY_DEFAULT: AgreementDefault = {
   title: '隐私政策',
   updated: '2026-06',
   intro: `${BRAND_NAME}（以下称“本小程序”）尊重并保护你的个人信息。本政策说明我们如何收集、使用、存储与保护你的信息，以及你享有的权利。我们仅在为你提供服务所必需的范围内收集信息，坚持“最小必要”原则。特别说明：本小程序不通过微信授权获取你的手机号（下单时的收货联系电话由你自行填写、仅用于配送联系）。`,
@@ -217,13 +222,13 @@ const PRIVACY_DEFAULT: AgreementDocVM = {
 
 /** 单文档映射（user/privacy 共用）：effectiveDate→更新日期回退默认；sections→条款条目、空/全脏回退默认全文；
  *  intro/title 为固定合规文本恒取默认（契约无字段·勿被 CMS 覆盖）。 */
-function mapAgreementDoc(raw: unknown, def: AgreementDocVM): AgreementDocVM {
+function mapAgreementDoc(raw: unknown, def: AgreementDefault): AgreementDocVM {
   const d = obj(raw)
   return {
     title: def.title, // 固定（导航栏标题·契约无字段）
     updated: str(d.effectiveDate, def.updated),
     intro: def.intro, // 固定合规引言（契约无字段·勿覆盖）
-    articles: arr(d.sections, titleBody, def.articles),
+    articles: arr(d.sections, titleBody, def.articles).map(markImportant),
   }
 }
 
