@@ -1,15 +1,13 @@
 // 编辑资料：微信头像昵称填写能力（button open-type=chooseAvatar——能力按钮属 button 例外）。
 // 头像临时路径先传云存储换 cloud:// 再同步（云端只收 cloud:// 或空）；上传失败昵称照常同步不带头像字段。
 import { tapHaptic } from '../../lib/haptics'
-import { login, updateProfile, deleteAccount } from '../../api/user'
+import { login, updateProfile } from '../../api/user'
 import { goBackOrHome } from '../../lib/nav'
-import { clearAll as clearAddresses } from '../../lib/address'
 import { loginGate } from '../../lib/loginGate'
 import { writeStoredCont } from '../../lib/meCont'
 import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 import { fxHint } from '../../lib/pxFx'
-import { clearConsentHint } from '../../lib/consent'
 import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
@@ -31,23 +29,23 @@ Page({
     busy: false,
     loading: true, // login 在途：不画空白可编辑档（根因#14·失败≠空档案）
     loaded: false, // 资料是否成功载入（login 成功）·未载入不允许保存（防读故障→空字段→破坏性覆盖清空已存 phone/bio）
-    holdDel: false, // 正在按住「删除资料」（驱动红色填充）
+    holdOut: false, // 正在按住「退出登录」（驱动墨色填充）
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
   orig: { nickname: '', phone: '' }, // 载入时的原值：判断有没有改动（放弃确认）
   unloaded: false, // 保存在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
-  // 账号操作（v5 D3·老板拍板从「我」页挪来）：删除＝按住 0.9s 再弹一次后果确认（删除不可恢复·隐私政策第六条）
-  _holdDel: null as Hold | null,
-  _deleting: false,
+  // 账号操作（老板 2026-09-30·§39）：退出登录＝按住 0.6s（设计稿 15 题参数）。只退本机登录态，云端资料/课程/进度一概不动，
+  // 同一微信再登全部回来。删除个人资料挪到隐私政策正文末尾（pages/agreement）。
+  _holdOut: null as Hold | null,
   onUnload() {
     this.unloaded = true
-    this._holdDel?.cancel()
+    this._holdOut?.cancel()
     if (this.backTimer) clearTimeout(this.backTimer) // 延时返回坞清理
   },
   async onLoad() {
-    this._holdDel = createHold(900, () => this.confirmDelete(), {
-      onQuick: () => fxHint(this, '按住删除资料'),
-      onChange: (v) => this.setData({ holdDel: v }),
+    this._holdOut = createHold(600, () => this.doLogout(), {
+      onQuick: () => fxHint(this, '按住退出登录'),
+      onChange: (v) => this.setData({ holdOut: v }),
     })
     let user: Record<string, any> | null = null
     try {
@@ -102,57 +100,30 @@ Page({
     if (e && e.currentTarget.dataset.f === 'nickname' && typeof v === 'string' && v !== this.data.nickname) this.sync({ nickname: v })
     this.setData({ focus: '' })
   },
-  onDeleteStart(e: WechatMiniprogram.TouchEvent) {
-    if (this._deleting) return
+  onLogoutStart(e: WechatMiniprogram.TouchEvent) {
     keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
     const t = e.touches[0]
-    this._holdDel?.start(t?.clientX, t?.clientY)
+    this._holdOut?.start(t?.clientX, t?.clientY)
   },
-  onDeleteMove(e: WechatMiniprogram.TouchEvent) {
+  onLogoutMove(e: WechatMiniprogram.TouchEvent) {
     const t = e.touches[0]
-    if (t) this._holdDel?.move(t.clientX, t.clientY) // 手指滑开超 10px 作废（顺势滚动不误删）
+    if (t) this._holdOut?.move(t.clientX, t.clientY) // 手指滑开超 10px 作废（顺势滚动不误退）
   },
-  onDeleteEnd() {
-    this._holdDel?.end()
+  onLogoutEnd() {
+    this._holdOut?.end()
   },
-  onDeleteCancel() {
-    this._holdDel?.cancel()
+  onLogoutCancel() {
+    this._holdOut?.cancel()
   },
-  confirmDelete() {
+  // 只清本机登录态与「我」页继续学习旧卡；地址簿（只存本机）与授权提示留着——同一微信再登，一切照旧
+  doLogout() {
     tapHaptic()
-    wx.showModal({
-      title: '删除资料',
-      content: '删除后这个微信不能再回到你的个人资料。学习记录和地址都会没有。订单还在。',
-      confirmText: '删除',
-      confirmColor: '#D9483B', // 不可恢复操作：确认键警示红（= tokens --v5-err）
-      success: (r) => {
-        if (r.confirm) void this.runDeleteAccount()
-      },
-    })
-  },
-  async runDeleteAccount() {
-    if (this._deleting) return
-    this._deleting = true
-    wx.showLoading({ title: '删除中', mask: true }) // 遮罩挡住在途连点/返回（删除要跑好几步服务端批删）
-    let r: { ok: boolean }
-    try {
-      r = await deleteAccount()
-    } finally {
-      wx.hideLoading()
-      this._deleting = false
-    }
-    if (!r.ok) {
-      fxHint(this, '没删成请稍后再试')
-      return
-    }
-    clearAddresses()
-    clearConsentHint() // 服务端已把数据共享授权重置；本机旧提示别再显示「已同意」
     loginGate.logout()
-    writeStoredCont(null) // 「我」页继续学习旧卡一并清掉（回去不再先画已删的课）
-    wx.showToast({ title: '已删除', icon: 'none' }) // 随即退回上一页：原生提示跨页不断
+    writeStoredCont(null)
+    wx.showToast({ title: '已退出登录', icon: 'none' }) // 随即退回上一页：原生提示跨页不断
     if (!this.unloaded) this.leaveNow()
   },
-  /** 删除后直接走：先撤放弃确认的拦截（有改动也不再问），渲染落地后再返回。 */
+  /** 退出后直接走：先撤放弃确认的拦截（有改动也不再问），渲染落地后再返回。 */
   leaveNow() {
     this.setData({ dirty: false }, () => goBackOrHome())
   },

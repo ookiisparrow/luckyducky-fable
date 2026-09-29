@@ -157,6 +157,18 @@ describe('协议「重要条款」显著提示（UI 审查 2026-09-29·民法典
   })
 })
 
+describe('隐私政策第六条与「退出登录 / 删除个人资料」对齐（老板 2026-09-30 定稿·§39）', () => {
+  it('大白话：删除个人资料在政策末尾、课程与学习进度保留、可随时退出登录不删资料；不再说删了就回不到课程', () => {
+    const p = mapAgreement(null).privacy
+    const six = p.articles.find((a) => a.title.startsWith('第六条'))?.body ?? ''
+    expect(six).toContain('可在本政策末尾使用“删除个人资料”')
+    expect(six).toContain('你已购买并激活的课程与学习进度作为交易与服务记录保留')
+    expect(six).toContain('退出不删除任何资料')
+    expect(JSON.stringify(p.articles)).not.toContain('不能再回到原来的个人资料与课程')
+    expect(p.updated).toBe('2026-09')
+  })
+})
+
 describe('mapAgreement（用户协议/隐私政策·缺档回退默认全文·intro 固定合规文本）', () => {
   it('大白话：整档 null → user/privacy 两文档默认全文（含引言 + ≥8 条条款）', () => {
     const d = mapAgreement(null)

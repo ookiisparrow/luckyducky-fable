@@ -115,10 +115,11 @@ async function upsertUser(db: any, OPENID: string, patch: Record<string, unknown
 }
 
 /**
- * 自助删除资料（隐私政策第五/六条「删除资料后删除或匿名化个人资料」）：
- * 抹掉可识别个人资料，摘掉课程权限与客服身份桥；公开评价改匿名署名（评分与内容保留）、
+ * 自助删除个人资料（隐私政策第五/六条「删除资料后删除或匿名化个人资料」）：
+ * 抹掉可识别个人资料（昵称/头像/签名/手机号/unionid）、摘掉客服身份桥；公开评价改匿名署名（评分与内容保留）、
  * 意见反馈删联系方式、节点拍照连文件一起删；订单行依法留存。
- * 同一微信再登是空身份：资料空、课看不了；旧码不能凭本人身份抢回（activatedBy 改成 deleted:openid）。
+ * **已解锁课程、学习进度、激活卡归属一律保留**（老板 2026-09-30·决策记录 §39）：课程是付费购买的权益，
+ * 和订单一样按交易与服务记录留存——同一微信再登，资料是空的，但课照样能看、进度接着学。
  */
 export const deleteAccount = withOpenId(
   withRateLimit('deleteAccount', { max: 5, windowMs: 60_000 }, async ({ db, OPENID }) => {
@@ -136,14 +137,8 @@ export const deleteAccount = withOpenId(
     await upsertUser(db, OPENID, blank, { createdAt: now })
 
     // 服务端条件批删/批改（无上界·各一次往返），串行：前一步失败后面不动。任一步失败直接抛→网关记账回
-    // INTERNAL，绝不报已删除却留着课权或旧码归属（根因#14：旧码仍归本人时重扫会走 activateCourse 自愈拿回课）。
-    await db.collection(COLLECTIONS.activations).where({ _openid: OPENID }).remove()
-    await db.collection(COLLECTIONS.progress).where({ _openid: OPENID }).remove()
+    // INTERNAL，绝不报已删除却留着客服身份桥（根因#14）。课程权限/进度/激活卡归属不在删除范围（§39）。
     await db.collection(COLLECTIONS.kfIdentity).where({ openid: OPENID }).remove()
-    await db
-      .collection(COLLECTIONS.qrcodes)
-      .where({ activatedBy: OPENID })
-      .update({ data: { activatedBy: 'deleted:' + OPENID } })
     await db
       .collection(COLLECTIONS.reviews)
       .where({ _openid: OPENID })

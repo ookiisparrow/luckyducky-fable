@@ -1,4 +1,4 @@
-// 「我」页继续学习卡的本地旧卡（冷启首帧先画·后台再刷）：我页读写；编辑资料页删除资料时清掉。
+// 「我」页继续学习卡的本地旧卡（冷启首帧先画·后台再刷）：我页读写；退出登录 / 删除个人资料时清掉。
 import { type ContinueTarget } from './continueResolve'
 import { readStorage } from '../utils/storage'
 

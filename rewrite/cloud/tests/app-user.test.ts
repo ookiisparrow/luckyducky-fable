@@ -140,7 +140,7 @@ describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单
     expect(u.deletedAt).toBeGreaterThan(0)
   })
 
-  it('大白话：删完课单和进度空、旧码不能再抢回、订单行还在', async () => {
+  it('大白话：删除个人资料不动已解锁课程——课单、学习进度、激活卡归属都在，同一微信照样看课；客服身份桥摘掉；订单行还在（老板 2026-09-30·§39）', async () => {
     control.setOpenId('oME')
     await call('login')
     control.seed('activations', [
@@ -153,20 +153,16 @@ describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单
 
     await call('deleteAccount')
 
-    expect(control.dump('activations')).toEqual([])
-    expect(control.dump('progress')).toEqual([])
+    expect(control.dump('activations')).toHaveLength(1)
+    expect(control.dump('progress')).toHaveLength(1)
+    expect(control.dump('qrcodes')[0].activatedBy).toBe('oME')
     expect(control.dump('kfIdentity')).toEqual([])
-    expect(control.dump('qrcodes')[0].activatedBy).toBe('deleted:oME')
     expect(control.dump('orders')).toHaveLength(1)
     expect(control.dump('orders')[0]._id).toBe('ord1')
 
     const mine: any = await call('getMyCourses')
     expect(mine.ok).toBe(true)
-    expect(mine.list).toEqual([])
-
-    const again: any = await call('activateCourse', { code: 'K1' })
-    expect(again.ok).toBe(false)
-    expect(again.error).toBe('CODE_TAKEN')
+    expect(mine.list.map((x: any) => x.courseId)).toEqual(['c1'])
   })
 
   it('大白话：再登是空资料；再删一次仍成功（幂等）', async () => {
@@ -189,21 +185,19 @@ describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单
     expect(r).toEqual({ ok: false, error: 'RATE_LIMITED' })
   })
 
-  it('大白话：摘激活/进度/客服桥删失败不再装成已删除——ok:false INTERNAL；真没有仍 deleted:true', async () => {
+  it('大白话：摘客服身份桥删失败不再装成已删除——ok:false INTERNAL；真没有仍 deleted:true', async () => {
     control.setOpenId('oME')
     await call('login')
-    control.seed('activations', [
-      { _id: 'A1', _openid: 'oME', courseId: 'c1', code: 'K1', enteredAt: 111, createdAt: 1 },
-    ])
+    control.seed('kfIdentity', [{ _id: 'ext:eu1', openid: 'oME', unionid: 'u1' }])
     control.setBeforeRemove(({ coll }: any) => {
-      if (coll === 'activations') throw new Error('MOCK_DB_FAIL')
+      if (coll === 'kfIdentity') throw new Error('MOCK_DB_FAIL')
     })
     const fail: any = await call('deleteAccount')
     control.setBeforeRemove(null)
     expect(fail.ok).toBe(false)
     expect(fail.error).toBe('INTERNAL')
     expect(fail.deleted).toBeUndefined()
-    expect(control.dump('activations')).toHaveLength(1)
+    expect(control.dump('kfIdentity')).toHaveLength(1)
     control.reset()
     control.setOpenId('oME')
     await call('login')
