@@ -99,6 +99,10 @@ function prepareCacheDir(fs: WechatMiniprogram.FileSystemManager, dir: string): 
   })
 }
 
+// 二级页字库（tier2·190KB）在首层落定后再缓一拍：首启那 2–3 秒首页图片/商品/内容云调用正在抢带宽（性能批 #6·老板 2026-10-01）；
+// 本地缓存命中时读盘极快，这个延时只在首启真下载时有感；期间进二级页缺字走回退栈（与原来 tier2 晚于 tier1 到达同款体验）
+const TIER2_DEFER_MS = 3000
+
 // 逐层接力：本层全部文件落定（成功或最终失败）才起下一层——带宽优先级=首屏最先（用户拍板口径）。
 function loadTier(fs: WechatMiniprogram.FileSystemManager, cacheDir: string | null, tierIndex: number): void {
   const tier = BRAND_FONT_TIERS[tierIndex]
@@ -106,7 +110,10 @@ function loadTier(fs: WechatMiniprogram.FileSystemManager, cacheDir: string | nu
   let pending = tier.files.length
   const settle = () => {
     pending--
-    if (pending === 0) loadTier(fs, cacheDir, tierIndex + 1)
+    if (pending !== 0) return
+    const next = () => loadTier(fs, cacheDir, tierIndex + 1)
+    if (tierIndex === 0) setTimeout(next, TIER2_DEFER_MS)
+    else next()
   }
   for (const file of tier.files) {
     getFontBase64(fs, cacheDir, file.name, (data, fromCache, cachePath) => {
