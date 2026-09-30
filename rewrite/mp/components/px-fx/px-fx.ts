@@ -73,7 +73,7 @@ Component({
       cfHolds.set(
         this,
         createHold(CF_HOLD_MS, () => this.closeCf(true), {
-          onQuick: () => this.toast('按住' + (this.data.cf?.confirmText || '')), // 黑体（系统字提示框）
+          onQuick: () => this.toast('按住' + (this.data.cf?.confirmText || '')),
           onChange: (v) => this.setData({ cfHold: v }),
         })
       )
@@ -155,7 +155,7 @@ Component({
       cfDone.get(this)?.(false)
       return new Promise((resolve) => {
         cfDone.set(this, resolve)
-        this.setData({ cf: { confirmText: '确定', cancelText: '取消', ...o }, cfOut: false, cfHold: false }) // 黑体（确认半屏整块黑体）
+        this.setData({ cf: { confirmText: '确定', cancelText: '取消', ...o }, cfOut: false, cfHold: false })
       })
     },
     closeCf(ok: boolean) {

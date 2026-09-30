@@ -32,7 +32,8 @@ beforeAll(() => {
 wx.showToast({ title: '网络异常', icon: 'none' })
 wx.showModal({ title: '确认删除', content: '删除后不能恢复' })
 this.ping('收藏成功')
-fxHint(this, '敬请期待')
+fxHint(this, '即将开放')
+fxLoading(this, '提交中')
 const BODY = '我们希望每个人都能亲手创造自己的随身幸运物件这是一段长长的正文说明'
 const SUB = '务必细看' // 黑体：显示在 .t-sys 节点
 const CTRL = '限时抢购' // 说明：显示在黑体上（标记不在注释开头，照收）`
@@ -48,12 +49,14 @@ const has = (set, text) => [...text].every((c) => set.has(c))
 describe('品牌字体挑字口径（只收真用圆体显示的字）', () => {
   it('大白话：按钮、标题、界面固定文案、tab 名、绑定里的字面量、seed 商品名收进首屏字库', () => {
     expect(has(tiers.tier1, '购买首页已选择新品上架小棉鸭')).toBe(true)
+    // 自绘提示/加载/确认（px-fx·像素化 9c）是圆体（老板 2026-09-30「弹窗换圆体」），照收；原生 wx.show* 仍是系统字不收
+    expect(has(tiers.tier1, '即将开放提交中')).toBe(true)
     expect(has(tiers.tier2, '协议附送卡片')).toBe(true)
   })
 
-  it('大白话：黑体正文（含嵌套）、等宽数字、输入框、系统弹窗/提示、长段正文、云端报错文案都不收', () => {
+  it('大白话：黑体正文（含嵌套）、等宽数字、输入框、原生系统弹窗/提示、长段正文、云端报错文案都不收', () => {
     const all = new Set([...tiers.tier1, ...tiers.tier2])
-    for (const t of ['正文段落嵌套', '单号', '请输入昵称写点什么', '网络异常确认删除后不能恢复收藏成功敬请期待', '我们希望每个人都能亲手', '库存不足请稍后']) {
+    for (const t of ['正文段落嵌套', '单号', '请输入昵称写点什么', '网络异常确认删除后不能恢复收藏成功', '我们希望每个人都能亲手', '库存不足请稍后']) {
       expect([...t].filter((c) => all.has(c)).join(''), t).toBe('')
     }
   })

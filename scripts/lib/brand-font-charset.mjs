@@ -9,9 +9,10 @@
 //   tier2 = 其余页闭包 + mp 未被闭包触达的散文件 + seed 其余 − tier1
 //
 // 只收「真用圆体显示」的字（v5·老板 2026-09-28 拍板：圆体只留给按钮/标题/界面固定文案，正文长段和用户内容
-// 走黑体 .t-sys）。所以不收：wxml 里 .t-sys（黑体）/.mono（等宽）/.ld-toast 子树与 input/textarea；ts 里系统
-// 弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast——原生界面或系统字）的
-// 参数；ts 里 ≥20 汉字的长段（正文，页面上必须挂 .t-sys）；云端报错文案（只经提示上屏＝系统字）。
+// 走黑体 .t-sys）。所以不收：wxml 里 .t-sys（黑体）/.mono（等宽）子树与 input/textarea；ts 里原生系统
+// 弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping——系统字）的参数；ts 里 ≥20 汉字
+// 的长段（正文，页面上必须挂 .t-sys）；云端报错文案（不在仓内，经自绘提示上屏时缺字逐字回退系统字）。
+// 自绘提示/加载/确认（fxToast/fxHint/fxLoading/fxConfirm）是圆体，照收（老板 2026-09-30「弹窗换圆体」）。
 // 用户内容走黑体，所以不设 GB2312 兜底层。
 // ts 里显示在黑体节点上的短句：行尾加「// 黑体」注释即不收（见 extractFileCJK）。
 // ponytail: ts 字面量看不出最终渲染在哪，「≥20 字＝正文」是约定；长标题会漏收（逐字掉黑体），届时给它挂圆体
@@ -31,7 +32,7 @@ export const CJK_PUNCT = '，。、；：？！“”‘’（）《》〈〉【
 export const LONG_TEXT_CJK = 20 // ts 字面量里汉字数达到这个就当正文（黑体），不收
 
 // ---------- wxml：跳过黑体/等宽/提示子树与输入框，其余文字节点与属性全收 ----------
-const SYS_CLASS = /(^|\s)(t-sys|mono|ld-toast)(\s|$)/
+const SYS_CLASS = /(^|\s)(t-sys|mono)(\s|$)/
 const SELF_CLOSING = new Set(['input', 'textarea', 'image', 'import', 'include'])
 function wxmlCJK(src, into) {
   src = src.replace(/<!--[\s\S]*?-->/g, '').replace(/<wxs[\s\S]*?<\/wxs>/g, '')
@@ -57,9 +58,10 @@ function wxmlCJK(src, into) {
 }
 
 // ---------- ts/js 字符串字面量抽取（跳过注释；' " ` 三种；模板字面量跳 ${…}） ----------
-// dropNativeUi：系统弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping、fxToast、fxHint、fxLoading、
-// fxConfirm）括号里的字面量不收——原生界面或系统字，不用圆体（自绘提示框 .ld-toast 与确认半屏 .fx-cf 都是黑体·像素化 9c）。
-const NATIVE_UI_AT = /(?:wx\.(?:showToast|showModal|showLoading|showActionSheet)|ping|fxToast|fxHint|fxLoading|fxConfirm)\(/y
+// dropNativeUi：原生系统弹窗/提示调用（wx.showToast/showModal/showLoading/showActionSheet、ping）括号里的字面量不收——
+// 原生界面是系统字。自绘的 fxToast/fxHint/fxLoading/fxConfirm（px-fx 提示框与确认半屏）是圆体，照收（老板 2026-09-30）；
+// 确认半屏正文走 .t-sys 黑体，≥20 字的长段本来就按正文不收。
+const NATIVE_UI_AT = /(?:wx\.(?:showToast|showModal|showLoading|showActionSheet)|ping)\(/y
 function extractStringLiterals(src, { dropNativeUi = false } = {}) {
   const out = []
   let i = 0
