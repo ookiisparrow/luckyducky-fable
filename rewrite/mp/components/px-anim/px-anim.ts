@@ -24,9 +24,10 @@ Component({
       live.set(
         this,
         mountPixelView(this, { cols: 13, rows: 13 }, this.data.size, (t, P) => {
-          const tt = hold && t + delay >= hold ? hold : t + delay
+          const held = !!hold && t + delay >= hold
           const plot = this.data.dark ? (x: number, y: number, c: string) => P(x, y, PIXEL_ANIM_DARK[c] || c) : P
-          f(plot, tt, this.data.p >= 0 ? this.data.p : null)
+          f(plot, held ? hold : t + delay, this.data.p >= 0 ? this.data.p : null)
+          return !held // 定格后画面不再变：报静止停表，不再每 66ms 空算（切页掉帧排查·2026-09-30）
         })
       )
     },

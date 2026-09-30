@@ -101,6 +101,14 @@ Component({
     hide() {
       // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
       if (this.data.cover) setTimeout(() => this.clearCover(), SLIDE_MS + 140)
+      // 撒花没落完就跳页：立刻停循环、清画布——本页已看不见，接着画只会跟新页滑入抢帧（切页掉帧排查·2026-09-30）
+      const s = S.get(this)
+      if (s?.cv && s.cfRaf) {
+        s.cv.cancelAnimationFrame(s.cfRaf)
+        s.cfRaf = 0
+        s.bits.length = 0
+        if (!this.data.busy) s.x?.clearRect(0, 0, s.w, s.h)
+      }
     },
   },
   methods: {
