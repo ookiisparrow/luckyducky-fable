@@ -112,14 +112,14 @@ describe('静态小修', () => {
     for (const w of [homeWxml, orderWxml]) expect(live(w)).not.toMatch(/"(hover-start-time|hover-class)=/)
   })
   it('大白话：首页买家秀按正文作 key（昵称可能为空或重名）', () => {
-    expect(tagOf(homeWxml, 'class="hm-rv ')).toContain('wx:key="quote"')
+    expect(tagOf(homeWxml, 'class="hm-rv[ "]')).toContain('wx:key="quote"')
   })
   it('大白话：订单详情写了省略号的地方真能省略', () => {
     expect(rule(orderWxss, '.od-info-v')).toContain('white-space: nowrap')
   })
   it('大白话：商品卡、购物车缩略图/商品名、查看售后进度、匿名勾选、自绘返回键热区都有按下反馈', () => {
     expect(tagOf(homeWxml, 'class="hm-card"')).toContain('hover-class=')
-    expect(tagOf(cartWxml, 'class="ca-thumb ')).toContain('hover-class=')
+    expect(tagOf(cartWxml, 'class="ca-thumb[ "]')).toContain('hover-class=')
     expect(tagOf(cartWxml, 'class="ca-mid"')).toContain('hover-class=')
     expect(tagOf(orderWxml, 'od-as-go')).toContain('hover-class=')
     expect(tagOf(reviewWxml, 'rv-anon')).toContain('hover-class=')

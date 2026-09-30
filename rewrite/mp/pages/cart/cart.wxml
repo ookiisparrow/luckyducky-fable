@@ -14,7 +14,7 @@
               <px-i wx:if="{{item.selected}}" name="check" tone="var(--v5-violet)" />
             </view>
           </view>
-          <view class="ca-thumb px-clip-4" data-id="{{item.id}}" catch:tap="onOpen" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
+          <view class="ca-thumb" data-id="{{item.id}}" catch:tap="onOpen" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
             <!-- 焦点 50% 40%（设计稿 object-position）：<image> 的 aspectFill 只能居中，改背景图定焦点 -->
             <view wx:if="{{item.cover}}" class="ca-thumb-img" style="background-image: url('{{item.cover}}')"></view>
           </view>

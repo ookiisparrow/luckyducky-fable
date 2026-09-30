@@ -58,6 +58,15 @@ describe('页面不再写平滑圆角/模糊投影', () => {
     }
     expect(bad).toEqual([])
   })
+  // 老板 2026-09-30：所有图片取消倒角，一律直角（连同它们的加载占位块·买家秀卡片图铺满顶部，整卡直角）；标签/气泡/按键/其余卡片仍是阶梯
+  const IMAGES = ['hm-rv', 'ca-thumb', 'co-thumb', 'hm-card-media', 'hm-rs-media', 'mc-thumb', 'mc-skel-thumb', 'me-av', 'me-thumb', 'od-thumb', 'ol-thumb', 'pe-av', 'rv-photo-img', 'rv-pic', 'rv-thumb']
+  it('大白话：图片（缩略图、商品图、头像、晒图）及其占位块一律直角——不裁阶梯、不写圆角', () => {
+    const bad = []
+    const re = new RegExp(`class="[^"]*(?<![\\w-])(${IMAGES.join('|')})(?![\\w-])[^"]*"`, 'g')
+    for (const [f, s] of src('.wxml')) for (const m of s.matchAll(re)) if (/px-clip|px-skin/.test(m[0])) bad.push(`${f}: ${m[0]}`)
+    for (const [f, s] of src('.wxss')) for (const m of s.matchAll(/([^{}]+)\{([^}]*)\}/g)) if (/radius\s*:/.test(m[2]) && IMAGES.some((c) => new RegExp(`\\.${c}(?![\\w-])`).test(m[1]))) bad.push(`${f} ${m[1].trim()}`)
+    expect(bad).toEqual([])
+  })
   it('大白话：没有带模糊半径的投影（阶梯只配硬边）', () => {
     const bad = []
     for (const [f, s] of src('.wxss')) for (const m of s.matchAll(/box-shadow\s*:([^;]*);/g)) if (m[1].split(',').some((l) => /-?\d+px\s+-?\d+px\s+[1-9]\d*px/.test(l.trim().replace(/^inset\s+/, '')))) bad.push(`${f}: ${m[1].trim()}`)

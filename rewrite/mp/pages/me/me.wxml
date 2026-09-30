@@ -18,12 +18,12 @@
     <!-- 已登录：头像＝换头像能力键（open-type=chooseAvatar·隐私能力·页尾挂 privacy-sheet），选完直接上传保存；
          按头像任意处「换」角标下沉（同编辑资料页）。未登录：占位，点了打开登录半屏（先登录再换）。 -->
     <button wx:if="{{loggedIn}}" class="me-av-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" hover-start-time="20" hover-class="me-av-down" hover-stay-time="100">
-      <view class="me-av px-clip-6">
+      <view class="me-av">
         <image class="me-av-img" src="{{avatar || '/static/avatar-duck-16.svg'}}" mode="aspectFill" />
       </view>
       <view class="k k-sm k-light me-av-k">换</view>
     </button>
-    <view wx:else class="me-av me-av-out px-clip-6" bind:tap="onLoginTap"></view>
+    <view wx:else class="me-av me-av-out" bind:tap="onLoginTap"></view>
     <view class="me-id-t">
       <text class="t-sys me-nick">{{nickname}}</text>
       <text wx:if="{{!loggedIn}}" class="t-sys me-id-sub">登录后同步订单与学习进度</text>
@@ -37,7 +37,7 @@
        缩略图：课程数据（publicCourse）不带封面图，这里一直是斜纹占位。 -->
   <block wx:if="{{loggedIn}}">
   <view wx:if="{{cont}}" class="me-card px-skin px-card" hover-start-time="20" hover-class="me-card-down" hover-stay-time="100" bind:tap="onContinue">
-    <view class="me-thumb px-clip-4"></view>
+    <view class="me-thumb"></view>
     <view class="me-card-t">
       <text class="t-sys me-card-sub">继续学习 · {{cont.courseTitle}}</text>
       <text class="t-sys me-card-main">{{contMain || cont.lessonName}}</text>
@@ -58,7 +58,7 @@
     <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" catch:tap="onGoShop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去逛逛</view>
   </view>
   <view wx:else class="me-card px-skin px-card">
-    <view class="me-thumb skel px-clip-4"></view>
+    <view class="me-thumb skel"></view>
     <view class="me-card-t">
       <view class="skel me-skel-l"></view>
       <view class="skel me-skel-s"></view>
