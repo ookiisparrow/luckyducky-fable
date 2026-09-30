@@ -39,6 +39,11 @@ function paint(x: Ctx, runs: Runs) {
   }
 }
 
+// 撒花跨页接着落（老板 2026-10-01「切页后撒花在下一页继续落」）：本页没落完就跳页 / 返回，把剩下的花交给
+// 新露面那页的 px-fx 接着落（坐标是屏幕坐标，接得上）；本页自己的照旧落完。1 秒内认领有效（花寿命 1.5–3 秒）。
+let cfCarry: { bits: Bit[]; at: number; owner: object } | null = null
+const CARRY_MS = 1000
+const readyOnes = new WeakSet<object>() // 画布已上屏的实例：新页 show 早于 ready，要等 ready 才认领
 // 提示定时器每实例一份（页面栈里多页各挂一个·共用一个会被别页的提示清掉，本页提示就卡住不消失）
 const toastTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 // 跨页接力（像素化 9c 替原生 showToast·原生提示是全局的、跳页还在）：提示期间换页（返回/跳转），
@@ -79,7 +84,9 @@ Component({
       )
     },
     ready() {
+      readyOnes.add(this)
       if (this.data.cover) setTimeout(() => this.uncover(), SLIDE_MS + 60)
+      void this.claimConfetti()
     },
     detached() {
       const s = S.get(this)
@@ -97,10 +104,13 @@ Component({
   pageLifetimes: {
     show() {
       this.claimToast()
+      if (readyOnes.has(this)) void this.claimConfetti() // 返回到本页：画布早已就绪，直接接
     },
     hide() {
       // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
       if (this.data.cover) setTimeout(() => this.clearCover(), SLIDE_MS + 140)
+      const s = S.get(this)
+      if (s && s.bits.length) cfCarry = { bits: s.bits.map((b) => ({ ...b })), at: Date.now(), owner: this }
     },
   },
   methods: {
@@ -223,7 +233,20 @@ Component({
       if (!s || !s.cv || !s.x) return
       party(s.bits, k, s, big, n)
       if (big) burstHaptic()
-      if (s.cfRaf) return
+      this.runConfetti(s)
+    },
+    /** 别页没落完的花：本页露面时接过来接着落。 */
+    async claimConfetti() {
+      const t = cfCarry
+      if (!t || t.owner === this || Date.now() - t.at > CARRY_MS) return
+      cfCarry = null
+      const s = await this.canvas()
+      if (!s || !s.cv || !s.x) return
+      s.bits.push(...t.bits)
+      this.runConfetti(s)
+    },
+    runConfetti(s: St) {
+      if (s.cfRaf || !s.cv || !s.x) return
       s.cfLast = 0
       const loop = (now: number) => {
         const dt = s.cfLast ? Math.min(48, now - s.cfLast) : 16.67
