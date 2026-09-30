@@ -9,7 +9,7 @@
     data-path="{{item.path}}"
     bind:tap="onTap"
    data-k="{{active === item.id ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-    <text>{{item.label}}</text>
+    <px-i name="{{item.id}}" />
     <text wx:if="{{item.id === 'cart' && cartCount > 0}}" class="t-sys ld-tab-count {{bump ? 'ld-tab-bump' : ''}}">{{cartCount > 99 ? '99+' : cartCount}}</text>
   </view>
 </view>

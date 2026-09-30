@@ -22,9 +22,10 @@ Component({
     // 隐私半屏漏了这一步时按键被 tabBar 盖住、半屏关不掉（老板真机 2026-09-29「我」页换头像）。
     hidden: false,
     tabs: [
-      { id: 'home', label: '首页', path: '/pages/home/home' },
-      { id: 'cart', label: '购物车', path: '/pages/cart/cart' },
-      { id: 'me', label: '我', path: '/pages/me/me' },
+      // 键里只放像素图标（id 即 px-i 字形名·老板 2026-09-30 照设计稿去文字）
+      { id: 'home', path: '/pages/home/home' },
+      { id: 'cart', path: '/pages/cart/cart' },
+      { id: 'me', path: '/pages/me/me' },
     ],
   },
   lifetimes: {
