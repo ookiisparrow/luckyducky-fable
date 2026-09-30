@@ -45,7 +45,7 @@
       <!-- 晒图横向一行不换行（设计稿 A3·最多 9 张超出横滑）；图没到时格子是 135° 斜纹占位 -->
       <scroll-view class="rv-pics" wx:if="{{item.photos.length}}" scroll-x enhanced show-scrollbar="{{false}}">
         <view class="rv-pics-row">
-          <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="*this" class="rv-pic px-clip-4" src="{{ph}}" mode="aspectFill"
+          <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="*this" class="rv-pic" src="{{ph}}" mode="aspectFill"
             lazy-load data-url="{{ph}}" data-urls="{{item.photos}}" bind:tap="onPreviewPhoto" />
         </view>
       </scroll-view>

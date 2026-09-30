@@ -10,7 +10,7 @@
 
     <view class="rv-main">
       <view class="rv-item" wx:if="{{item}}">
-        <view class="rv-thumb px-clip-4"><image wx:if="{{cover}}" class="rv-thumb-img" src="{{cover}}" mode="aspectFill" /></view>
+        <view class="rv-thumb"><image wx:if="{{cover}}" class="rv-thumb-img" src="{{cover}}" mode="aspectFill" /></view>
         <text class="t-sys rv-item-t">{{item}}</text>
       </view>
       <text class="rv-q">{{q}}</text>
@@ -43,7 +43,7 @@
         <!-- 缩略图 +「＋」同一行：「＋」是最后一格，加满 maxPhotos 张后消失（UI 审查 6 问 5b） -->
         <view class="rv-photos">
           <view class="rv-photo" wx:for="{{photos}}" wx:key="*this">
-            <image class="rv-photo-img px-clip-6" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
+            <image class="rv-photo-img" src="{{item}}" mode="aspectFill" data-url="{{item}}" bind:tap="onPreviewPhoto" />
             <view class="rv-photo-del" data-i="{{index}}" catch:tap="onDelPhoto"><view class="rv-photo-x px-clip-6"><px-i name="times" tone="var(--v5-surface)" /></view></view>
           </view>
           <view wx:if="{{photos.length < maxPhotos}}" class="k k-flat rv-add" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onAddPhotos" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">

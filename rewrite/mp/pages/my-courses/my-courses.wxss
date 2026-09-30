@@ -116,7 +116,6 @@ page {
   width: 64px;
   height: 64px;
   flex: 0 0 auto;
-  border-radius: 4px;
 }
 
 /* 失败 / 空 */

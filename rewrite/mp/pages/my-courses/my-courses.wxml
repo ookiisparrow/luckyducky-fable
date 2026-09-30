@@ -31,7 +31,7 @@
   <view class="mc-list" wx:elif="{{list.length}}">
     <view class="k-card mc-card px-skin px-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-start-time="20" hover-class="k-card-down" hover-stay-time="100">
       <view class="mc-row">
-        <view class="mc-thumb px-clip-4"></view>
+        <view class="mc-thumb"></view>
         <view class="mc-body">
           <text class="t-sys mc-name">{{item.title}}</text>
           <!-- 进度没读到（progressUnknown·根因#14）：不画 0% 进度条冒充「一段没学过」。

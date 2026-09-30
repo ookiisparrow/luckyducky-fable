@@ -24,7 +24,7 @@
       <view class="ol-card px-skin px-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
         <view class="ol-skel-bar skel" style="width: 96px"></view>
         <view class="ol-row">
-          <view class="ol-thumb skel px-clip-4"></view>
+          <view class="ol-thumb skel"></view>
           <view class="ol-skel-col">
             <view class="ol-skel-bar skel" style="width: 60%"></view>
             <view class="ol-skel-bar skel" style="width: 36%"></view>
@@ -56,7 +56,7 @@
       </view>
       <view class="ol-row">
         <view class="ol-thumbs">
-          <view class="ol-thumb px-clip-4" wx:for="{{item.thumbs}}" wx:for-item="line" wx:key="lineId">
+          <view class="ol-thumb" wx:for="{{item.thumbs}}" wx:for-item="line" wx:key="lineId">
             <image wx:if="{{line.cover}}" class="ol-thumb-img" src="{{line.cover}}" mode="aspectFill" lazy-load />
           </view>
         </view>

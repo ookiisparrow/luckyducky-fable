@@ -8,7 +8,7 @@
 <scroll-view class="pe-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
 <!-- 加载中：骨架占位，不画空白可编辑档（根因#14） -->
 <view wx:if="{{loading}}" class="pe">
-  <view class="pe-av-wrap"><view class="pe-av skel px-clip-6"></view></view>
+  <view class="pe-av-wrap"><view class="pe-av skel"></view></view>
   <view class="pe-form">
     <view class="pe-skel skel"></view>
     <view class="pe-skel skel"></view>
@@ -25,7 +25,7 @@
   <view class="pe-av-wrap">
     <!-- 按头像任意处「换」键都下沉（hover-class 挂在能力按钮上，.pe-av-down .pe-av-k 落到键帽） -->
     <button class="pe-av-btn" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar" hover-start-time="20" hover-class="pe-av-down" hover-stay-time="100">
-      <view class="pe-av px-clip-6">
+      <view class="pe-av">
         <image wx:if="{{avatarTemp || avatar}}" class="pe-av-img" src="{{avatarTemp || avatar}}" mode="aspectFill" />
         <image wx:else class="pe-av-img" src="/static/avatar-duck-22.svg" mode="aspectFill" />
       </view>

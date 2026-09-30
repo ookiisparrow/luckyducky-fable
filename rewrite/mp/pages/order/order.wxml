@@ -62,7 +62,7 @@
     <!-- 商品（只读 ×N）+ 金额 -->
     <view class="od-card od-goods px-skin px-card">
       <view class="od-item" wx:for="{{vm.items}}" wx:key="lineId">
-        <view class="od-thumb px-clip-4">
+        <view class="od-thumb">
           <image wx:if="{{item.cover}}" class="od-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         </view>
         <view class="od-item-mid">
@@ -132,7 +132,7 @@
     <view class="od-skel-bar skel" style="width: 80%"></view>
   </view>
   <view class="od-card od-item px-skin px-card">
-    <view class="od-thumb skel px-clip-4"></view>
+    <view class="od-thumb skel"></view>
     <view class="od-item-mid">
       <view class="od-skel-bar skel" style="width: 60%"></view>
       <view class="od-skel-bar skel" style="width: 36%"></view>

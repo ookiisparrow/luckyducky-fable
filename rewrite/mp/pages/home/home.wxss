@@ -371,11 +371,14 @@ page {
 .hm-rail-reviews .hm-rail-row {
   gap: 12px;
 }
+/* 买家秀卡片直角（老板 2026-09-30「图片全直角」·图铺满卡片顶部，卡片跟着直角）：白底 + 1px 硬边发丝线 */
 .hm-rv {
   flex: 0 0 200px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--v5-surface);
+  box-shadow: 0 0 0 1px var(--v5-hair);
 }
 .hm-rv-media {
   aspect-ratio: 3 / 4;

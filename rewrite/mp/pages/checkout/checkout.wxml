@@ -28,7 +28,7 @@
     <!-- 商品 -->
     <view class="co-card co-items px-skin px-card">
       <view class="co-item" wx:for="{{items}}" wx:key="lineId">
-        <view class="co-thumb px-clip-4">
+        <view class="co-thumb">
           <!-- 焦点 50% 40%（设计稿 object-position）：<image> 的 aspectFill 只能居中，改背景图定焦点 -->
           <view wx:if="{{item.cover}}" class="co-thumb-img" style="background-image: url('{{item.cover}}')"></view>
         </view>
