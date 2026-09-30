@@ -50,21 +50,23 @@ describe('结业页「去评价」：收礼人（没有已完成订单）不再�
     courseMock.mockReset().mockResolvedValue(null)
     ordersMock.mockReset()
   })
-  it('大白话：自己买过（有已完成订单）——照旧「课程目录 + 去评价」', async () => {
+  // 老板 2026-09-30：结业页取消「课程目录」键——能评价只留「去评价」一颗主键，收礼人底部不出键（左上返回离开）
+  it('大白话：自己买过（有已完成订单）——底部只一颗「去评价」', async () => {
     ordersMock.mockResolvedValue({ ok: true, list: [{ id: 'o1' }] })
     const p = await mount()
     await p.onLoad({ courseId: 'c1' })
     expect(ordersMock).toHaveBeenCalledWith(undefined, 1, 'done')
     expect(p.data.canReview).toBe(true)
   })
-  it('大白话：别人送的（没有已完成订单）——不出「去评价」，「课程目录」做主键', async () => {
+  it('大白话：别人送的（没有已完成订单）——底部不出键；整页再没有「课程目录」', async () => {
     ordersMock.mockResolvedValue({ ok: true, list: [] })
     const p = await mount()
     await p.onLoad({ courseId: 'c1' })
     expect(p.data.canReview).toBe(false)
     const w = live(finishWxml)
-    expect(w).toMatch(/<block wx:if="\{\{canReview\}\}">[\s\S]*去评价[\s\S]*<\/block>/)
-    expect(w).toMatch(/wx:else class="k k-ink k-48 fn-main"[^>]*bind:tap="onCatalog"[^>]*>课程目录</)
+    expect(w).toMatch(/<block wx:if="\{\{canReview\}\}">\s*<view class="fn-dock-space"><\/view>\s*<view class="fn-dock">\s*<view class="k k-ink k-48 fn-main"[^>]*bind:tap="onReview"[^>]*>去评价<\/view>\s*<\/view>\s*<\/block>/)
+    expect(w).not.toMatch(/课程目录|onCatalog/)
+    expect(p.onCatalog).toBeUndefined()
   })
   it('大白话：查订单失败——不误藏，照旧显示「去评价」', async () => {
     ordersMock.mockResolvedValue({ ok: false, error: 'CALL_FAIL' })

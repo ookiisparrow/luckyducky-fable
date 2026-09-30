@@ -89,7 +89,7 @@
       <block wx:if="{{submitted}}"><px-anim name="checkin" size="2" dark hold="700" /><text>已提交</text></block>
       <block wx:elif="{{paying}}"><px-anim name="loader" size="2" dark /><text>正在拉起支付</text></block>
       <block wx:elif="{{submitting}}"><px-anim name="loader" size="2" dark /><text>提交中</text></block>
-      <text wx:else>提交订单</text>
+      <px-i wx:else name="check" />
     </view>
   </view>
 </view>

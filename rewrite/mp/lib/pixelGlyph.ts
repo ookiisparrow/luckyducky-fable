@@ -16,6 +16,13 @@ export const PIXEL_GLYPHS: Record<string, string[]> = {
   pause: ['XX.XX', 'XX.XX', 'XX.XX', 'XX.XX', 'XX.XX', 'XX.XX', 'XX.XX'],
   star: ['...X...', '..XXX..', 'XXXXXXX', '.XXXXX.', '..XXX..', '.XX.XX.', 'XX...XX'],
   star5: ['..X..', '.XXX.', 'XXXXX', '.XXX.', '.X.X.'],
+  // v6 图标键（交接包 design_handoff_v6_pixel_icons 2 · pixel-mini.js·老板 2026-09-30 采纳）
+  service: ['..XXXXX..', '.X.....X.', 'X.......X', 'X.......X', 'XX.....XX', 'XX.....XX', 'XX.....XX', '.......X.', '.....XX..'],
+  prev: ['X....X', 'X...XX', 'X..XXX', 'X.XXXX', 'X..XXX', 'X...XX', 'X....X'],
+  next: ['X....X', 'XX...X', 'XXX..X', 'XXXX.X', 'XXX..X', 'XX...X', 'X....X'],
+  help: ['.XXX.', 'X...X', '....X', '...X.', '..X..', '.....', '..X..'],
+  replay: ['..XXXX.X.', '.X....XX.', 'X....XXX.', 'X........', 'X.......X', 'X.......X', '.X.....X.', '..XXXXX..'],
+  trash: ['...XXX...', 'XXXXXXXXX', '.X.....X.', '.X.X.X.X.', '.X.X.X.X.', '.X.X.X.X.', '.X.....X.', '..XXXXX..'],
   // 底栏三键（设计稿 data-tabbar：键里只放图标·老板 2026-09-30）
   home: ['....X....', '...XXX...', '..XXXXX..', '.XXXXXXX.', 'XXXXXXXXX', '.XX...XX.', '.XX.X.XX.', '.XX.X.XX.', '.XXXXXXX.'],
   cart: ['XX.......', '.X.......', '.XXXXXXXX', '.XX.....X', '.XX.....X', '.XXXXXXXX', '.X.......', '.XXXXXXX.', '..X...X..'],

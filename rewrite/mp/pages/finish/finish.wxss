@@ -72,9 +72,6 @@ page {
   gap: 8px;
   background: var(--v5-canvas);
 }
-.fn-side {
-  flex: 1;
-}
 .fn-main {
-  flex: 1.6;
+  flex: 1;
 }

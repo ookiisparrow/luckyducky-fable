@@ -20,7 +20,7 @@
     <text class="t-sys ls-cs-note">登录即默认开启受托客服数据共享，可随时撤回</text>
 
     <view class="ls-row">
-      <view class="k k-flat k-48 ls-later" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">暂不登录</view>
+      <view class="k k-flat k-48 ls-later k-sq" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onClose" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="times" /></view>
       <!-- 始终墨黑主键做视觉引导（老板 2026-09-30 改·原「未勾协议置灰」）：未勾协议点了，协议行抖一下并提示先勾选（不代勾） -->
       <view class="k k-ink k-48 ls-go" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" catch:tap="onLogin" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">微信一键登录</view>
     </view>

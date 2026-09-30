@@ -42,10 +42,6 @@ Page({
     if (this.unloaded || !r || !r.ok) return
     this.setData({ canReview: Array.isArray(r.list) && r.list.length > 0 })
   },
-  onCatalog() {
-    tapHaptic()
-    wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.data.courseId })
-  },
   // 去评价：评价挂在订单行上，结业页不知道是哪笔订单——带去「我的订单 · 已完成」挑一单写（订单页有「写评价」）
   onReview() {
     tapHaptic()

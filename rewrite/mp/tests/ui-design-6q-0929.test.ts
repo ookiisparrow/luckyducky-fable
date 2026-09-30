@@ -116,8 +116,9 @@ describe('4b 目录页续学位置写在主键上', () => {
     expect(mapCatalog(COURSE, [{ courseId: 'c1', done: { s1: true, s2: true }, updatedAt: 1 }], 'c1').resumeLabel).toBe('继续第 2 课 · 段落 1')
     expect(mapCatalog(COURSE, [{ courseId: 'c1', done: { s1: true, s2: true, s3: true, s4: true }, updatedAt: 1 }], 'c1').resumeLabel).toBe('')
   })
-  it('大白话：页面主键优先显示系统生成的续学位置', () => {
+  it('大白话：页面主键优先显示系统生成的续学位置（v6 图标化后老板 2026-09-30 定目录主键还原：播放图标 + 续学文案）', () => {
     expect(live(catalogWxml)).toContain('{{resumeLabel || resumeCta}}')
+    expect(live(catalogWxml)).not.toMatch(/k-sq ct-start/)
   })
 })
 

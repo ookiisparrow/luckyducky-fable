@@ -2,6 +2,7 @@
   "navigationStyle": "custom",
   "backgroundColor": "#fafaf8",
   "usingComponents": {
+    "px-i": "/components/px-i/px-i",
     "privacy-sheet": "/components/privacy-sheet/privacy-sheet",
     "v5-nav": "/components/v5-nav/v5-nav",
     "leave-sheet": "/components/leave-sheet/leave-sheet",
