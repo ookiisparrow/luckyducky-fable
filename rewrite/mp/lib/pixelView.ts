@@ -26,8 +26,10 @@ const live = new Set<() => void>()
 let timer: ReturnType<typeof setTimeout> | null = null
 const pump = () => {
   timer = null
+  const t0 = Date.now()
   for (const step of [...live]) step()
-  if (live.size) timer = setTimeout(pump, FRAME_MS)
+  // 下一帧按本帧起点算，处理耗时不吃进间隔（模拟器实测：不补偿会从 15fps 掉到 13）；下限 16 防慢帧空转
+  if (live.size) timer = setTimeout(pump, Math.max(16, FRAME_MS - (Date.now() - t0)))
 }
 const wake = () => {
   if (!timer) timer = setTimeout(pump, 0)
