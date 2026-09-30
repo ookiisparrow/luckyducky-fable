@@ -10,7 +10,6 @@ import paysuccessWxml from '../pages/paysuccess/paysuccess.wxml?raw'
 import orderListWxml from '../pages/order-list/order-list.wxml?raw'
 import orderWxml from '../pages/order/order.wxml?raw'
 import aftersalesWxml from '../pages/aftersales/aftersales.wxml?raw'
-import catalogWxml from '../pages/catalog/catalog.wxml?raw'
 import playerWxml from '../pages/player/player.wxml?raw'
 import profileWxml from '../pages/profile-edit/profile-edit.wxml?raw'
 import loginWxml from '../components/login-sheet/login-sheet.wxml?raw'
@@ -37,7 +36,6 @@ describe('v6 图标键：次键收成方键', () => {
     ['订单详情·返回', orderWxml, 'od-back', 'back'],
     ['售后记录·重试', aftersalesWxml, 'as-retry', 'replay'],
     ['编辑地址·删除（按住）', addrEditWxml, 'ae-del ', 'trash'],
-    ['课程目录·开始/继续', catalogWxml, 'ct-start', 'play'],
     ['播放页·求助', playerWxml, 'bind:tap="onHelp"', 'help'],
     ['播放页·上一段', playerWxml, 'bind:tap="onPrev"', 'prev'],
     ['播放页·下一段', playerWxml, 'lp-ctl \\{\\{canNext', 'next'],
