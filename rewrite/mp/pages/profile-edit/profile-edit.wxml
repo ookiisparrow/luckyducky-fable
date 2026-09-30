@@ -62,7 +62,7 @@
 <view wx:if="{{!loading}}" class="pe-dock">
   <view wx:if="{{!loaded}}" class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   <view wx:elif="{{busy}}" class="k k-flat k-off k-48 pe-save">保存中</view>
-  <view wx:else class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
+  <view wx:else class="k k-ink k-48 pe-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="check" /></view>
 </view>
 </view>
 

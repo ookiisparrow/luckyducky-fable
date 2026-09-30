@@ -123,11 +123,11 @@ describe('9b 物流页失败：标准失败块，失败时不画小货车', () =
   })
 })
 
-describe('10a 播放页控制行：上一段/下一段用像素双箭头', () => {
+describe('10a 播放页控制行：上一段/下一段是像素图标（v6 换成竖线+三角 prev/next·老板 2026-09-30）', () => {
   it('大白话：不再写字，任何屏宽都是图标', () => {
     const w = live(playerWxml)
-    expect(w).toMatch(/bind:tap="onPrev"[^>]*><px-i name="back" \/><px-i name="back" \/><\/view>/)
-    expect(w).toMatch(/bind:tap="onNext"[^>]*><px-i name="chev" \/><px-i name="chev" \/><\/view>/)
+    expect(w).toMatch(/bind:tap="onPrev"[^>]*><px-i name="prev" \/><\/view>/)
+    expect(w).toMatch(/lp-ctl \{\{canNext[^>]*bind:tap="onNext"[^>]*><px-i name="next" \/><\/view>/)
     expect(w).not.toMatch(/>上一段<|>下一段</)
   })
 })

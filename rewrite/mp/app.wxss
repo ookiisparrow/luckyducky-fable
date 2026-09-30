@@ -47,6 +47,16 @@ page {
 .k-48 {
   height: 48px;
 }
+/* 图标方键（v6 像素图标化·老板 2026-09-30）：次键文案换成像素图标后收成方键，宽＝高；双类压过页面自己的 flex/min-width */
+.k.k-sq {
+  flex: 0 0 auto;
+  width: 44px;
+  min-width: 0;
+  padding: 0;
+}
+.k.k-48.k-sq {
+  width: 48px;
+}
 .k-ink {
   background: var(--v5-key);
   color: var(--v5-key-hi);

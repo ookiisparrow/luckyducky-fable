@@ -333,7 +333,7 @@
   flex: 1;
   min-width: 0;
   padding: 0;
-  gap: 2px; /* 像素双箭头（15 问 10a·颜色随键：可用亮字、首末段置灰） */
+  /* 上一段/下一段：v6 像素 prev/next 方键（颜色随键：可用亮字、首末段置灰） */
 }
 .lp-ctl-main {
   flex: 1.2;

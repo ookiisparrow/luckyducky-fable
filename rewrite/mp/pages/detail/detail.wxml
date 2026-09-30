@@ -78,11 +78,11 @@
 
   <view class="pd-dock-space"></view>
   <view class="pd-dock">
-    <view class="k k-light k-48 pd-cs" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onService" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">客服</view>
+    <view class="k k-light k-48 pd-cs k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onService" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="service" /></view>
     <!-- 加购成功后两颗键合并成「去结算」（老板拍板 8·宽度占两键合计）；换款式（detail.ts onSelectSku）恢复 -->
     <view wx:if="{{added}}" class="k k-ink k-48 pd-go enter-fade" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onGoCheckout" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去结算</view>
     <block wx:else>
-      <view class="k k-light k-48 pd-add enter-fade" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAddCart" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">加入购物车</view>
+      <view class="k k-light k-48 pd-add enter-fade k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAddCart" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="cart" /></view>
       <view class="k k-ink k-48 pd-buy enter-fade" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onBuyNow" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">立即购买</view>
     </block>
   </view>

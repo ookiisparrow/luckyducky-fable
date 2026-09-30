@@ -134,10 +134,10 @@
     </view>
 
     <view class="lp-controls">
-      <view class="k k-48 lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /><px-i name="back" /></view>
+      <view class="k k-48 k-sq lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="prev" /></view>
       <view class="k k-48 k-inv lp-ctl-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onTapVideo" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="{{paused ? 'play' : 'pause'}}" tone="var(--v5-ink)" /></view>
-      <view class="k k-48 lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext" data-k="{{canNext ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="chev" /><px-i name="chev" /></view>
-      <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">求助</view>
+      <view class="k k-48 k-sq lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext" data-k="{{canNext ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="next" /></view>
+      <view class="k k-48 k-dk k-sq" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="help" /></view>
     </view>
   </view>
 
@@ -152,8 +152,8 @@
       <text class="lp-done-title">这一节学完了</text>
     </view>
     <view class="lp-done-keys">
-      <view class="k k-48 k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重看本节</view>
-      <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续下一节<px-i name="arrow" /></view>
+      <view class="k k-48 k-dk k-sq" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="replay" /></view>
+      <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="next" /></view>
       <view wx:else class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onFinishCourse" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">完成课程</view>
     </view>
   </view>
