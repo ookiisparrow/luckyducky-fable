@@ -130,7 +130,7 @@ textarea {
   letter-spacing: -0.02em;
 }
 
-/* 自绘轻提示（设计稿系统层 Toast·页面 .ld-toast + .show 切换；原生 wx.showToast 是系统界面不改） */
+/* 自绘轻提示（设计稿系统层 Toast·px-fx 里 .ld-toast + .show 切换；原生 wx.showToast 只剩兜底） */
 .ld-toast {
   position: fixed;
   left: 50%;
@@ -142,7 +142,7 @@ textarea {
   box-sizing: border-box;
   padding: 12px 16px;
   color: #ffffff;
-  font: 500 15px/1.4 -apple-system, 'PingFang SC', system-ui, sans-serif;
+  font: 500 15px/1.4 var(--v5-font-brand); /* 圆体（老板 2026-09-30「弹窗换圆体」·字进字库子集） */
   text-align: center;
   opacity: 0;
   pointer-events: none;

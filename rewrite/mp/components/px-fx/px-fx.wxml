@@ -1,8 +1,8 @@
 <canvas type="2d" id="fx" class="fx"></canvas>
 <view wx:if="{{cover}}" class="fx-cover {{coverOut ? 'out' : ''}}" style="background:{{cover}}" catch:touchstart="noop" catch:tap="noop"></view>
 <!-- 自绘系统层（像素化 9c·老板 2026-09-30）：确认半屏（替原生 showModal）+ 轻提示/加载框（替原生 showToast/showLoading） -->
-<!-- 整块黑体（同原生弹窗·圆体子集不收弹窗文案；要换圆体须重建字体子集） -->
-<view wx:if="{{cf}}" class="t-sys fx-cf" catch:touchmove="noop">
+<!-- 标题与按键圆体（老板 2026-09-30「弹窗换圆体」）；正文黑体（同「放弃编辑」半屏） -->
+<view wx:if="{{cf}}" class="v5-scope fx-cf" catch:touchmove="noop">
   <view class="sh-mask fx-cf-mask {{cfOut ? 'out' : ''}}" bind:tap="onCfMask"></view>
   <view class="sh-panel fx-cf-panel {{cfOut ? 'out' : ''}}">
     <view class="fx-cf-t">
