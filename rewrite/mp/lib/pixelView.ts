@@ -2,9 +2,8 @@
 // 为什么不用 canvas：canvas 是原生组件，放在 scroll-view 里滚动时位置同步跟不上（画面乱飘），层级还会盖住 TabBar
 // （开发者工具实测复现）。改为每行一个 view，背景是一条硬色标渐变（同色相邻格合并成一段）——普通元素随页面滚动、层级正常。
 // 每帧只 setData 变了的行；~15fps（像素风不需要更高）；页面隐藏或滚出视口即停，draw 返回 false（静止画面）也停，kick() 唤醒。
-// 切页不抢帧（老板 2026-09-30 反馈切页掉帧）：每帧 setData 都走逻辑→渲染跨线程，新页滑入 / 返回时一齐起播会跟系统转场抢——
-// 挂上与回到本页先只画一帧静止画面，SETTLE_MS 后才开始动；屏外挂上的不在后台空跑——起播按挂上时实测位置判定
-// （开发者工具实测：屏内挂上时观察器不一定回话，不能只等它），之后滚进滚出交给观察器。
+// 切页掉帧排查（老板 2026-09-30）：屏外挂上的不在后台空跑——起播按挂上时实测位置判定（开发者工具实测：屏内挂上时
+// 观察器不一定回话，不能只等它），之后滚进滚出交给观察器。露面即动，不先定格等转场（老板 2026-10-01：动画不要停 0.4 秒）。
 import type { Plot } from './pixelAnim'
 
 type Host = WechatMiniprogram.Component.TrivialInstance
@@ -22,7 +21,6 @@ export type PixelDims = { cols: number; rows: number } | ((widthPx: number) => {
 
 const FRAME_MS = 66 // ≈15fps
 const VIEW_MARGIN = 40 // 离屏 40px 内就当在屏内（滚进来前先动起来，不突兀）
-const SETTLE_MS = 400 // 系统 navigateTo/navigateBack 滑动约 250–300ms（px-fx 录屏实测）＋余量
 
 /**
  * 一帧的格子 → 每行一条渐变（空行＝''）。同一格以最后一次为准；坐标四舍五入到整格；越界丢弃。
@@ -73,7 +71,6 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
   let shown = true
   let inView = false // 挂上时按实测位置定；观察器回话后以观察器为准
   let ioHeard = false
-  let settleUntil = Date.now() + SETTLE_MS
   let dead = false
   let elapsed = 0
   let lastNow = 0
@@ -103,7 +100,7 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
   const kick = () => {
     if (!ready || timer || !loop || !shown || !inView || dead) return
     lastNow = 0
-    timer = setTimeout(tick, Math.max(0, settleUntil - Date.now()))
+    timer = setTimeout(tick, 0)
   }
   const halt = () => {
     if (timer) clearTimeout(timer)
@@ -143,10 +140,8 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
     kick,
     setVisible(v) {
       shown = v
-      if (v) {
-        settleUntil = Date.now() + SETTLE_MS // 回到本页：等返回转场走完再动
-        kick()
-      } else halt()
+      if (v) kick()
+      else halt()
     },
     destroy() {
       dead = true

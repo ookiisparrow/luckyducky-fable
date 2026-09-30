@@ -1,6 +1,7 @@
 // 「我」tab 切回去重：每次 onShow 都发 login+CMS+进度+我的课（+课程）4-5 次云调用；30 秒内切回且登录态没变不重拉。
 // 首次进入、上次没拉全、登录态变了、去改资料/看课/激活回来，照旧重拉。重试按钮和登录回调直接 refresh，不受影响。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { RETURN_SETTLE_MS } from '../lib/nav'
 
 const { loginMock, getMyProgressMock, getMyCoursesMock } = vi.hoisted(() => ({
   loginMock: vi.fn(),
@@ -17,6 +18,7 @@ let now = 1_000_000
 beforeEach(() => {
   store = { ld_login_hint: true }
   now = 1_000_000
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   vi.spyOn(Date, 'now').mockImplementation(() => now)
   ;(globalThis as any).wx = {
     getStorageSync: (k: string) => store[k],
@@ -30,7 +32,10 @@ beforeEach(() => {
   getMyProgressMock.mockReset().mockResolvedValue({ ok: true, list: [] })
   getMyCoursesMock.mockReset().mockResolvedValue({ ok: true, list: [] })
 })
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 async function mountMe(): Promise<Record<string, any>> {
   let opts: Record<string, any> = {}
@@ -45,8 +50,11 @@ async function mountMe(): Promise<Record<string, any>> {
   return page
 }
 
+// 回到本页的刷新等返回动画走完（lib/nav afterReturn·切页掉帧 2026-10-01）：页面在栈里、拨过 RETURN_SETTLE_MS
 async function show(page: Record<string, any>) {
+  ;(globalThis as any).getCurrentPages = () => [page]
   page.onShow()
+  vi.advanceTimersByTime(RETURN_SETTLE_MS)
   for (let i = 0; i < 10; i++) await Promise.resolve()
 }
 

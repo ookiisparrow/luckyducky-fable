@@ -2,7 +2,7 @@
 import { getMyAfterSales, withdrawRefund } from '../../api/orders'
 import { mapAfterSale, mapAfterSales, mergeAfterSales, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
 import { openCustomerService } from '../../utils/customerService'
-import { navigateOrRedirect } from '../../lib/nav'
+import { afterReturn, navigateOrRedirect } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { tapHaptic } from '../../lib/haptics'
 import { fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
@@ -29,7 +29,7 @@ Page({
   _busy: false, // 撤回在途锁：重复触发直接丢
   unloaded: false, // 页面已退出：撤回迟到回包不再提示/刷新
   onShow() {
-    void this.reload()
+    afterReturn(this, () => void this.reload()) // 返回本页等返回动画走完再刷新（切页掉帧·2026-10-01）
   },
   onHide() {
     hold?.cancel()

@@ -41,8 +41,8 @@ describe('rowGradients', () => {
   })
 })
 
-// 切页掉帧（老板 2026-09-30「页面切换的按钮有掉帧、卡顿感」）：像素动效每帧都 setData 跨线程，
-// 新页滑入 / 返回时一齐起播会跟转场抢；屏外的动效也不该跑。
+// 切页掉帧（老板 2026-09-30「页面切换的按钮有掉帧、卡顿感」）：屏外挂上的动效不在后台空跑、静止画面停表。
+// 露面即动，不做「先定格一会儿再动」（老板 2026-10-01：动画不要停 0.4 秒）。
 describe('mountPixelView：切页不抢帧、屏外不跑', () => {
   type IoCb = (r: { intersectionRatio: number }) => void
   // top＝挂上时量到的位置（屏高 667）：开发者工具实测屏内挂上时观察器不一定回话，起播按挂上时实测位置判定
@@ -68,14 +68,11 @@ describe('mountPixelView：切页不抢帧、屏外不跑', () => {
   afterEach(() => vi.useRealTimers())
   const frames = (h: ReturnType<typeof host>) => h.setData.mock.calls.filter((c) => Object.keys(c[0] as object).some((k) => k.startsWith('pxRows['))).length
 
-  it('大白话：挂上先画一帧静止画面；页面滑入的 0.4 秒内不动，之后在屏内才动（观察器不回话也照动）', () => {
+  it('大白话：屏内挂上马上就动，不定格等待（观察器不回话也照动）', () => {
     const h = host()
     mountPixelView(h as never, { cols: 13, rows: 13 }, 2, draw)
-    expect(frames(h)).toBe(1)
-    vi.advanceTimersByTime(399)
-    expect(frames(h)).toBe(1)
-    vi.advanceTimersByTime(400)
-    expect(frames(h)).toBeGreaterThan(3)
+    vi.advanceTimersByTime(200)
+    expect(frames(h)).toBeGreaterThan(2)
   })
   it('大白话：屏外挂上（首屏以下）——只有那一帧静止画面，不在后台空跑；滚进屏才动', () => {
     const h = host(2000)
@@ -86,7 +83,7 @@ describe('mountPixelView：切页不抢帧、屏外不跑', () => {
     vi.advanceTimersByTime(1000)
     expect(frames(h)).toBeGreaterThan(3)
   })
-  it('大白话：切走停；返回本页同样先稳 0.4 秒再动（不跟返回动画抢）', () => {
+  it('大白话：切走停；返回本页马上接着动', () => {
     const h = host()
     const v = mountPixelView(h as never, { cols: 13, rows: 13 }, 2, draw)
     h.see(true)
@@ -96,10 +93,8 @@ describe('mountPixelView：切页不抢帧、屏外不跑', () => {
     vi.advanceTimersByTime(1000)
     expect(frames(h)).toBe(n)
     v.setVisible(true)
-    vi.advanceTimersByTime(399)
-    expect(frames(h)).toBe(n)
-    vi.advanceTimersByTime(400)
-    expect(frames(h)).toBeGreaterThan(n)
+    vi.advanceTimersByTime(200)
+    expect(frames(h)).toBeGreaterThan(n + 1)
   })
   it('大白话：画面静止（draw 返回 false）就停表，不再每 66ms 空算', () => {
     const h = host()

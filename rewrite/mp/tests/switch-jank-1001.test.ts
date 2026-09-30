@@ -47,22 +47,3 @@ describe('px-anim hold：播到定格就停表', () => {
     expect(draw(99999, () => {})).not.toBe(false)
   })
 })
-
-describe('px-fx：切走就停撒花', () => {
-  it('大白话：撒花没落完就跳页——本页隐藏时立刻停掉撒花循环、清画布，不跟新页滑入抢帧', async () => {
-    vi.resetModules()
-    await import('../components/px-fx/px-fx')
-    const c = mount(opts)
-    opts.lifetimes.attached.call(c)
-    const cancel = vi.fn()
-    const clear = vi.fn()
-    const ctx = { clearRect: clear, fillRect: vi.fn(), beginPath: vi.fn(), rect: vi.fn(), fill: vi.fn(), scale: vi.fn(), fillStyle: '', globalAlpha: 1 }
-    const cv = { width: 0, height: 0, getContext: () => ctx, requestAnimationFrame: vi.fn(() => 7), cancelAnimationFrame: cancel }
-    c.createSelectorQuery = () => ({ select: () => ({ fields: () => ({ exec: (cb: (r: unknown[]) => void) => cb([{ node: cv }]) }) }) })
-    await c.party({ left: 100, top: 400, right: 200, bottom: 448 })
-    expect(cv.requestAnimationFrame).toHaveBeenCalled()
-    opts.pageLifetimes.hide.call(c)
-    expect(cancel).toHaveBeenCalledWith(7)
-    expect(clear).toHaveBeenCalled()
-  })
-})

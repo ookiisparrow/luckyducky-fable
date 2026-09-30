@@ -8,6 +8,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { groundGap } from '../../lib/ground'
 import { goHomeTab } from '../../lib/homeIntent'
 import { fxHint } from '../../lib/pxFx'
+import { afterReturn } from '../../lib/nav'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -20,7 +21,7 @@ Page({
   },
   _seq: 0, // onShow 代次·丢弃过期回包（同 player playToken）
   onShow() {
-    void this.reload()
+    afterReturn(this, () => void this.reload()) // 返回本页等返回动画走完再刷新（切页掉帧·2026-10-01）
   },
   async reload() {
     // 三路组合（云为唯一真相·纯前端 join 段数与 done map·不新增聚合 action）：getMyCourses/getMyProgress
