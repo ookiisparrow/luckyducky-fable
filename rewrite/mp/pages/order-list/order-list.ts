@@ -10,6 +10,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { navBottom } from '../../lib/ground'
+import { FRESH_MS, isFresh } from '../../utils/fresh'
 
 const HOLD_MS = 700 // 按住多久算取消（设计稿 data-ms=700·拍板 7）
 let hold: Hold | null = null // 当前按住取消的那张卡（lib/hold）
@@ -101,6 +102,7 @@ Page({
   _swT: 0, // 手势起点 timeStamp（ms）——一律用事件 timeStamp，不引 Date.now
   _ticker: null as ReturnType<typeof setInterval> | null, // 待支付倒计时每秒刷新（onShow 起、onHide/onUnload 停）
   _animDir: '', // 待应用的滑入方向类（非渲染态）：switchTab 置、reload 成功落数据时消费一次；onShow/翻页 reload 读到空＝不动画
+  _freshAt: 0, // 上次 reload 成功落地的时刻（utils/fresh）：从别页返回 30s 内且期间没做过订单写操作就不重拉（不闪 loading）
   onLoad(query: Record<string, string | undefined>) {
     if (query.tab && TABS.some((t) => t.key === query.tab)) this.setData({ tabKey: query.tab })
   },
@@ -109,7 +111,8 @@ Page({
     this.onHide()
   },
   onShow() {
-    void this.reload()
+    // 返回免重拉（性能批 #2）：支付/取消/收货/售后等写完 api 层已标脏，回来必拉；只是看了眼详情/物流就不拉
+    if (!isFresh('orders', this._freshAt, FRESH_MS)) void this.reload()
     if (!this._ticker) this._ticker = setInterval(() => this.tick(), 1000)
   },
   onHide() {
@@ -180,6 +183,7 @@ Page({
     const anim = this._animDir // 消费一次：仅切 tab 触发的 reload 带方向动画；onShow/翻页 _animDir 为空＝不动画
     this._animDir = ''
     this._all = all // 全量重发（新列表本该全发·非增量场景）：迁实例字段后 shown 仍整表替换
+    this._freshAt = Date.now()
     this.setData({ loading: false, loadFailed: false, shown: all.map((o) => decorate(o, this._as)), cursor: r.nextCursor, hasMore: !!r.hasMore, anim })
   },
   onRetryLoad() {

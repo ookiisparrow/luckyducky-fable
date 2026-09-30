@@ -8,6 +8,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { groundGap } from '../../lib/ground'
 import { goHomeTab } from '../../lib/homeIntent'
 import { fxHint } from '../../lib/pxFx'
+import { FRESH_MS, isFresh } from '../../utils/fresh'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -19,12 +20,14 @@ Page({
     loadFailed: false, // 失败≠空态（根因#14·守卫 rw-mp-list-loadfailed-state）：与「输入激活码」引导分治——付费用户弱网一次失败不该被引导输码
   },
   _seq: 0, // onShow 代次·丢弃过期回包（同 player playToken）
+  _freshAt: 0, // 上次 reload 成功落地的时刻（utils/fresh）：返回 30s 内且期间没激活/进课/写进度就不重拉
   onShow() {
-    void this.reload()
+    // 返回免重拉（性能批 #2）：看视频的进度埋点、激活/进课在 api 层已标脏，回来必拉；只是进目录看了眼就不拉
+    if (!isFresh('learning', this._freshAt, FRESH_MS)) void this.reload()
   },
   async reload() {
-    // 三路组合（云为唯一真相·纯前端 join 段数与 done map·不新增聚合 action）：getMyCourses/getMyProgress
-    // 每次实时（进度返回页面必须新鲜）；课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）。
+    // 三路组合（云为唯一真相·纯前端 join 段数与 done map）：getMyCourses/getMyProgress 实时拉（进度写过回来必新鲜·
+    // 由 utils/fresh 标脏保证）；课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）。
     const seq = ++this._seq
     const [mine, courses, progress] = await Promise.all([getMyCourses(), getAllCourses(), getMyProgress()])
     // 慢/超时回包不覆盖较新结果：tab 来回切/返回触发的后一次 onShow 已落地时，前一次（尤其超时 ok:false）
@@ -46,6 +49,7 @@ Page({
       // 课程列表本身照常渲染（进度只是卡上一行，不该因它失败把整页打成失败态）。
       list: mapMyCourses(mine.list, courses || [], progress.ok ? progress.list : null),
     })
+    if (progress.ok) this._freshAt = Date.now() // 进度没拉到不记新鲜（下次 onShow 再试，别把「读不到」缓存住）
   },
   // 空态「去逛逛」：回首页（从首屏购买区看起·15 问 12b）
   onGoShop() {

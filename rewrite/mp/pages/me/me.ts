@@ -20,10 +20,10 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint, fxLoaded, fxLoading, fxToast, fxTransit } from '../../lib/pxFx'
 import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 import { groundGap } from '../../lib/ground'
+import { FRESH_MS, isFresh } from '../../utils/fresh'
 
-// 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
-// ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
-const ME_FRESH_MS = 30_000
+// 切 tab 回「我」的去重窗（utils/fresh 单源）：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付；
+// 窗内若做过订单写操作或写过进度（api 层标脏），照样重拉——数字与续播位置不显示旧的。
 const COUNT_PAGE = 20 // 订单格数字按一页数（满页显示 20+）
 
 function continueCourseIds(progress: unknown, mine: unknown): string[] {
@@ -90,7 +90,7 @@ Page({
     armExitGuard(this) // tabBar 栈底页误触退出提醒：武装 page-container 拦第一次返回（决策§30·见 utils/exitGuard）
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
     loginGate.maybePromptOnce() // 软门槛本会话至多弹一次（首页/我页共用·未同意才弹）
-    if (Date.now() - this._freshAt < ME_FRESH_MS && this._freshAgreed === loginGate.hasAgreed()) return
+    if (isFresh('orders', this._freshAt, FRESH_MS) && isFresh('learning', this._freshAt, FRESH_MS) && this._freshAgreed === loginGate.hasAgreed()) return
     void this.refresh()
   },
   onHide() {
