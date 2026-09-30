@@ -195,7 +195,7 @@ Page({
       // 续播到秒（数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段·不拼）
       const at = c.resumeAt > 0 ? '&t=' + c.resumeAt : ''
       const url = '/pages/player/player?courseId=' + c.courseId + seg + at
-      void fxTransit(this, 'dither', '.me-card', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
+      void fxTransit(this, '.me-card', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
     } else {
       // 兜底去逛逛→首页应从头逛起：防首页上次恰好滚到 FAQ 板块的旧滚动位置残留，造成「弹出大家都在问」错位观感
       goHomeTab()

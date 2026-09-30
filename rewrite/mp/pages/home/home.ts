@@ -16,7 +16,7 @@ import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint, fxParty, fxToast, fxTransit } from '../../lib/pxFx'
+import { fxHint, fxParty, fxToast } from '../../lib/pxFx'
 
 const NAV_LOCK_MS = 800 // 跳转类按钮防连点：跳转发起后 800ms 内不再响应（连点会叠两个详情页）
 
@@ -194,13 +194,13 @@ Page({
     void fxParty(this, '.hm-closing-btn')
     setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }), 260)
   },
-  // 顶部「购买」：黄色像素彩虹从键扩散铺满后进详情（设计稿 fxRainbow）
+  // 顶部「购买」：直接进详情（老板 2026-09-30 去掉彩虹转场特效）
   toProductsTop() {
     tapHaptic()
     const duck = pickDuckKit(this.data.products) // 同上：占位＝将来小棉鸭的位置
     if (!duck) return this.scrollTo('friends')
-    if (!this._navOk()) return // 同上：彩虹转场期间连点
-    void fxTransit(this, 'rainbow', '.hm-buy', () => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }))
+    if (!this._navOk()) return // 连点防重复进详情
+    wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id })
   },
   toIntro() {
     void fxParty(this, '.hm-search')

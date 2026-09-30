@@ -1,19 +1,13 @@
-// 像素撒花 / 转场（v5 设计稿 party · fxEnter · fxRainbow·老板 2026-09-28「其他根据设计稿实现」）。
+// 像素撒花 / 暗场转场（v5 设计稿 party · fxEnter·老板 2026-09-28「其他根据设计稿实现」；首页「购买」的彩虹转场 2026-09-30 老板去掉）。
 // 纯计算：参数原样移植设计稿；画在 components/px-fx 那张页面级全屏 canvas 上（不进 scroll-view，不会漂）。
-// 与设计稿的差异（小程序做不到）：设计稿彩虹/暗场里「新页面」在圈内透出来；小程序不能把下一页画进当前页，
-// 圈内先铺纸色（彩虹）/ 深色（暗场），铺满后再 navigateTo，新页滑进来时接得上底色。
+// 与设计稿的差异（小程序做不到）：设计稿暗场里「新页面」在圈内透出来；小程序不能把下一页画进当前页，
+// 圈内先铺深色，铺满后再 navigateTo，新页滑进来时接得上底色。
 // 每帧按行把同色相邻格并成一段（runs），一段只画一个 rect——整屏 2 万格压到几百次 rect，低端安卓也跟得上。
 
 export const PX = 4
 export const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16)
-export const hsh = (i: number, t: number): number => {
-  let h = Math.imul(i, 374761393) ^ Math.imul(t + 1, 668265263)
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
 export const ease = (p: number): number => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2)
 
-export const PAPER = '#fafaf8' // = --v5-canvas，彩虹圈内铺这个等新页
 export const DARK = '#121212' // = 播放页底色
 const PURPLE = '#8A5AE0'
 
@@ -65,42 +59,6 @@ export function ditherRuns(F: Field, p: number): Runs {
     const th = BAYER4[(gx & 3) | ((gy & 3) << 2)]
     if (v < th) return ''
     return v - th < 0.3 ? PURPLE : DARK
-  })
-}
-
-export const RAINBOW_DUR = 680
-/** 彩虹（设计稿 fxRainbow/rbLoop）：t＝起跑后毫秒（<0 为键先亮紫的 150ms）；st 记键内开始揭开的时刻。 */
-export function rainbowRuns(F: Field, t: number, st: { rev?: number }): Runs {
-  if (t < 0) return toRuns(F, (_x, _y, i) => (F.D[i] === 0 ? PURPLE : ''))
-  const e = ease(Math.min(1, t / RAINBOW_DUR))
-  const bw = PX * (2 + Math.round(2 * e))
-  const W = bw * 3
-  const R = e * (F.maxD + W + 28)
-  const HL = 20
-  const TL = 36
-  if (R - W + PX > 0 && st.rev == null) st.rev = t
-  const kq = st.rev != null ? (t - st.rev) / 240 : -1
-  const tq = (t / 55) | 0
-  return toRuns(F, (gx, gy, i) => {
-    const d = F.D[i]
-    const th = BAYER4[(gx & 3) | ((gy & 3) << 2)]
-    if (d === 0) {
-      if (kq < 0 || th > kq) return kq >= 0 && th - kq < 0.2 ? '#B79CF0' : PURPLE
-      return PAPER
-    }
-    if (d > R + HL) return ''
-    if (d > R) {
-      const hv = hsh(i, tq)
-      return hv < 0.3 * (1 - (d - R) / HL) ? (hv < 0.12 ? '#F4BD3F' : '#F9D77E') : ''
-    }
-    if (d > R - bw) return th < 0.7 ? '#F9D77E' : ''
-    if (d > R - 2 * bw) return '#F4BD3F'
-    if (d > R - W) return '#E3A02B'
-    if (d >= R - W - TL) {
-      const hv = hsh(i, tq)
-      if (hv < 0.24 * (1 - (R - W - d) / TL)) return hv < 0.1 ? '#F9D77E' : '#F4BD3F'
-    }
-    return PAPER
   })
 }
 
@@ -189,7 +147,7 @@ export { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast, type ConfirmOpts } fro
 type Host = { createSelectorQuery(): WechatMiniprogram.SelectorQuery; selectComponent(sel: string): unknown }
 type Layer = {
   party(k: Rect, big?: boolean, n?: number): void
-  transit(kind: 'rainbow' | 'dither', k: Rect, go: () => void): void
+  transit(k: Rect, go: () => void): void
 }
 
 const layer = (page: Host): Layer | null =>
@@ -213,9 +171,9 @@ export async function fxParty(page: Host, sel: string, big = false, n?: number):
 }
 
 /** 从 sel 那颗键起转场，铺满后 go()；特效层/键缺失就直接 go()——转场是加分项，不能挡跳转。 */
-export async function fxTransit(page: Host, kind: 'rainbow' | 'dither', sel: string, go: () => void): Promise<void> {
+export async function fxTransit(page: Host, sel: string, go: () => void): Promise<void> {
   const fx = layer(page)
   const k = fx && (await keyRect(page, sel))
-  if (fx && k) fx.transit(kind, k, go)
+  if (fx && k) fx.transit(k, go)
   else go()
 }

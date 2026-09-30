@@ -1,6 +1,7 @@
 // 首页轻提示与跳转（v5 第 3 轮）：「+」加购走 px-fx 设计稿提示（像素 ✓ + 0.94 出场），不再用页内自绘 ping；
 // 加购只弹提示（v6 Lite 底栏不显示件数·不再碰 tab bar）；tab bar 重复点「首页」平滑回顶；页脚店名进关于页；「购买」没有小棉鸭时占位第一件商品。
 // Page 桩同 me-cont-failed.test.ts。
+import homeTs from '../pages/home/home.ts?raw'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BRAND_NAME } from '../lib/brand'
 
@@ -143,5 +144,16 @@ describe('首页跳转', () => {
     page.data.products = [{ id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }]
     await page.toProductsTop()
     expect((globalThis as any).wx.navigateTo).toHaveBeenCalledWith({ url: '/pages/detail/detail?id=yarn' })
+  })
+
+  it('大白话：「购买」去掉特效（老板 2026-09-30）——挂着特效层也直接进详情，不再彩虹铺满', async () => {
+    const page = await mount()
+    const transit = vi.fn()
+    ;(fx as Record<string, unknown>).transit = transit
+    page.data.products = [{ id: 'duck', name: '小棉鸭', tag: '', priceLabel: '¥128', wasLabel: '', cover: '' }]
+    await page.toProductsTop()
+    expect(transit).not.toHaveBeenCalled()
+    expect((globalThis as any).wx.navigateTo).toHaveBeenCalledWith({ url: '/pages/detail/detail?id=duck' })
+    expect(homeTs).not.toMatch(/rainbow/)
   })
 })
