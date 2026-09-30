@@ -57,7 +57,7 @@
     <view class="co-card co-items px-skin px-card" wx:if="{{addons.length}}">
       <text class="t-sys co-k co-addon-head">搭配购买</text>
       <view class="co-item" wx:for="{{addons}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onToggleAddon">
-        <view class="k k-sm k-light co-check px-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
+        <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
         <text class="t-sys co-item-name co-addon-name">{{item.name}}</text>
         <text class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>

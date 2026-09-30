@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// 像素皮肤生成器（Claude Design「像素化落地规格.md」2c/3a·老板 2026-09-30 定稿）→ rewrite/mp/styles/px-skin.wxss
-// 阶梯圆角 + 键座 + 顶高光 + 硬投影全部画进一张点阵 SVG，用 border-image 九宫格贴在 ::before 上——
+// 像素皮肤生成器（Claude Design「像素化落地规格.md」2c/3a·老板 2026-09-30 定稿；按键后改回平滑）→ rewrite/mp/styles/px-skin.wxss
+// 卡片/凹槽/半屏/提示框的阶梯圆角 + 描边 + 顶高光全部画进一张点阵 SVG，用 border-image 九宫格贴在 ::before 上——
 // 不用 box-shadow/border-radius（阶梯会把外投影裁掉·描边在拐角断开）。点阵算法照搬设计稿 pixelize.js 的 pz-step。
 // 一格 = 2px。改完跑 `node scripts/gen-px-skin.mjs`；tests/px-skin.test.ts 核对产物与本脚本一致。
 import { writeFileSync } from 'node:fs'
@@ -12,13 +12,6 @@ const HAIR = ['#111111', 0.14]
 // 阶梯写法 [a,b,c]：从角起第 1 行缩进 a 格、第 2 行 b 格…之后 0；top＝只上两角（半屏）。
 // 颜色写 [hex, 透明度]；down＝按下态（规格：键座 −1 格、外硬投影收为 0；面色沿用现有按下色）。
 export const SKINS = {
-  ink: { r: [2, 1], face: '#1c1c1a', hl: '#333330', seat: 2, seatc: '#68685f', drop: 1, dropc: '#111111', down: {} },
-  light: { r: [2, 1], face: '#ffffff', ring: HAIR, seat: 1, seatc: '#e3e3df', drop: 1, dropc: HAIR, down: { face: '#f0f0ed' } },
-  flat: { r: [2, 1], face: '#ededea', down: { face: '#e3e3df' } },
-  dk: { r: [2, 1], face: '#262626', seat: 1, seatc: '#1a1a1a', down: { face: '#202020' } },
-  inv: { r: [2, 1], face: '#f7f7f4', seat: 2, seatc: '#8f8f88', drop: 1, dropc: '#000000', down: {} },
-  top: { r: [2, 1], face: '#ffffff', ring: HAIR, seat: 1, seatc: '#e3e3df', drop: 2, dropc: HAIR, down: { face: '#f0f0ed' } },
-  check: { r: [1], face: '#ffffff', ring: HAIR, seat: 1, seatc: '#e3e3df' },
   card: { r: [3, 1, 1], face: '#ffffff', ring: HAIR, down: { face: '#f3f3f0' } },
   cardOn: { r: [3, 1, 1], face: '#ffffff', ring: '#8a5ae0' },
   well: { r: [3, 1, 1], face: '#ededea', hl: '#e3e3df' },
@@ -34,14 +27,9 @@ export const CIRCLES = {
   radioOn: { n: 11, face: '#ffffff', ring: '#8a5ae0' },
   disc: { n: 28, face: ['#121212', 0.55] },
 }
-// 皮肤直接挂到现有类上（全仓 ~130 颗键、6 个半屏不用逐个改 wxml）。页面里「包一层按下」的键（外层 hover-class、
-// 里面的键变按下样）也登记在这——tests/px-skin.test.ts 核对每个登记的类名真有页面在用，改名漏了会红。
+// 皮肤直接挂到现有类上（6 个半屏、全仓凹槽不用逐个改 wxml）。按键不走像素：老板 2026-09-30 定回平滑线性描边（app.wxss .k-*）。
+// tests/scripts/pixelize.test.js 核对每个登记的类名真有页面在用，改名漏了会红。
 const ALIAS = {
-  ink: ['.k-ink'],
-  light: ['.k-light'],
-  flat: ['.k-flat'],
-  dk: ['.k-dk'],
-  inv: ['.k-inv'],
   well: ['.well'],
   wellOn: ['.well-focus'],
   wellWarn: ['.ae-warn'],
@@ -49,16 +37,10 @@ const ALIAS = {
   sheet: ['.sh-panel'],
 }
 const DOWN_ALIAS = {
-  ink: ['.k-ink-down', '.me-card-down .me-play'],
-  light: ['.k-light-down', '.nv-hit-down .nv-back', '.wl-hit-down .wl-back', '.me-av-down .me-av-k', '.pe-av-down .pe-av-k', '.rv-star-on'],
-  flat: ['.k-flat-down'],
-  dk: ['.k-dk-down', '.lp-back-down .lp-back-key'],
-  inv: ['.k-inv-down'],
-  top: ['.px-top.k-light-down'],
   card: ['.px-card.k-card-down'],
 }
 // 挂皮肤的元素要成定位与层叠上下文（::before 垫在字下面）；页面自己写 fixed/absolute 的以页面为准（后加载）
-const HOSTS = ['.px-skin', '.k', '.well', '.sh-panel', '.ld-toast']
+const HOSTS = ['.px-skin', '.well', '.sh-panel', '.ld-toast']
 export const ALIAS_CLASSES = [...Object.values(ALIAS), ...Object.values(DOWN_ALIAS)].flat().flatMap((sel) => sel.match(/[a-z][\w-]*/g))
 // 只裁外形（照片/缩略图/标签/头像）：按原圆角档
 export const CLIPS = { 4: [1], 6: [2, 1], 8: [3, 1, 1] }

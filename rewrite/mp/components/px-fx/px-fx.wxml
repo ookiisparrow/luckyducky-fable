@@ -14,7 +14,7 @@
       <block wx:if="{{cf.danger}}">
         <view class="k k-light k-48 fx-cf-l fx-cf-danger {{cfHold ? 'fx-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
           catch:touchstart="onCfHoldStart" bind:touchmove="onCfHoldMove" catch:touchend="onCfHoldEnd" catch:touchcancel="onCfHoldCancel">
-          <view class="fx-cf-fill px-clip-6"></view>
+          <view class="fx-cf-fill"></view>
           <text class="fx-cf-kt">{{cf.confirmText}}</text>
         </view>
         <view class="k k-ink k-48 fx-cf-r" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onCfNo" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{cf.cancelText}}</view>
