@@ -68,7 +68,8 @@
         "cancelOrder",
         "getMyOrders",
         "getOrderById",
-        "getMyAfterSales"
+        "getMyAfterSales",
+        "countMyOrders"
       ],
       "adminActionFiles": [
         "orders",
@@ -111,6 +112,7 @@
         "getPlaybackUrl",
         "getMyCourses",
         "getMyProgress",
+        "getMyLearning",
         "trackEvent"
       ],
       "adminActionFiles": [

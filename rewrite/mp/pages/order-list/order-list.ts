@@ -1,6 +1,6 @@
 // 我的订单：状态分栏 + 游标分页 + 待支付续付（倒计时）+ 按住取消 + 查看物流 + 确认收货 + 写评价。列表从云端拉取、无本地回退单。
 import { tapHaptic } from '../../lib/haptics'
-import { getMyOrders, pay, confirmReceive, cancelOrder, getMyAfterSales } from '../../api/orders'
+import { getMyOrders, pay, confirmReceive, cancelOrder } from '../../api/orders'
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrders, statusHead, listRight, reviewUrl, payLeftMs, type OrderVM, type OrderLineVM } from '../../lib/mapOrders'
 import { mapAfterSales, afterSalesByOrder, afterSaleOverlay, type OrderAfterSales } from '../../lib/mapAftersales'
@@ -162,15 +162,12 @@ Page({
     const tab = this.data.tabKey // 捕获本次请求的 tab·回包落地前复核，防快速切 tab 慢回包乱序覆盖（同 player playToken）
     const seq = ++this._seq // 代次：同 tab 内被更晚 reload（如取消后 reload）取代的旧回包丢弃
     this.setData({ loading: true })
-    // 并行拉本人售后（云端退款不改订单状态，卡片靠它叠加「售后中 / 已退款」）；失败静默不叠加（保留上次拉到的）。翻页复用不重拉。
-    // ponytail: 只取最近 100 条售后，超出不叠加；上限升级路径＝云端订单接口直接带售后汇总。
-    // 售后只做叠加显示：同步抛错/非 Promise 也只当「没拉到」，不拖垮订单列表
-    const asReq = Promise.resolve()
-      .then(() => getMyAfterSales(undefined, 100))
-      .catch(() => null)
-    const [r, asRes] = await Promise.all([getMyOrders(undefined, 20, tab), asReq])
-    if (seq !== this._seq || tab !== this.data.tabKey) return
-    if (asRes && asRes.ok) this._as = afterSalesByOrder(mapAfterSales(asRes.list)) // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
+    // 本人售后随订单一次往返带回（性能批 #3·withAfterSales·云端最近 100 条）：卡片靠它叠加「售后中 / 已退款」（云端退款不改订单状态）；
+    // 云端售后读失败不带 afterSales 键＝不叠加（保留上次拉到的）。翻页复用不重拉。
+    // ponytail: 只取最近 100 条售后，超出不叠加；上限升级路径＝云端按订单汇总售后态。
+    const r = await getMyOrders(undefined, 20, tab, true)
+    if (seq !== this._seq || tab !== this.data.tabKey) return // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
+    if (r.ok && Array.isArray(r.afterSales)) this._as = afterSalesByOrder(mapAfterSales(r.afterSales))
     // 失败≠空态（根因#14）：失败不覆盖已有列表（onShow 返回抖动一次不该把待支付订单清空）；
     // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
     if (!r.ok) {

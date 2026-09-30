@@ -34,8 +34,13 @@ export type CreateOrderResp = AppResp<{ order: OrderDoc }>
 export type PayResp = AppResp<{ paid: boolean; paidAt: number } | { payment: WxPaymentParams }>
 /** 订单读响应＝库内文档 + 读时附加的已评价行 lineId（只读评价集合·不在订单文档里；评价读失败时不带该键）。 */
 export type OrderRead = OrderDoc & { reviewedLineIds?: string[] }
-export type GetMyOrdersResp = AppResp<{ list: OrderRead[]; nextCursor: unknown; hasMore: boolean }>
+/** withAfterSales 时多带本人最近 100 条售后（订单列表叠加「售后中/已退款」·省一次往返）；售后读失败不带该键。 */
+export type GetMyOrdersResp = AppResp<{ list: OrderRead[]; nextCursor: unknown; hasMore: boolean; afterSales?: AfterSaleDoc[] }>
 export type GetOrderByIdResp = AppResp<{ order: OrderRead }>
+/** 「我」页订单格数字：三态精确数；单态 count 失败给 null（那格不显示数字）。 */
+export type CountMyOrdersResp = AppResp<{ counts: { pending: number | null; paid: number | null; shipped: number | null } }>
+/** 我的课 + 学习进度一次往返；进度读失败给 null（课卡照出、进度标「读不到」）。 */
+export type GetMyLearningResp = AppResp<{ courses: { courseId: string; enteredAt: number }[]; progress: unknown[] | null }>
 /** 退款试算：预计退款额，分整数（与 applyRefund 同一份算额）。 */
 export type EstimateRefundResp = AppResp<{ refundFen: number }>
 export type GetPlaybackUrlResp = AppResp<{ url: string | null }>

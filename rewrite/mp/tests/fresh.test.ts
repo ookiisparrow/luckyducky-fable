@@ -6,7 +6,7 @@ vi.mock('../utils/cloud', () => ({ callApp: vi.fn(async () => ({ ok: true })) })
 
 import { FRESH_MS, isFresh, markStale, __resetForTest } from '../utils/fresh'
 import { applyRefund, cancelOrder, confirmReceive, createOrder, getMyOrders, pay, withdrawRefund } from '../api/orders'
-import { activateCourse, confirmEnter, getMyCourses, trackEvent } from '../api/learning'
+import { activateCourse, confirmEnter, getCourses, trackEvent } from '../api/learning'
 
 const ADDR = { name: 'n', phone: '13800000000', region: 'r', detail: 'd' }
 
@@ -52,7 +52,7 @@ describe('写类 api 完成即标脏（读类不标）', () => {
     expect(isFresh('orders', fetchedAt, FRESH_MS)).toBe(true)
   })
 
-  it('大白话：激活课 / 进课 / 带课程的进度埋点做完，learning 就不新鲜；纯统计埋点与只读 getMyCourses 不影响', async () => {
+  it('大白话：激活课 / 进课 / 带课程的进度埋点做完，learning 就不新鲜；纯统计埋点与只读 getCourses 不影响', async () => {
     const writes = [() => activateCourse('CODE'), () => confirmEnter('CODE'), () => trackEvent('segment_done', 'player', 's1', { courseId: 'c1' }), () => trackEvent('watch_at', 'player', 's1', { courseId: 'c1', at: 3 })]
     for (const w of writes) {
       __resetForTest()
@@ -64,7 +64,7 @@ describe('写类 api 完成即标脏（读类不标）', () => {
     __resetForTest()
     const fetchedAt = Date.now()
     trackEvent('view_product', 'detail', 'p1')
-    await getMyCourses()
+    await getCourses()
     expect(isFresh('learning', fetchedAt, FRESH_MS)).toBe(true)
   })
 })

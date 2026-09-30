@@ -44,6 +44,8 @@ const AS = (orderId: string, lineId: string, status: string) => ({ _id: orderId 
 let handlers: Record<string, (data: Record<string, any>) => unknown>
 let wxMock: Record<string, any>
 const asCalls = () => callAppMock.mock.calls.filter((c: unknown[]) => c[0] === 'getMyAfterSales')
+// 列表（性能批 #3）：售后随 getMyOrders(withAfterSales) 一次带回，数「带 flag 的那次」
+const listAsCalls = () => callAppMock.mock.calls.filter((c: any[]) => c[0] === 'getMyOrders' && c[1] && c[1].withAfterSales === true)
 
 beforeEach(() => {
   handlers = { getOrderById: () => ({ ok: true, order: ORDER('o1', 'paid') }) }
@@ -146,25 +148,26 @@ describe('订单详情叠加售后', () => {
 describe('订单列表叠加售后', () => {
   const list = () => mount('../pages/order-list/order-list')
 
-  it('大白话：卡片按售后叠加——售后中墨点 + 右侧「退款申请中」（不再显示小货车）、全退完「已退款」、没售后的照旧；翻页不重复拉售后', async () => {
-    handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o1', 'shipped'), ORDER('o2', 'done'), ORDER('o3', 'paid')], nextCursor: 'c1', hasMore: true })
-    handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'applied'), AS('o2', 'L1', 'refunded'), AS('o2', 'L2', 'refunded'), AS('o4', 'L1', 'approved')] })
+  it('大白话：卡片按售后叠加（售后随订单一次带回·性能批 #3）——售后中墨点 + 右侧「退款申请中」（不再显示小货车）、全退完「已退款」、没售后的照旧；翻页不重复带售后', async () => {
+    const afterSales = [AS('o1', 'L1', 'applied'), AS('o2', 'L1', 'refunded'), AS('o2', 'L2', 'refunded'), AS('o4', 'L1', 'approved')]
+    handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o1', 'shipped'), ORDER('o2', 'done'), ORDER('o3', 'paid')], nextCursor: 'c1', hasMore: true, afterSales })
     const page = await list()
     await page.reload()
+    expect(listAsCalls()).toHaveLength(1)
+    expect(asCalls()).toHaveLength(0) // 列表不再另拉 getMyAfterSales
     const [o1, o2, o3] = page.data.shown
     expect(o1).toMatchObject({ label: '售后中', led: { tone: 'var(--v5-ink)', halo: '' }, right: '退款申请中', truck: false, labelColor: '' })
     expect(o2).toMatchObject({ label: '已退款', led: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, right: '已原路退回', labelColor: '' })
     expect(o3).toMatchObject({ label: '待发货', right: '48 小时内发货' })
 
-    handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o4', 'shipped')], nextCursor: null, hasMore: false })
+    handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o4', 'shipped')], nextCursor: null, hasMore: false }) // 翻页回包不带售后
     await page.onReachBottom()
-    expect(asCalls()).toHaveLength(1)
-    expect(page.data.shown[3]).toMatchObject({ label: '售后中', right: '退款处理中' })
+    expect(listAsCalls()).toHaveLength(1)
+    expect(page.data.shown[3]).toMatchObject({ label: '售后中', right: '退款处理中' }) // 复用首载带回的售后
   })
 
-  it('大白话：列表拉售后失败——卡片照原样、不弹提示', async () => {
+  it('大白话：云端售后读失败（回包不带 afterSales 键）——卡片照原样、不弹提示', async () => {
     handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o1', 'shipped')], nextCursor: null, hasMore: false })
-    handlers.getMyAfterSales = () => ({ ok: false, error: 'CALL_TIMEOUT' })
     const page = await list()
     await page.reload()
     expect(page.data.shown[0]).toMatchObject({ label: '待收货', truck: true, labelColor: '' })

@@ -56,7 +56,7 @@ describe('订单列表：加载', () => {
     const page = await mount({ tab: 'pending' })
     page.onShow()
     await flush()
-    expect(callAppMock).toHaveBeenCalledWith('getMyOrders', { cursor: undefined, limit: 20, status: 'pending' })
+    expect(callAppMock).toHaveBeenCalledWith('getMyOrders', { cursor: undefined, limit: 20, status: 'pending', withAfterSales: true }) // 性能批 #3：一次带回售后
     expect(page.data).toMatchObject({ loading: false, loadFailed: false, cursor: 'c1', hasMore: true, anim: '' })
     expect(page.data.shown[0]).toMatchObject({ id: 'o1', tint: 'purple', amountNum: '128.00' })
     expect(page.data.shown[0].items[0].priceNum).toBe('64.00')
@@ -164,7 +164,7 @@ describe('订单列表：切 tab 与手势', () => {
     page.onTab({ currentTarget: { dataset: { key: 'shipped' } } })
     expect(page.data).toMatchObject({ tabKey: 'shipped', shown: [], cursor: null, hasMore: false, anim: '' })
     await flush()
-    expect(callAppMock).toHaveBeenCalledWith('getMyOrders', { cursor: undefined, limit: 20, status: 'shipped' })
+    expect(callAppMock).toHaveBeenCalledWith('getMyOrders', { cursor: undefined, limit: 20, status: 'shipped', withAfterSales: true })
     expect(page.data.anim).toBe('anim-next')
 
     page.switchTab('pending')

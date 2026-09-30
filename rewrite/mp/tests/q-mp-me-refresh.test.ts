@@ -2,13 +2,14 @@
 // 首次进入、上次没拉全、登录态变了、去改资料/看课/激活回来，照旧重拉。重试按钮和登录回调直接 refresh，不受影响。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-const { loginMock, getMyProgressMock, getMyCoursesMock } = vi.hoisted(() => ({
+// 性能批 #1/#4：我的课 + 进度并成一次 getMyLearning；订单格数字一次 countMyOrders
+const { loginMock, getMyLearningMock } = vi.hoisted(() => ({
   loginMock: vi.fn(),
-  getMyProgressMock: vi.fn(),
-  getMyCoursesMock: vi.fn(),
+  getMyLearningMock: vi.fn(),
 }))
-vi.mock('../api/user', () => ({ login: loginMock, getMyProgress: getMyProgressMock, deleteAccount: vi.fn() }))
-vi.mock('../api/learning', () => ({ getMyCourses: getMyCoursesMock }))
+vi.mock('../api/user', () => ({ login: loginMock, deleteAccount: vi.fn() }))
+vi.mock('../api/learning', () => ({ getMyLearning: getMyLearningMock }))
+vi.mock('../api/orders', () => ({ countMyOrders: async () => ({ ok: false }) }))
 vi.mock('../lib/courses', () => ({ getCoursesByIds: async () => [] }))
 vi.mock('../lib/pageContent', () => ({ getPageContent: async () => null }))
 
@@ -27,8 +28,7 @@ beforeEach(() => {
     switchTab: vi.fn(),
   }
   loginMock.mockReset().mockResolvedValue({ ok: true, user: { nickname: '鸭' } })
-  getMyProgressMock.mockReset().mockResolvedValue({ ok: true, list: [] })
-  getMyCoursesMock.mockReset().mockResolvedValue({ ok: true, list: [] })
+  getMyLearningMock.mockReset().mockResolvedValue({ ok: true, courses: [], progress: [] })
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -55,22 +55,22 @@ describe('「我」tab onShow 短时去重', () => {
     const page = await mountMe()
     await show(page)
     expect(loginMock).toHaveBeenCalledTimes(1)
-    expect(getMyProgressMock).toHaveBeenCalledTimes(1)
+    expect(getMyLearningMock).toHaveBeenCalledTimes(1)
     now += 29_000
     await show(page)
     expect(loginMock).toHaveBeenCalledTimes(1)
-    expect(getMyCoursesMock).toHaveBeenCalledTimes(1)
+    expect(getMyLearningMock).toHaveBeenCalledTimes(1)
     now += 2_000
     await show(page)
     expect(loginMock).toHaveBeenCalledTimes(2)
   })
 
   it('大白话：上次继续学习区没拉到——切回马上重拉，不把失败缓存 30 秒', async () => {
-    getMyProgressMock.mockResolvedValueOnce({ ok: false, error: 'CALL_TIMEOUT' })
+    getMyLearningMock.mockResolvedValueOnce({ ok: true, courses: [], progress: null }) // 进度读失败
     const page = await mountMe()
     await show(page)
     await show(page)
-    expect(getMyProgressMock).toHaveBeenCalledTimes(2)
+    expect(getMyLearningMock).toHaveBeenCalledTimes(2)
   })
 
   it('大白话：上次登录（资料）没拉到——切回马上重拉', async () => {

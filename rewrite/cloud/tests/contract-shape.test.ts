@@ -290,6 +290,37 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     expect(keysOf(r.list[0])).toEqual(AFTERSALE_KEYS)
   })
 
+  // 性能批 #3（老板 2026-10-01）：订单列表一次往返带回本人售后（叠加「售后中/已退款」），不再另拉 getMyAfterSales
+  it('getMyOrders withAfterSales：顶层多一键 [afterSales,hasMore,list,nextCursor,ok]；afterSales 行＝售后 16 键（applyRefund 真写入）；不传 flag 键集不变', async () => {
+    control.seed('orders', [AS_ORDER])
+    const a = await call('applyRefund', { orderId: 'oR', lineId: 'p1__基础款', reason: '尺寸不合适' })
+    expect(a.ok).toBe(true)
+    const r = await call('getMyOrders', { withAfterSales: true })
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['afterSales', 'hasMore', 'list', 'nextCursor', 'ok'])
+    expect(keysOf(r.afterSales[0])).toEqual(AFTERSALE_KEYS)
+    const plain = await call('getMyOrders')
+    expect(keysOf(plain)).toEqual(['hasMore', 'list', 'nextCursor', 'ok'])
+  })
+
+  // 性能批 #1：「我」页三个订单格数字一次往返（原三次 getMyOrders 各拉一页数条数）
+  it('countMyOrders：顶层 [counts,ok]；counts 三键 [paid,pending,shipped] 为本人各状态精确数；未登录 [error,ok]', async () => {
+    control.seed('orders', [
+      { _id: 'c1', _openid: 'oME', status: 'pending', createdAt: 1 },
+      { _id: 'c2', _openid: 'oME', status: 'pending', createdAt: 2 },
+      { _id: 'c3', _openid: 'oME', status: 'shipped', createdAt: 3 },
+      { _id: 'c4', _openid: 'oME', status: 'done', createdAt: 4 },
+      { _id: 'c5', _openid: 'oOTHER', status: 'paid', createdAt: 5 },
+    ])
+    const r = await call('countMyOrders')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['counts', 'ok'])
+    expect(keysOf(r.counts)).toEqual(['paid', 'pending', 'shipped'])
+    expect(r.counts).toEqual({ pending: 2, paid: 0, shipped: 1 })
+    control.setOpenId('')
+    expect(keysOf(await call('countMyOrders'))).toEqual(['error', 'ok'])
+  })
+
   it('getReviews：首页顶层 5 键含 summary；翻页 summary 键仍在（值 undefined·键集合不随页变）；评价行 7 键、summary 5 键——晒图只下发换好的临时地址', async () => {
     control.seed('reviews', [
       { _id: 'r1', productId: 'p1', picked: true, _openid: 'oA', name: '小明', rating: 5, tags: ['手感好'], text: '很好', spec: '基础款', photos: [], createdAt: 200 },
@@ -536,6 +567,21 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
     control.setOpenId('')
     const anon = await call('getMyProgress')
     expect(keysOf(anon)).toEqual(['error', 'ok']) // 失败态 list 键消失，与成功态不同形
+  })
+
+  // 性能批 #1/#4（老板 2026-10-01）：「我」页与我的课程页一次往返拿「我的课 + 进度」（原两次）
+  it('getMyLearning：顶层 [courses,ok,progress]；courses 行同 getMyCourses [courseId,enteredAt]；progress 行同 getMyProgress 7 键（trackEvent 真写入）；未登录 [error,ok]', async () => {
+    control.seed('qrcodes', [{ _id: 'CODE1', code: 'CODE1', courseId: 'c1', status: 'unused', activatedBy: null, activatedAt: null, createdAt: 1 }])
+    await call('activateCourse', { code: 'CODE1' })
+    await call('confirmEnter', { code: 'CODE1' })
+    await call('trackEvent', { type: 'segment_done', targetId: 's1', page: 'player', meta: { courseId: 'c1', lessonId: 'l1', at: 30, dur: 60 } })
+    const r = await call('getMyLearning')
+    expect(r.ok).toBe(true)
+    expect(keysOf(r)).toEqual(['courses', 'ok', 'progress'])
+    expect(keysOf(r.courses[0])).toEqual(['courseId', 'enteredAt'])
+    expect(keysOf(r.progress[0])).toEqual(['_id', '_openid', 'courseId', 'createdAt', 'done', 'last', 'updatedAt'])
+    control.setOpenId('')
+    expect(keysOf(await call('getMyLearning'))).toEqual(['error', 'ok'])
   })
 
   it('trackEvent：三条成功路径响应恒 [ok] 零载荷；events 写入 7 键含 _openid 但一个字节都不下发；NO_TYPE/META_TOO_BIG 各 [error,ok]', async () => {

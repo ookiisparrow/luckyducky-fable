@@ -13,7 +13,8 @@ export const activateCourse = (code: string): Promise<ApiResult> => touch(callAp
 export const confirmEnter = (code: string): Promise<ApiResult> => touch(callApp('confirmEnter', { code }))
 export const getCourses = (data?: { ids?: string[] }): Promise<ApiResult> =>
   data ? callApp('getCourses', data) : callApp('getCourses')
-export const getMyCourses = (): Promise<ApiResult> => callApp('getMyCourses')
+// 我的课 + 学习进度一次往返（性能批 #1/#4·替代 getMyCourses + getMyProgress 两次）：回 { courses, progress }，进度读失败 progress 为 null
+export const getMyLearning = (): Promise<ApiResult> => callApp('getMyLearning')
 export const getPlaybackUrl = (courseId: string, segmentId: string): Promise<ApiResult> => callApp('getPlaybackUrl', { courseId, segmentId })
 export const getHelpVideos = (): Promise<ApiResult> => callApp('getHelpVideos')
 // 求助面板·精选 FAQ 公开读（R37b·KB 单源·无鉴权只读，同 getProducts/getContent 口径）

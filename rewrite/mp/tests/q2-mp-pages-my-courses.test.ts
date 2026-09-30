@@ -37,10 +37,10 @@ async function mount(): Promise<Record<string, any>> {
 }
 
 beforeEach(() => {
+  // 性能批 #4：我的课 + 进度并成一次 getMyLearning（progress:null＝进度读失败）；课程目录仍走 getCourses（会话缓存）
   handlers = {
-    getMyCourses: () => ({ ok: true, list: [{ courseId: 'c1', enteredAt: 0 }] }),
+    getMyLearning: () => ({ ok: true, courses: [{ courseId: 'c1', enteredAt: 0 }], progress: [{ courseId: 'c1', done: { s1: true, s2: true } }] }),
     getCourses: () => ({ ok: true, list: COURSES }),
-    getMyProgress: () => ({ ok: true, list: [{ courseId: 'c1', done: { s1: true, s2: true } }] }),
   }
   callAppMock.mockReset().mockImplementation(async (action: string) => (handlers[action] ? handlers[action]() : { ok: false, error: 'UNEXPECTED' }))
   wxMock = { showToast: vi.fn(), navigateTo: vi.fn() }
@@ -59,14 +59,14 @@ describe('我的课程：加载', () => {
   })
 
   it('大白话：真的没进过课——落空态（给输码引导），不亮重试', async () => {
-    handlers.getMyCourses = () => ({ ok: true, list: [] })
+    handlers.getMyLearning = () => ({ ok: true, courses: [], progress: [] })
     const page = await mount()
     await page.reload()
     expect(page.data).toMatchObject({ loading: false, loadFailed: false, list: [] })
   })
 
   it('大白话：首次加载「我的课」或课程目录拉失败——亮重试，不装成没课、不弹提示；点重试回到加载中并重拉', async () => {
-    for (const broken of ['getMyCourses', 'getCourses']) {
+    for (const broken of ['getMyLearning', 'getCourses']) {
       const ok = handlers[broken]
       handlers[broken] = () => ({ ok: false, error: 'CALL_TIMEOUT' })
       const page = await mount()
@@ -86,7 +86,7 @@ describe('我的课程：加载', () => {
   it('大白话：已经显示了课卡再刷新失败——课卡不动、不亮重试，只轻提示', async () => {
     const page = await mount()
     await page.reload()
-    handlers.getMyCourses = () => ({ ok: false, error: 'CALL_FAIL' })
+    handlers.getMyLearning = () => ({ ok: false, error: 'CALL_FAIL' })
     await page.reload()
     expect(page.data).toMatchObject({ loading: false, loadFailed: false })
     expect(page.data.list[0].title).toBe('小棉鸭')
@@ -94,7 +94,7 @@ describe('我的课程：加载', () => {
   })
 
   it('大白话：只有进度没读到——课卡照常出，进度标「读不到」而不是谎报 0%', async () => {
-    handlers.getMyProgress = () => ({ ok: false, error: 'CALL_TIMEOUT' })
+    handlers.getMyLearning = () => ({ ok: true, courses: [{ courseId: 'c1', enteredAt: 0 }], progress: null })
     const page = await mount()
     await page.reload()
     expect(page.data.loadFailed).toBe(false)
@@ -103,10 +103,10 @@ describe('我的课程：加载', () => {
 
   it('大白话：两次刷新并发、先发的后回——旧回包（超时失败）丢掉，不把新结果盖成失败', async () => {
     let releaseOld!: (v: unknown) => void
-    handlers.getMyCourses = () => new Promise((r) => (releaseOld = r))
+    handlers.getMyLearning = () => new Promise((r) => (releaseOld = r))
     const page = await mount()
     const old = page.reload()
-    handlers.getMyCourses = () => ({ ok: true, list: [{ courseId: 'c1' }] })
+    handlers.getMyLearning = () => ({ ok: true, courses: [{ courseId: 'c1' }], progress: [] })
     await page.reload()
     releaseOld({ ok: false, error: 'CALL_TIMEOUT' })
     await old

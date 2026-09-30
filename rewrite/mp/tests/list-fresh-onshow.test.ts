@@ -30,11 +30,9 @@ const calls = (action: string) => callAppMock.mock.calls.filter((c) => c[0] === 
 
 beforeEach(() => {
   const handlers: Record<string, () => unknown> = {
-    getMyOrders: () => ({ ok: true, list: [], nextCursor: null, hasMore: false }),
-    getMyAfterSales: () => ({ ok: true, list: [], nextCursor: null, hasMore: false }),
-    getMyCourses: () => ({ ok: true, list: [] }),
+    getMyOrders: () => ({ ok: true, list: [], nextCursor: null, hasMore: false, afterSales: [] }),
+    getMyLearning: () => ({ ok: true, courses: [], progress: [] }),
     getCourses: () => ({ ok: true, list: [] }),
-    getMyProgress: () => ({ ok: true, list: [] }),
   }
   callAppMock.mockReset().mockImplementation(async (action: string) => (handlers[action] ? handlers[action]() : { ok: false, error: 'UNEXPECTED' }))
   ;(globalThis as any).wx = { showToast: vi.fn(), navigateTo: vi.fn() }
@@ -63,23 +61,23 @@ describe('返回免重拉', () => {
     const page = await mount('../pages/my-courses/my-courses')
     page.onShow()
     await flush()
-    expect(calls('getMyCourses')).toBe(1)
+    expect(calls('getMyLearning')).toBe(1)
     page.onShow()
     await flush()
-    expect(calls('getMyCourses')).toBe(1)
+    expect(calls('getMyLearning')).toBe(1)
     const { markStale } = await import('../utils/fresh')
     markStale('learning')
     page.onShow()
     await flush()
-    expect(calls('getMyCourses')).toBe(2)
-    // 进度读失败：列表照常渲染但不记新鲜，再 onShow 会重试
-    callAppMock.mockImplementation(async (action: string) => (action === 'getMyProgress' ? { ok: false, error: 'CALL_TIMEOUT' } : { ok: true, list: [] }))
+    expect(calls('getMyLearning')).toBe(2)
+    // 进度读失败（progress:null）：列表照常渲染但不记新鲜，再 onShow 会重试
+    callAppMock.mockImplementation(async (action: string) => (action === 'getMyLearning' ? { ok: true, courses: [], progress: null } : { ok: true, list: [] }))
     markStale('learning')
     page.onShow()
     await flush()
-    expect(calls('getMyCourses')).toBe(3)
+    expect(calls('getMyLearning')).toBe(3)
     page.onShow()
     await flush()
-    expect(calls('getMyCourses')).toBe(4)
+    expect(calls('getMyLearning')).toBe(4)
   })
 })

@@ -1,10 +1,10 @@
 // 「我」页：静默登录回灌资料 + 继续学习卡 + 入口列。
 // 登录零资料采集；继续学习定位纯函数（不假装有课·无课卡片走「去逛逛」兜底）。
 import { tapHaptic } from '../../lib/haptics'
-import { login, getMyProgress, updateProfile } from '../../api/user'
-import { getMyOrders } from '../../api/orders'
+import { login, updateProfile } from '../../api/user'
+import { countMyOrders } from '../../api/orders'
 import { countBadge } from '../../lib/mapOrders'
-import { getMyCourses } from '../../api/learning'
+import { getMyLearning } from '../../api/learning'
 import { getCoursesByIds } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（我页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getPageContent } from '../../lib/pageContent'
@@ -24,7 +24,7 @@ import { FRESH_MS, isFresh } from '../../utils/fresh'
 
 // 切 tab 回「我」的去重窗（utils/fresh 单源）：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付；
 // 窗内若做过订单写操作或写过进度（api 层标脏），照样重拉——数字与续播位置不显示旧的。
-const COUNT_PAGE = 20 // 订单格数字按一页数（满页显示 20+）
+const COUNT_CAP = 20 // 订单格数字上限（超过显示 20+·云端给精确数）
 
 function continueCourseIds(progress: unknown, mine: unknown): string[] {
   const ids: string[] = []
@@ -146,34 +146,35 @@ Page({
       this._freshAgreed = agreed
     }
   },
-  /** 订单格数字：待支付/待发货/待收货各拉一页数条数（countBadge）；失败的格不显示数字。 */
+  /** 订单格数字（性能批 #1）：三态精确数一次往返（countMyOrders）；某一态失败那格不显示数字，整个调用失败/抛错三格都不显示。 */
   async refreshCounts(seq: number) {
-    const keys = ['pending', 'paid', 'shipped'] as const
-    // 单路失败（含云调用直接抛错）只让那一格不显示数字，不冒成未处理异常
-    const rs = await Promise.all(keys.map((k) => getMyOrders(undefined, COUNT_PAGE, k).catch(() => ({ ok: false }))))
+    const r = await countMyOrders().catch(() => ({ ok: false }) as { ok: boolean; counts?: unknown })
     if (seq !== this._seq) return
-    this.setData({ counts: { pending: countBadge(rs[0], COUNT_PAGE), paid: countBadge(rs[1], COUNT_PAGE), shipped: countBadge(rs[2], COUNT_PAGE) } })
+    const c = ((r.ok && r.counts) || {}) as Record<string, unknown>
+    this.setData({ counts: { pending: countBadge(c.pending, COUNT_CAP), paid: countBadge(c.paid, COUNT_CAP), shipped: countBadge(c.shipped, COUNT_CAP) } })
   },
-  /** 返回是否拉全（供 refresh 判断能否进去重窗）。 */
+  /** 返回是否拉全（供 refresh 判断能否进去重窗）。我的课 + 进度一次往返（性能批 #1/#4）；进度读失败（progress:null）同失败态——没进度定位不了续播。 */
   async refreshCont(seq: number): Promise<boolean> {
-    const [progress, mine] = await Promise.all([getMyProgress(), getMyCourses()])
+    const r = await getMyLearning()
     if (seq !== this._seq) return false
-    if (!progress.ok || !mine.ok) {
+    if (!r.ok || !Array.isArray(r.progress)) {
       this.setData({ contLoaded: true, ...(this.data.cont ? {} : { contFailed: true }) })
       return false
     }
-    const ids = continueCourseIds(progress.list, mine.list)
+    const progress = r.progress as unknown[]
+    const mine = r.courses
+    const ids = continueCourseIds(progress, mine)
     const courses = ids.length ? await getCoursesByIds(ids) : []
     if (seq !== this._seq) return false
     if (courses === null) {
       this.setData({ contLoaded: true, ...(this.data.cont ? {} : { contFailed: true }) })
       return false
     }
-    const cont = continueResolve(progress.list, mine.list, courses)
+    const cont = continueResolve(progress, mine, courses)
     writeStoredCont(cont)
     const course = cont ? courses.find((c) => String(c.id || '') === cont.courseId) : null
-    const contMain = cont ? contMainLine(cont, course, !!course && !!hatchedCourseId(progress.list, [course])) : ''
-    this.setData({ cont, contMain, contFailed: false, contLoaded: true, hatchKey: hatchedCourseId(progress.list, courses) })
+    const contMain = cont ? contMainLine(cont, course, !!course && !!hatchedCourseId(progress, [course])) : ''
+    this.setData({ cont, contMain, contFailed: false, contLoaded: true, hatchKey: hatchedCourseId(progress, courses) })
     if (cont) void playbackCache.prefetch(cont.courseId, cont.segmentId)
     return true
   },

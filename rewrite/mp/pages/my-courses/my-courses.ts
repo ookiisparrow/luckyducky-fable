@@ -1,7 +1,6 @@
 // 我的课程：已进课课程列表（join 课程标题 + 段粒度学习进度）。
 import { tapHaptic } from '../../lib/haptics'
-import { getMyCourses } from '../../api/learning'
-import { getMyProgress } from '../../api/user'
+import { getMyLearning } from '../../api/learning'
 import { getAllCourses } from '../../lib/courses'
 import { mapMyCourses, type MyCourseVM } from '../../lib/mapLearning'
 import { keyDown, keyUp } from '../../lib/keyFx'
@@ -26,10 +25,10 @@ Page({
     if (!isFresh('learning', this._freshAt, FRESH_MS)) void this.reload()
   },
   async reload() {
-    // 三路组合（云为唯一真相·纯前端 join 段数与 done map）：getMyCourses/getMyProgress 实时拉（进度写过回来必新鲜·
+    // 两路组合（云为唯一真相·纯前端 join 段数与 done map）：getMyLearning 一次拿我的课 + 进度（性能批 #4·进度写过回来必新鲜·
     // 由 utils/fresh 标脏保证）；课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）。
     const seq = ++this._seq
-    const [mine, courses, progress] = await Promise.all([getMyCourses(), getAllCourses(), getMyProgress()])
+    const [mine, courses] = await Promise.all([getMyLearning(), getAllCourses()])
     // 慢/超时回包不覆盖较新结果：tab 来回切/返回触发的后一次 onShow 已落地时，前一次（尤其超时 ok:false）
     // 迟到的 setData 会把有课列表盖成空态、误显「输入激活码」——代次不符即丢弃。
     if (seq !== this._seq) return
@@ -44,12 +43,12 @@ Page({
     this.setData({
       loading: false,
       loadFailed: false,
-      // 进度失败传 null 而非 []（根因#14）：[] 与「真的一段没学过」不可区分，课卡会谎报
+      // 进度失败云端给 null 而非 []（根因#14）：[] 与「真的一段没学过」不可区分，课卡会谎报
       // 「已学 0/80 · 0%」；null 落 progressUnknown，界面显示「进度暂时读不到，点此重试」（点按走 onRetryLoad，本页无下拉刷新）。
       // 课程列表本身照常渲染（进度只是卡上一行，不该因它失败把整页打成失败态）。
-      list: mapMyCourses(mine.list, courses || [], progress.ok ? progress.list : null),
+      list: mapMyCourses(mine.courses, courses || [], Array.isArray(mine.progress) ? mine.progress : null),
     })
-    if (progress.ok) this._freshAt = Date.now() // 进度没拉到不记新鲜（下次 onShow 再试，别把「读不到」缓存住）
+    if (Array.isArray(mine.progress)) this._freshAt = Date.now() // 进度没拉到不记新鲜（下次 onShow 再试，别把「读不到」缓存住）
   },
   // 空态「去逛逛」：回首页（从首屏购买区看起·15 问 12b）
   onGoShop() {

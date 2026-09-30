@@ -25,7 +25,11 @@ export const createOrder = (
 
 export const pay = (id: string): Promise<ApiResult> => touch(callApp('pay', { id }))
 
-export const getMyOrders = (cursor?: unknown, limit = 20, status = ''): Promise<ApiResult> => callApp('getMyOrders', { cursor, limit, status })
+// withAfterSales（性能批 #3）：一次往返顺带本人最近 100 条售后（回包多 afterSales 键·读失败不带键）；订单列表用，别处照旧
+export const getMyOrders = (cursor?: unknown, limit = 20, status = '', withAfterSales = false): Promise<ApiResult> =>
+  callApp('getMyOrders', withAfterSales ? { cursor, limit, status, withAfterSales: true } : { cursor, limit, status })
+// 「我」页订单格数字（性能批 #1）：三态精确数一次往返·回 { counts: { pending, paid, shipped } }，单态失败给 null
+export const countMyOrders = (): Promise<ApiResult> => callApp('countMyOrders')
 export const getOrderById = (id: string): Promise<ApiResult> => callApp('getOrderById', { id })
 export const confirmReceive = (id: string): Promise<ApiResult> => touch(callApp('confirmReceive', { id }))
 export const cancelOrder = (id: string): Promise<ApiResult> => touch(callApp('cancelOrder', { id }))
