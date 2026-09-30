@@ -18,16 +18,16 @@ describe('像素皮肤生成', () => {
     expect(insets(circleInside(CIRCLES.radio.n), 11)).toEqual([3, 2, 1, 0, 0, 0, 0, 0, 1, 2, 3])
     expect(insets(circleInside(CIRCLES.disc.n), 28)).toEqual([10, 8, 6, 5, 4, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 4, 5, 6, 8, 10])
   })
-  it('大白话：白卡——[3,1,1] 阶梯、一格发丝描边沿阶梯走（4 邻接）、里面白底；凹槽顶一格 sunk-2 代替内阴影', () => {
+  it('大白话：凹槽——[3,1,1] 阶梯；聚焦描边一格沿阶梯走（4 邻接）、里面凹槽底；常态顶一格 sunk-2 代替内阴影', () => {
     const inside = (cols, rows, r) => (x, y) => {
       const n = y < r.length ? r[y] : rows - 1 - y < r.length ? r[rows - 1 - y] : 0
       return x >= 0 && y >= 0 && x < cols && y < rows && x >= n && x < cols - n
     }
-    const C = paint(SKINS.card, inside(11, 11, [3, 1, 1]), 11, 11)
-    expect(C[0].slice(0, 4)).toEqual([null, null, null, SKINS.card.ring])
-    expect(C[1].slice(0, 4)).toEqual([null, SKINS.card.ring, SKINS.card.ring, SKINS.card.face])
-    expect(C[5][0]).toBe(SKINS.card.ring)
-    expect(C[5][5]).toBe(SKINS.card.face)
+    const C = paint(SKINS.wellOn, inside(11, 11, [3, 1, 1]), 11, 11)
+    expect(C[0].slice(0, 4)).toEqual([null, null, null, SKINS.wellOn.ring])
+    expect(C[1].slice(0, 4)).toEqual([null, SKINS.wellOn.ring, SKINS.wellOn.ring, SKINS.wellOn.face])
+    expect(C[5][0]).toBe(SKINS.wellOn.ring)
+    expect(C[5][5]).toBe(SKINS.wellOn.face)
     const W = paint(SKINS.well, inside(11, 11, [3, 1, 1]), 11, 11)
     expect(W.map((r) => r[5]).slice(0, 2)).toEqual([SKINS.well.hl, SKINS.well.face])
   })
@@ -47,7 +47,7 @@ describe('像素皮肤生成', () => {
 describe('页面不再写平滑圆角/模糊投影（按键除外）', () => {
   // 例外：按键（老板 2026-09-30 定回平滑线性描边·app.wxss .k-* 与页面里的键帽/勾选框/回顶键）、骨架灰条（规格：骨架不随 2c 改）、
   // 原生 <video> 外框（同层渲染下阶梯裁切不可靠，留平滑）
-  const KEYS = /\.k(-[\w-]+)?\b|ps-btn|co-step-key|co-check|ca-check|ca-step-key|rv-box|rv-star-on|ae-knob|ae-region|rv-tag\b|hm-backtop|nv-back|wl-back|me-av-k|me-play|pe-av-k|lp-back-key|ls-check/
+  const KEYS = /\.k(-[\w-]+)?\b|ps-btn|\.ca-step\b|co-step-key|co-check|ca-check|ca-step-key|rv-box|rv-star-on|ae-knob|ae-region|rv-tag\b|hm-backtop|nv-back|wl-back|me-av-k|me-play|pe-av-k|lp-back-key|ls-check/
   const KEEP = /skel|lp-stage|lp-help-play/
   const rules = () => src('.wxss').filter(([f]) => !f.startsWith('styles/')).flatMap(([f, s]) => [...s.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => [f, m[1].trim(), m[2]]))
   it('大白话：border-radius 只剩按键、骨架条与视频外框', () => {

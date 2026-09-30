@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 像素皮肤生成器（Claude Design「像素化落地规格.md」2c/3a·老板 2026-09-30 定稿；按键后改回平滑）→ rewrite/mp/styles/px-skin.wxss
-// 卡片/凹槽/半屏/提示框的阶梯圆角 + 描边 + 顶高光全部画进一张点阵 SVG，用 border-image 九宫格贴在 ::before 上——
+// 凹槽/半屏/提示框的阶梯圆角（白卡 v6 Lite 取消·老板 2026-09-30） + 描边 + 顶高光全部画进一张点阵 SVG，用 border-image 九宫格贴在 ::before 上——
 // 不用 box-shadow/border-radius（阶梯会把外投影裁掉·描边在拐角断开）。点阵算法照搬设计稿 pixelize.js 的 pz-step。
 // 一格 = 2px。改完跑 `node scripts/gen-px-skin.mjs`；tests/px-skin.test.ts 核对产物与本脚本一致。
 import { writeFileSync } from 'node:fs'
@@ -12,8 +12,6 @@ const HAIR = ['#111111', 0.14]
 // 阶梯写法 [a,b,c]：从角起第 1 行缩进 a 格、第 2 行 b 格…之后 0；top＝只上两角（半屏）。
 // 颜色写 [hex, 透明度]；down＝按下态（规格：键座 −1 格、外硬投影收为 0；面色沿用现有按下色）。
 export const SKINS = {
-  card: { r: [3, 1, 1], face: '#ffffff', ring: HAIR, down: { face: '#f3f3f0' } },
-  cardOn: { r: [3, 1, 1], face: '#ffffff', ring: '#8a5ae0' },
   well: { r: [3, 1, 1], face: '#ededea', hl: '#e3e3df' },
   wellOn: { r: [3, 1, 1], face: '#ededea', ring: '#8a5ae0' },
   wellWarn: { r: [3, 1, 1], face: '#ededea', ring: '#f4bd3f' },
@@ -36,12 +34,9 @@ const ALIAS = {
   toast: ['.ld-toast'],
   sheet: ['.sh-panel'],
 }
-const DOWN_ALIAS = {
-  card: ['.px-card.k-card-down'],
-}
 // 挂皮肤的元素要成定位与层叠上下文（::before 垫在字下面）；页面自己写 fixed/absolute 的以页面为准（后加载）
 const HOSTS = ['.px-skin', '.well', '.sh-panel', '.ld-toast']
-export const ALIAS_CLASSES = [...Object.values(ALIAS), ...Object.values(DOWN_ALIAS)].flat().flatMap((sel) => sel.match(/[a-z][\w-]*/g))
+export const ALIAS_CLASSES = Object.values(ALIAS).flat().flatMap((sel) => sel.match(/[a-z][\w-]*/g))
 // 只裁外形（照片/缩略图/标签/头像）：按原圆角档
 export const CLIPS = { 4: [1], 6: [2, 1], 8: [3, 1, 1] }
 
@@ -134,7 +129,6 @@ export function nineSlice(p) {
   )
 }
 
-const withDown = (p) => ({ ...p, ...p.down, seat: Math.max(0, (p.seat || 0) - 1), drop: 0, dropc: undefined })
 
 // 阶梯裁切 polygon（四角对称；像素单位）
 export function clipPath(r, top = false) {
@@ -186,7 +180,6 @@ export function render() {
     const n = kebab(name)
     const sel = (list) => list.map((x) => x + '::before').join(',\n')
     out.push(`${sel([`.px-${n}`, ...(ALIAS[name] || [])])} {\n  ${nineSlice(p)}\n}`)
-    if (p.down) out.push(`${sel([`.px-${n}-down`, ...(DOWN_ALIAS[name] || [])])} {\n  ${nineSlice(withDown(p))}\n}`)
   }
   for (const [name, c] of Object.entries(CIRCLES)) {
     const inside = circleInside(c.n)

@@ -36,7 +36,7 @@
        按卡片＝右侧播放键下沉（设计稿按卡时下沉卡内的 data-k 键，整卡不变灰）。
        缩略图：课程数据（publicCourse）不带封面图，这里一直是斜纹占位。 -->
   <block wx:if="{{loggedIn}}">
-  <view wx:if="{{cont}}" class="me-card px-skin px-card" hover-start-time="20" hover-class="me-card-down" hover-stay-time="100" bind:tap="onContinue">
+  <view wx:if="{{cont}}" class="me-card" hover-start-time="20" hover-class="me-card-down" hover-stay-time="100" bind:tap="onContinue">
     <view class="me-thumb"></view>
     <view class="me-card-t">
       <text class="t-sys me-card-sub">继续学习 · {{cont.courseTitle}}</text>
@@ -44,20 +44,20 @@
     </view>
     <view class="k k-ink me-play"><px-i name="play" /></view>
   </view>
-  <view wx:elif="{{contFailed}}" class="me-card px-skin px-card">
+  <view wx:elif="{{contFailed}}" class="me-card">
     <px-anim name="signal" size="2" />
     <text class="me-card-main me-card-grow">没连上网络</text>
     <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryCont" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
   <!-- 一门课都没有（15 问 13a·与「我的课程」空状态同一套说法和出口）：不做应用内扫码，给「去逛逛」 -->
-  <view wx:elif="{{contLoaded}}" class="me-card px-skin px-card">
+  <view wx:elif="{{contLoaded}}" class="me-card">
     <view class="me-card-t me-card-grow">
       <text class="me-card-main">还没有课程</text>
       <text class="t-sys me-card-sub">用微信扫激活卡开课</text>
     </view>
     <view class="k k-sm k-light me-mini" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" catch:tap="onGoShop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去逛逛</view>
   </view>
-  <view wx:else class="me-card px-skin px-card">
+  <view wx:else class="me-card">
     <view class="me-thumb skel"></view>
     <view class="me-card-t">
       <view class="skel me-skel-l"></view>

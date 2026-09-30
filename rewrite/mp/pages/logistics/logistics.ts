@@ -6,7 +6,7 @@ import { getOrderById } from '../../api/orders'
 import { mapOrder } from '../../lib/mapOrders'
 import { expressCode } from '../../lib/express'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { goBackOrHome } from '../../lib/nav'
+import { afterReturn, goBackOrHome } from '../../lib/nav'
 import { groundGap } from '../../lib/ground'
 import { fxHint } from '../../lib/pxFx'
 
@@ -30,7 +30,7 @@ Page({
     this.orderId = String(query.id || '')
   },
   onShow() {
-    void this.reload()
+    afterReturn(this, () => void this.reload()) // 返回本页等返回动画走完再刷新（切页掉帧·2026-10-01）
   },
   async reload() {
     if (!this.orderId) {

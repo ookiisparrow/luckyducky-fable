@@ -4,7 +4,7 @@ import { getOrderById, pay, confirmReceive, cancelOrder, applyRefund, estimateRe
 import { mapPayResult } from '../../lib/payFlow'
 import { mapOrder, orderSteps, statusHead, detailSub, reviewUrl, payLeftMs, money, type OrderVM, type OrderLineVM, type StepState } from '../../lib/mapOrders'
 import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, rejectedLineIdsOf, REFUND_REJECTED, withdrawableLines, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
-import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
+import { afterReturn, goBackOrHome, navigateOrRedirect } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
@@ -88,7 +88,7 @@ Page({
     this.onHide()
   },
   onShow() {
-    void this.reload()
+    afterReturn(this, () => void this.reload()) // 返回本页等返回动画走完再刷新（切页掉帧·2026-10-01）
     if (!this._ticker) this._ticker = setInterval(() => this.tick(), 1000)
   },
   onHide() {

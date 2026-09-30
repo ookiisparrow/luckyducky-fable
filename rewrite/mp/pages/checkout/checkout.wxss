@@ -92,7 +92,7 @@ page {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 .co-item:first-child,
 .co-addon-head + .co-item {
@@ -238,7 +238,7 @@ page {
   flex-wrap: wrap; /* 协议小字独占第一行，应付 + 提交在第二行 */
   align-items: center;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   background: var(--v5-canvas);
 }
 /* 协议小字（老板拍板 10）：书名号上下各让 8px 扩热区，负外边距抵掉、视觉不变 */
@@ -270,4 +270,8 @@ page {
 .co-submit {
   flex: 0 0 calc((100% - 108px) * 1.25 / 2.25 + 24px);
   gap: 12px;
+}
+/* 确认订单信息块（v6 Lite：取消白卡，只留顶部分隔线） */
+.co-card {
+  box-shadow: inset 0 1px 0 var(--v5-hair-soft);
 }

@@ -123,13 +123,7 @@ describe('底部 TabBar', () => {
     expect(c.data.hidden).toBe(false)
   })
 
-  it('大白话：加购后 bump()——购物车数字刷新并弹一下（320ms 后复位）', async () => {
-    const c = await mountComp('../custom-tab-bar/index')
-    c.bump()
-    expect(c.data.bump).toBe(true)
-    vi.advanceTimersByTime(320)
-    expect(c.data.bump).toBe(false)
-  })
+  // 加购 bump() 已随 v6 Lite「底栏不显示件数」删除（老板 2026-09-30·见 v6-lite-1001.test）
 })
 
 describe('登录半屏', () => {

@@ -12,14 +12,14 @@ page {
 }
 .ad-list {
   margin: 12px 16px 16px;
-  border-bottom: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .ad-row {
   padding: 12px 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 /* 像素圆单选（像素化 3a：11×11 格·外形见 px-skin .px-circle-radio(-on)）；选中圆心 px-i dot 居中 */
 .ad-radio {

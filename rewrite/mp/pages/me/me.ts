@@ -20,6 +20,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint, fxLoaded, fxLoading, fxToast, fxTransit } from '../../lib/pxFx'
 import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 import { groundGap } from '../../lib/ground'
+import { afterReturn } from '../../lib/nav'
 
 // 切 tab 回「我」的去重窗：每次刷新是 login+CMS+进度+我的课（+课程）4-5 次云调用，tab 来回切不该每次都付。
 // ponytail: 窗内从别的 tab 看完课再切回，继续学习卡的续播秒数最多旧 30s；要更准就改成播放器写进度时主动作废。
@@ -91,7 +92,7 @@ Page({
     if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('me')
     loginGate.maybePromptOnce() // 软门槛本会话至多弹一次（首页/我页共用·未同意才弹）
     if (Date.now() - this._freshAt < ME_FRESH_MS && this._freshAgreed === loginGate.hasAgreed()) return
-    void this.refresh()
+    afterReturn(this, () => void this.refresh()) // 回到本页等返回动画走完再刷新（切页掉帧·2026-10-01）
   },
   onHide() {
     releaseExitGuard(this) // 切走本 tab：清在途重武装定时器（不回调已隐藏页的 setData）
@@ -195,7 +196,7 @@ Page({
       // 续播到秒（数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段·不拼）
       const at = c.resumeAt > 0 ? '&t=' + c.resumeAt : ''
       const url = '/pages/player/player?courseId=' + c.courseId + seg + at
-      void fxTransit(this, 'dither', '.me-card', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
+      void fxTransit(this, '.me-card', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
     } else {
       // 兜底去逛逛→首页应从头逛起：防首页上次恰好滚到 FAQ 板块的旧滚动位置残留，造成「弹出大家都在问」错位观感
       goHomeTab()

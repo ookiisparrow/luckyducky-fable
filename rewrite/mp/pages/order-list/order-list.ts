@@ -10,6 +10,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { navBottom } from '../../lib/ground'
+import { afterReturn } from '../../lib/nav'
 
 const HOLD_MS = 700 // 按住多久算取消（设计稿 data-ms=700·拍板 7）
 let hold: Hold | null = null // 当前按住取消的那张卡（lib/hold）
@@ -109,7 +110,7 @@ Page({
     this.onHide()
   },
   onShow() {
-    void this.reload()
+    afterReturn(this, () => void this.reload()) // 返回本页等返回动画走完再刷新（切页掉帧·2026-10-01）
     if (!this._ticker) this._ticker = setInterval(() => this.tick(), 1000)
   },
   onHide() {

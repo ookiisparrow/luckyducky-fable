@@ -91,7 +91,7 @@ page {
 }
 .rv-item {
   padding: 12px 0;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -155,7 +155,7 @@ page {
 /* 标签筛选后为空（设计稿 A3） */
 .rv-none {
   padding: 32px 0;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   text-align: center;
   font-size: 17px;
   font-weight: 500;

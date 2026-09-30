@@ -125,7 +125,7 @@ describe('静态小修', () => {
     expect(tagOf(cartWxml, 'class="ca-mid"')).toContain('hover-class=')
     expect(tagOf(orderWxml, 'od-as-go')).toContain('hover-class=')
     expect(tagOf(reviewWxml, 'rv-anon')).toContain('hover-class=')
-    expect(tagOf(welcomeWxml, 'class="wl-hit"')).toContain('hover-class="wl-hit-down"')
+    expect(tagOf(welcomeWxml, 'class="wl-hit"')).toContain('hover-class="press-fade"') // v6 Lite 返回去键帽：按下淡一下
     expect(tagOf(playerWxml, 'class="lp-back"')).toContain('hover-class="lp-back-down"')
   })
   it('大白话：我的课程/目录页骨架有微光，缩略占位和真实缩略图一样大', () => {

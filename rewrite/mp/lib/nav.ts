@@ -25,3 +25,19 @@ export function navigateOrRedirect(url: string): void {
   if (getCurrentPages().length >= 8) wx.redirectTo({ url })
   else wx.navigateTo({ url, fail: () => wx.redirectTo({ url }) })
 }
+
+// 返回本页不抢帧（老板 2026-10-01「重点排查左上方的返回键」）：返回键本身只 navigateBack，卡的是退回到的这页 onShow
+// 立刻重拉 + 大段 setData，回包撞在系统返回滑动（约 250–300ms）里重排整页。首次露面照旧立刻拉（首屏要数据）；
+// 之后回到本页，刷新等 RETURN_SETTLE_MS 再跑；这期间本页已出栈（用户又走了）就不跑。
+export const RETURN_SETTLE_MS = 350
+const shownOnce = new WeakSet<object>()
+export function afterReturn(page: object, refresh: () => void): void {
+  if (!shownOnce.has(page)) {
+    shownOnce.add(page)
+    refresh()
+    return
+  }
+  setTimeout(() => {
+    if (getCurrentPages().indexOf(page as WechatMiniprogram.Page.Instance<WechatMiniprogram.IAnyObject, WechatMiniprogram.IAnyObject>) >= 0) refresh()
+  }, RETURN_SETTLE_MS)
+}

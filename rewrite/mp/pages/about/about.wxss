@@ -51,7 +51,7 @@ page {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 .ab-row-t {
   flex: 1;

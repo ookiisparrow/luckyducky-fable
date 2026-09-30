@@ -87,7 +87,7 @@ page {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 .ct-no {
   min-width: 22px;
@@ -133,7 +133,7 @@ page {
   font-weight: 600;
 }
 .ct-toc-end {
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 
 /* 加载中骨架 */

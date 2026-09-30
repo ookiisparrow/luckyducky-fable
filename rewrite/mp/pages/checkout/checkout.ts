@@ -12,6 +12,7 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxConfirm, fxHint } from '../../lib/pxFx'
 import { groundGap } from '../../lib/ground'
+import { afterReturn } from '../../lib/nav'
 
 const SUBMITTED_MS = 600 // 设计稿 submitOrder：建单成功后按键打勾「已提交」停 600ms 再拉起支付
 // 取消支付提示（老板拍板 4·设计稿 payClose）。15 分钟＝云端付款时限 shared PAY_WINDOW_MS（小程序进不了 shared，
@@ -58,8 +59,8 @@ Page({
     }
   },
   onShow() {
-    // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址
-    void this.refresh()
+    // onShow 而非 onLoad：从地址列表/编辑页返回时刷新选中地址（返回本页等返回动画走完再刷·切页掉帧 2026-10-01）
+    afterReturn(this, () => void this.refresh())
   },
   // 600ms 空草稿自动返回起表纪律：navigateBack 若打在前向转场未落地的窗口内（冷启动
   // 转场实测可迟至 ~800ms），开发者工具 Nightly≥2.02.2607232 的模拟器导航状态机会死锁（真机同族竞态未必死锁，

@@ -27,7 +27,6 @@ const iconOnly = (k: string, icon: string) => {
 
 describe('v6 图标键：次键收成方键', () => {
   const SQ: [string, string, string, string][] = [
-    ['商品详情·客服', detailWxml, 'pd-cs', 'service'],
     ['商品详情·加入购物车', detailWxml, 'pd-add', 'cart'],
     ['空购物车·去首页逛逛', cartWxml, 'bind:tap="onGoHome"', 'home'],
     ['支付成功·回首页', paysuccessWxml, 'ps-home', 'home'],

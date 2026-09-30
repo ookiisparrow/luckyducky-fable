@@ -12,6 +12,7 @@ import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer } from '../../lib/mapPages'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxHint, fxTransit } from '../../lib/pxFx'
+import { afterReturn } from '../../lib/nav'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -63,7 +64,10 @@ Page({
     if (!courseId) return
     this.setData({ bg: this.cmsHero || bgFor(this.home, courseId, 'activated') })
   },
-  async onShow() {
+  onShow() {
+    afterReturn(this, () => void this.refreshToc()) // 返回本页等返回动画走完再刷新（切页掉帧·2026-10-01）
+  },
+  async refreshToc() {
     const courseId = this.data.courseId
     if (!courseId) return // onLoad 已落 missing 态（courseId 缺失），onShow 不重复处理
     const seq = ++this._seq
@@ -113,7 +117,7 @@ Page({
     // 续播到秒（数据已在库·接通最后一公里）：resumeAt>0 才拼 &t=（0=从头/挑段起播·不拼）；点课时行（onTapLesson）不带 t＝从头。
     const at = t.resumeAt > 0 ? '&t=' + t.resumeAt : ''
     const url = '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId + at
-    void fxTransit(this, 'dither', '.ct-start', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
+    void fxTransit(this, '.ct-start', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
   },
   // 课时行点击：firstPlayableSegId 非空跳该段；空＝本课时无可播视频（半上线），诚实提示。
   onTapLesson(e: WechatMiniprogram.TouchEvent) {

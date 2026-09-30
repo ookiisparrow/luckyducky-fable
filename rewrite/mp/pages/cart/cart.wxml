@@ -10,7 +10,7 @@
       <view class="ca-rows">
         <view class="ca-row" wx:for="{{items}}" wx:key="lineId">
           <view class="ca-check-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle">
-            <view class="k k-sm k-light ca-check" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+            <view class="k k-sm k-light ca-check" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
               <px-i wx:if="{{item.selected}}" name="check" tone="var(--v5-violet)" />
             </view>
           </view>
@@ -27,18 +27,18 @@
             <view class="ca-step">
               <!-- 数量 >1：减号；=1：红色 ×，按住 0.6s 删除（防误删·设计稿「危险操作用浅色键+红字+长按」） -->
               <view wx:if="{{item.qty > 1}}" class="ca-step-hit ca-step-l" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onDec">
-                <view class="k k-sm k-light ca-step-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="minus" /></view>
+                <view class="ca-step-key" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="minus" /></view>
               </view>
               <view wx:else class="ca-step-hit ca-step-l" data-line="{{item.lineId}}" data-id="{{item.id}}" data-sku="{{item.sku}}"
                 catch:touchstart="onHoldStart" bind:touchmove="onHoldMove" catch:touchend="onHoldEnd" catch:touchcancel="onHoldEnd">
-                <view class="k k-sm k-light ca-step-key ca-del {{holding === item.lineId ? 'ca-del-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+                <view class="ca-step-key ca-del {{holding === item.lineId ? 'ca-del-on' : ''}}" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
                   <view class="ca-del-fill"></view>
                   <px-i name="times" />
                 </view>
               </view>
               <text class="mono ca-qty">{{item.qty}}</text>
               <view class="ca-step-hit ca-step-r" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onInc">
-                <view class="k k-sm k-light ca-step-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
+                <view class="ca-step-key" hover-start-time="20" hover-class="k-row-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="plus" /></view>
               </view>
             </view>
           </view>

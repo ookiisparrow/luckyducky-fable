@@ -27,16 +27,6 @@
   pointer-events: none;
   box-sizing: border-box;
 }
-.px-card::before {
-  border-style: solid; border-color: transparent; border-width: 10px 10px 10px; border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 11 11' shape-rendering='crispEdges'%3E%3Cpath fill='%23111111' fill-opacity='0.14' d='M3 0h5v1h-5zM1 1h2v1h-2zM8 1h2v1h-2zM1 2h1v1h-1zM9 2h1v1h-1zM0 3h1v1h-1zM10 3h1v1h-1zM0 4h1v1h-1zM10 4h1v1h-1zM0 5h1v1h-1zM10 5h1v1h-1zM0 6h1v1h-1zM10 6h1v1h-1zM0 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM9 8h1v1h-1zM1 9h2v1h-2zM8 9h2v1h-2zM3 10h5v1h-5z'/%3E%3Cpath fill='%23ffffff' d='M3 1h5v1h-5zM2 2h7v1h-7zM1 3h9v1h-9zM1 4h9v1h-9zM1 5h9v1h-9zM1 6h9v1h-9zM1 7h9v1h-9zM2 8h7v1h-7zM3 9h5v1h-5z'/%3E%3C/svg%3E") 5 5 5 fill / 10px 10px 10px / 0 0 0px stretch;
-}
-.px-card-down::before,
-.px-card.k-card-down::before {
-  border-style: solid; border-color: transparent; border-width: 10px 10px 10px; border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 11 11' shape-rendering='crispEdges'%3E%3Cpath fill='%23111111' fill-opacity='0.14' d='M3 0h5v1h-5zM1 1h2v1h-2zM8 1h2v1h-2zM1 2h1v1h-1zM9 2h1v1h-1zM0 3h1v1h-1zM10 3h1v1h-1zM0 4h1v1h-1zM10 4h1v1h-1zM0 5h1v1h-1zM10 5h1v1h-1zM0 6h1v1h-1zM10 6h1v1h-1zM0 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM9 8h1v1h-1zM1 9h2v1h-2zM8 9h2v1h-2zM3 10h5v1h-5z'/%3E%3Cpath fill='%23f3f3f0' d='M3 1h5v1h-5zM2 2h7v1h-7zM1 3h9v1h-9zM1 4h9v1h-9zM1 5h9v1h-9zM1 6h9v1h-9zM1 7h9v1h-9zM2 8h7v1h-7zM3 9h5v1h-5z'/%3E%3C/svg%3E") 5 5 5 fill / 10px 10px 10px / 0 0 0px stretch;
-}
-.px-card-on::before {
-  border-style: solid; border-color: transparent; border-width: 10px 10px 10px; border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 11 11' shape-rendering='crispEdges'%3E%3Cpath fill='%238a5ae0' d='M3 0h5v1h-5zM1 1h2v1h-2zM8 1h2v1h-2zM1 2h1v1h-1zM9 2h1v1h-1zM0 3h1v1h-1zM10 3h1v1h-1zM0 4h1v1h-1zM10 4h1v1h-1zM0 5h1v1h-1zM10 5h1v1h-1zM0 6h1v1h-1zM10 6h1v1h-1zM0 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM9 8h1v1h-1zM1 9h2v1h-2zM8 9h2v1h-2zM3 10h5v1h-5z'/%3E%3Cpath fill='%23ffffff' d='M3 1h5v1h-5zM2 2h7v1h-7zM1 3h9v1h-9zM1 4h9v1h-9zM1 5h9v1h-9zM1 6h9v1h-9zM1 7h9v1h-9zM2 8h7v1h-7zM3 9h5v1h-5z'/%3E%3C/svg%3E") 5 5 5 fill / 10px 10px 10px / 0 0 0px stretch;
-}
 .px-well::before,
 .well::before {
   border-style: solid; border-color: transparent; border-width: 10px 10px 10px; border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 11 11' shape-rendering='crispEdges'%3E%3Cpath fill='%23e3e3df' d='M3 0h5v1h-5zM1 1h2v1h-2zM8 1h2v1h-2zM0 3h1v1h-1zM10 3h1v1h-1z'/%3E%3Cpath fill='%23ededea' d='M3 1h5v1h-5zM1 2h9v1h-9zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11zM0 6h11v1h-11zM0 7h11v1h-11zM1 8h9v1h-9zM1 9h9v1h-9zM3 10h5v1h-5z'/%3E%3C/svg%3E") 5 5 5 fill / 10px 10px 10px / 0 0 0px stretch;

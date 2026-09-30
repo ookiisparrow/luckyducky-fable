@@ -127,6 +127,7 @@ describe('tabBar 栈底页误触退出提醒（page-container「再点一次退�
       vi.useFakeTimers()
       const toast = vi.fn()
       ;(globalThis as any).wx = { showToast: toast, hideToast: vi.fn(), getStorageSync: () => undefined, setStorageSync: vi.fn(), getWindowInfo: () => ({ statusBarHeight: 20 }) }
+      ;(globalThis as any).getCurrentPages = () => [] // 回到本页的延后刷新（lib/nav afterReturn）见页不在栈即跳过
       const page = await mountTab(p)
       expect(page.data.exitGuardArmed, p).toBe(false)
       page.onShow()

@@ -1,10 +1,10 @@
-// 全屏像素特效层 <px-fx id="fx" />：撒花 / 彩虹转场 / 暗场转场（算法见 lib/pxFx，调用走 lib/pxFx 的 runFx）。
+// 全屏像素特效层 <px-fx id="fx" />：撒花 / 暗场转场（算法见 lib/pxFx，调用走 lib/pxFx 的 runFx）。
 // 页面级 position:fixed 的 2d canvas，放在页面根下、不进 scroll-view（canvas 进滚动容器会漂·见 lib/pixelView 注）。
 // 转场进行中盖一层透明挡板吃掉点按，防连点二次跳转。
 // 跨页接力（60fps 录屏逐帧核过的错乱）：navigateTo 自带系统滑入动画关不掉，旧页画布在跳页那一刻会丢——
 // 旧页内容闪回 ~130ms，再滑入一张没盖底的新页。所以铺满后旧页换成纯色遮罩 view（不会丢），新页一出生就盖同色
 // 遮罩（同色盖同色，滑入看不出来），滑完再照设计稿 fxEnter 淡出（280ms ease-out）。
-import { ditherRuns, distField, ease, party, rainbowRuns, stepConfetti, RAINBOW_DUR, PAPER, DARK, type Bit, type ConfirmOpts, type Rect, type Runs } from '../../lib/pxFx'
+import { ditherRuns, distField, ease, party, stepConfetti, DARK, type Bit, type ConfirmOpts, type Rect, type Runs } from '../../lib/pxFx'
 import { burstHaptic } from '../../lib/haptics'
 import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
@@ -39,6 +39,11 @@ function paint(x: Ctx, runs: Runs) {
   }
 }
 
+// 撒花跨页接着落（老板 2026-10-01「切页后撒花在下一页继续落」）：本页没落完就跳页 / 返回，把剩下的花交给
+// 新露面那页的 px-fx 接着落（坐标是屏幕坐标，接得上）；本页自己的照旧落完。1 秒内认领有效（花寿命 1.5–3 秒）。
+let cfCarry: { bits: Bit[]; at: number; owner: object } | null = null
+const CARRY_MS = 1000
+const readyOnes = new WeakSet<object>() // 画布已上屏的实例：新页 show 早于 ready，要等 ready 才认领
 // 提示定时器每实例一份（页面栈里多页各挂一个·共用一个会被别页的提示清掉，本页提示就卡住不消失）
 const toastTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
 // 跨页接力（像素化 9c 替原生 showToast·原生提示是全局的、跳页还在）：提示期间换页（返回/跳转），
@@ -79,7 +84,9 @@ Component({
       )
     },
     ready() {
+      readyOnes.add(this)
       if (this.data.cover) setTimeout(() => this.uncover(), SLIDE_MS + 60)
+      void this.claimConfetti()
     },
     detached() {
       const s = S.get(this)
@@ -97,10 +104,13 @@ Component({
   pageLifetimes: {
     show() {
       this.claimToast()
+      if (readyOnes.has(this)) void this.claimConfetti() // 返回到本页：画布早已就绪，直接接
     },
     hide() {
       // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
       if (this.data.cover) setTimeout(() => this.clearCover(), SLIDE_MS + 140)
+      const s = S.get(this)
+      if (s && s.bits.length) cfCarry = { bits: s.bits.map((b) => ({ ...b })), at: Date.now(), owner: this }
     },
   },
   methods: {
@@ -223,7 +233,20 @@ Component({
       if (!s || !s.cv || !s.x) return
       party(s.bits, k, s, big, n)
       if (big) burstHaptic()
-      if (s.cfRaf) return
+      this.runConfetti(s)
+    },
+    /** 别页没落完的花：本页露面时接过来接着落。 */
+    async claimConfetti() {
+      const t = cfCarry
+      if (!t || t.owner === this || Date.now() - t.at > CARRY_MS) return
+      cfCarry = null
+      const s = await this.canvas()
+      if (!s || !s.cv || !s.x) return
+      s.bits.push(...t.bits)
+      this.runConfetti(s)
+    },
+    runConfetti(s: St) {
+      if (s.cfRaf || !s.cv || !s.x) return
       s.cfLast = 0
       const loop = (now: number) => {
         const dt = s.cfLast ? Math.min(48, now - s.cfLast) : 16.67
@@ -240,16 +263,15 @@ Component({
       }
       s.cfRaf = s.cv.requestAnimationFrame(loop)
     },
-    /** 彩虹 / 暗场转场：铺满后调 go（跳页）。画不出来（取不到 canvas）直接 go，不耽误跳转。 */
-    async transit(kind: 'rainbow' | 'dither', k: Rect, go: () => void) {
+    /** 暗场转场：铺满后调 go（跳页）。画不出来（取不到 canvas）直接 go，不耽误跳转。 */
+    async transit(k: Rect, go: () => void) {
       if (this.data.busy) return
       const s = await this.canvas()
       if (!s || !s.cv || !s.x) return go()
       this.setData({ busy: true })
       const F = distField(s.w, s.h, k)
-      const st: { rev?: number } = {}
-      const delay = kind === 'rainbow' ? 150 : 90
-      const dur = kind === 'rainbow' ? RAINBOW_DUR : DITHER_DUR
+      const delay = 90
+      const dur = DITHER_DUR
       // 底部 TabBar 中心离键的距离占全程的比例：扩散前沿过了这里就让 TabBar 让位
       const tabAt = F.D[Math.floor((s.h - 40) / 4) * F.cols + Math.floor(s.w / 8)] / F.maxD
       let tabHidden = false
@@ -260,7 +282,7 @@ Component({
         const x = s.x!
         x.clearRect(0, 0, s.w, s.h)
         if (t >= dur) {
-          const color = kind === 'rainbow' ? PAPER : DARK
+          const color = DARK
           x.fillStyle = color
           x.fillRect(0, 0, s.w, s.h)
           s.fxRaf = 0
@@ -278,7 +300,7 @@ Component({
           tabHidden = true
           this.tabBar(true)
         }
-        paint(x, kind === 'rainbow' ? rainbowRuns(F, t, st) : ditherRuns(F, Math.max(0, t) / dur))
+        paint(x, ditherRuns(F, Math.max(0, t) / dur))
         s.fxRaf = s.cv!.requestAnimationFrame(frame)
       }
       s.fxRaf = s.cv.requestAnimationFrame(frame)

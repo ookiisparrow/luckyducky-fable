@@ -1,8 +1,8 @@
 <view class="v5-scope nv-space" style="height:{{sb + 44}}px">
   <view class="nv-bar" style="padding-top:{{sb}}px">
-    <!-- 按下态挂在 44×44 热区上（按热区任意处键帽都下沉·.nv-hit-down .nv-back 见 wxss）；手感音效也跟热区走 -->
-    <view wx:if="{{back}}" class="nv-hit" bind:tap="onBack" hover-start-time="20" hover-class="nv-hit-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-      <view class="k k-sm k-light nv-back"><px-i name="back" /></view>
+    <!-- 返回只留像素箭头（v6 Lite 去键帽·老板 2026-09-30）：44×44 热区不变，按下淡一下 -->
+    <view wx:if="{{back}}" class="nv-hit" bind:tap="onBack" hover-start-time="20" hover-class="press-fade" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <px-i name="back" />
     </view>
     <text wx:if="{{title}}" class="t-sys nv-title">{{title}}</text>
   </view>
