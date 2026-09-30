@@ -53,7 +53,7 @@
         </view>
 
         <view class="rv-anon hit44" bind:tap="onAnon" hover-start-time="20" hover-class="rv-anon-down" hover-stay-time="100">
-          <view class="k k-sm k-light rv-box px-check"><px-i wx:if="{{anon}}" name="check" tone="var(--v5-violet)" /></view>
+          <view class="k k-sm k-light rv-box"><px-i wx:if="{{anon}}" name="check" tone="var(--v5-violet)" /></view>
           <text class="rv-anon-t">匿名评价</text>
         </view>
       </view>

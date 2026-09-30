@@ -30,7 +30,7 @@
           <!-- 申请中：按住 700ms 撤回（浅色键红字·轻点提示「按住撤回申请」·挪开 10px 作废，同订单页按住取消） -->
           <view wx:if="{{item.canWithdraw}}" class="as-wd" data-i="{{index}}" bind:touchstart="onWithdrawStart" bind:touchmove="onWithdrawMove" bind:touchend="onWithdrawEnd" bind:touchcancel="onWithdrawEnd">
             <view class="k k-sm k-light as-wd-k {{holdId === item.id ? 'as-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-              data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="as-fill px-clip-6"></view><text class="as-wd-t">撤回申请</text></view>
+              data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="as-fill"></view><text class="as-wd-t">撤回申请</text></view>
           </view>
           <view class="t-sys as-link" hover-start-time="20" hover-class="k-row-down" data-id="{{item.orderId}}" bind:tap="onTapOrder">
             <text>查看订单</text>

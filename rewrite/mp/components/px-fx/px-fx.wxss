@@ -93,6 +93,8 @@
   flex: 1.6;
 }
 .fx-cf-danger {
+  position: relative;
+  overflow: hidden;
   color: var(--v5-err-text);
 }
 .fx-cf-kt {

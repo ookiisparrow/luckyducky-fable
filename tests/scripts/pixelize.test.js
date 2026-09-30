@@ -18,21 +18,18 @@ describe('像素皮肤生成', () => {
     expect(insets(circleInside(CIRCLES.radio.n), 11)).toEqual([3, 2, 1, 0, 0, 0, 0, 0, 1, 2, 3])
     expect(insets(circleInside(CIRCLES.disc.n), 28)).toEqual([10, 8, 6, 5, 4, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 4, 5, 6, 8, 10])
   })
-  it('大白话：墨黑键——[2,1] 阶梯、顶一格高光、底两格键座、键外一格硬投影；按下键座剩一格、投影收掉', () => {
-    const p = SKINS.ink
-    const cols = 9
-    const rows = 11
-    const inside = (x, y) => {
-      const r = [2, 1]
-      const n = y < 2 ? r[y] : rows - 1 - y < 2 ? r[rows - 1 - y] : 0
+  it('大白话：白卡——[3,1,1] 阶梯、一格发丝描边沿阶梯走（4 邻接）、里面白底；凹槽顶一格 sunk-2 代替内阴影', () => {
+    const inside = (cols, rows, r) => (x, y) => {
+      const n = y < r.length ? r[y] : rows - 1 - y < r.length ? r[rows - 1 - y] : 0
       return x >= 0 && y >= 0 && x < cols && y < rows && x >= n && x < cols - n
     }
-    const G = paint(p, inside, cols, rows)
-    expect(G[0].slice(0, 3)).toEqual([null, null, p.hl])
-    expect(G.map((r) => r[4])).toEqual([p.hl, ...Array(8).fill(p.face), p.seatc, p.seatc, p.dropc])
-    const D = paint({ ...p, seat: 1, drop: 0 }, inside, cols, rows)
-    expect(D.map((r) => r[4]).slice(-2)).toEqual([p.face, p.seatc])
-    expect(D.length).toBe(rows)
+    const C = paint(SKINS.card, inside(11, 11, [3, 1, 1]), 11, 11)
+    expect(C[0].slice(0, 4)).toEqual([null, null, null, SKINS.card.ring])
+    expect(C[1].slice(0, 4)).toEqual([null, SKINS.card.ring, SKINS.card.ring, SKINS.card.face])
+    expect(C[5][0]).toBe(SKINS.card.ring)
+    expect(C[5][5]).toBe(SKINS.card.face)
+    const W = paint(SKINS.well, inside(11, 11, [3, 1, 1]), 11, 11)
+    expect(W.map((r) => r[5]).slice(0, 2)).toEqual([SKINS.well.hl, SKINS.well.face])
   })
   it('大白话：默认头像小鸭与规格 5c 逐格点阵一字不差，static 里的 svg 是生成器产物', () => {
     const L = { '#F2D27A': 'Y', '#D9B45A': 'D', '#E98A6E': 'O', '#111111': 'K', '#ededea': 's' }
@@ -47,18 +44,23 @@ describe('像素皮肤生成', () => {
   })
 })
 
-describe('页面不再写平滑圆角/模糊投影', () => {
-  // 例外：骨架灰条（规格：骨架不随 2c 改）、原生 <video> 外框（同层渲染下阶梯裁切不可靠，留平滑）
+describe('页面不再写平滑圆角/模糊投影（按键除外）', () => {
+  // 例外：按键（老板 2026-09-30 定回平滑线性描边·app.wxss .k-* 与页面里的键帽/勾选框/回顶键）、骨架灰条（规格：骨架不随 2c 改）、
+  // 原生 <video> 外框（同层渲染下阶梯裁切不可靠，留平滑）
+  const KEYS = /\.k(-[\w-]+)?\b|ps-btn|co-step-key|co-check|ca-check|ca-step-key|rv-box|rv-star-on|ae-knob|ae-region|rv-tag\b|hm-backtop|nv-back|wl-back|me-av-k|me-play|pe-av-k|lp-back-key|ls-check/
   const KEEP = /skel|lp-stage|lp-help-play/
-  it('大白话：页面/组件/全局样式里的 border-radius 只剩骨架条与视频外框', () => {
-    const bad = []
-    for (const [f, s] of src('.wxss')) {
-      if (f.startsWith('styles/')) continue
-      for (const m of s.matchAll(/([^{}]+)\{([^}]*)\}/g)) if (/radius\s*:/.test(m[2]) && !KEEP.test(m[1])) bad.push(`${f} ${m[1].trim()}`)
-    }
+  const rules = () => src('.wxss').filter(([f]) => !f.startsWith('styles/')).flatMap(([f, s]) => [...s.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => [f, m[1].trim(), m[2]]))
+  it('大白话：border-radius 只剩按键、骨架条与视频外框', () => {
+    const bad = rules().filter(([, sel, body]) => /radius\s*:/.test(body) && !KEEP.test(sel) && !KEYS.test(sel)).map(([f, sel]) => `${f} ${sel}`)
     expect(bad).toEqual([])
   })
-  // 老板 2026-09-30：所有图片取消倒角，一律直角（连同它们的加载占位块·买家秀卡片图铺满顶部，整卡直角）；标签/气泡/按键/其余卡片仍是阶梯
+  it('大白话：按键是平滑线性描边——键帽有 6px 圆角、浅色键一圈 1px 发丝线；不再挂像素点阵', () => {
+    const app = fs.readFileSync(path.join(MP, 'app.wxss'), 'utf8')
+    expect(app).toMatch(/\.k \{[^}]*border-radius: 6px;/)
+    expect(app).toMatch(/\.k-light \{[^}]*0 0 0 1px var\(--v5-hair\)/)
+    expect(render()).not.toMatch(/(?<![\w-])\.k(-[\w-]+)?::before|px-check|px-top/) // 白卡按下 .px-card.k-card-down 不算
+  })
+  // 老板 2026-09-30：所有图片取消倒角，一律直角（连同它们的加载占位块·买家秀卡片图铺满顶部，整卡直角）；标签/气泡/其余卡片仍是阶梯
   const IMAGES = ['hm-rv', 'ca-thumb', 'co-thumb', 'hm-card-media', 'hm-rs-media', 'mc-thumb', 'mc-skel-thumb', 'me-av', 'me-thumb', 'od-thumb', 'ol-thumb', 'pe-av', 'rv-photo-img', 'rv-pic', 'rv-thumb']
   it('大白话：图片（缩略图、商品图、头像、晒图）及其占位块一律直角——不裁阶梯、不写圆角', () => {
     const bad = []
@@ -67,9 +69,9 @@ describe('页面不再写平滑圆角/模糊投影', () => {
     for (const [f, s] of src('.wxss')) for (const m of s.matchAll(/([^{}]+)\{([^}]*)\}/g)) if (/radius\s*:/.test(m[2]) && IMAGES.some((c) => new RegExp(`\\.${c}(?![\\w-])`).test(m[1]))) bad.push(`${f} ${m[1].trim()}`)
     expect(bad).toEqual([])
   })
-  it('大白话：没有带模糊半径的投影（阶梯只配硬边）', () => {
-    const bad = []
-    for (const [f, s] of src('.wxss')) for (const m of s.matchAll(/box-shadow\s*:([^;]*);/g)) if (m[1].split(',').some((l) => /-?\d+px\s+-?\d+px\s+[1-9]\d*px/.test(l.trim().replace(/^inset\s+/, '')))) bad.push(`${f}: ${m[1].trim()}`)
+  it('大白话：除按键外没有带模糊半径的投影（阶梯只配硬边）', () => {
+    const blur = (body) => [...body.matchAll(/box-shadow\s*:([^;]*);/g)].some((m) => m[1].split(',').some((l) => /-?\d+px\s+-?\d+px\s+[1-9]\d*px/.test(l.trim().replace(/^inset\s+/, ''))))
+    const bad = rules().filter(([, sel, body]) => blur(body) && !KEYS.test(sel)).map(([f, sel]) => `${f} ${sel}`)
     expect(bad).toEqual([])
   })
 })
