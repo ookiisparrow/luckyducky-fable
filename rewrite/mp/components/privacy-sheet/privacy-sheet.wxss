@@ -23,8 +23,6 @@
   bottom: 0;
   box-sizing: border-box;
   min-height: calc(212px + max(28px, env(safe-area-inset-bottom)));
-  border-radius: 12px 12px 0 0;
-  background: var(--v5-canvas);
   color: var(--v5-ink);
   padding: 20px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
@@ -61,7 +59,6 @@
   flex: 1.6;
   display: flex;
   height: 48px;
-  background: var(--v5-key);
   color: var(--v5-key-hi);
   min-width: 0;
   width: auto;
@@ -70,7 +67,6 @@
   line-height: normal;
   font-size: 17px;
   font-weight: 500;
-  border-radius: 6px;
 }
 .ps-btn::after {
   border: none;

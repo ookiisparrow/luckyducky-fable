@@ -40,12 +40,12 @@
       <text class="t-sys rv-text" wx:if="{{item.text}}">{{item.text}}</text>
       <!-- 这条评价自带的标签（只读小字·点上方汇总标签才是筛选） -->
       <view class="rv-itags" wx:if="{{item.tags.length}}">
-        <text wx:for="{{item.tags}}" wx:for-item="tg" wx:key="*this" class="t-sys rv-itag">{{tg}}</text>
+        <text wx:for="{{item.tags}}" wx:for-item="tg" wx:key="*this" class="t-sys rv-itag px-clip-4">{{tg}}</text>
       </view>
       <!-- 晒图横向一行不换行（设计稿 A3·最多 9 张超出横滑）；图没到时格子是 135° 斜纹占位 -->
       <scroll-view class="rv-pics" wx:if="{{item.photos.length}}" scroll-x enhanced show-scrollbar="{{false}}">
         <view class="rv-pics-row">
-          <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="*this" class="rv-pic" src="{{ph}}" mode="aspectFill"
+          <image wx:for="{{item.photos}}" wx:for-item="ph" wx:key="*this" class="rv-pic px-clip-4" src="{{ph}}" mode="aspectFill"
             lazy-load data-url="{{ph}}" data-urls="{{item.photos}}" bind:tap="onPreviewPhoto" />
         </view>
       </scroll-view>
@@ -84,3 +84,4 @@
   <view class="t-sys rv-more" wx:elif="{{hasMore}}">上拉加载更多</view>
   <view class="t-sys rv-more" wx:elif="{{list.length && !loading}}">没有更多了</view>
 </view>
+<px-fx id="fx" />

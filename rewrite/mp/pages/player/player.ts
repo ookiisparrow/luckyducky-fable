@@ -28,6 +28,7 @@ import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '.
 import { mapCatalogPlayer, type CatalogPlayerVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint } from '../../lib/pxFx'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 拖动文案刷新节流（ms）：位置由 seek.wxs 渲染层 60fps 跟手，curClock/snapName 文案经 onSeekTick 回逻辑层
@@ -691,7 +692,7 @@ Page({
     this.setData({ helpSrc: '', helpSegName: '' })
   },
   onHelpVideoError() {
-    wx.showToast({ title: '这段视频暂时播放不了', icon: 'none' })
+    fxHint(this, '这段视频暂时播放不了')
   },
   // 求助面板遮罩/壳体锁背景滚动的占位 handler（catch:touchmove 绑定必须真实存在，抄写错题本 E2：
   // wxml 事件绑定与 ts 方法定义是一对，抄一半＝真机报错）。
@@ -708,7 +709,7 @@ Page({
     const now = Date.now()
     if (now - this._backAt > BACK_CONFIRM_MS) {
       this._backAt = now
-      wx.showToast({ title: '再按一次返回退出', icon: 'none' })
+      fxHint(this, '再按一次返回退出')
       return
     }
     // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同

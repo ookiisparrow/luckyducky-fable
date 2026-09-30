@@ -22,8 +22,8 @@ page {
 }
 .pe-av-btn {
   position: relative;
-  width: 84px;
-  height: 84px;
+  width: 88px;
+  height: 88px;
   margin: 0;
   padding: 0;
   background: transparent;
@@ -34,9 +34,8 @@ page {
   border: none;
 }
 .pe-av {
-  width: 84px;
-  height: 84px;
-  border-radius: 8px;
+  width: 88px;
+  height: 88px;
   overflow: hidden;
   background: var(--v5-sunk);
 }
@@ -57,10 +56,8 @@ page {
 }
 /* 按住头像：「换」键下沉（同 app.wxss .k-sm.k-light-down） */
 .pe-av-down .pe-av-k {
-  transform: translateY(1px);
-  background: var(--v5-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
-  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
+  transform: translateY(2px);
+  transition: transform 60ms ease-out;
 }
 
 .pe-form {

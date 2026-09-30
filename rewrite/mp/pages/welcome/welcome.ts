@@ -14,6 +14,7 @@ import type { ApiResult } from '../../utils/cloud'
 import { goHomeTab } from '../../lib/homeIntent'
 import { openCustomerService } from '../../utils/customerService'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint } from '../../lib/pxFx'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -101,7 +102,7 @@ Page({
       // 仅失败复位 busy（同 review/feedback onSubmit 范式）：成功路径保持锁定直至 redirectTo——
       // 提前解锁则导航完成前双击可再次 confirmEnter+redirectTo
       this.setData({ busy: false })
-      wx.showToast({ title: '进课没成功，稍后再试', icon: 'none' })
+      fxHint(this, '进课没成功，稍后再试')
       return
     }
     // 进课直达该课目录（W2「进入课程」/mine 屏「继续学习」共用本方法）；courseId 前置缺失兜底回我的课程列表（无参）。

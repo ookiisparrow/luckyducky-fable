@@ -37,3 +37,4 @@
     </view>
   </view>
 </block>
+<px-fx id="fx" />

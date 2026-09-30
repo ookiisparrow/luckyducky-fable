@@ -123,3 +123,4 @@
     </view>
   </block>
 </view>
+<px-fx id="fx" />

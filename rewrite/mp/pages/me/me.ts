@@ -17,7 +17,7 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { armExitGuard, releaseExitGuard, onExitGuardBeforeLeave as consumeExitGuard } from '../../utils/exitGuard'
 import { loginGate } from '../../lib/loginGate'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxTransit, fxToast, fxHint } from '../../lib/pxFx'
+import { fxHint, fxLoaded, fxLoading, fxToast, fxTransit } from '../../lib/pxFx'
 import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 import { groundGap } from '../../lib/ground'
 
@@ -208,7 +208,7 @@ Page({
     const path = e?.detail?.avatarUrl
     if (this._avatarBusy || !path) return
     this._avatarBusy = true
-    wx.showLoading({ title: '头像保存中', mask: true })
+    fxLoading(this, '头像保存中')
     let fileID = ''
     let r: Awaited<ReturnType<typeof updateProfile>> | null = null
     try {
@@ -217,7 +217,7 @@ Page({
     } catch {
       // 只有上传会抛：r 留空
     } finally {
-      wx.hideLoading()
+      fxLoaded(this)
       this._avatarBusy = false
     }
     if (!r) return fxHint(this, '头像没传上去，稍后再试')

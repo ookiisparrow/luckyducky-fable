@@ -39,3 +39,4 @@
 <view class="lg-state" wx:else>
   <text class="t-sys lg-note">商家发货后这里会显示运单号</text>
 </view>
+<px-fx id="fx" />

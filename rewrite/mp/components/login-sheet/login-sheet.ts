@@ -8,7 +8,7 @@ import { loginGate } from '../../lib/loginGate'
 import { login } from '../../api/user'
 import { tapHaptic } from '../../lib/haptics'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint, fxToast } from '../../lib/pxFx'
+import { fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 
 const OUT_MS = 240
 const SHAKE_MS = 360 // 设计稿 shake：-6,6,-4,3,0 px
@@ -75,9 +75,9 @@ Component({
       }
       tapHaptic() // 禁用/未勾选早退之后、动作提交前（同 lib/haptics 调用纪律）
       this.setData({ submitting: true })
-      wx.showLoading({ title: '登录中', mask: true }) // 设计稿「登录中」加载框：原生 showLoading（带遮罩·挡连点）
+      fxLoading(null, '登录中') // 设计稿「登录中」加载框（自绘·挡连点·挂在当前页的 px-fx）
       const res = await login(true) // 静默 openid 直接登录（零资料采集）+ 服务端记账；true＝刚勾了协议（云端默认开启数据共享·§40）
-      wx.hideLoading() // 先收加载框再提示（原生 loading 与 toast 互斥）
+      fxLoaded(null) // 先收加载框再提示
       this.setData({ submitting: false })
       if (!res.ok) {
         fxHint(host(), '网络不太好，请重试')

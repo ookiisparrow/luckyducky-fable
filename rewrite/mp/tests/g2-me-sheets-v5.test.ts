@@ -56,8 +56,8 @@ describe('「我」页 D1', () => {
   it('大白话：没登录时继续学习卡（有卡/失败/空/骨架）一律不画', () => {
     const block = meWxml.match(/<block wx:if="\{\{loggedIn\}\}">([\s\S]*?)<\/block>/)
     expect(block).not.toBeNull()
-    const total = (meWxml.match(/class="me-card"/g) || []).length
-    const inside = (block![1].match(/class="me-card"/g) || []).length
+    const total = (meWxml.match(/class="me-card[ "]/g) || []).length
+    const inside = (block![1].match(/class="me-card[ "]/g) || []).length
     expect(total).toBeGreaterThan(0)
     expect(inside).toBe(total)
   })

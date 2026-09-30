@@ -7,6 +7,7 @@ import { mapMyCourses, type MyCourseVM } from '../../lib/mapLearning'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { groundGap } from '../../lib/ground'
 import { goHomeTab } from '../../lib/homeIntent'
+import { fxHint } from '../../lib/pxFx'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -34,7 +35,7 @@ Page({
     // 课卡会显示原始 courseId、进度条整行消失，用户以为数据坏了（口径对齐 me.ts contFetchFailed）。
     if (!mine.ok || courses === null) {
       this.setData({ loading: false, loadFailed: !this.data.list.length })
-      if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      if (this.data.list.length) fxHint(this, '刷新失败，请稍后重试')
       return
     }
     this.setData({

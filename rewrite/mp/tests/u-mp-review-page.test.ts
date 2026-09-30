@@ -2,10 +2,10 @@
 // Page 桩同 me-cont-failed.test.ts；撒花/提示层（lib/pxFx）桩掉只看调用参数。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-const { submitMock, partyMock, hintMock } = vi.hoisted(() => ({ submitMock: vi.fn(), partyMock: vi.fn(), hintMock: vi.fn() }))
+const { submitMock, partyMock, hintMock, loadingMock, loadedMock } = vi.hoisted(() => ({ submitMock: vi.fn(), partyMock: vi.fn(), hintMock: vi.fn(), loadingMock: vi.fn(), loadedMock: vi.fn() }))
 vi.mock('../api/reviews', () => ({ submitReview: submitMock }))
 vi.mock('../lib/haptics', () => ({ tapHaptic: vi.fn() }))
-vi.mock('../lib/pxFx', () => ({ fxParty: partyMock, fxHint: hintMock }))
+vi.mock('../lib/pxFx', () => ({ fxParty: partyMock, fxHint: hintMock, fxLoading: loadingMock, fxLoaded: loadedMock }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
@@ -75,16 +75,15 @@ describe('写评价页', () => {
     expect(submitMock).not.toHaveBeenCalled()
   })
 
-  it('大白话：发布——先转「发布中」，成功提示「已提交，精选后展示」（原生提示跨页不断）、撤掉放弃拦截，再返回上一页', async () => {
+  it('大白话：发布——先转「发布中」，成功提示「已提交，精选后展示」（返回后上一页接着显示）、撤掉放弃拦截，再返回上一页', async () => {
     submitMock.mockResolvedValue({ ok: true })
     const page = await mount({ orderId: 'o1', lineId: 'L1' })
     page.onStar(star(5))
     expect(page.data.dirty).toBe(true)
     await page.onSubmit()
-    expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '发布中', mask: true })
-    expect(wxMock.hideLoading).toHaveBeenCalled()
-    // 用 icon none：带 success 图标时标题最多显示 7 个字，这句会被截
-    expect(wxMock.showToast).toHaveBeenCalledWith({ title: '已提交，精选后展示', icon: 'none', mask: true })
+    expect(loadingMock).toHaveBeenCalledWith(page, '发布中')
+    expect(loadedMock).toHaveBeenCalledWith(page)
+    expect(hintMock).toHaveBeenCalledWith(page, '已提交，精选后展示', { mask: true })
     expect(page.data.dirty).toBe(false)
     expect(wxMock.navigateBack).not.toHaveBeenCalled()
     vi.advanceTimersByTime(800)

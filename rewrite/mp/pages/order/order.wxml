@@ -9,7 +9,7 @@
 
   <view class="od-body">
     <!-- 状态卡（UI 审查 15 问 6a）：灯 + 状态名（墨 17/500·与列表同名），下一行完整说明句（灰；只有待支付倒计时深黄） -->
-    <view class="od-card">
+    <view class="od-card px-skin px-card">
       <view class="od-state">
         <view class="od-state-l">
           <px-anim wx:if="{{vm.status === 'pending' && !expired}}" name="hourglass" size="2" />
@@ -34,7 +34,7 @@
     </view>
 
     <!-- 物流（有运单号时·真实数据仅运单号+公司，实时轨迹经快递100插件；插件打不开回退复制运单号） -->
-    <view class="k-card od-card od-logi" wx:if="{{vm.trackingNo}}" hover-start-time="20" hover-class="k-card-down" bind:tap="onViewLogistics">
+    <view class="k-card od-card od-logi px-skin px-card" wx:if="{{vm.trackingNo}}" hover-start-time="20" hover-class="k-card-down" bind:tap="onViewLogistics">
       <view class="od-logi-top">
         <view class="od-logi-no">
           <text class="t-sys od-k" wx:if="{{vm.shipCompany}}">{{vm.shipCompany}}</text>
@@ -49,7 +49,7 @@
     </view>
 
     <!-- 收货地址（历史快照·只读） -->
-    <view class="od-card" wx:if="{{vm.address}}">
+    <view class="od-card px-skin px-card" wx:if="{{vm.address}}">
       <text class="t-sys od-k">收货地址</text>
       <text class="t-sys od-region">{{vm.address.region}}</text>
       <text class="t-sys od-detail">{{vm.address.detail}}</text>
@@ -60,20 +60,20 @@
     </view>
 
     <!-- 商品（只读 ×N）+ 金额 -->
-    <view class="od-card od-goods">
+    <view class="od-card od-goods px-skin px-card">
       <view class="od-item" wx:for="{{vm.items}}" wx:key="lineId">
-        <view class="od-thumb">
+        <view class="od-thumb px-clip-4">
           <image wx:if="{{item.cover}}" class="od-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
         </view>
         <view class="od-item-mid">
           <text class="t-sys od-item-name">{{item.name}}</text>
           <text class="t-sys od-item-sub">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
-          <text wx:if="{{lineTags[item.lineId]}}" class="t-sys od-as-tag">{{lineTags[item.lineId]}}</text>
+          <text wx:if="{{lineTags[item.lineId]}}" class="t-sys od-as-tag px-clip-4">{{lineTags[item.lineId]}}</text>
         </view>
         <view class="od-item-r">
           <text class="mono od-item-price">{{item.priceLabel}}</text>
           <!-- 已评价的行：灰底「已评价」标签不可点（拍板 6·设计稿 #ededea 底 #8f8f88 字）；没评的出「写评价」 -->
-          <text wx:if="{{vm.status === 'done' && item.reviewed}}" class="od-mini hit44 od-reviewed">已评价</text>
+          <text wx:if="{{vm.status === 'done' && item.reviewed}}" class="od-mini hit44 od-reviewed px-clip-6">已评价</text>
           <view wx:elif="{{vm.status === 'done'}}" class="k k-sm k-light od-mini hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
             data-i="{{index}}" catch:tap="onWriteReview" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">写评价</view>
         </view>
@@ -106,7 +106,7 @@
       <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条；轻点提示「按住取消订单」） -->
       <view class="od-side" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd">
         <view class="k k-light k-48 od-danger {{holding ? 'od-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-          data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill"></view><text class="od-danger-t">取消订单</text></view>
+          data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill px-clip-6"></view><text class="od-danger-t">取消订单</text></view>
       </view>
       <!-- 倒计时归零（expired）：藏「去支付」，状态卡小字已写「已超时」，并自动刷新一次看云端关单 -->
       <view wx:if="{{!expired}}" class="k k-ink k-48 od-main {{paying ? 'od-busy' : ''}}" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onPay" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
@@ -117,7 +117,7 @@
     <!-- 有申请中的售后：「撤回申请」代替「申请售后」（老板 2026-09-29）——按住 700ms 撤回本单申请中的售后（轻点提示·挪开 10px 作废） -->
     <view wx:if="{{canAfterSale && wdLines.length}}" class="od-side" catch:touchstart="onWithdrawStart" catch:touchmove="onWithdrawMove" catch:touchend="onWithdrawEnd" catch:touchcancel="onWithdrawEnd">
       <view class="k k-light k-48 od-danger {{wdHold ? 'od-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-        data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill"></view><text class="od-danger-t">撤回申请</text></view>
+        data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill px-clip-6"></view><text class="od-danger-t">撤回申请</text></view>
     </view>
     <view wx:elif="{{canAfterSale}}" class="k k-light k-48 od-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAfterSale" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">申请售后</view>
     <view wx:if="{{vm.status === 'shipped'}}" class="k k-ink k-48 od-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onConfirm" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
@@ -127,12 +127,12 @@
 
 <!-- 加载骨架（根因#8·loading 且 vm 空时三分支曾全假→白屏） -->
 <view class="od-skel" wx:elif="{{loading}}">
-  <view class="od-card">
+  <view class="od-card px-skin px-card">
     <view class="od-skel-bar skel" style="width: 120px"></view>
     <view class="od-skel-bar skel" style="width: 80%"></view>
   </view>
-  <view class="od-card od-item">
-    <view class="od-thumb skel"></view>
+  <view class="od-card od-item px-skin px-card">
+    <view class="od-thumb skel px-clip-4"></view>
     <view class="od-item-mid">
       <view class="od-skel-bar skel" style="width: 60%"></view>
       <view class="od-skel-bar skel" style="width: 36%"></view>

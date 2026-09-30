@@ -9,7 +9,7 @@
 
     <view class="ls-agree {{shake ? 'ls-shake' : ''}}">
       <view class="ls-hit" catch:tap="onToggleAgree">
-        <view class="ls-check"><px-i wx:if="{{agreed}}" name="check" tone="var(--v5-violet)" /></view>
+        <view class="ls-check px-skin px-check"><px-i wx:if="{{agreed}}" name="check" tone="var(--v5-violet)" /></view>
       </view>
       <view class="t-sys ls-agree-t">
         <text class="ls-agree-s" catch:tap="onToggleAgree">已阅读并同意</text>

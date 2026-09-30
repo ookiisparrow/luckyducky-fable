@@ -15,9 +15,6 @@ page {
 }
 .od-card {
   padding: 16px;
-  border-radius: 8px;
-  background: var(--v5-surface);
-  box-shadow: 0 0 0 1px var(--v5-hair);
 }
 .od-k {
   font-size: 13px;
@@ -145,7 +142,6 @@ page {
 .od-reviewed {
   display: flex;
   align-items: center;
-  border-radius: 6px;
   background: var(--v5-sunk);
   color: var(--v5-ink-2);
 }
@@ -196,7 +192,6 @@ page {
   width: 44px;
   height: 44px;
   flex: 0 0 auto;
-  border-radius: 4px;
   overflow: hidden;
   background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
@@ -231,7 +226,6 @@ page {
   padding: 0 6px;
   font-size: 12px;
   line-height: 18px;
-  border-radius: 4px;
   background: var(--v5-sunk);
   color: var(--v5-ink-2);
 }
@@ -398,8 +392,6 @@ page {
   left: 0;
   right: 0;
   bottom: 0;
-  border-radius: 12px 12px 0 0;
-  background: var(--v5-canvas);
   padding: 20px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -423,7 +415,6 @@ page {
 /* 三段：凹槽里选中＝浅色键带紫灯，其余透明灰字 */
 .as-seg {
   padding: 4px;
-  border-radius: 8px;
   display: flex;
   gap: 4px;
 }

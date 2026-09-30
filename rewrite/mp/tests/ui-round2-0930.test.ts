@@ -159,7 +159,7 @@ describe('11a 求助面板与加桌引导：全站浅色半屏', () => {
     const dg = w.slice(i)
     expect(dg).toContain('加到桌面，下次一点就开')
     expect(dg).toMatch(/lp-help-close" bind:tap="onDeskGuideStay"/)
-    expect(dg).toMatch(/lp-dg-no">1<[\s\S]*lp-dg-no">2</)
+    expect(dg).toMatch(/lp-dg-no[^"]*">1<[\s\S]*lp-dg-no[^"]*">2</)
     expect(dg).toMatch(/k-ink lp-dg-ok"[^>]*bind:tap="onDeskGuideExit"[^>]*>知道了</)
   })
 })

@@ -10,7 +10,7 @@ import { freshCover } from '../../lib/cart'
 import { getAllProducts } from '../../lib/catalog'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint } from '../../lib/pxFx'
+import { fxConfirm, fxHint } from '../../lib/pxFx'
 import { groundGap } from '../../lib/ground'
 
 const SUBMITTED_MS = 600 // 设计稿 submitOrder：建单成功后按键打勾「已提交」停 600ms 再拉起支付
@@ -75,7 +75,7 @@ Page({
     if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（第3轮审计·与 onPickAddress/onToggleAddon 同闸）
     if (!checkout.getDraft().items.length) {
       if (this.unloaded) return // 页面已退出（守卫扩面统一不变量）：不再对下一页 navigateBack
-      wx.showToast({ title: '还没有要结算的商品', icon: 'none' })
+      fxHint(this, '还没有要结算的商品')
       if (this.ready) this.armBackTimer()
       else this.pendingBackTimer = true
       return
@@ -163,7 +163,7 @@ Page({
     if (this.unloaded) {
       if (!r.ok) return
       checkout.finishSubmitted() // 已退页不进成功页·金额无消费方不再算（不留丢弃返回值的死调用）
-      wx.showToast({ title: ORDER_KEPT_TIP, icon: 'none' })
+      fxHint(this, ORDER_KEPT_TIP)
       return
     }
     if (!r.ok) {
@@ -176,18 +176,18 @@ Page({
         // 草稿空了（立即购买那一件/唯一勾选的那件）没东西可下，等用户看完弹窗再退回——不走 refresh 的空草稿
         // 提示+600ms 自动返回，否则 toast 和退页会跟弹窗抢。
         const left = checkout.getDraft().items.length > 0
-        wx.showModal({
+        void fxConfirm(this, {
           title: checkout.mapCreateOrderError(errCode),
           content: `「${dropped}」现在买不了，已从本单移除` + (left ? '，其余商品可以继续下单。' : '。'),
-          showCancel: false,
-          success: () => {
-            if (!left && !this.unloaded) wx.navigateBack()
-          },
+          confirmText: '知道了',
+          single: true,
+        }).then(() => {
+          if (!left && !this.unloaded) wx.navigateBack()
         })
         if (left) void this.refresh()
         return
       }
-      wx.showToast({ title: checkout.mapCreateOrderError(errCode), icon: 'none' })
+      fxHint(this, checkout.mapCreateOrderError(errCode))
       return
     }
     // 建单成功后每条后续路径都会离开结算页（redirectTo 成功页 / startPay 内 requestPayment 成功→成功页、取消→redirectTo 订单详情、失败→弹窗后 redirectTo 订单详情（订单已关闭才回首页）），
@@ -223,17 +223,17 @@ Page({
     // 拉起支付请求在途用户手动退出结算页：不再对无关页面 redirectTo/requestPayment（真实支付授权框）/showModal
     // （同 onSubmit 建单分支范式）——订单已建，轻提示即可，导航/授权框留给用户主动回到订单列表时发起。
     if (this.unloaded) {
-      wx.showToast({ title: ORDER_KEPT_TIP, icon: 'none' })
+      fxHint(this, ORDER_KEPT_TIP)
       return
     }
     // 支付出错（拍板 A）：订单还在、可继续付——弹窗说明后换到这张订单的详情页（先弹窗再换页：弹窗期间本页还在，最稳）
     const toOrder = (reason: string) =>
-      wx.showModal({
+      void fxConfirm(this, {
         title: '支付没成功',
         content: (reason ? reason + '。' : '') + '订单已保留，可在订单详情里继续支付。',
-        showCancel: false,
-        success: () => wx.redirectTo({ url: '/pages/order/order?id=' + orderId }),
-      })
+        confirmText: '知道了',
+        single: true,
+      }).then(() => wx.redirectTo({ url: '/pages/order/order?id=' + orderId }))
     if (outcome.kind === 'paid') {
       this.toSuccess(orderId, amountFen)
       return
@@ -246,7 +246,7 @@ Page({
         // 换页后本页没了，用原生提示（跨页还在）。失败（非取消）：弹窗说明后同样换到订单详情（拍板 A）
         fail: (res) => {
           if (String(res.errMsg || '').includes('cancel')) {
-            wx.showToast({ title: PAY_CANCEL_TIP, icon: 'none', duration: 2500 })
+            fxHint(this, PAY_CANCEL_TIP, { ms: 2500 })
             wx.redirectTo({ url: '/pages/order/order?id=' + orderId })
             return
           }
@@ -257,7 +257,7 @@ Page({
     }
     if (outcome.kind === 'closed') {
       // 订单已超时关闭（付不了了）：弹窗后回首页从头逛起（goHomeTab 防 tab 实例旧滚动位置残留）
-      wx.showModal({ title: '订单已关闭', content: outcome.message, showCancel: false, success: () => goHomeTab() })
+      void fxConfirm(this, { title: '订单已关闭', content: outcome.message, confirmText: '知道了', single: true }).then(() => goHomeTab())
       return
     }
     toOrder(outcome.message)

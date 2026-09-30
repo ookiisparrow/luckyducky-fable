@@ -4,7 +4,7 @@
 import { tapHaptic } from '../../lib/haptics'
 import { submitReview } from '../../api/reviews'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxParty, fxHint } from '../../lib/pxFx'
+import { fxHint, fxLoaded, fxLoading, fxParty } from '../../lib/pxFx'
 import { groundGap } from '../../lib/ground'
 
 const REV_TAGS = ['教程清晰', '很可爱', '适合新手', '包装用心', '物流快', '线材好'] // 预设标签
@@ -123,7 +123,7 @@ Page({
     }
     if (this.unloaded) return // await 恢复点复核（同 onSubmit 范式）：上传在途已退页——迟到回包不再 setData/toast
     this.edit({ photos: [...this.data.photos, ...ups].slice(0, this.data.maxPhotos), uploading: false })
-    if (ups.length < res.tempFiles.length) wx.showToast({ title: '部分图片没传上', icon: 'none' })
+    if (ups.length < res.tempFiles.length) fxHint(this, '部分图片没传上')
   },
   onDelPhoto(e: WechatMiniprogram.TouchEvent) {
     const i = Number(e.currentTarget.dataset.i)
@@ -136,7 +136,7 @@ Page({
   async onSubmit() {
     if (this.data.busy) return
     if (this.data.uploading) {
-      wx.showToast({ title: '图片还在上传，稍等一下', icon: 'none' })
+      fxHint(this, '图片还在上传，稍等一下')
       return
     }
     if (!this.data.rating) {
@@ -147,7 +147,7 @@ Page({
     }
     tapHaptic()
     this.setData({ busy: true })
-    wx.showLoading({ title: '发布中', mask: true })
+    fxLoading(this, '发布中')
     const r = await submitReview(
       this.orderId,
       this.lineId,
@@ -157,19 +157,19 @@ Page({
       this.data.anon,
       this.data.photos
     )
-    wx.hideLoading()
+    fxLoaded(this)
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交（撞主键回 REVIEWED 的矛盾 toast）；toast 加 mask·定时器存实例待清。
       // 成功提示用原生：随后退回上一页，原生提示跨页不断，自绘的会随本页消失。先撤 dirty 让放弃拦截卸下再返回。
       // icon none：带 success 图标时标题最多显示 7 个字，这句会被截。评价要精选后才对外展示，文案照实说。
-      wx.showToast({ title: '已提交，精选后展示', icon: 'none', mask: true })
+      fxHint(this, '已提交，精选后展示', { mask: true })
       this.setData({ dirty: false })
       this.backTimer = setTimeout(() => wx.navigateBack(), 800)
       return
     }
     const code = String(r.error || '')
-    wx.showToast({ title: REV_ERR.get(code) || '提交没成功，稍后再试', icon: 'none' })
+    fxHint(this, REV_ERR.get(code) || '提交没成功，稍后再试')
     if (code === 'REVIEWED') {
       // 已评过：这页没什么可做了——撤 dirty 卸下放弃拦截，busy 保持锁住，1 秒后自动返回
       this.setData({ dirty: false })

@@ -23,3 +23,4 @@
   </view>
   <view class="ab-ver mono">{{version}}</view>
 </view>
+<px-fx id="fx" />

@@ -27,7 +27,6 @@ page {
 }
 .fb-cats {
   padding: 4px;
-  border-radius: 8px;
   display: flex;
   gap: 4px;
 }

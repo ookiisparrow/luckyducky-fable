@@ -1,3 +1,4 @@
+import { fxHint } from './sysUi'
 // 微信客服单源。病根#5：corpId/url 散到多处就会漂——wx.openCustomerServiceChat 只应出现在这一处。
 // 根因#8：corpId/url 须真机验（小程序后台绑同主体企业微信 ID + 接待人）。
 const CUSTOMER_SERVICE = {
@@ -10,7 +11,7 @@ function open(): void {
     corpId: CUSTOMER_SERVICE.corpId,
     extInfo: { url: CUSTOMER_SERVICE.url },
     fail: () => {
-      wx.showToast({ title: '客服暂时打不开，请稍后再试', icon: 'none' })
+      fxHint(null, '客服暂时打不开，请稍后再试')
     },
   })
 }

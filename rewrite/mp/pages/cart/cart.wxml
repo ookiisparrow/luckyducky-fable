@@ -10,11 +10,11 @@
       <view class="ca-rows">
         <view class="ca-row" wx:for="{{items}}" wx:key="lineId">
           <view class="ca-check-hit" data-id="{{item.id}}" data-sku="{{item.sku}}" catch:tap="onToggle">
-            <view class="k k-sm k-light ca-check" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+            <view class="k k-sm k-light ca-check px-check" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
               <px-i wx:if="{{item.selected}}" name="check" tone="var(--v5-violet)" />
             </view>
           </view>
-          <view class="ca-thumb" data-id="{{item.id}}" catch:tap="onOpen" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
+          <view class="ca-thumb px-clip-4" data-id="{{item.id}}" catch:tap="onOpen" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
             <!-- 焦点 50% 40%（设计稿 object-position）：<image> 的 aspectFill 只能居中，改背景图定焦点 -->
             <view wx:if="{{item.cover}}" class="ca-thumb-img" style="background-image: url('{{item.cover}}')"></view>
           </view>
@@ -32,7 +32,7 @@
               <view wx:else class="ca-step-hit ca-step-l" data-line="{{item.lineId}}" data-id="{{item.id}}" data-sku="{{item.sku}}"
                 catch:touchstart="onHoldStart" bind:touchmove="onHoldMove" catch:touchend="onHoldEnd" catch:touchcancel="onHoldEnd">
                 <view class="k k-sm k-light ca-step-key ca-del {{holding === item.lineId ? 'ca-del-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-                  <view class="ca-del-fill"></view>
+                  <view class="ca-del-fill px-clip-6"></view>
                   <px-i name="times" />
                 </view>
               </view>

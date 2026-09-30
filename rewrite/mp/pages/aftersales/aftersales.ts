@@ -5,7 +5,7 @@ import { openCustomerService } from '../../utils/customerService'
 import { navigateOrRedirect } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { tapHaptic } from '../../lib/haptics'
-import { fxToast, fxHint } from '../../lib/pxFx'
+import { fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { groundGap } from '../../lib/ground'
 
@@ -45,7 +45,7 @@ Page({
     if (!r.ok) {
       // 失败不覆盖已有数据；首载一无所有时落 loadFailed 给重试，不与「还没有售后记录」混同（根因#14）。
       this.setData({ loading: false, loadFailed: !this.data.list.length })
-      if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      if (this.data.list.length) fxHint(this, '刷新失败，请稍后重试')
       return
     }
     this.setData({ loading: false, loadFailed: false, list: mapAfterSales(r.list), cursor: r.nextCursor, hasMore: !!r.hasMore })
@@ -62,7 +62,7 @@ Page({
     this.setData({ paging: false })
     if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标（失败的过期回包也静默丢弃，不误弹 toast）
     if (!r.ok) {
-      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      fxHint(this, '加载失败，上拉重试') // 翻页失败不静默（根因#14）
       return
     }
     this.setData({ list: mergeAfterSales(this.data.list, mapAfterSales(r.list)), cursor: r.nextCursor, hasMore: !!r.hasMore })
@@ -92,12 +92,12 @@ Page({
     if (!a || !a.canWithdraw || this._busy) return
     this._busy = true
     tapHaptic()
-    wx.showLoading({ title: '正在撤回', mask: true })
+    fxLoading(this, '正在撤回')
     let r
     try {
       r = await withdrawRefund(a.orderId, a.lineId)
     } finally {
-      wx.hideLoading()
+      fxLoaded(this)
       this._busy = false
     }
     if (this.unloaded) return
@@ -106,7 +106,7 @@ Page({
       const next = mapAfterSale(r.afterSale)
       if (next) this.setData({ list: this.data.list.map((x) => (x.id === next.id ? next : x)) })
       fxToast(this, '已撤回')
-    } else wx.showToast({ title: withdrawErrText(r.error), icon: 'none' }) // 没抢过商家等：刷新看最新状态
+    } else fxHint(this, withdrawErrText(r.error)) // 没抢过商家等：刷新看最新状态
     await this.reload()
   },
   onTapOrder(e: WechatMiniprogram.TouchEvent) {

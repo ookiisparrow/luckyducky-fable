@@ -3,6 +3,7 @@ import { tapHaptic } from '../../lib/haptics'
 import { getReviews } from '../../api/reviews'
 import { hiddenByTag, mapReviews, mapSummary, type ReviewVM, type SummaryVM } from '../../lib/mapReviews'
 import { keyDown, keyUp } from '../../lib/keyFx'
+import { fxHint } from '../../lib/pxFx'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -45,7 +46,7 @@ Page({
     }
     if (!r.ok) {
       this.setData({ loading: false, loadFailed: !this.data.list.length })
-      if (this.data.list.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      if (this.data.list.length) fxHint(this, '刷新失败，请稍后重试')
       return
     }
     const list = mapReviews(r.list)
@@ -75,7 +76,7 @@ Page({
     this.setData({ paging: false })
     if (seq !== this._seq) return // reload 已取代当前列表：丢弃·不错配游标
     if (!r.ok) {
-      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      fxHint(this, '加载失败，上拉重试') // 翻页失败不静默（根因#14）
       return // 不覆盖已有
     }
     // 增量 setData（根因#7 规模）：翻页只把新增行按路径键 list[N] 追加，不整表重发已渲染卡（O(n²) 传输）。

@@ -4,8 +4,10 @@
 // 跨页接力（60fps 录屏逐帧核过的错乱）：navigateTo 自带系统滑入动画关不掉，旧页画布在跳页那一刻会丢——
 // 旧页内容闪回 ~130ms，再滑入一张没盖底的新页。所以铺满后旧页换成纯色遮罩 view（不会丢），新页一出生就盖同色
 // 遮罩（同色盖同色，滑入看不出来），滑完再照设计稿 fxEnter 淡出（280ms ease-out）。
-import { ditherRuns, distField, ease, party, rainbowRuns, stepConfetti, RAINBOW_DUR, PAPER, DARK, type Bit, type Rect, type Runs } from '../../lib/pxFx'
+import { ditherRuns, distField, ease, party, rainbowRuns, stepConfetti, RAINBOW_DUR, PAPER, DARK, type Bit, type ConfirmOpts, type Rect, type Runs } from '../../lib/pxFx'
 import { burstHaptic } from '../../lib/haptics'
+import { createHold, type Hold } from '../../lib/hold'
+import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 
 type Ctx = {
   clearRect(x: number, y: number, w: number, h: number): void
@@ -39,15 +41,42 @@ function paint(x: Ctx, runs: Runs) {
 
 // 提示定时器每实例一份（页面栈里多页各挂一个·共用一个会被别页的提示清掉，本页提示就卡住不消失）
 const toastTimers = new WeakMap<object, ReturnType<typeof setTimeout>>()
+// 跨页接力（像素化 9c 替原生 showToast·原生提示是全局的、跳页还在）：提示期间换页（返回/跳转），
+// 新露面那页的 px-fx 认领剩余时长接着显示——「已保存」随即返回、「已提交」随即跳售后都照旧看得到。
+let lastToast: { text: string; kind: ToastKind; until: number; owner: object } | null = null
+type ToastKind = '' | 'ok' | 'loading'
+const CF_OUT_MS = 240 // 同 leave-sheet：面板 240ms 下滑后撤节点
+const CF_HOLD_MS = 700 // 规格 9c：危险确认按住 700ms
+const cfDone = new WeakMap<object, (ok: boolean) => void>()
+const cfHolds = new WeakMap<object, Hold>()
 
 Component({
-  data: { busy: false, toastShow: false, toastOk: false, toastText: '', cover: '', coverOut: false },
+  data: {
+    busy: false,
+    blocking: false,
+    toastShow: false,
+    toastKind: '' as ToastKind,
+    toastText: '',
+    cover: '',
+    coverOut: false,
+    cf: null as ConfirmOpts | null,
+    cfOut: false,
+    cfHold: false,
+  },
   lifetimes: {
     attached() {
       const wi = wx.getWindowInfo()
       S.set(this, { w: wi.windowWidth, h: wi.windowHeight, bits: [], cfRaf: 0, cfLast: 0, fxRaf: 0 })
       if (entering && Date.now() - entering.at < 1500) this.setData({ cover: entering.color, coverOut: false })
       entering = null
+      this.claimToast()
+      cfHolds.set(
+        this,
+        createHold(CF_HOLD_MS, () => this.closeCf(true), {
+          onQuick: () => this.toast('按住' + (this.data.cf?.confirmText || '')), // 黑体（系统字提示框）
+          onChange: (v) => this.setData({ cfHold: v }),
+        })
+      )
     },
     ready() {
       if (this.data.cover) setTimeout(() => this.uncover(), SLIDE_MS + 60)
@@ -60,9 +89,15 @@ Component({
       }
       S.delete(this)
       clearTimeout(toastTimers.get(this))
+      cfHolds.get(this)?.cancel()
+      cfDone.get(this)?.(false) // 页面带着没答的确认半屏卸掉＝当取消（调用方的 await 不能永远挂着）
+      cfDone.delete(this)
     },
   },
   pageLifetimes: {
+    show() {
+      this.claimToast()
+    },
     hide() {
       // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
       if (this.data.cover) setTimeout(() => this.clearCover(), SLIDE_MS + 140)
@@ -84,18 +119,82 @@ Component({
       const owner = this.selectOwnerComponent() as unknown as { getTabBar?: () => { setCovered?: (v: boolean) => void } | null }
       owner?.getTabBar?.()?.setCovered?.(covered)
     },
-    /** 系统层轻提示（设计稿 toast：深色半透明框，成功带像素 ✓，1.5 秒后 180ms 淡出）。 */
-    toast(text: string, ok = false) {
+    /** 系统层轻提示（设计稿 toast：阶梯深色框，成功带像素 ✓，默认 1.5 秒后 180ms 淡出）。mask＝提示期间挡住点按。 */
+    toast(text: string, ok = false, ms = 1500, mask = false) {
       clearTimeout(toastTimers.get(this))
-      this.setData({ toastText: text, toastOk: ok, toastShow: true })
+      const kind: ToastKind = ok ? 'ok' : ''
+      lastToast = { text, kind, until: Date.now() + ms, owner: this }
+      this.setData({ toastText: text, toastKind: kind, toastShow: true, blocking: mask })
       toastTimers.set(
         this,
         setTimeout(() => {
           toastTimers.delete(this)
-          this.setData({ toastShow: false })
-        }, 1500)
+          this.setData({ toastShow: false, blocking: false })
+        }, ms)
       )
     },
+    /** 别页刚弹、还没到点的提示：本页露面时接着显示剩下的时长。 */
+    claimToast() {
+      const t = lastToast
+      if (!t || t.owner === this || t.kind === 'loading') return
+      const left = t.until - Date.now()
+      if (left > 200) this.toast(t.text, t.kind === 'ok', left)
+    },
+    /** 加载框（替原生 showLoading）：像素转圈 + 字，挡住点按，直到 loaded()。 */
+    loading(text: string) {
+      clearTimeout(toastTimers.get(this))
+      toastTimers.delete(this)
+      lastToast = null
+      this.setData({ toastText: text, toastKind: 'loading', toastShow: true, blocking: true })
+    },
+    loaded() {
+      if (this.data.toastKind === 'loading') this.setData({ toastShow: false, blocking: false })
+    },
+    /** 确认半屏（替原生 showModal）：resolve(true)＝确认。danger＝左键红字按住 700ms 才确认；single＝只一颗「知道了」。 */
+    confirm(o: ConfirmOpts): Promise<boolean> {
+      cfDone.get(this)?.(false)
+      return new Promise((resolve) => {
+        cfDone.set(this, resolve)
+        this.setData({ cf: { confirmText: '确定', cancelText: '取消', ...o }, cfOut: false, cfHold: false }) // 黑体（确认半屏整块黑体）
+      })
+    },
+    closeCf(ok: boolean) {
+      if (!this.data.cf || this.data.cfOut) return
+      cfHolds.get(this)?.cancel()
+      const done = cfDone.get(this)
+      cfDone.delete(this)
+      this.setData({ cfOut: true })
+      setTimeout(() => {
+        this.setData({ cf: null, cfOut: false })
+        done?.(ok)
+      }, CF_OUT_MS)
+    },
+    onCfYes() {
+      this.closeCf(true)
+    },
+    onCfNo() {
+      this.closeCf(false)
+    },
+    onCfMask() {
+      this.closeCf(!!this.data.cf?.single) // 只一颗键的通知：点遮罩＝知道了
+    },
+    onCfHoldStart(e: WechatMiniprogram.TouchEvent) {
+      keyPress('light') // 按住类键自己 catch 了 touchstart，手感在这里补
+      const t = e.touches[0]
+      cfHolds.get(this)?.start(t?.clientX, t?.clientY)
+    },
+    onCfHoldMove(e: WechatMiniprogram.TouchEvent) {
+      const t = e.touches[0]
+      if (t) cfHolds.get(this)?.move(t.clientX, t.clientY)
+    },
+    onCfHoldEnd() {
+      cfHolds.get(this)?.end()
+    },
+    onCfHoldCancel() {
+      cfHolds.get(this)?.cancel()
+    },
+    onKeyDown: keyDown,
+    onKeyUp: keyUp,
     canvas(): Promise<St | null> {
       const s = S.get(this)
       if (!s) return Promise.resolve(null)

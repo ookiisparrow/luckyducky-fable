@@ -22,9 +22,6 @@ page {
   padding-top: 12px;
 }
 .mc-card {
-  border-radius: 8px;
-  background: var(--v5-surface);
-  box-shadow: 0 0 0 1px var(--v5-hair);
   padding: 16px;
 }
 /* 卡片按下（设计稿 PRESS.card：底 #f3f3f0·下沉 1px） */
@@ -38,7 +35,6 @@ page {
   width: 64px;
   height: 64px;
   flex: 0 0 auto;
-  border-radius: 4px;
   background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .mc-body {

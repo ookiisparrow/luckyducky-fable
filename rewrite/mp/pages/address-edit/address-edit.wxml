@@ -51,7 +51,7 @@
   <view class="ae-dock">
     <view wx:if="{{id}}" class="k k-light k-48 ae-del {{deleting ? 'ae-del-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
       catch:touchstart="onDelHoldStart" bind:touchmove="onDelHoldMove" catch:touchend="onDelHoldEnd" catch:touchcancel="onDelHoldCancel">
-      <view class="ae-del-fill"></view>
+      <view class="ae-del-fill px-clip-6"></view>
       <text class="ae-del-t">删除</text>
     </view>
     <view wx:if="{{valid}}" class="k k-ink k-48 ae-save" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onSave" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">保存</view>
