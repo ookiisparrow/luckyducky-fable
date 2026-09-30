@@ -10,11 +10,11 @@ const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 const rule = (css: string, sel: string) => css.slice(css.indexOf('\n' + sel + ' {'), css.indexOf('}', css.indexOf('\n' + sel + ' {')))
 
 describe('底栏像素图标', () => {
-  it('大白话：三个 tab 键只放像素图标（跟按键字色），不再写「首页 / 购物车 / 我」；购物车件数角标照留', () => {
+  it('大白话：三个 tab 只放像素图标（v6 Lite：紫＝当前、其余 ink-2），不再写「首页 / 购物车 / 我」；件数不显示', () => {
     const w = live(tabWxml)
-    expect(w).toContain('<px-i name="{{item.id}}" />')
+    expect(w).toMatch(/<px-i name="\{\{item\.id\}\}" tone=/)
     expect(w).not.toMatch(/item\.label/)
-    expect(w).toContain('ld-tab-count')
+    expect(w).not.toContain('ld-tab-count')
     expect(JSON.parse(tabJson).usingComponents['px-i']).toBe('/components/px-i/px-i')
   })
   it('大白话：home / cart / me 三个图标点阵与设计稿 pixel-mini.js 一格不差', () => {

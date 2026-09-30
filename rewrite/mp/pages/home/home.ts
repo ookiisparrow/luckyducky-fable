@@ -65,7 +65,7 @@ Page({
   },
   hidden: false, // 已切走本 tab 标记：home 是 tabBar 页，切 tab/navigateTo 只触发 onHide、
   // 实例常驻不销毁（不适用 checkout 那套 onUnload→this.unloaded 家族）——quick-add 的 await 恢复点据此判断
-  // 是否还站在本页，不把迟到回包的导航/角标同步/toast 打到用户已经切走之后的当前页面上。
+  // 是否还站在本页，不把迟到回包的导航/toast 打到用户已经切走之后的当前页面上。
   onShow() {
     this.hidden = false
     armExitGuard(this) // tabBar 栈底页误触退出提醒：武装 page-container 拦第一次返回（决策§30·见 utils/exitGuard）
@@ -162,7 +162,7 @@ Page({
     if (id && this._navOk()) wx.navigateTo({ url: '/pages/detail/detail?id=' + id })
   },
   _addSeq: 0, // onAddProduct 代次（同 reload._seq 范式）：连点「+」可并发在途（冷启动快照期共享同一次目录拉取）——
-  // 每次点击的加购都照做（每下独立生效），代次只管提示：过期回包不弹提示/不弹角标，只最后一次提示。
+  // 每次点击的加购都照做（每下独立生效），代次只管提示：过期回包不弹提示，只最后一次提示。
   // 切走本 tab（onHide）而非退出本页那条路见上面 hidden 字段。
   // 首页「+」快速加购（用户拍板：「+」统一加入购物车，多规格默认加
   // 首个规格·不跳详情）：单规格直加、多规格加首规格、原始记录取不到（缓存 miss 且网络失败）温和失败反馈
@@ -177,13 +177,7 @@ Page({
     if (payload) {
       cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：连点每下都算、即便已切走本 tab 也不该丢单
       trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
-      if (this.hidden) return // 已切走 home tab：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
-      if (typeof this.getTabBar === 'function') {
-        const bar = this.getTabBar() as unknown as LdTabBar
-        bar.setActive('home') // 角标随动（同 cart.ts refresh() 范式·重数一遍，过期回包也要同步，否则乱序回来时角标少算）
-        if (!stale) bar.bump?.() // 设计稿：加购后购物车角标弹一下（scale 1→1.5→1·320ms·动画在 custom-tab-bar 里）
-      }
-      if (stale) return
+      if (this.hidden || stale) return // 已切走 home tab / 过期回包：toast 是本页 UI 副作用，静默跳过（底栏不显示件数·v6 Lite）
       // 多规格被默认加了首规格时把规格名亮给用户（px-fx 自绘提示不受原生 toast 字数限制）——静默替选规格必须可见
       fxToast(this, payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
     } else {

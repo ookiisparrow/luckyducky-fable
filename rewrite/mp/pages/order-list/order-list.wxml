@@ -7,10 +7,10 @@
 <view class="ol" bind:touchstart="onSwipeStart" bind:touchend="onSwipeEnd">
   <!-- 页签常驻导航栏下方（UI 审查 15 问 5a）；滚动后下缘出 1px 分隔线 -->
   <view class="ol-tabs-bar {{scrolled ? 'ol-tabs-bar-line' : ''}}" style="top: {{navBottom}}px">
-  <view class="well ol-tabs">
+  <view class="ol-tabs">
     <view wx:for="{{tabs}}" wx:key="key" data-key="{{item.key}}" bind:tap="onTab"
-      class="k ol-tab hit44 {{tabKey === item.key ? 'k-light ol-tab-on' : ''}}"
-      hover-start-time="20" hover-class="{{tabKey === item.key ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-k="{{tabKey === item.key ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.label}}</view>
+      class="ol-tab hit44 {{tabKey === item.key ? 'ol-tab-on' : ''}}"
+      hover-start-time="20" hover-class="press-fade" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.label}}</view>
   </view>
 
   </view>
@@ -21,7 +21,7 @@
     <!-- 加载中且列表空：像素 loader + 骨架卡（尺寸照真卡，落地少跳变） -->
     <block wx:if="{{loading && !shown.length}}">
       <view class="t-sys ol-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
-      <view class="ol-card px-skin px-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="ol-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
         <view class="ol-skel-bar skel" style="width: 96px"></view>
         <view class="ol-row">
           <view class="ol-thumb skel"></view>
@@ -46,7 +46,7 @@
       <view class="k k-light ol-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去逛逛</view>
     </view>
 
-    <view class="k-card ol-card px-skin px-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
+    <view class="k-card ol-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
       <view class="ol-head">
         <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />

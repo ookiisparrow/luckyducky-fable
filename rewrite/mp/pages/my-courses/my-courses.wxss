@@ -22,7 +22,8 @@ page {
   padding-top: 12px;
 }
 .mc-card {
-  padding: 16px;
+  padding: 16px 0; /* v6 Lite：取消白卡，只留顶部分隔线、内容贴页边距（老板 2026-09-30） */
+  box-shadow: inset 0 1px 0 var(--v5-hair-soft);
 }
 /* 卡片按下（设计稿 PRESS.card：底 #f3f3f0·下沉 1px） */
 .mc-row {

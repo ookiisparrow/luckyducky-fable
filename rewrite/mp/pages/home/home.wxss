@@ -309,8 +309,8 @@ page {
 .hm-trust {
   margin: 40px 16px 0;
   display: flex;
-  border-top: 1px solid var(--v5-hair);
-  border-bottom: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .hm-trust-item {
   flex: 1;
@@ -434,10 +434,10 @@ page {
   padding: 16px 16px 0;
 }
 .hm-faq-item {
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 .hm-faq-item:last-child {
-  border-bottom: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .hm-faq-row {
   min-height: 52px;
@@ -541,7 +541,7 @@ page {
 .hm-footer {
   margin: 56px 16px 0;
   padding-top: 24px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   display: flex;
   flex-direction: column;
   align-items: center;

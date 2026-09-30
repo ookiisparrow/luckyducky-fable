@@ -9,7 +9,7 @@
 
   <view class="od-body">
     <!-- 状态卡（UI 审查 15 问 6a）：灯 + 状态名（墨 17/500·与列表同名），下一行完整说明句（灰；只有待支付倒计时深黄） -->
-    <view class="od-card px-skin px-card">
+    <view class="od-card">
       <view class="od-state">
         <view class="od-state-l">
           <px-anim wx:if="{{vm.status === 'pending' && !expired}}" name="hourglass" size="2" />
@@ -34,7 +34,7 @@
     </view>
 
     <!-- 物流（有运单号时·真实数据仅运单号+公司，实时轨迹经快递100插件；插件打不开回退复制运单号） -->
-    <view class="k-card od-card od-logi px-skin px-card" wx:if="{{vm.trackingNo}}" hover-start-time="20" hover-class="k-card-down" bind:tap="onViewLogistics">
+    <view class="k-card od-card od-logi" wx:if="{{vm.trackingNo}}" hover-start-time="20" hover-class="k-card-down" bind:tap="onViewLogistics">
       <view class="od-logi-top">
         <view class="od-logi-no">
           <text class="t-sys od-k" wx:if="{{vm.shipCompany}}">{{vm.shipCompany}}</text>
@@ -49,7 +49,7 @@
     </view>
 
     <!-- 收货地址（历史快照·只读） -->
-    <view class="od-card px-skin px-card" wx:if="{{vm.address}}">
+    <view class="od-card" wx:if="{{vm.address}}">
       <text class="t-sys od-k">收货地址</text>
       <text class="t-sys od-region">{{vm.address.region}}</text>
       <text class="t-sys od-detail">{{vm.address.detail}}</text>
@@ -60,7 +60,7 @@
     </view>
 
     <!-- 商品（只读 ×N）+ 金额 -->
-    <view class="od-card od-goods px-skin px-card">
+    <view class="od-card od-goods">
       <view class="od-item" wx:for="{{vm.items}}" wx:key="lineId">
         <view class="od-thumb">
           <image wx:if="{{item.cover}}" class="od-thumb-img" src="{{item.cover}}" mode="aspectFill" lazy-load />
@@ -127,11 +127,11 @@
 
 <!-- 加载骨架（根因#8·loading 且 vm 空时三分支曾全假→白屏） -->
 <view class="od-skel" wx:elif="{{loading}}">
-  <view class="od-card px-skin px-card">
+  <view class="od-card">
     <view class="od-skel-bar skel" style="width: 120px"></view>
     <view class="od-skel-bar skel" style="width: 80%"></view>
   </view>
-  <view class="od-card od-item px-skin px-card">
+  <view class="od-card od-item">
     <view class="od-thumb skel"></view>
     <view class="od-item-mid">
       <view class="od-skel-bar skel" style="width: 60%"></view>

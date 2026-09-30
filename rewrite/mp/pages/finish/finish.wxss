@@ -35,7 +35,7 @@ page {
 .fn-stats {
   margin: 24px 16px 0;
   padding-top: 16px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   display: flex;
   flex-direction: column;
   gap: 8px;

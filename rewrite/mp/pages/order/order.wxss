@@ -14,7 +14,8 @@ page {
   gap: 8px;
 }
 .od-card {
-  padding: 16px;
+  padding: 16px 0; /* v6 Lite：取消白卡，只留顶部分隔线、内容贴页边距（老板 2026-09-30） */
+  box-shadow: inset 0 1px 0 var(--v5-hair-soft);
 }
 .od-k {
   font-size: 13px;
@@ -56,7 +57,7 @@ page {
 .od-as-go {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   justify-content: flex-end;
 }
 .od-steps {
@@ -186,7 +187,7 @@ page {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .od-thumb {
   width: 44px;

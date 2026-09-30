@@ -15,7 +15,7 @@
   <!-- 骨架占位（加载中，不写死假进度） -->
   <view class="mc-list mc-list-load" wx:elif="{{loading}}">
     <view class="t-sys mc-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
-    <view class="mc-card mc-skel-card px-skin px-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+    <view class="mc-card mc-skel-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
       <view class="mc-skel-bar skel" style="width: 96px"></view>
       <view class="mc-row">
         <view class="mc-skel-thumb skel"></view>
@@ -29,7 +29,7 @@
 
   <!-- 课卡列表 -->
   <view class="mc-list" wx:elif="{{list.length}}">
-    <view class="k-card mc-card px-skin px-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-start-time="20" hover-class="k-card-down" hover-stay-time="100">
+    <view class="k-card mc-card" wx:for="{{list}}" wx:key="courseId" data-id="{{item.courseId}}" bind:tap="onTapCourse" hover-start-time="20" hover-class="k-card-down" hover-stay-time="100">
       <view class="mc-row">
         <view class="mc-thumb"></view>
         <view class="mc-body">

@@ -73,12 +73,12 @@ describe('5a 订单列表页签固定在导航栏下方', () => {
   afterEach(() => {
     g.wx = saved
   })
-  it('大白话：页签条贴在导航栏下缘（状态栏 + 44），下面留 52 占位；滚动后才出分隔线', async () => {
+  it('大白话：页签条贴在导航栏下缘（状态栏 + 44），下面留 49 占位（v6 Lite 页签 40 + 分隔线 1 + 8）；滚动后才出分隔线', async () => {
     g.wx = { getWindowInfo: () => ({ statusBarHeight: 47, screenHeight: 844 }) }
     expect(navBottom()).toBe(91)
     expect(live(orderListWxml)).toMatch(/class="ol-tabs-bar \{\{scrolled \? 'ol-tabs-bar-line' : ''\}\}" style="top: \{\{navBottom\}\}px"/)
     expect(rule(orderListWxss, '.ol-tabs-bar')).toContain('position: fixed')
-    expect(rule(orderListWxss, '.ol-tabs-space')).toContain('height: 52px')
+    expect(rule(orderListWxss, '.ol-tabs-space')).toContain('height: 49px')
     vi.resetModules()
     await import('../pages/order-list/order-list')
     const patches: Record<string, unknown>[] = []

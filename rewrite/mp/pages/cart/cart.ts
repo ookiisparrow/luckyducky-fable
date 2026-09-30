@@ -42,7 +42,7 @@ Page({
   },
   onShow() {
     armExitGuard(this) // tabBar 栈底页误触退出提醒（决策§30·见 utils/exitGuard）
-    // 云目录首拉没回来也先刷本地车（refresh 是同步的，和 onLoad 的两次 refresh 不会互踩）；末尾同步 tabBar 角标
+    // 云目录首拉没回来也先刷本地车（refresh 是同步的，和 onLoad 的两次 refresh 不会互踩）；末尾回写 tabBar 当前项
     this.refresh()
   },
   onHide() {
@@ -71,7 +71,7 @@ Page({
       totalLabel: cart.selectedTotalLabel(),
       cargo: cargoOf(items),
     })
-    if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart') // 角标随动
+    if (typeof this.getTabBar === 'function') (this.getTabBar() as unknown as LdTabBar).setActive('cart') // 当前项紫色（v6 Lite 底栏不显示件数）
   },
   onToggle(e: WechatMiniprogram.TouchEvent) {
     const { id, sku } = e.currentTarget.dataset as { id: string; sku: string }

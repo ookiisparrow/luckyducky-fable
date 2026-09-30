@@ -35,8 +35,8 @@ page {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
-  border-bottom: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .cs-row-t {
   flex: 1;

@@ -507,7 +507,7 @@
 /* 常见问题问答（CMS help.faq）：发丝线分隔的问答行；q/a 字号随容器（KB 条目另有 .lp-help-faq-item 下的同名规则） */
 .lp-help-faq {
   padding: 16px 0;
-  border-bottom: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair-soft);
   font-size: 15px;
 }
 .lp-help-faq-q {
@@ -540,7 +540,7 @@
 /* 常见问题条目（R37·KB 精选 FAQ）：同 CMS 问答行版式 */
 .lp-help-faq-item {
   padding: 16px 0;
-  border-bottom: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .lp-help-faq-item .lp-help-faq-q {
   font-size: 15px;

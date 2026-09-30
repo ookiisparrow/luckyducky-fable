@@ -121,8 +121,6 @@ page {
   margin: 2px 16px 0;
   display: flex;
   flex-wrap: wrap;
-  border-top: 1px solid var(--v5-hair);
-  border-bottom: 1px solid var(--v5-hair);
 }
 .pd-spec {
   box-sizing: border-box;
@@ -132,6 +130,10 @@ page {
   flex-direction: column;
   gap: 4px;
 }
+.pd-spec:first-child {
+  padding-left: 0;
+}
+
 .pd-spec-k {
   font-size: 13px;
   font-weight: 300;
@@ -148,29 +150,33 @@ page {
 /* 款式：凹槽里一排键，选中＝浅色键 + 紫灯 */
 .pd-vars {
   margin: 8px 16px 0;
-  padding: 4px;
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 0 20px;
 }
 .pd-var {
-  flex: 1;
+  height: 44px;
   min-width: 0;
-  height: 36px;
-  padding: 0 8px;
-}
-.pd-var-off {
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 500;
   color: var(--v5-ink-2);
+}
+.pd-var-on {
+  color: var(--v5-violet-text);
 }
 .pd-var-name {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 图文 */
 .pd-sec {
   margin: 24px 16px 0;
   padding-top: 16px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -206,10 +212,10 @@ page {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  border-top: 1px solid var(--v5-hair-soft);
 }
 .pd-kit-row:last-child {
-  border-bottom: 1px solid var(--v5-hair);
+  border-bottom: 1px solid var(--v5-hair-soft);
 }
 .pd-kit-name {
   font-size: 17px;
@@ -237,8 +243,12 @@ page {
   background: var(--v5-canvas);
 }
 .pd-cs {
-  flex: 0 0 48px;
-  padding: 0;
+  width: 44px; /* 平面图标（v6 Lite 去键帽） */
+  height: 48px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .pd-add {
   flex: 1;
