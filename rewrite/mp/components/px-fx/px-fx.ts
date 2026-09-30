@@ -101,7 +101,6 @@ Component({
     hide() {
       // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
       if (this.data.cover) setTimeout(() => this.clearCover(), SLIDE_MS + 140)
-      // 撒花没落完就跳页：照旧落完（老板 2026-10-01：中途停掉画面是割裂的）
     },
   },
   methods: {
