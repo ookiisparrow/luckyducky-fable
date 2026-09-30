@@ -12,6 +12,7 @@ import { loginGate } from '../../lib/loginGate'
 import { writeStoredCont } from '../../lib/meCont'
 import { clearConsentHint } from '../../lib/consent'
 import { tapHaptic } from '../../lib/haptics'
+import { fxConfirm, fxHint, fxLoaded, fxLoading } from '../../lib/pxFx'
 
 Page({
   data: {
@@ -47,35 +48,36 @@ Page({
   _deleting: false,
   onDeleteData() {
     tapHaptic()
-    wx.showModal({
+    // 不可恢复：左键红字按住 700ms 才删，右墨黑＝保留（像素化 9c）
+    void fxConfirm(this, {
       title: '删除个人资料',
       content: '将删除你的昵称、头像、签名、手机号和本机地址簿，评价改为匿名。已解锁的课程和学习进度会保留，订单依法留存。删除后不能恢复。',
       confirmText: '删除',
-      confirmColor: '#D9483B', // 不可恢复操作：确认键警示红（= tokens --v5-err·原生弹窗只收 hex）
-      success: (r) => {
-        if (r.confirm) void this.runDeleteData()
-      },
+      cancelText: '保留',
+      danger: true,
+    }).then((ok) => {
+      if (ok) void this.runDeleteData()
     })
   },
   async runDeleteData() {
     if (this._deleting) return
     this._deleting = true
-    wx.showLoading({ title: '删除中', mask: true }) // 遮罩挡住在途连点/返回（服务端要跑好几步批删）
+    fxLoading(this, '删除中') // 遮罩挡住在途连点/返回（服务端要跑好几步批删）
     let r: { ok: boolean }
     try {
       r = await deleteAccount()
     } finally {
-      wx.hideLoading()
+      fxLoaded(this)
       this._deleting = false
     }
     if (!r.ok) {
-      wx.showToast({ title: '没删成，请稍后再试', icon: 'none' })
+      fxHint(this, '没删成，请稍后再试')
       return
     }
     clearAddresses() // 地址簿只存本机
     clearConsentHint() // 服务端已把数据共享授权重置；本机旧提示别再显示「已同意」
     loginGate.logout()
     writeStoredCont(null)
-    wx.showToast({ title: '已删除', icon: 'none' })
+    fxHint(this, '已删除')
   },
 })

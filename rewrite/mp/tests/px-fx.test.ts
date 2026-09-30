@@ -40,8 +40,8 @@ describe('像素转场', () => {
 describe('成功轻提示', () => {
   it('大白话：页面挂了特效层就用设计稿的像素 ✓ 提示；没挂（或测试里的假页面）退回原生成功提示，文案不变', () => {
     const toast = vi.fn()
-    fxToast({ selectComponent: () => ({ toast }), createSelectorQuery: () => ({}) as never }, '已支付')
-    expect(toast).toHaveBeenCalledWith('已支付', true)
+    fxToast({ selectComponent: () => ({ toast }) }, '已支付')
+    expect(toast).toHaveBeenCalledWith('已支付', true, undefined, undefined)
     const showToast = vi.fn()
     ;(globalThis as Record<string, unknown>).wx = { showToast }
     fxToast({} as never, '支付成功')

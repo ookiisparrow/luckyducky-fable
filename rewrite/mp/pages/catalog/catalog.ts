@@ -11,7 +11,7 @@ import { getMyProgress } from '../../api/user'
 import { mapCatalog, bgFor, type CatalogChapterVM } from '../../lib/mapLearning'
 import { mapCatalogPlayer } from '../../lib/mapPages'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxTransit } from '../../lib/pxFx'
+import { fxHint, fxTransit } from '../../lib/pxFx'
 
 Page({
   onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
@@ -101,12 +101,12 @@ Page({
     // 加载中先说加载中：state 未到 'ok' 时 continueTarget 天然为空，
     // 一律弹「课程视频整理中」的话，页面还在转圈时点一下就得到一句不实的结论。
     if (this.data.state === 'loading') {
-      wx.showToast({ title: '课程还在加载，稍等一下', icon: 'none' })
+      fxHint(this, '课程还在加载，稍等一下')
       return
     }
     const t = this.data.continueTarget
     if (!t) {
-      wx.showToast({ title: '课程视频整理中', icon: 'none' })
+      fxHint(this, '课程视频整理中')
       return
     }
     tapHaptic()
@@ -119,7 +119,7 @@ Page({
   onTapLesson(e: WechatMiniprogram.TouchEvent) {
     const segId = String(e.currentTarget.dataset.seg || '')
     if (!segId) {
-      wx.showToast({ title: this.emptyLessonText, icon: 'none' }) // CMS 空态文案·回退默认「这节课还在整理中」
+      fxHint(this, this.emptyLessonText) // CMS 空态文案·回退默认「这节课还在整理中」
       return
     }
     wx.navigateTo({ url: '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + segId })

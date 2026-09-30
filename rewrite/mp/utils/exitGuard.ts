@@ -1,3 +1,4 @@
+import { fxHint } from './sysUi'
 // tabBar 栈底页「误触退出提醒」单源（决策§30）。
 // 病：tabBar 三页（首页/购物车/我）是页面栈底，安卓实体返回键＝直接退出小程序，误触即丢会话。
 //
@@ -59,7 +60,7 @@ export function onExitGuardBeforeLeave(page: ExitGuardHost): void {
   page.setData({ exitGuardArmed: false }) // 本次返回已被消费 → 2s 内再按返回不拦、直接退出
   // 登录半屏开着：这次返回＝关掉半屏（安卓返回键收浮层的习惯），不提示退出、立刻恢复保护
   const sheet = !!overlayBack && overlayBack()
-  if (!sheet) wx.showToast({ title: EXIT_TOAST, icon: 'none', duration: REARM_MS })
+  if (!sheet) fxHint(null, EXIT_TOAST, { ms: REARM_MS }) // 返回键拦在本 tab 页＝当前页
   releaseExitGuard(page)
   page._exitGuardTimer = setTimeout(() => {
     page._exitGuardTimer = null

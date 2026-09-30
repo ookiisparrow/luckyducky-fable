@@ -120,7 +120,9 @@ describe('结算页：拒单后能继续下单', () => {
       expect(modal.content).not.toContain('其余商品')
       expect(wxMock.showToast).not.toHaveBeenCalled()
       expect(wxMock.navigateBack).not.toHaveBeenCalled() // 用户还没看完弹窗
+      expect(modal.confirmText).toBe('知道了')
       modal.success({ confirm: true })
+      await vi.runAllTimersAsync() // 确认半屏的去向在 then 里（异步）
       expect(wxMock.navigateBack).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()

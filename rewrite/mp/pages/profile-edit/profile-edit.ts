@@ -7,7 +7,7 @@ import { loginGate } from '../../lib/loginGate'
 import { writeStoredCont } from '../../lib/meCont'
 import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
-import { fxHint } from '../../lib/pxFx'
+import { fxHint, fxToast } from '../../lib/pxFx'
 import { uploadAvatar, hintProfileFail } from '../../lib/avatar'
 
 // 账户联系电话可入库位数（手落副本·canonical 单源＝云端 actions/user.ts 的 d.length>=7 与 CAPS.phone=11；
@@ -120,7 +120,7 @@ Page({
     tapHaptic()
     loginGate.logout()
     writeStoredCont(null)
-    wx.showToast({ title: '已退出登录', icon: 'none' }) // 随即退回上一页：原生提示跨页不断
+    fxHint(this, '已退出登录') // 随即退回上一页：上一页接着显示（px-fx 跨页接力）
     if (!this.unloaded) this.leaveNow()
   },
   /** 退出后直接走：先撤放弃确认的拦截（有改动也不再问），渲染落地后再返回。 */
@@ -171,7 +171,7 @@ Page({
     if (r.ok && !avatarFailed) {
       // 成功且无需停留：清临时头像（防二次上传孤儿文件）+ 保持 busy 锁定到返回·toast 加 mask 挡点·定时器存实例待清
       this.setData({ avatarTemp: '' })
-      wx.showToast({ title: '已保存', icon: 'success', mask: true }) // 随后退回上一页：原生提示跨页不断，自绘的会随本页消失
+      fxToast(this, '已保存', { mask: true }) // 随后退回上一页：上一页接着显示（px-fx 跨页接力）
       this.backTimer = setTimeout(() => wx.navigateBack(), 600)
       return
     }

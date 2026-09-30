@@ -4,6 +4,7 @@
   "usingComponents": {
     "v5-nav": "/components/v5-nav/v5-nav",
     "px-truck": "/components/px-truck/px-truck",
-    "px-anim": "/components/px-anim/px-anim"
+    "px-anim": "/components/px-anim/px-anim",
+    "px-fx": "/components/px-fx/px-fx"
   }
 }

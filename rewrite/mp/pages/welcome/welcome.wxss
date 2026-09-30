@@ -30,9 +30,7 @@ page {
 }
 /* 按下态挂在 44 热区上（按热区任意处键帽都下沉·同 v5-nav .nv-hit-down） */
 .wl-hit-down .wl-back {
-  transform: translateY(1px);
-  background: var(--v5-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
+  transform: translateY(2px);
 }
 .wl-back {
   width: 32px;
@@ -95,10 +93,6 @@ page {
   text-overflow: ellipsis;
 }
 .wl-code-invalid,
-.wl-code-taken {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1.5px var(--v5-err);
-}
-
 /* 状态灯 + 说明 */
 .wl-msg {
   padding: 12px 16px 0;

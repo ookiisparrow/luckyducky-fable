@@ -35,3 +35,80 @@
   gap: 8px;
   z-index: 902;
 }
+/* 成功勾上下各留 4px（规格 9c） */
+.fx-ok {
+  margin: 4px 0;
+}
+/* 确认半屏（替原生 showModal·结构同「放弃编辑」半屏 leave-sheet）：盖在页面与 TabBar 之上、提示框之下 */
+.fx-cf {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 140;
+}
+.fx-cf-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+.fx-cf-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.fx-cf-t {
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fx-cf-h {
+  font-size: 20px;
+  font-weight: 700;
+}
+.fx-cf-sub {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--v5-ink-2);
+}
+.fx-cf-ks {
+  padding-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+.fx-cf-l {
+  flex: 1;
+}
+.fx-cf-r {
+  flex: 1.6;
+}
+.fx-cf-danger {
+  color: var(--v5-err-text);
+}
+.fx-cf-kt {
+  position: relative;
+}
+.fx-cf-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--v5-err-soft);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.fx-hold-on .fx-cf-fill {
+  transform: scaleX(1);
+  transition: transform 700ms linear;
+}

@@ -4,7 +4,7 @@
 // 有改动（dirty）时 <leave-sheet> 拦返回/侧滑先问「放弃修改地址？」。
 import { tapHaptic } from '../../lib/haptics'
 import * as addr from '../../lib/address'
-import { fxHint } from '../../lib/pxFx'
+import { fxHint, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { keyDown, keyPress, keyUp } from '../../lib/keyFx'
 
@@ -105,7 +105,7 @@ Page({
     const pick = this.data.pick
     // 从结算页来新增：选址＝设默认（拍板 5），结算页 onShow 取默认，存完直接回去
     addr.saveAddress({ id: id ?? undefined, name: name.trim(), phone, region: region.trim(), detail: detail.trim(), isDefault: pick ? true : isDefault })
-    wx.showToast({ title: '已保存', icon: 'success' }) // 马上退回：自绘提示会随本页消失，用原生（跨页还在）
+    fxToast(this, '已保存') // 马上退回：上一页接着显示（px-fx 跨页接力）
     this._leave(pick || 1)
   },
   // 删除既有地址（仅编辑态·复用簿逻辑 removeAddress）：按住 0.7s 才删，松手太快提示按住——替代原二次确认弹窗（lib/hold）
@@ -119,7 +119,7 @@ Page({
           if (id == null) return
           tapHaptic()
           addr.removeAddress(id)
-          wx.showToast({ title: '已删除', icon: 'none' }) // 同保存：马上退回，用原生
+          fxHint(this, '已删除') // 同保存：马上退回，上一页接着显示
           this._leave()
         },
         {

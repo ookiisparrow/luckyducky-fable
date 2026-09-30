@@ -21,12 +21,15 @@ page {
   gap: 12px;
   border-top: 1px solid var(--v5-hair);
 }
+/* 像素圆单选（像素化 3a：11×11 格·外形见 px-skin .px-circle-radio(-on)）；选中圆心 px-i dot 居中 */
 .ad-radio {
   width: 22px;
   height: 22px;
-  padding: 0;
   flex: 0 0 auto;
-  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 .ad-text {
   flex: 1;
@@ -71,7 +74,6 @@ page {
 .ad-def {
   height: 18px;
   padding: 0 4px;
-  border-radius: 4px;
   display: flex;
   align-items: center;
   background: var(--v5-sunk);

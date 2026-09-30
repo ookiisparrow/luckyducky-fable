@@ -68,7 +68,7 @@
   <scroll-view wx:if="{{products.length}}" class="hm-rail" scroll-x enhanced show-scrollbar="{{false}}">
     <view class="hm-rail-row">
       <view class="hm-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
-        <view class="hm-card-media">
+        <view class="hm-card-media px-clip-4">
           <image wx:if="{{item.cover}}" class="hm-card-img {{wide[item.cover] ? '' : 'focus-img'}}" src="{{item.cover}}" mode="{{wide[item.cover] ? 'aspectFill' : 'widthFix'}}" data-src="{{item.cover}}" bindload="onImgLoad" />
         </view>
         <view class="hm-card-info">
@@ -87,7 +87,7 @@
     <view class="t-sys hm-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
     <view class="hm-rail-row">
       <view class="hm-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
-        <view class="hm-card-media skel"></view>
+        <view class="hm-card-media skel px-clip-4"></view>
         <view class="hm-skel-line skel"></view>
         <view class="hm-skel-line short skel"></view>
       </view>
@@ -110,7 +110,7 @@
   </view>
   <view class="hm-reassure">
     <view class="hm-rs" wx:for="{{content.reassure.items}}" wx:key="title">
-      <view wx:if="{{item.img}}" class="hm-rs-media">
+      <view wx:if="{{item.img}}" class="hm-rs-media px-clip-8">
         <image class="hm-rs-img" src="{{item.img}}" mode="aspectFill" lazy-load />
       </view>
       <view class="hm-rs-head">
@@ -126,7 +126,7 @@
   <view class="hm-sec"><text class="hm-h2">{{content.reviews.heading}}</text></view>
   <scroll-view class="hm-rail hm-rail-reviews" scroll-x enhanced show-scrollbar="{{false}}">
     <view class="hm-rail-row">
-      <view class="hm-rv" wx:for="{{content.reviews.items}}" wx:key="quote">
+      <view class="hm-rv px-skin px-card px-clip-8" wx:for="{{content.reviews.items}}" wx:key="quote">
         <view class="hm-rv-media">
           <image wx:if="{{item.img}}" class="hm-card-img" src="{{item.img}}" mode="aspectFill" />
         </view>
@@ -190,7 +190,7 @@
 </scroll-view>
 
 <!-- 回到顶部（滚过一屏半浮现） -->
-<view wx:if="{{showTop}}" class="k k-light hm-backtop hit44 enter-rise" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+<view wx:if="{{showTop}}" class="k k-light hm-backtop hit44 enter-rise px-top" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
   <px-i name="up" />
   <text>顶部</text>
 </view>

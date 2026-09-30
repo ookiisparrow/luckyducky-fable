@@ -306,19 +306,25 @@ describe('订单详情：继续支付', () => {
 })
 
 describe('订单详情：确认收货与写评价', () => {
+  // 页面桩没挂 px-fx：确认半屏/提示走 utils/sysUi 的原生兜底，断言原生调用即可（自绘本身见 sys-ui-9c.test）
   it('大白话：确认收货——成功提示并刷新；失败提示稍后再试；取消确认不发请求', async () => {
     const page = await mount()
     handlers.confirmReceive = () => ({ ok: true })
     page.onConfirm()
-    await modal().success({ confirm: false })
+    expect(modal()).toMatchObject({ title: '确认收货', confirmText: '确认收货', showCancel: true })
+    modal().success({ confirm: false })
+    await flush()
     expect(callAppMock).not.toHaveBeenCalledWith('confirmReceive', expect.anything())
-    await modal().success({ confirm: true })
+    page.onConfirm()
+    modal(1).success({ confirm: true })
+    await flush()
     expect(callAppMock).toHaveBeenCalledWith('confirmReceive', { id: 'o1' })
     expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '已确认收货', icon: 'success' })
 
     handlers.confirmReceive = () => ({ ok: false, error: 'BAD_STATUS' })
     page.onConfirm()
-    await modal(1).success({ confirm: true })
+    modal(2).success({ confirm: true })
+    await flush()
     expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '操作没成功，稍后再试', icon: 'none' })
   })
 
@@ -326,9 +332,9 @@ describe('订单详情：确认收货与写评价', () => {
     const page = await mount()
     handlers.confirmReceive = () => ({ ok: true })
     page.onConfirm()
-    const done = modal().success({ confirm: true })
+    modal().success({ confirm: true })
     page.onUnload()
-    await done
+    await flush()
     expect(wxMock.showToast).not.toHaveBeenCalled()
   })
 
@@ -504,10 +510,12 @@ describe('订单详情：UX 修复轮', () => {
     handlers.confirmReceive = () => new Promise((r) => (release = r))
     const page = await mount()
     page.onConfirm()
-    const a = modal().success({ confirm: true })
-    const b = modal().success({ confirm: true })
+    modal().success({ confirm: true })
+    await flush()
+    page.onConfirm() // 在途再点：_busy 挡住，连确认都不再弹
+    expect(wxMock.showModal).toHaveBeenCalledTimes(1)
     release({ ok: true })
-    await Promise.all([a, b])
+    await flush()
     expect(callAppMock.mock.calls.filter((c: unknown[]) => c[0] === 'confirmReceive')).toHaveLength(1)
     expect(wxMock.showLoading).toHaveBeenCalledWith({ title: '正在确认', mask: true })
     expect(wxMock.hideLoading).toHaveBeenCalledTimes(1)

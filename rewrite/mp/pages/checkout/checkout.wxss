@@ -24,11 +24,7 @@ page {
   flex-direction: column;
   gap: 8px;
 }
-.co-card {
-  border-radius: 8px;
-  background: var(--v5-surface);
-  box-shadow: 0 0 0 1px var(--v5-hair);
-}
+
 .co-k {
   font-size: 13px;
   font-weight: 300;
@@ -106,7 +102,6 @@ page {
   width: 40px;
   height: 40px;
   flex: 0 0 auto;
-  border-radius: 4px;
   overflow: hidden;
   background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
@@ -182,7 +177,6 @@ page {
   width: 28px;
   height: 28px;
   padding: 0;
-  border-radius: 4px;
 }
 /* 到头（1 件 / 上限）或提交在途：置灰、按了不动 */
 .co-step-off {
@@ -206,7 +200,6 @@ page {
   width: 22px;
   height: 22px;
   padding: 0;
-  border-radius: 4px;
 }
 
 /* 明细 */

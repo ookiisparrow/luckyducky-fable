@@ -117,8 +117,8 @@ describe('首帧前不黑屏：起播前转圈、iOS 拦自动播放换播放键
     const live = playerWxml.replace(/<!--[\s\S]*?-->/g, '')
     const zone = live.match(/<view wx:if="\{\{src && !segDone\}\}" class="lp-tapzone"[\s\S]*?\n {6}<\/view>/)?.[0] ?? ''
     expect(zone).toMatch(/<view wx:if="\{\{!started && !blocked\}\}" class="lp-first-loader"><px-anim name="loader" size="2" dark \/><\/view>/)
-    expect(zone).toMatch(/wx:if="\{\{state === 'playing' && started && !hintDismissed\}\}" class="t-sys lp-tap-hint"/)
-    expect(zone).toMatch(/wx:if="\{\{paused \|\| blocked\}\}" class="lp-pause-badge"/)
+    expect(zone).toMatch(/wx:if="\{\{state === 'playing' && started && !hintDismissed\}\}" class="t-sys lp-tap-hint[ "]/)
+    expect(zone).toMatch(/wx:if="\{\{paused \|\| blocked\}\}" class="lp-pause-badge[ "]/)
     expect(zone).toMatch(/wx:if="\{\{buffering && !paused && started\}\}"/)
   })
 })

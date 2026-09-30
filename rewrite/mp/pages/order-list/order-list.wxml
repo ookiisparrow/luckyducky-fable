@@ -21,10 +21,10 @@
     <!-- 加载中且列表空：像素 loader + 骨架卡（尺寸照真卡，落地少跳变） -->
     <block wx:if="{{loading && !shown.length}}">
       <view class="t-sys ol-loading"><px-anim name="loader" size="2" /><text>加载中</text></view>
-      <view class="ol-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
+      <view class="ol-card px-skin px-card" wx:for="{{[1, 2, 3]}}" wx:key="*this">
         <view class="ol-skel-bar skel" style="width: 96px"></view>
         <view class="ol-row">
-          <view class="ol-thumb skel"></view>
+          <view class="ol-thumb skel px-clip-4"></view>
           <view class="ol-skel-col">
             <view class="ol-skel-bar skel" style="width: 60%"></view>
             <view class="ol-skel-bar skel" style="width: 36%"></view>
@@ -46,7 +46,7 @@
       <view class="k k-light ol-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去逛逛</view>
     </view>
 
-    <view class="k-card ol-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
+    <view class="k-card ol-card px-skin px-card" wx:for="{{shown}}" wx:key="id" hover-start-time="20" hover-class="k-card-down" data-id="{{item.id}}" bind:tap="onTapOrder">
       <view class="ol-head">
         <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
@@ -56,7 +56,7 @@
       </view>
       <view class="ol-row">
         <view class="ol-thumbs">
-          <view class="ol-thumb" wx:for="{{item.thumbs}}" wx:for-item="line" wx:key="lineId">
+          <view class="ol-thumb px-clip-4" wx:for="{{item.thumbs}}" wx:for-item="line" wx:key="lineId">
             <image wx:if="{{line.cover}}" class="ol-thumb-img" src="{{line.cover}}" mode="aspectFill" lazy-load />
           </view>
         </view>
@@ -71,7 +71,7 @@
         <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条）：外层接按住手势 + 吞掉 tap 不进详情，内层是键帽 -->
         <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
           <view class="k k-sm k-light ol-act hit44 ol-danger {{holding === item.id ? 'ol-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
-            data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="ol-fill"></view><text class="ol-act-t">取消订单</text></view>
+            data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="ol-fill px-clip-6"></view><text class="ol-act-t">取消订单</text></view>
         </view>
         <!-- 倒计时归零（expired）：藏「去支付」，右上角写「已超时」并自动刷新一次 -->
         <view wx:if="{{!item.expired}}" class="k k-sm k-light ol-act hit44 {{payingId === item.id ? 'ol-act-busy' : ''}}"
@@ -84,7 +84,7 @@
           data-id="{{item.id}}" catch:tap="onConfirm" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
       </view>
       <view class="ol-acts" wx:elif="{{item.status === 'done' && item.reviewedAll}}">
-        <text class="ol-act hit44 ol-reviewed">已评价</text>
+        <text class="ol-act hit44 ol-reviewed px-clip-6">已评价</text>
       </view>
       <view class="ol-acts" wx:elif="{{item.status === 'done'}}">
         <view class="k k-sm k-light ol-act hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"

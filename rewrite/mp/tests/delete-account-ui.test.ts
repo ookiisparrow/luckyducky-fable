@@ -111,8 +111,9 @@ describe('删除个人资料（隐私政策正文末尾·确认后删·课程与
     expect(m.title).toBe('删除个人资料')
     expect(m.content).toContain('已解锁的课程和学习进度会保留')
     expect(m.confirmText).toBe('删除')
-    expect(m.confirmColor).toBe('#D9483B')
+    expect(m.cancelText).toBe('保留') // 自绘危险确认：左键红字按住删、右墨黑「保留」（页面桩没挂 px-fx·走原生兜底）
     m.success({ confirm: false })
+    await Promise.resolve()
     expect(deleteAccountMock).not.toHaveBeenCalled()
   })
 

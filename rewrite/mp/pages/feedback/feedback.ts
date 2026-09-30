@@ -2,7 +2,7 @@
 import { tapHaptic } from '../../lib/haptics'
 import { submitFeedback } from '../../api/user'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint } from '../../lib/pxFx'
+import { fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 
 const CATS = [
   { key: 'bug', label: '有问题' },
@@ -62,13 +62,13 @@ Page({
     }
     tapHaptic()
     this.sync({ busy: true })
-    wx.showLoading({ title: '提交中', mask: true }) // 设计稿「提交中」加载框：用原生 showLoading（带遮罩·挡连点）
+    fxLoading(this, '提交中') // 设计稿「提交中」加载框（自绘·挡连点）
     const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim())
-    wx.hideLoading() // 先收加载框再提示（原生 loading 与 toast 互斥）；退页了也得收，它是全局的
+    fxLoaded(this) // 先收加载框再提示
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
       // 成功不复位 busy——锁到返回·防延时窗口内二次提交；toast 加 mask 挡点；定时器存实例待 onUnload 清
-      wx.showToast({ title: '已收到，谢谢你', icon: 'success', mask: true }) // 随后退回上一页：原生提示跨页不断，自绘的会随本页消失
+      fxToast(this, '已收到，谢谢你', { mask: true }) // 随后退回上一页：上一页接着显示（px-fx 跨页接力）
       this.backTimer = setTimeout(() => wx.navigateBack(), 800)
       return
     }

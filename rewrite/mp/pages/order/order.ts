@@ -6,7 +6,7 @@ import { mapOrder, orderSteps, statusHead, detailSub, reviewUrl, payLeftMs, mone
 import { applicableLines, mapAfterSales, mergeAfterSales, refundBlock, afterSalesByOrder, afterSaleOverlay, appliedLineIdsOf, rejectedLineIdsOf, REFUND_REJECTED, withdrawableLines, withdrawErrText, type AfterSaleVM } from '../../lib/mapAftersales'
 import { navigateOrRedirect, goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxToast, fxHint } from '../../lib/pxFx'
+import { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { openCustomerService } from '../../utils/customerService'
 import { groundGap } from '../../lib/ground'
@@ -113,11 +113,11 @@ Page({
   async withLoading<T>(title: string, fn: () => Promise<T>): Promise<T | undefined> {
     if (this._busy) return undefined
     this._busy = true
-    wx.showLoading({ title, mask: true })
+    fxLoading(this, title)
     try {
       return await fn()
     } finally {
-      wx.hideLoading()
+      fxLoaded(this)
       this._busy = false
     }
   },
@@ -147,7 +147,7 @@ Page({
         loadFailed: !notFound && !this.data.vm,
       })
       // 已有 vm（页内刷新失败）：不动已渲染内容，只轻提示——含单据刚被后台删除的边界。
-      if (this.data.vm) wx.showToast({ title: notFound ? '这单已经不在了' : '刷新失败，请稍后重试', icon: 'none' })
+      if (this.data.vm) fxHint(this, notFound ? '这单已经不在了' : '刷新失败，请稍后重试')
       return
     }
     const vm = mapOrder(r.order)
@@ -206,8 +206,8 @@ Page({
     if (!this.orderId) return
     wx.setClipboardData({
       data: this.orderId,
-      success: () => wx.showToast({ title: '已复制单号', icon: 'none' }),
-      fail: () => wx.showToast({ title: '复制没成功，长按单号手动复制', icon: 'none' }),
+      success: () => fxHint(this, '已复制单号'),
+      fail: () => fxHint(this, '复制没成功，长按单号手动复制'),
     })
   },
   onCopyTracking() {
@@ -215,8 +215,8 @@ Page({
     if (!no) return
     wx.setClipboardData({
       data: no,
-      success: () => wx.showToast({ title: '已复制运单号', icon: 'none' }),
-      fail: () => wx.showToast({ title: '复制没成功，长按运单号手动复制', icon: 'none' }),
+      success: () => fxHint(this, '已复制运单号'),
+      fail: () => fxHint(this, '复制没成功，长按运单号手动复制'),
     })
   },
   // 「查看售后进度」→ 我的售后（售后↔详情会互跳，防叠栈）
@@ -281,7 +281,7 @@ Page({
     })
     if (!r || this.unloaded) return
     if (r.ok) fxToast(this, '已撤回')
-    else wx.showToast({ title: withdrawErrText(r.error), icon: 'none' }) // 没抢过商家等：下面刷新看最新状态
+    else fxHint(this, withdrawErrText(r.error)) // 没抢过商家等：下面刷新看最新状态
     await this.reload()
   },
   async cancelNow() {
@@ -290,16 +290,17 @@ Page({
     tapHaptic()
     const r = await this.withLoading('正在取消', () => cancelOrder(this.orderId))
     if (!r || this.unloaded) return // 在途重复触发 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
-    wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
+    if (r.ok) fxToast(this, '订单已取消')
+    else fxHint(this, '取消没成功，稍后再试')
     void this.reload() // 状态卡按映射自动翻「已关闭」
   },
   async onPay() {
     if (this.data.paying) return
     tapHaptic()
     this.setData({ paying: true })
-    wx.showLoading({ title: '正在发起支付', mask: true })
+    fxLoading(this, '正在发起支付')
     const outcome = mapPayResult(await pay(this.orderId))
-    wx.hideLoading()
+    fxLoaded(this)
     // 收银台关掉（成功/取消/失败）或没拉起都要解锁，否则按钮永久点不动
     const settle = () => {
       this.setData({ paying: false })
@@ -309,7 +310,7 @@ Page({
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次重新打开详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
     if (this.unloaded) {
-      wx.showToast({ title: '订单已保留，可在订单详情继续支付', icon: 'none' })
+      fxHint(this, '订单已保留，可在订单详情继续支付')
       return
     }
     if (outcome.kind === 'paid') {
@@ -328,23 +329,18 @@ Page({
       })
       return
     }
-    wx.showToast({ title: outcome.message, icon: 'none' })
+    fxHint(this, outcome.message)
     settle()
   },
-  onConfirm() {
+  async onConfirm() {
     if (this._busy) return
     tapHaptic()
-    wx.showModal({
-      title: '确认收货',
-      content: '确认已收到宝贝了吗？',
-      success: async (res) => {
-        if (!res.confirm) return
-        const r = await this.withLoading('正在确认', () => confirmReceive(this.orderId))
-        if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
-        wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
-        void this.reload()
-      },
-    })
+    if (!(await fxConfirm(this, { title: '确认收货', content: '确认已收到宝贝了吗？', confirmText: '确认收货' }))) return
+    const r = await this.withLoading('正在确认', () => confirmReceive(this.orderId))
+    if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
+    if (r.ok) fxToast(this, '已确认收货')
+    else fxHint(this, '操作没成功，稍后再试')
+    void this.reload()
   },
   onWriteReview(e: WechatMiniprogram.TouchEvent) {
     const line = this.data.vm && this.data.vm.items[Number(e.currentTarget.dataset.i)]
@@ -364,7 +360,7 @@ Page({
       const asRes = await this.withLoading('正在加载', () => getMyAfterSales(undefined, 100))
       if (!asRes || this.unloaded) return // 在途重复点 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
       if (!asRes.ok) {
-        wx.showToast({ title: '售后记录没加载出来，稍后再试', icon: 'none' }) // 失败≠一条都没申请过
+        fxHint(this, '售后记录没加载出来，稍后再试') // 失败≠一条都没申请过
         return
       }
       list = this._asList = mapAfterSales(asRes.list)
@@ -469,13 +465,13 @@ Page({
       // 新售后单先并进本地记录：回到详情时就算这次刷新售后没拉到，也能显示「售后中」
       if (this._asList) this._asList = mergeAfterSales(mapAfterSales([r.afterSale]), this._asList)
       this.setData({ asOpen: false, asOut: false, asBusy: false })
-      wx.showToast({ title: '已提交申请', icon: 'success' }) // 紧接着跳售后页：原生提示跨页不断
+      fxToast(this, '已提交申请') // 紧接着跳售后页：提示由新页接着显示（px-fx 跨页接力）
       navigateOrRedirect('/pages/aftersales/aftersales')
       return
     }
     this.setData({ asBusy: false })
     const e = String(r.error || '')
     const msg = e === 'ALREADY_APPLIED' ? '这条已申请过了' : e === 'NOT_REFUNDABLE' ? '该条目不可退（已开课）' : e === 'NOTHING_LEFT' ? '本单可退额度已用完' : '申请没成功，稍后再试'
-    wx.showToast({ title: msg, icon: 'none' })
+    fxHint(this, msg)
   },
 })

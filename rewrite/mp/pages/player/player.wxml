@@ -51,10 +51,10 @@
       <view wx:if="{{src && !segDone}}" class="lp-tapzone" bind:tap="onTapVideo">
         <!-- 首帧前转圈（不加字·老板 2026-09-29 选定）；被拦自动播放时换下方播放键 -->
         <view wx:if="{{!started && !blocked}}" class="lp-first-loader"><px-anim name="loader" size="2" dark /></view>
-        <view wx:if="{{state === 'playing' && started && !hintDismissed}}" class="t-sys lp-tap-hint">单击画面 播放 / 暂停</view>
-        <view wx:if="{{paused || blocked}}" class="lp-pause-badge"><px-i name="playL" tone="var(--v5-dark-ink)" /></view>
+        <view wx:if="{{state === 'playing' && started && !hintDismissed}}" class="t-sys lp-tap-hint px-clip-6">单击画面 播放 / 暂停</view>
+        <view wx:if="{{paused || blocked}}" class="lp-pause-badge px-circle-disc"><px-i name="playL" tone="var(--v5-dark-ink)" /></view>
         <!-- 缓冲失速角标·见 ts onVideoWaiting -->
-        <view wx:if="{{buffering && !paused && started}}" class="t-sys lp-buffering">
+        <view wx:if="{{buffering && !paused && started}}" class="t-sys lp-buffering px-clip-6">
           <px-anim name="loader" size="2" dark />
           <text>正在缓冲…</text>
         </view>
@@ -111,8 +111,8 @@
     >
       <!-- 拖动浮层（常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控）；命中关键动作节点再叠黄气泡 -->
       <view class="lp-seek-preview">
-        <view class="lp-seek-preview-time mono">{{curClock}}</view>
-        <view wx:if="{{snapName}}" class="t-sys lp-seek-preview-bubble">关键动作 · {{snapName}}</view>
+        <view class="lp-seek-preview-time mono px-clip-6">{{curClock}}</view>
+        <view wx:if="{{snapName}}" class="t-sys lp-seek-preview-bubble px-clip-6">关键动作 · {{snapName}}</view>
       </view>
       <view class="lp-seek-track"></view>
       <!-- 缓冲水位（bind:progress 尽力而为·换段清零 bufferPct·WXS 不碰） -->
@@ -275,8 +275,8 @@
         </view>
       </view>
       <view class="lp-dg-steps">
-        <view class="lp-dg-step"><text class="mono lp-dg-no">1</text><text class="t-sys lp-dg-t">点右上角的 ···</text></view>
-        <view class="lp-dg-step"><text class="mono lp-dg-no">2</text><text class="t-sys lp-dg-t">{{deskGuideIOS ? '选「添加到我的小程序」' : '选「添加到桌面」'}}</text></view>
+        <view class="lp-dg-step"><text class="mono lp-dg-no px-clip-6">1</text><text class="t-sys lp-dg-t">点右上角的 ···</text></view>
+        <view class="lp-dg-step"><text class="mono lp-dg-no px-clip-6">2</text><text class="t-sys lp-dg-t">{{deskGuideIOS ? '选「添加到我的小程序」' : '选「添加到桌面」'}}</text></view>
       </view>
       <view class="k k-48 k-ink lp-dg-ok" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onDeskGuideExit" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">知道了</view>
     </view>

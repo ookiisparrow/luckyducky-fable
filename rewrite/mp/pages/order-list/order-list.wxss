@@ -26,7 +26,6 @@ page {
 .ol-tabs {
   margin: 0 16px;
   padding: 4px;
-  border-radius: 8px;
   display: flex;
   gap: 2px;
 }
@@ -80,9 +79,6 @@ page {
 /* 订单卡 */
 .ol-card {
   padding: 16px;
-  border-radius: 8px;
-  background: var(--v5-surface);
-  box-shadow: 0 0 0 1px var(--v5-hair);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -131,7 +127,6 @@ page {
   width: 44px;
   height: 44px;
   flex: 0 0 auto;
-  border-radius: 4px;
   overflow: hidden;
   background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
@@ -171,7 +166,6 @@ page {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  border-radius: 6px;
   font-size: 17px;
   font-weight: 500;
   background: var(--v5-sunk);

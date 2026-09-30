@@ -54,7 +54,7 @@ describe('首页「+」加购提示', () => {
     const page = await mount()
     await page.onAddProduct(tapId('p1'))
     expect(addMock).toHaveBeenCalledTimes(1)
-    expect(fx.toast).toHaveBeenCalledWith('已加入购物车 · 鹅黄', true)
+    expect(fx.toast).toHaveBeenCalledWith('已加入购物车 · 鹅黄', true, undefined, undefined)
     expect(tabBar.bump).toHaveBeenCalledTimes(1)
   })
 
@@ -62,7 +62,7 @@ describe('首页「+」加购提示', () => {
     byIdMock.mockResolvedValue(null)
     const page = await mount()
     await page.onAddProduct(tapId('p1'))
-    expect(fx.toast).toHaveBeenCalledWith('商品信息获取失败，请稍后重试', false)
+    expect(fx.toast).toHaveBeenCalledWith('商品信息获取失败，请稍后重试', false, undefined, undefined)
     expect(tabBar.bump).not.toHaveBeenCalled()
   })
 
@@ -71,7 +71,7 @@ describe('首页「+」加购提示', () => {
     const page = await mount()
     page.getTabBar = () => ({ setActive: vi.fn() })
     await page.onAddProduct(tapId('p1'))
-    expect(fx.toast).toHaveBeenCalledWith('已加入购物车', true)
+    expect(fx.toast).toHaveBeenCalledWith('已加入购物车', true, undefined, undefined)
   })
 })
 
@@ -134,7 +134,7 @@ describe('首页跳转', () => {
     page.onTapFooterLink({ currentTarget: { dataset: { label: BRAND_NAME } } })
     expect((globalThis as any).wx.navigateTo).toHaveBeenCalledWith({ url: '/pages/about/about' })
     page.onTapFooterLink({ currentTarget: { dataset: { label: '加入我们' } } })
-    expect(fx.toast).toHaveBeenCalledWith('加入我们 · 敬请期待', false)
+    expect(fx.toast).toHaveBeenCalledWith('加入我们 · 敬请期待', false, undefined, undefined)
   })
 
   it('大白话：「购买」——货架还没有小棉鸭就进第一件商品详情占位（拍板 18），不再滚到商品区', async () => {

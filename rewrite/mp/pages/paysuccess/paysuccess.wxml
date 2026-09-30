@@ -24,3 +24,4 @@
   <view class="k k-light k-48 ps-home" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">回首页</view>
   <view class="k k-ink k-48 ps-order" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onViewOrder" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看订单</view>
 </view>
+<px-fx id="fx" />

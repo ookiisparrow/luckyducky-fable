@@ -46,7 +46,6 @@ page {
   width: 64px;
   height: 64px;
   flex: 0 0 auto;
-  border-radius: 6px;
   overflow: hidden;
   background: var(--v5-sunk);
 }
@@ -76,10 +75,8 @@ page {
   font-weight: 500; /* 圆体只 500/700/900 */
 }
 .me-av-down .me-av-k {
-  transform: translateY(1px);
-  background: var(--v5-press);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--v5-hair);
-  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 60ms ease-out;
+  transform: translateY(2px);
+  transition: transform 60ms ease-out;
 }
 .me-av-out {
   background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
@@ -134,9 +131,6 @@ page {
 .me-card {
   margin: 24px 16px 0;
   padding: 16px;
-  border-radius: 8px;
-  background: var(--v5-surface);
-  box-shadow: 0 0 0 1px var(--v5-hair);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -145,7 +139,6 @@ page {
   width: 52px;
   height: 52px;
   flex: 0 0 auto;
-  border-radius: 4px;
   background: repeating-linear-gradient(135deg, var(--v5-sunk) 0 5px, var(--v5-sunk-2) 5px 10px);
 }
 .me-card-t {
@@ -182,9 +175,7 @@ page {
 /* 按住继续学习卡：卡片不变色，右侧墨黑播放键下沉（同 app.wxss .k-ink-down；hover-class 只能挂在卡上，借后代选择器落到键帽） */
 .me-card-down .me-play {
   transform: translateY(2px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 var(--v5-key-seat), 0 0 0 var(--v5-ink),
-    0 1px 2px -1px rgba(0, 0, 0, 0.35);
-  transition: transform 60ms ease-out, box-shadow 60ms ease-out;
+  transition: transform 60ms ease-out;
 }
 .me-skel-l {
   width: 60%;
@@ -265,7 +256,6 @@ page {
 .me-link {
   height: 44px;
   padding: 0 16px;
-  border-radius: 6px;
   display: flex;
   align-items: center;
   font-size: 15px;

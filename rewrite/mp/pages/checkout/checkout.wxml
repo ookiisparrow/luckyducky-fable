@@ -10,7 +10,7 @@
   <scroll-view class="co-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
   <view class="co-body">
     <!-- 收货地址 -->
-    <view wx:if="{{address}}" class="k-card co-card co-addr" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
+    <view wx:if="{{address}}" class="k-card co-card co-addr px-skin px-card" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
       <view class="co-addr-top">
         <text class="t-sys co-k">收货地址</text>
         <view class="t-sys co-change"><text>更换</text><px-i name="arrow" /></view>
@@ -19,16 +19,16 @@
       <text class="t-sys co-detail">{{address.detail}}</text>
       <text class="t-sys co-who">{{address.who}}</text>
     </view>
-    <view wx:else class="k-card co-card co-addr-none" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
+    <view wx:else class="k-card co-card co-addr-none px-skin px-card" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
       <px-i name="led" tone="var(--v5-warn)" />
       <text class="co-addr-add">添加收货地址</text>
       <px-i name="arrow" tone="var(--v5-ink-2)" />
     </view>
 
     <!-- 商品 -->
-    <view class="co-card co-items">
+    <view class="co-card co-items px-skin px-card">
       <view class="co-item" wx:for="{{items}}" wx:key="lineId">
-        <view class="co-thumb">
+        <view class="co-thumb px-clip-4">
           <!-- 焦点 50% 40%（设计稿 object-position）：<image> 的 aspectFill 只能居中，改背景图定焦点 -->
           <view wx:if="{{item.cover}}" class="co-thumb-img" style="background-image: url('{{item.cover}}')"></view>
         </view>
@@ -54,10 +54,10 @@
     </view>
 
     <!-- 搭配购买：只有真能卖的加项才露整块；checkoutConst 里 hook/yarn 是占位，空则整块不渲染。 -->
-    <view class="co-card co-items" wx:if="{{addons.length}}">
+    <view class="co-card co-items px-skin px-card" wx:if="{{addons.length}}">
       <text class="t-sys co-k co-addon-head">搭配购买</text>
       <view class="co-item" wx:for="{{addons}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onToggleAddon">
-        <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
+        <view class="k k-sm k-light co-check px-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
         <text class="t-sys co-item-name co-addon-name">{{item.name}}</text>
         <text class="mono co-item-price">¥{{item.priceNum}}</text>
       </view>

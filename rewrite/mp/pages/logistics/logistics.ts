@@ -8,6 +8,7 @@ import { expressCode } from '../../lib/express'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { goBackOrHome } from '../../lib/nav'
 import { groundGap } from '../../lib/ground'
+import { fxHint } from '../../lib/pxFx'
 
 const POSE: Record<string, string> = { paid: 'drive', shipped: 'drive', done: 'unload' }
 
@@ -69,8 +70,8 @@ Page({
     if (!no) return
     wx.setClipboardData({
       data: no,
-      success: () => wx.showToast({ title: okText, icon: 'none' }),
-      fail: () => wx.showToast({ title: '复制没成功，长按运单号手动复制', icon: 'none' }),
+      success: () => fxHint(this, okText),
+      fail: () => fxHint(this, '复制没成功，长按运单号手动复制'),
     })
   },
   // 快递100 插件结果页。插件打不开（未安装/版本不匹配等）不静默——回退复制运单号并说明去处，用户仍能自行查（根因#14）。

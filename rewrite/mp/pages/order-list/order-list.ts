@@ -7,7 +7,7 @@ import { mapAfterSales, afterSalesByOrder, afterSaleOverlay, type OrderAfterSale
 import { swipeDir, nextTabKey } from '../../lib/orderSwipe'
 import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxToast, fxHint } from '../../lib/pxFx'
+import { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { navBottom } from '../../lib/ground'
 
@@ -144,11 +144,11 @@ Page({
   async withLoading<T>(title: string, fn: () => Promise<T>): Promise<T | undefined> {
     if (this._busy) return undefined
     this._busy = true
-    wx.showLoading({ title, mask: true })
+    fxLoading(this, title)
     try {
       return await fn()
     } finally {
-      wx.hideLoading()
+      fxLoaded(this)
       this._busy = false
     }
   },
@@ -173,7 +173,7 @@ Page({
     if (!r.ok) {
       this._animDir = '' // 切 tab 失败无新内容·丢弃待应用方向（下次成功 reload 才动画，不留陈旧向）
       this.setData({ loading: false, loadFailed: !this._all.length })
-      if (this._all.length) wx.showToast({ title: '刷新失败，请稍后重试', icon: 'none' })
+      if (this._all.length) fxHint(this, '刷新失败，请稍后重试')
       return
     }
     const all = mapOrders(r.list)
@@ -199,7 +199,7 @@ Page({
     this.setData({ paging: false })
     if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast）
     if (!r.ok) {
-      wx.showToast({ title: '加载失败，上拉重试', icon: 'none' }) // 翻页失败不静默（根因#14）
+      fxHint(this, '加载失败，上拉重试') // 翻页失败不静默（根因#14）
       return // 不覆盖已有数据
     }
     // 增量 setData（根因#7 规模）：翻页只把新增行按路径键 shown[N] 追加，不重发已渲染卡（整表 setData 传输 O(n²)）。
@@ -261,9 +261,9 @@ Page({
     const id = String(e.currentTarget.dataset.id)
     tapHaptic()
     this.setData({ payingId: id })
-    wx.showLoading({ title: '正在发起支付', mask: true })
+    fxLoading(this, '正在发起支付')
     const outcome = mapPayResult(await pay(id))
-    wx.hideLoading()
+    fxLoaded(this)
     // 收银台关掉（成功/取消/失败）或没拉起都要解锁，否则按钮永久点不动
     const settle = () => {
       this.setData({ payingId: '' })
@@ -273,7 +273,7 @@ Page({
     // 不再对已退页 toast/reload/拉起支付授权框——订单已在云端，用户下次进详情页续付即可。requestPayment 的
     // success/fail 回调内不加同款复核：授权框是模态、卸载窗口小，无需评估。
     if (this.unloaded) {
-      wx.showToast({ title: '订单已保留，可在订单详情继续支付', icon: 'none' })
+      fxHint(this, '订单已保留，可在订单详情继续支付')
       return
     }
     if (outcome.kind === 'paid') {
@@ -292,23 +292,18 @@ Page({
       })
       return
     }
-    wx.showToast({ title: outcome.message, icon: 'none' })
+    fxHint(this, outcome.message)
     settle() // 超时关单等状态变化如实刷出来
   },
-  onConfirm(e: WechatMiniprogram.TouchEvent) {
+  async onConfirm(e: WechatMiniprogram.TouchEvent) {
     if (this._busy) return
     const id = String(e.currentTarget.dataset.id)
-    wx.showModal({
-      title: '确认收货',
-      content: '确认已收到宝贝了吗？',
-      success: async (res) => {
-        if (!res.confirm) return
-        const r = await this.withLoading('正在确认', () => confirmReceive(id))
-        if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
-        wx.showToast({ title: r.ok ? '已确认收货' : '操作没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
-        void this.reload()
-      },
-    })
+    if (!(await fxConfirm(this, { title: '确认收货', content: '确认已收到宝贝了吗？', confirmText: '确认收货' }))) return
+    const r = await this.withLoading('正在确认', () => confirmReceive(id))
+    if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
+    if (r.ok) fxToast(this, '已确认收货')
+    else fxHint(this, '操作没成功，稍后再试')
+    void this.reload()
   },
   onLogistics(e: WechatMiniprogram.TouchEvent) {
     wx.navigateTo({ url: '/pages/logistics/logistics?id=' + String(e.currentTarget.dataset.id) })
@@ -345,7 +340,8 @@ Page({
     tapHaptic()
     const r = await this.withLoading('正在取消', () => cancelOrder(id))
     if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
-    wx.showToast({ title: r.ok ? '订单已取消' : '取消没成功，稍后再试', icon: r.ok ? 'success' : 'none' })
+    if (r.ok) fxToast(this, '订单已取消')
+    else fxHint(this, '取消没成功，稍后再试')
     void this.reload()
   },
 })

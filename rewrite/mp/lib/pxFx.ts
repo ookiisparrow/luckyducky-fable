@@ -184,30 +184,16 @@ export function stepConfetti(L: Bit[], dt: number, h: number, rnd: () => number 
 }
 
 // ---------- 页面调用口（页面根下放 <px-fx id="fx" />） ----------
+// 提示/加载/确认在 utils/sysUi（utils 也要用·依赖方向 lib→utils），这里原样转出，页面照旧从 lib/pxFx 取。
+export { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast, type ConfirmOpts } from '../utils/sysUi'
 type Host = { createSelectorQuery(): WechatMiniprogram.SelectorQuery; selectComponent(sel: string): unknown }
 type Layer = {
   party(k: Rect, big?: boolean, n?: number): void
   transit(kind: 'rainbow' | 'dither', k: Rect, go: () => void): void
-  toast(text: string, ok?: boolean): void
 }
 
 const layer = (page: Host): Layer | null =>
   typeof page.selectComponent === 'function' ? ((page.selectComponent('#fx') as Layer | null) ?? null) : null
-
-/** 成功轻提示：页面挂了 px-fx 走设计稿样式（像素 ✓），没挂就退回原生 wx.showToast（参数同旧写法）。
- *  提示完马上退回上一页的别用这个——自绘提示随本页一起消失，那种场景留原生（跨页不断）。 */
-export function fxToast(page: Host, text: string): void {
-  const fx = layer(page)
-  if (fx) return fx.toast(text, true)
-  wx.showToast({ title: text, icon: 'success' })
-}
-
-/** 普通轻提示（设计稿 toast 不带图标）：同 fxToast，只是不画 ✓；没挂 px-fx 退回原生无图标提示。 */
-export function fxHint(page: Host, text: string): void {
-  const fx = layer(page)
-  if (fx) return fx.toast(text, false)
-  wx.showToast({ title: text, icon: 'none' })
-}
 
 function keyRect(page: Host, sel: string): Promise<Rect | null> {
   return new Promise((resolve) => {
