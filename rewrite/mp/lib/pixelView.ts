@@ -19,6 +19,20 @@ export type PixelDims = { cols: number; rows: number } | ((widthPx: number) => {
 
 const FRAME_MS = 66 // ≈15fps
 
+// 全站一个帧调度器：一页上的几个像素画（播放页 5 个、首页 5 个）共用一个计时器，每帧各自的 setData 在同一个
+// JS 任务里连发、渲染层一批处理。之前每个组件各开一个 setTimeout，计时器互不对齐，渲染层每秒被零散打断几十次，
+// 和滚动抢渲染线程就掉帧。
+const live = new Set<() => void>()
+let timer: ReturnType<typeof setTimeout> | null = null
+const pump = () => {
+  timer = null
+  for (const step of [...live]) step()
+  if (live.size) timer = setTimeout(pump, FRAME_MS)
+}
+const wake = () => {
+  if (!timer) timer = setTimeout(pump, 0)
+}
+
 /**
  * 一帧的格子 → 每行一条渐变（空行＝''）。同一格以最后一次为准；坐标四舍五入到整格；越界丢弃。
  * @param cols 不传＝不限右边界（满宽画布由容器裁掉）
@@ -64,7 +78,6 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
   let cols = 0
   let rows = 0
   let ready = false
-  let timer: ReturnType<typeof setTimeout> | null = null
   let shown = true
   let inView = true
   let dead = false
@@ -84,23 +97,26 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
     if (Object.keys(patch).length) host.setData(patch)
     return more
   }
-  const tick = () => {
-    timer = null
-    if (dead || !ready) return
+  // 共享调度器每帧调一次；不该再动（静止/隐藏/滚出视口/已销毁）就把自己摘掉
+  const step = () => {
+    if (dead || !ready) {
+      live.delete(step)
+      return
+    }
     const now = Date.now()
     elapsed += lastNow ? Math.min(120, now - lastNow) : FRAME_MS
     lastNow = now
     const more = paint()
-    if (loop && more && shown && inView) timer = setTimeout(tick, FRAME_MS)
+    if (!(loop && more && shown && inView)) live.delete(step)
   }
   const kick = () => {
-    if (!ready || timer || !loop || !shown || !inView || dead) return
+    if (!ready || !loop || !shown || !inView || dead || live.has(step)) return
     lastNow = 0
-    timer = setTimeout(tick, 0)
+    live.add(step)
+    wake()
   }
   const halt = () => {
-    if (timer) clearTimeout(timer)
-    timer = null
+    live.delete(step)
   }
 
   host
