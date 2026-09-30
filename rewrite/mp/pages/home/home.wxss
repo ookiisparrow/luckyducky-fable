@@ -578,10 +578,9 @@ page {
   right: 16px;
   bottom: calc(64px + max(24px, env(safe-area-inset-bottom)));
   z-index: 5;
+  width: 36px; /* 设计稿 backTop：36 方键只放向上箭头（老板 2026-09-30 去「顶部」字） */
   height: 36px;
-  padding: 0 12px;
-  gap: 12px; /* 设计稿 gap 4 + 图标右边距 8 */
-  font-size: 15px;
+  padding: 0;
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px var(--v5-hair), 0 1px 2px rgba(17, 17, 17, 0.08),
     0 6px 14px -6px rgba(0, 0, 0, 0.25);
 }

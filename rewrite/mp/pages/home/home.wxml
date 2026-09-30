@@ -192,7 +192,6 @@
 <!-- 回到顶部（滚过一屏半浮现） -->
 <view wx:if="{{showTop}}" class="k k-light hm-backtop hit44 enter-rise" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="backTop" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
   <px-i name="up" />
-  <text>顶部</text>
 </view>
 
 <!-- 登录授权半屏（R1·软门槛）：进 App 首个落地页即弹（未同意时·本会话一次）·可「暂不登录」关掉先逛·经 lib/loginGate 单例驱动 -->
