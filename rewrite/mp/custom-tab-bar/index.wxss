@@ -11,6 +11,18 @@
   border-top: 1px solid var(--v5-hair-tab);
   background: var(--v5-canvas);
 }
+/* 开屏淡出时同步淡入（时长同 brand-splash FADE_MS 500）：淡出期间首页已透出，底部不留空 */
+.ld-tab-in {
+  animation: ld-tab-in 500ms ease-out both;
+}
+@keyframes ld-tab-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 /* 平面键本身带凹槽灰底（app.wxss .k-flat），Tab 栏三格连底色和阴影一起去掉 */
 .ld-tab {
   flex: 1;

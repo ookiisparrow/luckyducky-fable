@@ -1,6 +1,6 @@
 <!-- 底部三格（v6 Lite 5a·降存在感）：全平面、无键帽；当前那格图标紫、其余灰（紫＝当前），不加 LED、不显示购物车件数。
      按下只淡一下（press-fade·不出灰底下沉，免得又浮成键帽），手感照旧（keyFx flat：轻震 + 咔嗒）。 -->
-<view wx:if="{{!hidden}}" class="v5-scope ld-tabbar">
+<view wx:if="{{!hidden}}" class="v5-scope ld-tabbar {{fadeIn ? 'ld-tab-in' : ''}}">
   <view
     wx:for="{{tabs}}"
     wx:key="id"
