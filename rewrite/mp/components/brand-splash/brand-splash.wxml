@@ -3,4 +3,5 @@
 <view class="v5-scope ld-splash {{leaving ? 'leaving' : ''}}">
   <image class="ld-splash-logo" src="/static/logo-wordmark.svg" mode="heightFix" />
   <text class="mono ld-splash-slogan">{{sloganEn}}™</text>
+  <text wx:if="{{pushAt}}" class="mono ld-splash-push">{{pushAt}}</text>
 </view>

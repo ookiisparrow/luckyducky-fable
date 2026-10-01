@@ -88,3 +88,22 @@ export function formatAppVersionDetail(
 export function currentAppVersionDetail(): string {
   return formatAppVersionDetail(runtimeEnvVersion())
 }
+
+// 推到手机那一刻的上海时间（YYYY-MM-DD HH:mm）：scripts/push-mp-preview.mjs 推前写入、推完还原成空——不进 git。
+const DEV_PUSH_AT = ''
+
+/** 开屏推送时间行：只开发版（微信 envVersion=develop）且带着推送时间才有字（老板 2026-10-02）。 */
+export function devPushLine(envVersion: string, at: string): string {
+  return envVersion === 'develop' && at ? DEV + ' · ' + at : ''
+}
+
+/** 看微信给的真实版本类型——不走 BUILD_CHANNEL（本仓 main 钉 develop，体验版也会被当成开发）。 */
+export function currentDevPushLine(at = DEV_PUSH_AT): string {
+  let v = ''
+  try {
+    if (typeof wx !== 'undefined' && typeof wx.getAccountInfoSync === 'function') v = String(wx.getAccountInfoSync().miniProgram.envVersion || '')
+  } catch {
+    /* 拿不到就不显示 */
+  }
+  return devPushLine(v, at)
+}
