@@ -3,8 +3,7 @@
 // 课程结构走 lib/courses 会话缓存（本会话内不变·根因账本#15）；学习进度每次实时（onShow 重拉，同
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞。
 import { tapHaptic } from '../../lib/haptics'
-import { getContent } from '../../api/catalog'
-import { getPageContent } from '../../lib/pageContent'
+import { getHomeContent, getPageContent } from '../../lib/pageContent'
 import { getCourseByIdDetailed } from '../../lib/courses'
 import { playbackCache } from '../../lib/playbackCache' // 续播段取址预热（目录页停留窗口预热·进播放器 peek 命中零云往返·根因#15）
 import { getMyProgress } from '../../api/user'
@@ -39,7 +38,7 @@ Page({
     this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight, courseId, state: courseId ? 'loading' : 'missing' })
     if (!courseId) return
     // hero 背景图与 onShow 的目录+进度请求并行，互不依赖，省一次串行往返
-    void getContent().then((content) => {
+    void getHomeContent().then((content) => {
       // fail-soft：拿不到内容→home 置空，bgFor 走回退链落空串，hero 渲染渐变占位，不阻塞目录本体。
       this.home = content.ok ? content.home : null
       this.applyHero()

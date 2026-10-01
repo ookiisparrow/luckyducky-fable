@@ -3,7 +3,7 @@
 // 页只编排：把原始返回交给纯函数 mapHomeContent/mapProducts，再 setData（house style·同 detail/me）。
 import { tapHaptic } from '../../lib/haptics'
 import { trackEvent } from '../../api/learning'
-import { getContent } from '../../api/catalog'
+import { getHomeContent } from '../../lib/pageContent'
 import { getAllProducts, getProductById } from '../../lib/catalog'
 import { BRAND_NAME, HOME_SHARE_TITLE } from '../../lib/brand'
 import { mapHomeContent, mapProducts, pickDuckKit, type HomeContentVM, type ProductVM } from '../../lib/mapHome'
@@ -126,7 +126,7 @@ Page({
     const seq = ++this._seq
     // 强刷（force:true）：下拉刷新/首屏仍要最新数据，同时回填缓存供详情/购物车复用（省它们的云调用）；
     // 兼任 SWR revalidate——onLoad 若已用快照渲染过（stale），这趟拉最新数据覆盖（fresh），陈旧即悄悄换新。
-    const [content, products] = await Promise.all([getContent(), getAllProducts({ force: true })])
+    const [content, products] = await Promise.all([getHomeContent({ force: true }), getAllProducts({ force: true })])
     if (seq !== this._seq) return false // 过期回包（被更晚 reload 取代）：丢弃·不覆盖较新结果
     const nextContent = mapHomeContent(content.ok ? content.home : null) // 逐块回退默认（不空屏·不半空）
     // products===null（本次强刷失败）时不计算/不写入 patch.products——保留已渲染的现状不动：

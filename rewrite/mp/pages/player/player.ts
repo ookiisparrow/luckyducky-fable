@@ -150,7 +150,7 @@ Page({
     this._wantAt = Math.max(0, Math.floor(Number(query.t) || 0)) // 续播秒（catalog/me 带 &t=·仅对 _wantSeg 生效·脏值归 0）
     await this.initCourse()
   },
-  // 课程目录装载（onLoad 与 onRetryError 课程级重试共用）：来源页（me/my-courses）已把课程目录热进
+  // 课程目录装载（onLoad 与 onRetryError 课程级重试共用）：来源页（me/my-courses 按 id、catalog 整本）已把本课热进
   // lib/courses 缓存→这里零云调用；深链冷启动（分享链直进播放页）缓存未热→内部兜底重拉一次目录（根因账本#15）。
   // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：目录拉取失败落 error 态给重试，
   // 只有拉取成功且查无此课才是 missing「课程不存在」。

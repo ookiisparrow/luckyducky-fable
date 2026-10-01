@@ -65,6 +65,15 @@ describe('home.reload() 商品强刷失败 fail-soft（G1）', () => {
     expect(cold.data.loadFailed).toBe(true)
   })
 
+  it('大白话：首页内容走会话缓存（#444），但首页每次刷新（含下拉）都拉最新文案，不吃缓存', async () => {
+    getContentMock.mockResolvedValueOnce({ ok: true, home: { hero: { title: '旧' } } }).mockResolvedValueOnce({ ok: true, home: { hero: { title: '新' } } })
+    getAllMock.mockResolvedValue(RAW)
+    const page = await mount()
+    await page.reload()
+    await page.reload()
+    expect(getContentMock).toHaveBeenCalledTimes(2)
+  })
+
   it('大白话：强刷成功照常换上新商品、灭失败态', async () => {
     getAllMock.mockResolvedValue([...RAW, { id: 'p2', name: '云朵鸭', price: 22, cover: '' }])
     const page = await mount()
