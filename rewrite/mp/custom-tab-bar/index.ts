@@ -3,7 +3,7 @@
 import { loginGate } from '../lib/loginGate'
 import { privacyGate } from '../lib/privacyGate'
 import { keyDown, keyUp } from '../lib/keyFx'
-import { splashUp } from '../lib/splashGate'
+import { onSplash, splashUp } from '../lib/splashGate'
 
 // 每实例一份退订句柄与转场遮挡态（多 tabBar 页各自挂本组件·同 privacy-sheet/login-sheet 范式）
 const unsubs = new WeakMap<object, () => void>()
@@ -31,9 +31,11 @@ Component({
       const offLogin = loginGate.subscribe(() => this.syncHidden())
       // observe 而非 subscribe：tabBar 常驻，若算作「挂着隐私弹窗的页面」会让「页面走了没选按不同意收场」永不触发
       const offPrivacy = privacyGate.observe(() => this.syncHidden())
+      const offSplash = onSplash((fade) => this.syncHidden(fade)) // 开屏撤场：每个 TabBar 都回来（首页那个跟着淡入）
       unsubs.set(this, () => {
         offLogin()
         offPrivacy()
+        offSplash()
       })
     },
     detached() {
@@ -42,16 +44,22 @@ Component({
       covered.delete(this)
     },
   },
+  pageLifetimes: {
+    // 兜底：页面每次露面都按当下开关重算——哪个开关变回 0 时漏了通知本实例，切过来也不会一直藏着、逼人重进
+    show() {
+      this.syncHidden()
+    },
+  },
   methods: {
     onKeyDown: keyDown, // v5 按键手感（lib/keyFx）
     onKeyUp: keyUp,
     syncHidden(fade = false) {
       this.setData({ hidden: !!covered.get(this) || splashUp() || loginGate.visible() || privacyGate.visible(), fadeIn: fade })
     },
-    /** 转场 / 开屏铺到底部时让位（px-fx、brand-splash 调·同登录半屏的理由：页面内 z-index 盖不住本层），撤了恢复；fade＝回来时淡入。 */
-    setCovered(v: boolean, fade = false) {
+    /** 转场铺到底部时让位（px-fx 调·同登录半屏的理由：页面内 z-index 盖不住本层），跳走后恢复。 */
+    setCovered(v: boolean) {
       covered.set(this, v)
-      this.syncHidden(!v && fade)
+      this.syncHidden()
     },
     setActive(id: string) {
       this.setData({ active: id })

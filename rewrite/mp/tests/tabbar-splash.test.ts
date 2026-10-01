@@ -78,6 +78,23 @@ describe('开屏与 TabBar 交接', () => {
     expect(later.data).toMatchObject({ hidden: false, fadeIn: false })
   })
 
+  it('大白话：开屏期间切到了别的页（那页 TabBar 挂上时被藏）——开屏一撤它也回来，不卡在没有 TabBar 的页上（老板真机 2026-10-02「切换时消失、只能刷新」）', () => {
+    const homeBar = mountBar()
+    const s = mountSplash(homeBar)
+    const cartBar = mountBar() // 开屏还在时切到购物车
+    expect(cartBar.data.hidden).toBe(true)
+    s.leave()
+    expect(cartBar.data.hidden).toBe(false)
+    expect(homeBar.data.hidden).toBe(false)
+  })
+
+  it('大白话：页面每次露面 TabBar 都按当下开关重算——哪个开关漏了通知，切过来也不会一直藏着', () => {
+    const bar = mountBar()
+    bar.setData({ hidden: true }) // 模拟某个开关变回 0 时没通知到本实例
+    barOpts.pageLifetimes.show.call(bar)
+    expect(bar.data.hidden).toBe(false)
+  })
+
   it('大白话：转场遮罩撤了 TabBar 直接回来，不淡入（淡入只给开屏交接用）', () => {
     const bar = mountBar()
     bar.setCovered(true)
