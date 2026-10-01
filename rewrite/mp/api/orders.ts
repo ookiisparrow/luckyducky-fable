@@ -39,4 +39,6 @@ export const applyRefund = (orderId: string, lineId: string, reason: string): Pr
 export const estimateRefund = (orderId: string, lineId: string): Promise<ApiResult> => callApp('estimateRefund', { orderId, lineId })
 // 撤回申请中的售后（仅本人·仅申请中，最终裁决在云端；失败回 BAD_STATUS:<此刻状态>）
 export const withdrawRefund = (orderId: string, lineId: string): Promise<ApiResult> => touch(callApp('withdrawRefund', { orderId, lineId }))
-export const getMyAfterSales = (cursor?: unknown, limit = 20): Promise<ApiResult> => callApp('getMyAfterSales', { cursor, limit })
+// orderId：只要本人这一单的售后（订单详情·#443）；旧版云端不认则回本人最近 limit 条，页面本就按单号筛，照样对。
+export const getMyAfterSales = (cursor?: unknown, limit = 20, orderId?: string): Promise<ApiResult> =>
+  callApp('getMyAfterSales', orderId ? { cursor, limit, orderId } : { cursor, limit })

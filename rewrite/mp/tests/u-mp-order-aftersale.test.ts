@@ -1,5 +1,6 @@
 // 订单详情「申请售后」入口收窄：本单已申请过的行不该再出现在可选列表里。
-// callApp 桩按云端 getMyAfterSales 的真实口径回包（本人售后按 appliedAt 倒序、按 limit 截断、缺省 100、上限 200），
+// callApp 桩按云端 getMyAfterSales 的真实口径回包（本人售后按 appliedAt 倒序、按 limit 截断、缺省 100、上限 200；
+// 首条用例的桩不认 orderId＝旧版云端：页面照样按单号筛，新旧云端谁先上线都对），
 // 这样 mp api 层的默认 limit 也在被测范围里。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -54,6 +55,23 @@ describe('申请售后入口：已申请过的行要排除', () => {
     page.data.vm = VM
     await page.onAfterSale()
     expect(page.data.asOpen).toBe(true)
+    expect(page.data.asLines.map((l: { name: string }) => l.name)).toEqual(['云朵鸭'])
+  })
+
+  it('大白话：本人售后超过 100 条、本单那条申请得最早——按单号向云端只要本单的，照样认出来（#443·原先只取最近 100 条会截掉）', async () => {
+    const many = [
+      { _id: 'as-0', orderId: 'o-old', lineId: 'L1', appliedAt: 1000 },
+      ...Array.from({ length: 150 }, (_, i) => ({ _id: 'as-' + (i + 1), orderId: 'o-' + (i + 1), lineId: 'X', appliedAt: 2000 + i })),
+    ]
+    callAppMock.mockImplementation(async (action: string, data: Record<string, unknown>) => {
+      if (action !== 'getMyAfterSales') return { ok: false, error: 'UNEXPECTED' }
+      const mine = data.orderId ? many.filter((a) => a.orderId === data.orderId) : many // 云端口径：带单号只回本单
+      const sorted = [...mine].sort((a, b) => b.appliedAt - a.appliedAt)
+      return { ok: true, list: sorted.slice(0, Number(data.limit) || 100), hasMore: sorted.length > 100, nextCursor: null }
+    })
+    const page = await mount()
+    page.data.vm = VM
+    await page.onAfterSale()
     expect(page.data.asLines.map((l: { name: string }) => l.name)).toEqual(['云朵鸭'])
   })
 

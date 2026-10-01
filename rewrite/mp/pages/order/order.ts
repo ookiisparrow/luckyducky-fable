@@ -125,11 +125,10 @@ Page({
     // 订单状态/钱路径页：多 reload 触发点（onShow + 取消/支付/确认收货各自 reload）并发时，慢回包迟到落地会把
     // 状态卡盖回过期态（如取消成功已 closed 又被在途 onShow 的 pending 盖回·重现取消/支付按钮）。代次不符即丢弃。
     const seq = ++this._seq
-    // 并行拉本人售后（云端退款不改订单状态，靠它叠加「售后中 / 已退款」）；失败静默不叠加（保留上次拉到的，首次则不叠加）。
-    // ponytail: 只取最近 100 条售后，超出不叠加；上限升级路径＝云端订单接口直接带售后汇总。
+    // 并行拉本单售后（云端退款不改订单状态，靠它叠加「售后中 / 已退款」·#443 按单号只取本单）；失败静默不叠加（保留上次拉到的，首次则不叠加）。
     // Promise.resolve().then 包一层：接口桩/异常实现同步抛错或返回非 Promise 时也只当「没拉到」，不拖垮订单主体
     const asReq = Promise.resolve()
-      .then(() => getMyAfterSales(undefined, 100))
+      .then(() => getMyAfterSales(undefined, 100, this.orderId))
       .catch(() => null)
     const [r, asRes] = await Promise.all([getOrderById(this.orderId), asReq])
     if (seq !== this._seq) return
@@ -351,13 +350,11 @@ Page({
   async onAfterSale() {
     const vm = this.data.vm
     if (!vm) return
-    // 该单已申请过的行：从我的售后里筛本单。reload 已并行拉过就复用（不重复请求），没拉到才现拉。
-    // 云端按申请时间倒序截断，页长取云端默认 100（api 默认 20 会把本单较早的申请截掉，用户选了才被 ALREADY_APPLIED 拒）。
-    // ponytail: 只取首页·不看 hasMore——本人售后超 100 条时本单更早的申请仍会被截掉（云端 ALREADY_APPLIED 兜底）；
-    // 根治=云端 getMyAfterSales 接 orderId 过滤后改传 vm.id、删下方客户端 filter。
+    // 该单已申请过的行：按单号向云端只取本单售后（#443）。reload 已并行拉过就复用（不重复请求），没拉到才现拉。
+    // 页长仍给 100：旧版云端不认 orderId 时回本人最近 100 条（api 默认 20 会把本单较早的申请截掉），下方按单号筛照样对。
     let list = this._asList
     if (!list) {
-      const asRes = await this.withLoading('正在加载', () => getMyAfterSales(undefined, 100))
+      const asRes = await this.withLoading('正在加载', () => getMyAfterSales(undefined, 100, vm.id))
       if (!asRes || this.unloaded) return // 在途重复点 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
       if (!asRes.ok) {
         fxHint(this, '售后记录没加载出来，稍后再试') // 失败≠一条都没申请过

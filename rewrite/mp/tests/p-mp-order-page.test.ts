@@ -363,7 +363,7 @@ describe('订单详情：申请售后（拍板 7·自绘底部弹层）', () => 
     handlers.getMyAfterSales = () => ({ ok: true, list: [{ _id: 'a1', orderId: 'o1', lineId: 'L1', appliedAt: 1 }] })
     page.data.vm = doneVm()
     await page.onAfterSale()
-    expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100 })
+    expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100, orderId: 'o1' }) // 只拉本单售后（#443）
     expect(page.data).toMatchObject({ asOpen: true, asType: '换货', asBlock: '这件已申请过' })
     expect(wxMock.showToast).not.toHaveBeenCalled()
   })
