@@ -145,11 +145,11 @@ export function mapOrders(list: unknown): OrderVM[] {
   return list.map(mapOrder).filter((x): x is OrderVM => !!x)
 }
 
-/** 「我」页订单格数字（v5 D1）：按状态拉一页算条数——一页内给实数，满页还有下一页给「N+」，取数失败给 ''（不显示，不瞎报 0）。
- *  ponytail: 没有顾客侧计数接口（订单 action 在红区），先用一页列表数；要精确大数就在云端加计数 action。 */
-export function countBadge(r: { ok?: boolean; list?: unknown; hasMore?: unknown }, limit: number): string {
-  if (!r || !r.ok || !Array.isArray(r.list)) return ''
-  return r.hasMore && r.list.length >= limit ? `${limit}+` : String(r.list.length)
+/** 「我」页订单格数字（v5 D1·性能批 #1 改收云端 countMyOrders 的精确数）：上限内给实数，超上限给「N+」，
+ *  取数失败（null/非数字/负数）给 ''（不显示，不瞎报 0）。 */
+export function countBadge(n: unknown, cap: number): string {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return ''
+  return n > cap ? `${cap}+` : String(n)
 }
 
 export type StepState = 'done' | 'cur' | 'todo'

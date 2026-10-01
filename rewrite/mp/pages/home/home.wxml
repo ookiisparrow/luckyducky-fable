@@ -69,7 +69,7 @@
     <view class="hm-rail-row">
       <view class="hm-card" wx:for="{{products}}" wx:key="id" data-id="{{item.id}}" bind:tap="onTapProduct" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
         <view class="hm-card-media">
-          <image wx:if="{{item.cover}}" class="hm-card-img {{wide[item.cover] ? '' : 'focus-img'}}" src="{{item.cover}}" mode="{{wide[item.cover] ? 'aspectFill' : 'widthFix'}}" data-src="{{item.cover}}" bindload="onImgLoad" />
+          <image wx:if="{{item.cover}}" class="hm-card-img {{wide[item.cover] ? '' : 'focus-img'}}" src="{{item.cover}}" mode="{{wide[item.cover] ? 'aspectFill' : 'widthFix'}}" data-src="{{item.cover}}" bindload="onImgLoad" lazy-load />
         </view>
         <view class="hm-card-info">
           <text class="t-sys hm-card-name">{{item.name}}</text>
@@ -128,7 +128,7 @@
     <view class="hm-rail-row">
       <view class="hm-rv" wx:for="{{content.reviews.items}}" wx:key="quote">
         <view class="hm-rv-media">
-          <image wx:if="{{item.img}}" class="hm-card-img" src="{{item.img}}" mode="aspectFill" />
+          <image wx:if="{{item.img}}" class="hm-card-img" src="{{item.img}}" mode="aspectFill" lazy-load />
         </view>
         <view class="hm-rv-body">
           <view class="hm-stars"><px-i wx:for="{{[1, 2, 3, 4, 5]}}" wx:key="*this" wx:for-item="s" name="star5" /></view>

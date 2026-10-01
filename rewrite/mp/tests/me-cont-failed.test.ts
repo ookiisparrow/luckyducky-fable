@@ -7,17 +7,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { loginGate } from '../lib/loginGate'
 import { mapMe } from '../lib/mapMe'
 
-const { loginMock, getMyProgressMock, getMyCoursesMock, getCoursesByIdsMock, getPageContentMock, getMyOrdersMock } = vi.hoisted(() => ({
-  getMyOrdersMock: vi.fn(),
+// 性能批 #1/#4：我的课 + 进度并成一次 getMyLearning（progress:null＝进度读失败）；订单格数字一次 countMyOrders
+const { loginMock, getMyLearningMock, getCoursesByIdsMock, getPageContentMock, countMyOrdersMock } = vi.hoisted(() => ({
+  countMyOrdersMock: vi.fn(),
   loginMock: vi.fn(),
-  getMyProgressMock: vi.fn(),
-  getMyCoursesMock: vi.fn(),
+  getMyLearningMock: vi.fn(),
   getCoursesByIdsMock: vi.fn(),
   getPageContentMock: vi.fn(),
 }))
-vi.mock('../api/user', () => ({ login: loginMock, getMyProgress: getMyProgressMock, deleteAccount: vi.fn() }))
-vi.mock('../api/learning', () => ({ getMyCourses: getMyCoursesMock }))
-vi.mock('../api/orders', () => ({ getMyOrders: getMyOrdersMock }))
+vi.mock('../api/user', () => ({ login: loginMock, deleteAccount: vi.fn() }))
+vi.mock('../api/learning', () => ({ getMyLearning: getMyLearningMock }))
+vi.mock('../api/orders', () => ({ countMyOrders: countMyOrdersMock }))
 vi.mock('../lib/courses', () => ({ getCoursesByIds: getCoursesByIdsMock, getAllCourses: vi.fn() }))
 // 合流补桩（页面内容 CMS 战役后 me.ts 并入 getPageContent('mePage')·本测试只钉 cont 分治，CMS 内容走默认 null）
 vi.mock('../lib/pageContent', () => ({ getPageContent: getPageContentMock, __resetForTest: () => {} }))
@@ -64,31 +64,28 @@ beforeEach(() => {
     getWindowInfo: () => ({ statusBarHeight: 20 }),
   }
   loginMock.mockReset().mockResolvedValue({ ok: true, user: { nickname: '鸭' } })
-  getMyProgressMock.mockReset().mockResolvedValue({ ok: true, list: [] })
-  getMyCoursesMock.mockReset().mockResolvedValue({ ok: true, list: [] })
+  getMyLearningMock.mockReset().mockResolvedValue({ ok: true, courses: [], progress: [] })
   getCoursesByIdsMock.mockReset().mockResolvedValue(COURSES)
   getPageContentMock.mockReset().mockResolvedValue(null)
-  getMyOrdersMock.mockReset().mockResolvedValue({ ok: true, list: [], hasMore: false })
+  countMyOrdersMock.mockReset().mockResolvedValue({ ok: true, counts: { pending: 0, paid: 0, shipped: 0 } })
 })
 
 describe('继续学习区失败分治（失败≠没进度·同 aftersales/order-list loadFailed 范式）', () => {
   it('大白话：进度/我的课/所需课程任一拉取失败 → contFailed 亮起给重试，不渲染「还没有学习记录」假空态', async () => {
-    getMyProgressMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: null }) // 进度读失败＝progress:null
     const p1 = await mountMe()
     await p1.refresh()
     await flush()
     expect(p1.data.contFailed).toBe(true) // 失败态·不是空态
     expect(p1.data.cont).toBeNull()
 
-    getMyCoursesMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: false, error: 'NETWORK' }) // 我的课挂＝整包失败
     const p2 = await mountMe()
     await p2.refresh()
     await flush()
     expect(p2.data.contFailed).toBe(true)
 
-    getMyCoursesMock.mockResolvedValue({ ok: true, list: [] })
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
     getCoursesByIdsMock.mockResolvedValue(null) // 有进度才去取课·取失败＝失败态
     const p3 = await mountMe()
     await p3.refresh()
@@ -106,14 +103,14 @@ describe('继续学习区失败分治（失败≠没进度·同 aftersales/order
   })
 
   it('大白话：成功定位到课 → cont 落卡片、contFailed 灭；随后一次刷新失败 → 不清掉已有卡片、不亮失败态', async () => {
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
     const page = await mountMe()
     await page.refresh()
     await flush()
     expect(page.data.cont).toMatchObject({ courseId: 'c1', lessonId: 'l1' })
     expect(page.data.contFailed).toBe(false)
 
-    getMyProgressMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: null }) // 进度读失败＝progress:null
     await page.refresh()
     await flush()
     expect(page.data.cont).toMatchObject({ courseId: 'c1', lessonId: 'l1' }) // 失败不覆盖已有数据（黄金 §八）
@@ -134,7 +131,7 @@ describe('继续学习区加载中态分治（加载中≠没课·消首帧假�
     await flush()
     expect(page.data.contLoaded).toBe(true)
     // 失败路也须置 true（否则失败时也卡在骨架）
-    getMyProgressMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: null }) // 进度读失败＝progress:null
     const page2 = await mountMe()
     await page2.refresh()
     await flush()
@@ -150,7 +147,7 @@ describe('继续学习卡不等人资料/不拉整本树/旧卡先画（根因#1
         resolveLogin = r
       })
     )
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
     const page = await mountMe()
     const done = page.refresh()
     await flush()
@@ -161,13 +158,13 @@ describe('继续学习卡不等人资料/不拉整本树/旧卡先画（根因#1
   })
 
   it('大白话：已有 cont 再 refresh，中途不把卡片清掉（不把骨架拉回来）', async () => {
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
     const page = await mountMe()
     await page.refresh()
     await flush()
     expect(page.data.cont).toMatchObject({ courseId: 'c1' })
 
-    getMyProgressMock.mockReturnValue(new Promise(() => {})) // 挂住第二趟
+    getMyLearningMock.mockReturnValue(new Promise(() => {})) // 挂住第二趟
     void page.refresh()
     expect(page.data.cont).toMatchObject({ courseId: 'c1' }) // 旧卡还在
     expect(page.data.contLoaded).toBe(true)
@@ -193,7 +190,7 @@ describe('继续学习卡不等人资料/不拉整本树/旧卡先画（根因#1
 
   it('大白话：刷新失败时不覆盖本地旧卡存档（失败≠空）', async () => {
     store[CONT_KEY] = STORED
-    getMyProgressMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: null }) // 进度读失败＝progress:null
     const page = await mountMe()
     await page.refresh()
     await flush()
@@ -235,7 +232,7 @@ describe('「我」页小鸭蛋孵化判定（v5 D1·有一门课全部段看完
     { id: 'c1', title: '小棉鸭', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true }, { id: 's2', hasVideo: true }] }] }] },
   ]
   async function hatchKeyWith(progressList: unknown[]): Promise<string> {
-    getMyProgressMock.mockResolvedValue({ ok: true, list: progressList })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: progressList })
     const page = await mountMe()
     await page.refresh()
     await flush()
@@ -251,21 +248,23 @@ describe('「我」页小鸭蛋孵化判定（v5 D1·有一门课全部段看完
 })
 
 describe('订单格数字（v5 D1）', () => {
-  it('大白话：各状态按一页数条数；某一路云调用直接抛错——只那一格不显示数字，其它格照常，不冒未处理异常', async () => {
-    getMyOrdersMock.mockImplementation(async (_c: unknown, _l: number, status: string) => {
-      if (status === 'paid') throw new Error('boom')
-      return { ok: true, list: status === 'pending' ? [1, 2] : [], hasMore: false }
-    })
+  it('大白话：三态数字一次往返（性能批 #1）；云端某一态 count 失败给 null——只那一格不显示数字，其它格照常；整个调用抛错——三格都不显示，不冒未处理异常', async () => {
+    countMyOrdersMock.mockResolvedValue({ ok: true, counts: { pending: 2, paid: null, shipped: 0 } })
     const page = await mountMe()
     await page.refresh()
     await vi.waitFor(() => expect(page.data.counts).toEqual({ pending: '2', paid: '', shipped: '0' }))
-    expect(getMyOrdersMock.mock.calls.map((c: unknown[]) => c[2])).toEqual(['pending', 'paid', 'shipped'])
+    expect(countMyOrdersMock).toHaveBeenCalledTimes(1)
+
+    countMyOrdersMock.mockRejectedValue(new Error('boom'))
+    const page2 = await mountMe()
+    await page2.refresh()
+    await vi.waitFor(() => expect(page2.data.counts).toEqual({ pending: '', paid: '', shipped: '' }))
   })
 })
 
 describe('继续学习卡下行（v5 D1）', () => {
   it('大白话：刷新落卡后下行带节号「1.1 起针」；这门课每段都看完了改写「全部学完 · 可以重看」', async () => {
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: [{ courseId: 'c1', last: { lessonId: 'l1' }, updatedAt: 100 }] })
     const page = await mountMe()
     await page.refresh()
     await flush()
@@ -273,7 +272,7 @@ describe('继续学习卡下行（v5 D1）', () => {
 
     const segs = [{ id: 'c1', title: '小棉鸭', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true }] }] }] }]
     getCoursesByIdsMock.mockResolvedValue(segs)
-    getMyProgressMock.mockResolvedValue({ ok: true, list: [{ courseId: 'c1', last: { lessonId: 'l1' }, done: { s1: true }, updatedAt: 100 }] })
+    getMyLearningMock.mockResolvedValue({ ok: true, courses: [], progress: [{ courseId: 'c1', last: { lessonId: 'l1' }, done: { s1: true }, updatedAt: 100 }] })
     await page.refresh()
     await flush()
     expect(page.data.contMain).toBe('全部学完 · 可以重看')

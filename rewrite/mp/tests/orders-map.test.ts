@@ -134,12 +134,15 @@ describe('金额行标题·顾客视角「付过没有」（体检批 P1·钱链
 })
 
 describe('「我」页订单格数字 countBadge（v5 D1）', () => {
-  it('大白话：一页内给实数；满一页还有下一页给「20+」；取数失败给空串（不显示数字，不瞎报 0）', () => {
-    expect(countBadge({ ok: true, list: [1, 2, 3], hasMore: false }, 20)).toBe('3')
-    expect(countBadge({ ok: true, list: [], hasMore: false }, 20)).toBe('0')
-    expect(countBadge({ ok: true, list: new Array(20).fill(0), hasMore: true }, 20)).toBe('20+')
-    expect(countBadge({ ok: false }, 20)).toBe('')
-    expect(countBadge({ ok: true, list: 'x' }, 20)).toBe('')
+  it('大白话：云端精确数在上限内给实数；超过上限给「20+」；取数失败（null/非数字/负数）给空串（不显示数字，不瞎报 0）', () => {
+    expect(countBadge(3, 20)).toBe('3')
+    expect(countBadge(0, 20)).toBe('0')
+    expect(countBadge(20, 20)).toBe('20')
+    expect(countBadge(21, 20)).toBe('20+')
+    expect(countBadge(null, 20)).toBe('')
+    expect(countBadge(undefined, 20)).toBe('')
+    expect(countBadge('3', 20)).toBe('')
+    expect(countBadge(-1, 20)).toBe('')
   })
 })
 

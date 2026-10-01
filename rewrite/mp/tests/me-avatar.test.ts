@@ -9,11 +9,10 @@ const { loginMock, updateMock } = vi.hoisted(() => ({ loginMock: vi.fn(), update
 vi.mock('../api/user', () => ({
   login: loginMock,
   updateProfile: updateMock,
-  getMyProgress: vi.fn().mockResolvedValue({ ok: true, list: [] }),
   deleteAccount: vi.fn(),
 }))
-vi.mock('../api/learning', () => ({ getMyCourses: vi.fn().mockResolvedValue({ ok: true, list: [] }) }))
-vi.mock('../api/orders', () => ({ getMyOrders: vi.fn().mockResolvedValue({ ok: false }) }))
+vi.mock('../api/learning', () => ({ getMyLearning: vi.fn().mockResolvedValue({ ok: true, courses: [], progress: [] }) }))
+vi.mock('../api/orders', () => ({ countMyOrders: vi.fn().mockResolvedValue({ ok: false }) }))
 vi.mock('../lib/courses', () => ({ getCoursesByIds: async () => [] }))
 vi.mock('../lib/pageContent', () => ({ getPageContent: async () => null }))
 

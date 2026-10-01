@@ -9,6 +9,7 @@ import {
   getPlaybackUrl,
   getMyCourses,
   getMyProgress,
+  getMyLearning,
   trackEvent,
 } from './actions/learning'
 import { getHelpVideos, getReviews, getRatingSummary, submitReview } from './actions/reviews'
@@ -24,6 +25,7 @@ import {
   getMyOrders,
   getOrderById,
   getMyAfterSales,
+  countMyOrders,
 } from './actions/orders'
 import { kfBind, dataConsent } from './actions/cs'
 import { submitFeedback } from './actions/feedback'
@@ -52,6 +54,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.ass
   getPlaybackUrl,
   getMyCourses,
   getMyProgress,
+  getMyLearning,
   trackEvent,
   getHelpVideos,
   getPublicFaq,
@@ -68,6 +71,7 @@ const ACTIONS: Record<string, (event: unknown) => Promise<unknown>> = Object.ass
   getMyOrders,
   getOrderById,
   getMyAfterSales,
+  countMyOrders,
   kfBind,
   dataConsent,
   submitFeedback,

@@ -481,6 +481,8 @@ export const repoChecks = [
         getMyOrders: '只读本人订单（游标分页）',
         getOrderById: '只读本人单张订单',
         getMyAfterSales: '只读本人售后单（游标分页）',
+        countMyOrders: '只读本人三态订单 count（性能批 #1·「我」页数字一次往返）',
+        getMyLearning: '只读本人已解锁课程 + 学习进度（性能批 #4·两次并一次）',
       }
       const dir = 'rewrite/cloud/src/functions/app'
       const indexAbs = join(root, dir, 'index.ts')

@@ -20,7 +20,7 @@ import {
 } from '@ldrw/shared'
 // 响应契约（病根#5/#8）：返回类型绑定 shared 契约——删键/改名 tsc 红；加键编译锁无牙
 // （可选键也能多写），牙在 tests/contract-shape.test.ts 键集合哨兵。
-import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, EstimateRefundResp, OrderDoc, OrderRead, OrderLine, AfterSaleDoc, ErrCode, Fen } from '@ldrw/shared'
+import type { CreateOrderResp, PayResp, GetMyOrdersResp, GetOrderByIdResp, EstimateRefundResp, CountMyOrdersResp, OrderDoc, OrderRead, OrderLine, OrderStatus, AfterSaleDoc, ErrCode, Fen } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -619,9 +619,15 @@ export const getMyOrders = withOpenId(async ({ db, OPENID, event }): Promise<Get
   const raw = str((event as any)?.status, 200)
   const status = (Object.values(ORDER_STATUS) as string[]).includes(raw) ? raw : ''
   const where = status ? { _openid: OPENID, status } : { _openid: OPENID }
-  const paged = await pageQuery(db, COLLECTIONS.orders, where, 'createdAt', event as any, 100)
+  // 性能批 #3（老板 2026-10-01）：withAfterSales＝顺带本人最近 100 条售后（列表叠加「售后中/已退款」），省一次往返；
+  // 售后读失败不带键（叠加层缺省＝不叠加，同原 getMyAfterSales 失败静默口径），订单列表照常
+  const asReq: Promise<AfterSaleDoc[] | null> =
+    (event as any)?.withAfterSales === true
+      ? pageQuery(db, COLLECTIONS.afterSales, { _openid: OPENID }, 'appliedAt', { limit: 100 }, 100).then((p) => p.list as AfterSaleDoc[], () => null)
+      : Promise.resolve(null)
+  const [paged, afterSales] = await Promise.all([pageQuery(db, COLLECTIONS.orders, where, 'createdAt', event as any, 100), asReq])
   const [list, by] = await Promise.all([swapOrdersCover(paged.list), reviewedByOrder(db, OPENID, paged.list, 'getMyOrders')])
-  return ok({ ...paged, list: list.map((o) => withReviewed(o, by)) })
+  return ok({ ...paged, list: list.map((o) => withReviewed(o, by)), ...(afterSales ? { afterSales } : {}) })
 })
 
 /** 按单号取本人订单（他人/不存在一律 NOT_FOUND·不泄露存在性）。 */
@@ -633,6 +639,19 @@ export const getOrderById = withOpenId(async ({ db, OPENID, event }): Promise<Ge
   if (!got || got._openid !== OPENID) return err(ERR.NOT_FOUND)
   const [[order], by] = await Promise.all([swapOrdersCover([got]), reviewedByOrder(db, OPENID, [got], 'getOrderById')])
   return ok({ order: withReviewed(order, by) })
+})
+
+/** 「我」页订单格数字（性能批 #1·老板 2026-10-01）：本人待支付/待发货/待收货三态各一 count，一次往返替代三次拉页数条数。
+ *  单态 count 失败给 null（那格不显示数字·不整包失败·根因#14）。三态字面量受 OrderStatus 类型约束（拼错 tsc 红）。 */
+export const countMyOrders = withOpenId(async ({ db, OPENID }): Promise<CountMyOrdersResp> => {
+  const one = (status: OrderStatus): Promise<number | null> =>
+    db
+      .collection(COLLECTIONS.orders)
+      .where({ _openid: OPENID, status })
+      .count()
+      .then((r: { total: number }) => r.total, () => null)
+  const [pending, paid, shipped] = await Promise.all([one('pending'), one('paid'), one('shipped')])
+  return ok({ counts: { pending, paid, shipped } })
 })
 
 /** 本人售后单（游标分页·按申请时间倒序）。 */

@@ -1,7 +1,7 @@
 import { ERR, COLLECTIONS, QRCODE_STATUS_SPEC } from '@ldrw/shared'
 // 响应契约（病根#5/#8）：getPlaybackUrl 返回类型绑定 shared 契约——删键/改名 tsc 红；
 // 加键编译不红（TS 宽赋值），牙在 tests/contract-shape.test.ts 键集合哨兵。
-import type { GetPlaybackUrlResp } from '@ldrw/shared'
+import type { GetPlaybackUrlResp, GetMyLearningResp } from '@ldrw/shared'
 import {
   withOpenId,
   withRateLimit,
@@ -365,6 +365,14 @@ export const getMyProgress = withOpenId(async ({ db, OPENID }) => {
     .catch(() => null)
   if (!res) return err(ERR.INTERNAL) // 库挂 ≠ 没有进度（根因#14·同 getUser 读失败口径）
   return ok({ list: res.data })
+})
+
+/** 「我」页 / 我的课程页一次往返（性能批 #1/#4·老板 2026-10-01）：我的课 + 学习进度，替代两次调用（单次往返实测 350–550ms）。
+ *  进度库挂给 progress:null（课卡照出、进度标「读不到」·根因#14）；我的课挂整包失败（没有课列表页面无从渲染）。 */
+export const getMyLearning = withOpenId(async ({ event }): Promise<GetMyLearningResp> => {
+  const [mine, progress] = await Promise.all([getMyCourses(event), getMyProgress(event)])
+  if (!mine.ok) return mine
+  return ok({ courses: mine.list, progress: progress.ok ? progress.list : null })
 })
 
 async function addTo(db: any, coll: string, data: any) {
