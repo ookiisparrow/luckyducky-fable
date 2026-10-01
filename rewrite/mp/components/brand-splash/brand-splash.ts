@@ -4,6 +4,7 @@
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
 //    （根因#8 build 绿·真机陷死）。
 import { BRAND_SLOGAN_EN } from '../../lib/brand'
+import { setSplashUp } from '../../lib/splashGate'
 
 const MIN_HOLD_MS = 800 // 最短停留（低于此一闪而过·观感差）
 const FADE_MS = 500 // 淡出时长（须与 wxss .ld-splash.leaving 动画时长一致）
@@ -29,19 +30,17 @@ Component({
   // 开屏第一眼与支付成功页两种写法。™ 留在模板里。
   data: { leaving: false, sloganEn: BRAND_SLOGAN_EN },
   lifetimes: {
+    // 开屏期间所有底部 TabBar 让位（自定义 TabBar 是框架独立层、z-index 盖不住）：经 lib/splashGate 广播，
+    // 已挂的当场藏、后挂的挂上即藏；撤场同样广播，开屏期间切到别页的 TabBar 也回来。
     attached() {
+      setSplashUp(true)
       starts.set(this, Date.now())
       const minHold = setTimeout(() => this.maybeLeave(), MIN_HOLD_MS)
       const hardCap = setTimeout(() => this.leave(), HARD_CAP_MS) // 无条件兜底撤场
       timers.set(this, [minHold, hardCap])
     },
-    // 开屏期间让底部 TabBar 让位（自定义 TabBar 是框架独立层、z-index 盖不住·同 px-fx 转场做法）。
-    // ready 才调：attached 时 TabBar 可能还没挂上。⚠ 真机待验：TabBar 是否真在开屏期间露出、此处能否压住。
-    ready() {
-      this.tabBar(true)
-    },
     detached() {
-      this.tabBar(false)
+      setSplashUp(false)
       for (const t of timers.get(this) || []) clearTimeout(t)
       timers.delete(this)
       starts.delete(this)
@@ -53,17 +52,12 @@ Component({
       if (t0 == null) return // attached 尚未记 t0（property observer 早于 attached 的保险）
       if (shouldLeave(Date.now(), t0, this.properties.ready)) this.leave()
     },
-    tabBar(covered: boolean) {
-      const owner = this.selectOwnerComponent() as unknown as { getTabBar?: () => { setCovered?: (v: boolean) => void } | null } | null
-      owner?.getTabBar?.()?.setCovered?.(covered)
-    },
     leave() {
       if (this.data.leaving) return // 幂等：淡出已启动不重入（min-hold/ready/hard-cap 三处都可能触发）
       this.setData({ leaving: true })
-      const fade = setTimeout(() => {
-        this.tabBar(false) // 淡出完 TabBar 回来
-        this.triggerEvent('done') // 淡出动画结束请父级撤下
-      }, FADE_MS)
+      // TabBar 一开淡就回来并同步淡入（同 500ms）：等淡完才回，淡出期间首页已透出、底部空着（老板真机 2026-10-02）
+      setSplashUp(false, true)
+      const fade = setTimeout(() => this.triggerEvent('done'), FADE_MS) // 淡出动画结束请父级撤下
       const arr = timers.get(this)
       if (arr) arr.push(fade)
       else timers.set(this, [fade])

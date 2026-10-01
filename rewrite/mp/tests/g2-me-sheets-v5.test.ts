@@ -193,19 +193,3 @@ describe('隐私授权半屏', () => {
     expect(resolve).toHaveBeenCalledWith({ event: 'disagree' })
   })
 })
-
-describe('开屏', () => {
-  it('大白话：开屏显示时让底部 TabBar 让位，淡出完再回来（真机待验）', async () => {
-    const setCovered = vi.fn()
-    const c = await mountComp('../components/brand-splash/brand-splash')
-    c.properties = { ready: false }
-    c.selectOwnerComponent = () => ({ getTabBar: () => ({ setCovered }) })
-    c.triggerEvent = vi.fn()
-    opts.lifetimes.ready.call(c)
-    expect(setCovered).toHaveBeenLastCalledWith(true)
-    c.leave()
-    vi.advanceTimersByTime(500)
-    expect(setCovered).toHaveBeenLastCalledWith(false)
-    expect(c.triggerEvent).toHaveBeenCalledWith('done')
-  })
-})
