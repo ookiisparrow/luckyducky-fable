@@ -122,14 +122,6 @@ describe('底部 TabBar', () => {
     expect(privacyGate.visible()).toBe(false)
     expect(c.data.hidden).toBe(false)
   })
-
-  it('大白话：加购后 bump()——购物车数字刷新并弹一下（320ms 后复位）', async () => {
-    const c = await mountComp('../custom-tab-bar/index')
-    c.bump()
-    expect(c.data.bump).toBe(true)
-    vi.advanceTimersByTime(320)
-    expect(c.data.bump).toBe(false)
-  })
 })
 
 describe('登录半屏', () => {

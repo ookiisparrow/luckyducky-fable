@@ -1,15 +1,16 @@
+<!-- 底部三格（v6 Lite 5a·降存在感）：全平面、无键帽；当前那格图标紫、其余灰（紫＝当前），不加 LED、不显示购物车件数。
+     按下只淡一下（press-fade·不出灰底下沉，免得又浮成键帽），手感照旧（keyFx flat：轻震 + 咔嗒）。 -->
 <view wx:if="{{!hidden}}" class="v5-scope ld-tabbar">
   <view
     wx:for="{{tabs}}"
     wx:key="id"
-    class="k ld-tab {{active === item.id ? 'k-light ld-tab-on' : 'k-flat'}}"
-    hover-start-time="20" hover-class="{{active === item.id ? 'k-light-down' : 'k-flat-down'}}"
+    class="k k-flat ld-tab"
+    hover-start-time="20" hover-class="press-fade"
     hover-stay-time="100"
     data-id="{{item.id}}"
     data-path="{{item.path}}"
     bind:tap="onTap"
-   data-k="{{active === item.id ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
-    <px-i name="{{item.id}}" />
-    <text wx:if="{{item.id === 'cart' && cartCount > 0}}" class="t-sys ld-tab-count {{bump ? 'ld-tab-bump' : ''}}">{{cartCount > 99 ? '99+' : cartCount}}</text>
+    data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+    <px-i name="{{item.id}}" tone="{{active === item.id ? 'var(--v5-violet)' : 'var(--v5-ink-2)'}}" />
   </view>
 </view>

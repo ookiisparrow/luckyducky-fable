@@ -1,5 +1,5 @@
-/* 底部三键 TabBar（v5）：满宽贴底，三颗等宽键；选中＝浅色键，未选＝平面键。
-   占高＝上 8 + 键 44 + 下 max(24, 安全区)——tab 页底部留白按这个数算（首页首屏高度同）。 */
+/* 底部三格 TabBar（v6 Lite 5a·降存在感）：满宽贴底，三格等宽、全平面（无底色无阴影），顶上一条 0.10 分隔线。
+   占高＝上 8 + 键 44 + 下 max(24, 安全区)（分隔线另加 1px）——tab 页底部留白按这个数算（首页首屏高度同）。 */
 .ld-tabbar {
   position: fixed;
   left: 0;
@@ -8,24 +8,12 @@
   display: flex;
   gap: 8px;
   padding: 8px 16px max(24px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--v5-hair-tab);
   background: var(--v5-canvas);
 }
+/* 平面键本身带凹槽灰底（app.wxss .k-flat），Tab 栏三格连底色和阴影一起去掉 */
 .ld-tab {
   flex: 1;
-  font-size: 15px;
-}
-.ld-tab-count {
-  display: inline-block; /* transform 对行内 text 不生效 */
-  font-size: 13px;
-  letter-spacing: -0.02em;
-  color: var(--v5-ink-2);
-}
-/* 加购弹一下（设计稿 bumpCart：scale 1→1.5→1，320ms） */
-.ld-tab-bump {
-  animation: ld-tab-bump 320ms cubic-bezier(0.3, 1.5, 0.5, 1);
-}
-@keyframes ld-tab-bump {
-  50% {
-    transform: scale(1.5);
-  }
+  background: transparent;
+  box-shadow: none;
 }

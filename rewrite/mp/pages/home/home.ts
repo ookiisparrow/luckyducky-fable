@@ -16,7 +16,7 @@ import { loginGate } from '../../lib/loginGate'
 import { readSnapshot, writeSnapshot } from '../../lib/snapshot'
 import { reportColdStart } from '../../lib/coldStart'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint, fxParty, fxToast, fxTransit } from '../../lib/pxFx'
+import { fxHint, fxParty, fxToast } from '../../lib/pxFx'
 
 const NAV_LOCK_MS = 800 // 跳转类按钮防连点：跳转发起后 800ms 内不再响应（连点会叠两个详情页）
 
@@ -177,12 +177,7 @@ Page({
     if (payload) {
       cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：连点每下都算、即便已切走本 tab 也不该丢单
       trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
-      if (this.hidden) return // 已切走 home tab：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
-      if (typeof this.getTabBar === 'function') {
-        const bar = this.getTabBar() as unknown as LdTabBar
-        bar.setActive('home') // 角标随动（同 cart.ts refresh() 范式·重数一遍，过期回包也要同步，否则乱序回来时角标少算）
-        if (!stale) bar.bump?.() // 设计稿：加购后购物车角标弹一下（scale 1→1.5→1·320ms·动画在 custom-tab-bar 里）
-      }
+      if (this.hidden) return // 已切走 home tab：toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (stale) return
       // 多规格被默认加了首规格时把规格名亮给用户（px-fx 自绘提示不受原生 toast 字数限制）——静默替选规格必须可见
       fxToast(this, payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')
@@ -200,13 +195,13 @@ Page({
     void fxParty(this, '.hm-closing-btn')
     setTimeout(() => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }), 260)
   },
-  // 顶部「购买」：黄色像素彩虹从键扩散铺满后进详情（设计稿 fxRainbow）
+  // 顶部「购买」：直接进详情（老板 2026-10-01 取消原设计稿的彩虹转场）
   toProductsTop() {
     tapHaptic()
     const duck = pickDuckKit(this.data.products) // 同上：占位＝将来小棉鸭的位置
     if (!duck) return this.scrollTo('friends')
-    if (!this._navOk()) return // 同上：彩虹转场期间连点
-    void fxTransit(this, 'rainbow', '.hm-buy', () => wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id }))
+    if (!this._navOk()) return // 连点会叠两个详情页
+    wx.navigateTo({ url: '/pages/detail/detail?id=' + duck.id })
   },
   toIntro() {
     void fxParty(this, '.hm-search')

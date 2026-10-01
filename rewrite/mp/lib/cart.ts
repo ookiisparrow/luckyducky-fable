@@ -91,7 +91,6 @@ export function getItems(): Array<CartItem & { lineId: string }> {
   return load().map((it) => ({ ...it, lineId: lineIdOf(it.id, it.sku) }))
 }
 
-export const count = (): number => load().reduce((n, it) => n + it.qty, 0)
 export const selectedCount = (): number => load().reduce((n, it) => (it.selected ? n + it.qty : n), 0)
 
 /** 选中合计·分（整数·结算下单用同一口径——0.1 元这类价 ×100 浮点会带尾数，逐行 Math.round 后必为整数）。 */
