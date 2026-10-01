@@ -25,7 +25,7 @@
     "loadtest": "node scripts/loadtest.mjs",
     "env:resolve": "node scripts/env-resolve.mjs",
     "smoke:mp": "node scripts/mp-smoke.cjs",
-    "preview:mp": "node scripts/stamp-mp-version-date.mjs && wechatide -c ldrw-cli auto_preview --project \"$PWD/rewrite/mp\" --page-path pages/home/home",
+    "preview:mp": "node scripts/stamp-mp-version-date.mjs && node scripts/push-mp-preview.mjs",
     "deploy:test": "node scripts/deploy-test.mjs",
     "db:export": "node scripts/db-export.mjs",
     "db:check-indexes": "node scripts/check-indexes.mjs",

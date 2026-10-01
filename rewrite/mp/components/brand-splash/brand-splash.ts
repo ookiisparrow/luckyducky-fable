@@ -4,6 +4,7 @@
 //  · 数据迟迟不来（弱网/云未部署）则 HARD_CAP_MS 无条件撤场——防「数据永不就绪」splash 永久盖死首页
 //    （根因#8 build 绿·真机陷死）。
 import { BRAND_SLOGAN_EN } from '../../lib/brand'
+import { currentDevPushLine } from '../../lib/appVersion'
 import { setSplashUp } from '../../lib/splashGate'
 
 const MIN_HOLD_MS = 800 // 最短停留（低于此一闪而过·观感差）
@@ -28,7 +29,8 @@ Component({
   },
   // sloganEn 恒引 lib/brand 单源（病根#5）：本组件硬编码的话大小写易与单源不一致，
   // 开屏第一眼与支付成功页两种写法。™ 留在模板里。
-  data: { leaving: false, sloganEn: BRAND_SLOGAN_EN },
+  // pushAt：开发版推到手机的时间（口号下一行·只开发版有字·见 lib/appVersion currentDevPushLine）
+  data: { leaving: false, sloganEn: BRAND_SLOGAN_EN, pushAt: currentDevPushLine() },
   lifetimes: {
     // 开屏期间所有底部 TabBar 让位（自定义 TabBar 是框架独立层、z-index 盖不住）：经 lib/splashGate 广播，
     // 已挂的当场藏、后挂的挂上即藏；撤场同样广播，开屏期间切到别页的 TabBar 也回来。

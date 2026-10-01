@@ -1,7 +1,32 @@
 // 小程序版本行：数字跟 package.json（LD-004）；四条线（开发/测试/发布/实验）；「我」页底部接线。
 import { describe, it, expect, afterEach } from 'vitest'
-import { APP_VERSION, PUBLIC_RELEASE_NAME, DEV_UPDATE_DATE, resolveAppChannel, channelLabel, formatAppVersionLine, formatAppVersionDetail, currentAppVersionLine, currentAppVersionDetail } from '../lib/appVersion'
+import { APP_VERSION, PUBLIC_RELEASE_NAME, DEV_UPDATE_DATE, resolveAppChannel, channelLabel, formatAppVersionLine, formatAppVersionDetail, currentAppVersionLine, currentAppVersionDetail, devPushLine, currentDevPushLine } from '../lib/appVersion'
 import pkgRaw from '../../../package.json?raw'
+import splashWxml from '../components/brand-splash/brand-splash.wxml?raw'
+import splashTs from '../components/brand-splash/brand-splash.ts?raw'
+
+describe('开屏推送时间（老板 2026-10-02：开发版每次推到手机都在开屏标日期和几点·只开发版）', () => {
+  const setEnv = (v: string) => ((globalThis as any).wx = { getAccountInfoSync: () => ({ miniProgram: { envVersion: v } }) })
+  afterEach(() => delete (globalThis as any).wx)
+
+  it('大白话：开发版且带着推送时间才显示「开发 · 日期 时间」；没推送时间（仓里默认空）不显示', () => {
+    expect(devPushLine('develop', '2026-10-02 14:23')).toBe('开发 · 2026-10-02 14:23')
+    expect(devPushLine('develop', '')).toBe('')
+  })
+
+  it('大白话：体验版、正式版、实验版一律不显示——看微信给的版本类型，不看编译时写死的开发通道', () => {
+    for (const v of ['trial', 'release', 'experimental']) expect(devPushLine(v, '2026-10-02 14:23')).toBe('')
+    setEnv('trial')
+    expect(currentDevPushLine('2026-10-02 14:23')).toBe('')
+    setEnv('develop')
+    expect(currentDevPushLine('2026-10-02 14:23')).toBe('开发 · 2026-10-02 14:23')
+  })
+
+  it('大白话：开屏页口号下面挂这一行，有字才出', () => {
+    expect(splashWxml).toContain('<text wx:if="{{pushAt}}" class="mono ld-splash-push">{{pushAt}}</text>')
+    expect(splashTs).toContain('pushAt: currentDevPushLine()')
+  })
+})
 
 describe('版本号单源（LD-004）', () => {
   it('大白话：小程序上屏的数字必须跟仓根 package.json 同一个，不能各写各的', () => {

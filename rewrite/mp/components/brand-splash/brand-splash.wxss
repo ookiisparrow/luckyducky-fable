@@ -27,6 +27,11 @@
   letter-spacing: -0.01em;
   color: var(--v5-ink-2);
 }
+/* 开发版推送时间（只开发版有字）：口号下一行，弱灰小字 */
+.ld-splash-push {
+  font-size: 13px;
+  color: var(--v5-ink-3);
+}
 @keyframes ld-splash-out {
   from {
     opacity: 1;
