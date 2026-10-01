@@ -5,7 +5,7 @@ import { bgFor } from '../lib/mapLearning'
 
 const { getContentMock } = vi.hoisted(() => ({ getContentMock: vi.fn() }))
 vi.mock('../api/catalog', () => ({ getContent: getContentMock }))
-vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null) }))
+vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null), getHomeContent: () => getContentMock() })) // 缓存层本身见 home-content-cache.test
 vi.mock('../lib/courses', () => ({ getCourseByIdDetailed: vi.fn() }))
 vi.mock('../api/user', () => ({ getMyProgress: vi.fn() }))
 

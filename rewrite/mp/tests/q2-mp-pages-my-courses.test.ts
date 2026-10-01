@@ -58,6 +58,21 @@ describe('我的课程：加载', () => {
     expect(page.data.list[0]).toMatchObject({ courseId: 'c1', title: '小棉鸭', doneCount: 2, totalSegments: 4, percent: 50, progressUnknown: false })
   })
 
+  it('大白话：从「我」进来（「我」页已按 id 取过已解锁的课）→ 不再拉课程目录；冷进只按已解锁的 id 取（#441）', async () => {
+    const page = await mount()
+    const { getCoursesByIds } = await import('../lib/courses') // mount 已 resetModules：与页面拿到的是同一份
+    await getCoursesByIds(['c1'])
+    callAppMock.mockClear()
+    await page.reload()
+    expect(page.data.list[0]).toMatchObject({ title: '小棉鸭', totalSegments: 4 })
+    expect(callAppMock.mock.calls.map((c) => c[0])).toEqual(['getMyLearning'])
+
+    const cold = await mount()
+    callAppMock.mockClear()
+    await cold.reload()
+    expect(callAppMock.mock.calls).toContainEqual(['getCourses', { ids: ['c1'] }])
+  })
+
   it('大白话：真的没进过课——落空态（给输码引导），不亮重试', async () => {
     handlers.getMyLearning = () => ({ ok: true, courses: [], progress: [] })
     const page = await mount()

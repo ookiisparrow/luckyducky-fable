@@ -81,6 +81,35 @@ describe('getCoursesByIds（继续学习只取所需课·不毒化整本缓存�
   })
 })
 
+describe('按 id 的会话缓存（#441：「我」→「我的课程」/ 播放页不再重拉整本目录）', () => {
+  it('大白话：按 id 取过的课缓存住——同一批再取零请求；部分命中只拉缺的那几门，按传入顺序返回', async () => {
+    getCoursesMock.mockResolvedValueOnce({ ok: true, list: [COURSES[0]] })
+    const { getCoursesByIds } = await import('../lib/courses')
+    expect(await getCoursesByIds(['c1'])).toEqual([COURSES[0]])
+    expect(await getCoursesByIds(['c1'])).toEqual([COURSES[0]])
+    expect(getCoursesMock).toHaveBeenCalledTimes(1)
+    getCoursesMock.mockResolvedValueOnce({ ok: true, list: [COURSES[1]] })
+    expect(await getCoursesByIds(['c2', 'c1'])).toEqual([COURSES[1], COURSES[0]])
+    expect(getCoursesMock).toHaveBeenLastCalledWith({ ids: ['c2'] })
+  })
+
+  it('大白话：按 id 查一门课（播放页 / 目录页）先看按 id 缓存——「我」页取过的课点进去零请求', async () => {
+    getCoursesMock.mockResolvedValueOnce({ ok: true, list: [COURSES[1]] })
+    const { getCoursesByIds, getCourseByIdDetailed } = await import('../lib/courses')
+    await getCoursesByIds(['c2'])
+    expect(await getCourseByIdDetailed('c2')).toEqual({ failed: false, course: COURSES[1] })
+    expect(getCoursesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('大白话：超过 20 门（云端按 id 单次上限）→ 改走整本目录，不截断', async () => {
+    const many = Array.from({ length: 21 }, (_, i) => ({ id: 'k' + i, title: 't' + i }))
+    getCoursesMock.mockResolvedValue({ ok: true, list: many })
+    const { getCoursesByIds } = await import('../lib/courses')
+    expect(await getCoursesByIds(many.map((c) => c.id))).toEqual(many)
+    expect(getCoursesMock).toHaveBeenCalledWith()
+  })
+})
+
 describe('getCourseById（复用 getAllCourses·命中与 miss）', () => {
   it('大白话：空 id 直接返回 null，不发请求', async () => {
     const { getCourseById } = await import('../lib/courses')

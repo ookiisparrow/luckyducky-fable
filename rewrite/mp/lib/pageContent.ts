@@ -3,7 +3,8 @@
 // 在途去重（inflight 按页收口：并发同页只真取一次）；失败不缓存、不覆盖既有（下次仍可重试）。
 // 不持久化（会话内即可）。调用方（页面）在 await 恢复点仍须自行做 _seq/unloaded 复核——
 // 本层只负责「取一次、缓存住」，不管页面生命周期。
-import { getPageContent as apiGetPageContent } from '../api/catalog'
+import { getContent, getPageContent as apiGetPageContent } from '../api/catalog'
+import type { ApiResult } from '../utils/cloud'
 import { createInflight } from './inflight'
 
 export type PageKey = 'welcome' | 'catalogPlayer' | 'mePage' | 'about' | 'agreement'
@@ -27,8 +28,24 @@ export async function getPageContent(page: PageKey): Promise<unknown> {
   })
 }
 
+// 首页内容（getContent：首页文案 + 各页背景图·#444）：首页 reload 强刷（force）并回填；目录页 / 欢迎页命中复用零重拉，
+// 冷进（扫码直进欢迎页）照常拉。原样返回回包（调用方照旧判 ok 取 home）；仅成功落缓存，失败不缓存、不覆盖既有。
+// force 在途时后到调用同样复用在途结果（同 lib/catalog getAllProducts 口径）。
+let home: ApiResult | null = null
+const homeFlight = createInflight<ApiResult>()
+export async function getHomeContent(opts?: { force?: boolean }): Promise<ApiResult> {
+  if (!opts?.force && home) return home
+  return homeFlight.run('home', async () => {
+    const r = await getContent()
+    if (r.ok) home = r
+    return r
+  })
+}
+
 /** 仅测试：清空内存态强制下次重新回灌。 */
 export function __resetForTest(): void {
   for (const k of Object.keys(cache) as PageKey[]) delete cache[k]
   flight.clear()
+  home = null
+  homeFlight.clear()
 }

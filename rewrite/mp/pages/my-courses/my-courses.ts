@@ -1,7 +1,7 @@
 // 我的课程：已进课课程列表（join 课程标题 + 段粒度学习进度）。
 import { tapHaptic } from '../../lib/haptics'
 import { getMyLearning } from '../../api/learning'
-import { getAllCourses } from '../../lib/courses'
+import { getCoursesByIds } from '../../lib/courses'
 import { mapMyCourses, type MyCourseVM } from '../../lib/mapLearning'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { groundGap } from '../../lib/ground'
@@ -26,14 +26,17 @@ Page({
   },
   async reload() {
     // 两路组合（云为唯一真相·纯前端 join 段数与 done map）：getMyLearning 一次拿我的课 + 进度（性能批 #4·进度写过回来必新鲜·
-    // 由 utils/fresh 标脏保证）；课程目录本会话内不变，走 lib/courses 会话缓存（根因账本#15）。
+    // 由 utils/fresh 标脏保证）；课程只取已解锁那几门（#441）——「我」页已按同一批 id 取过，走 lib/courses 缓存零请求；
+    // 冷进（欢迎页兑课后直跳等）才按 id 补拉，变成先后两次往返，但回包只跟已解锁课数挂钩、不随整本目录变大。
     const seq = ++this._seq
-    const [mine, courses] = await Promise.all([getMyLearning(), getAllCourses()])
+    const mine = await getMyLearning()
+    const ids = mine.ok && Array.isArray(mine.courses) ? (mine.courses as { courseId?: unknown }[]).map((m) => String((m && m.courseId) || '')) : []
+    const courses = mine.ok ? await getCoursesByIds(ids) : null
     // 慢/超时回包不覆盖较新结果：tab 来回切/返回触发的后一次 onShow 已落地时，前一次（尤其超时 ok:false）
     // 迟到的 setData 会把有课列表盖成空态、误显「输入激活码」——代次不符即丢弃。
     if (seq !== this._seq) return
     // 失败≠空态（根因#14）：失败不覆盖已展示课程；一无所有时落 loadFailed 给重试，不误导去输激活码。
-    // courses===null（目录拉取失败·getAllCourses 失败语义）同判失败——否则 mapMyCourses 查不到课程标题，
+    // courses===null（课程拉取失败·getCoursesByIds 失败语义）同判失败——否则 mapMyCourses 查不到课程标题，
     // 课卡会显示原始 courseId、进度条整行消失，用户以为数据坏了（口径对齐 me.ts contFetchFailed）。
     if (!mine.ok || courses === null) {
       this.setData({ loading: false, loadFailed: !this.data.list.length })

@@ -4,8 +4,7 @@
 // 视觉＝v5 稿 C2（mine/taken/invalid/error 结果屏）/ C3（W1+W2 拆两屏），见 wxml 头注。
 import { tapHaptic } from '../../lib/haptics'
 import { activateCourse, confirmEnter } from '../../api/learning'
-import { getContent } from '../../api/catalog'
-import { getPageContent } from '../../lib/pageContent'
+import { getHomeContent, getPageContent } from '../../lib/pageContent'
 import { getCourseById } from '../../lib/courses'
 import { activationView, bgFor, ACTIVATION_ERR_COPY, type ActivationKind } from '../../lib/mapLearning'
 import { mapWelcome, type WelcomeVM } from '../../lib/mapPages'
@@ -32,7 +31,7 @@ Page({
     welcome: mapWelcome(null) as WelcomeVM, // W1/W2 文案·首帧即默认（CMS 到达后覆盖·不空屏）
   },
   home: null as unknown,
-  // getContent（背景图）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
+  // 首页内容（背景图·lib/pageContent 会话缓存，首页来过即零请求·#444）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
   // 页实例持有而非模块级——同 home 一样跟着本次 onLoad 走，避免跨实例复用陈旧 promise。
   homeReady: null as Promise<ApiResult> | null,
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onEnter 进课回包在途用户已退出本页（自绘导航无返回箭头，但侧滑/物理键仍可退），迟到回包不再 redirectTo
@@ -42,7 +41,7 @@ Page({
   onLoad(query: Record<string, string | undefined>) {
     const info = wx.getWindowInfo()
     this.setData({ statusBarHeight: info.statusBarHeight })
-    this.homeReady = getContent() // 不 await：activate() 里再取，跟 activateCourse 并行
+    this.homeReady = getHomeContent() // 不 await：activate() 里再取，跟 activateCourse 并行
     void this.loadPageContent() // W1/W2 文案·与激活流程互不依赖，并行发起（不阻塞首帧·默认已在 data）
     const code = String(query.code || '').trim()
     if (code) {

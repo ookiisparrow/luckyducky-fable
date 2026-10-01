@@ -9,6 +9,9 @@ let cache: Record<string, unknown>[] | null = null
 const idOf = (x: Record<string, unknown>) => String(x.id || x._id || '')
 // 在途去重：cache 未命中时的并发调用（player/me/my-courses 深链撞车）共享一次云调用。
 const flight = createInflight<Record<string, unknown>[] | null>()
+// 按 id 取来的单门课（与整本里的同一形状·云端同走 publicCourse）：只供按 id 取，不冒充整本目录。
+const byId = new Map<string, Record<string, unknown>>()
+const BY_IDS_MAX = 20 // 云端 getCourses 按 id 单次上限（app/actions/learning.ts requestedCourseIds）
 
 export async function getAllCourses(): Promise<Record<string, unknown>[] | null> {
   if (cache) return cache
@@ -19,16 +22,22 @@ export async function getAllCourses(): Promise<Record<string, unknown>[] | null>
   })
 }
 
-/** 继续学习只要进度/已解锁里那几门（通常 1 门），不拉整本树。
- *  整本会话缓存已热则只筛、不发请求；未热则按 ids 取，且不把残片写进整本缓存（防毒化目录页）。 */
+/** 「我」页继续学习 / 「我的课程」只要已解锁、学过的那几门，不拉整本树（#441）。
+ *  整本缓存已热则只筛；否则先查按 id 缓存，缺的才按 id 拉（结果进按 id 缓存，不写整本缓存·防毒化目录页）。
+ *  超过云端单次上限（20 门）改走整本目录，不截断。任一次拉取失败返 null（失败≠空目录）。 */
 export async function getCoursesByIds(ids: string[]): Promise<Record<string, unknown>[] | null> {
-  const uniq = [...new Set(ids.map((id) => String(id || '')).filter(Boolean))].slice(0, 20)
+  const uniq = [...new Set(ids.map((id) => String(id || '')).filter(Boolean))]
   if (!uniq.length) return []
-  const all = cache
+  const all = uniq.length > BY_IDS_MAX ? await getAllCourses() : cache
   if (all) return uniq.map((id) => all.find((x) => idOf(x) === id)).filter((c): c is Record<string, unknown> => !!c)
-  const r = await getCourses({ ids: uniq })
-  if (!r.ok || !Array.isArray(r.list)) return null
-  return r.list as Record<string, unknown>[]
+  if (uniq.length > BY_IDS_MAX) return null // 整本拉取失败（按 id 拉会被云端截到 20 门·不能拿残缺冒充）
+  const missing = uniq.filter((id) => !byId.has(id))
+  if (missing.length) {
+    const r = await getCourses({ ids: missing })
+    if (!r.ok || !Array.isArray(r.list)) return null
+    for (const c of r.list as Record<string, unknown>[]) byId.set(idOf(c), c)
+  }
+  return uniq.map((id) => byId.get(id)).filter((c): c is Record<string, unknown> => !!c)
 }
 
 // 简版：null 混同「网络失败」与「查无此课」，只给 welcome 等 fail-soft 场景用。
@@ -40,6 +49,8 @@ export async function getCourseById(id: string): Promise<Record<string, unknown>
 // 误报成课程消失。failed=目录拉取失败（可重试）；failed=false 且 course=null 才是真查无。catalog/player 用本函数。
 export async function getCourseByIdDetailed(id: string): Promise<{ failed: boolean; course: Record<string, unknown> | null }> {
   if (!id) return { failed: false, course: null }
+  const hit = byId.get(id) // 「我」/「我的课程」按 id 取过 → 播放页、目录页零请求（#441）
+  if (hit) return { failed: false, course: hit }
   const list = await getAllCourses()
   if (!list) return { failed: true, course: null }
   return { failed: false, course: list.find((c) => idOf(c) === id) || null }
