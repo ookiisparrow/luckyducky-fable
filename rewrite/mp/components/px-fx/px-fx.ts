@@ -4,6 +4,8 @@
 // 跨页接力（60fps 录屏逐帧核过的错乱）：navigateTo 自带系统滑入动画关不掉，旧页画布在跳页那一刻会丢——
 // 旧页内容闪回 ~130ms，再滑入一张没盖底的新页。所以铺满后旧页换成纯色遮罩 view（不会丢），新页一出生就盖同色
 // 遮罩（同色盖同色，滑入看不出来），滑完再照设计稿 fxEnter 淡出（280ms ease-out）。
+// 撒花跨页接力（老板 2026-10-01·设计稿撒花层盖在所有页面之上、切页纸片照落完整程）：纸片场全站一份（cfBits），
+// 每页画布只负责把当前这批纸片画到自己身上——老页被盖住前照画，新页一出生（ready/show）见场上还有纸片就接着画。
 import { ditherRuns, distField, ease, party, rainbowRuns, stepConfetti, RAINBOW_DUR, PAPER, DARK, type Bit, type ConfirmOpts, type Rect, type Runs } from '../../lib/pxFx'
 import { burstHaptic } from '../../lib/haptics'
 import { createHold, type Hold } from '../../lib/hold'
@@ -20,9 +22,13 @@ type Ctx = {
   globalAlpha: number
 }
 type Cv = { width: number; height: number; getContext(t: '2d'): Ctx; requestAnimationFrame(cb: (t: number) => void): number; cancelAnimationFrame(id: number): void }
-type St = { cv?: Cv; x?: Ctx; w: number; h: number; bits: Bit[]; cfRaf: number; cfLast: number; fxRaf: number }
+type St = { cv?: Cv; x?: Ctx; w: number; h: number; cfRaf: number; fxRaf: number }
 
 const S = new WeakMap<object, St>()
+// 撒花场（见文件头）：物理按真实时钟推进——各页画布的 rAF 时间基不同，不能拿它的 now；两页同时在画（滑入那 ~300ms）
+// 各推各的 dt，走过的总时长不变。
+const cfBits: Bit[] = []
+let cfLast = 0
 const DITHER_DUR = 800
 const SLIDE_MS = 300 // 系统 navigateTo 滑入时长（工具 60fps 录屏实测 ~250ms·留余量）：新页遮罩等滑完再淡出
 const FADE_MS = 280
@@ -66,7 +72,7 @@ Component({
   lifetimes: {
     attached() {
       const wi = wx.getWindowInfo()
-      S.set(this, { w: wi.windowWidth, h: wi.windowHeight, bits: [], cfRaf: 0, cfLast: 0, fxRaf: 0 })
+      S.set(this, { w: wi.windowWidth, h: wi.windowHeight, cfRaf: 0, fxRaf: 0 })
       if (entering && Date.now() - entering.at < 1500) this.setData({ cover: entering.color, coverOut: false })
       entering = null
       this.claimToast()
@@ -80,6 +86,7 @@ Component({
     },
     ready() {
       if (this.data.cover) setTimeout(() => this.uncover(), SLIDE_MS + 60)
+      if (cfBits.length) void this.confetti() // 上一页撒的花还在落：本页接着画
     },
     detached() {
       const s = S.get(this)
@@ -97,6 +104,7 @@ Component({
   pageLifetimes: {
     show() {
       this.claimToast()
+      if (cfBits.length) void this.confetti() // switchTab / 返回露面时场上还有纸片：接着画
     },
     hide() {
       // 跳走后旧页遮罩等新页滑完再撤（本页已被盖住·撤了看不见），返回时就是干净的本页
@@ -217,26 +225,34 @@ Component({
           })
       })
     },
-    /** 撒花：从键矩形 k 喷出；big＝整屏大撒花（完课/好评）。 */
+    /** 撒花：从键矩形 k 喷出；big＝整屏大撒花（完课/好评）。纸片进全站共享的场，本页起渲染循环。 */
     async party(k: Rect, big = false, n?: number) {
       const s = await this.canvas()
-      if (!s || !s.cv || !s.x) return
-      party(s.bits, k, s, big, n)
+      if (!s) return
+      party(cfBits, k, s, big, n)
       if (big) burstHaptic()
-      if (s.cfRaf) return
-      s.cfLast = 0
-      const loop = (now: number) => {
-        const dt = s.cfLast ? Math.min(48, now - s.cfLast) : 16.67
-        s.cfLast = now
+      void this.confetti()
+    },
+    /** 本页的撒花渲染循环（已在跑就不重复）：每帧按真实时钟推进共享的纸片场并画到本页画布，场空即停。 */
+    async confetti() {
+      const s = await this.canvas()
+      if (!s || !s.cv || !s.x || s.cfRaf) return
+      const loop = () => {
+        const now = Date.now()
+        const dt = cfLast ? Math.min(48, now - cfLast) : 16.67
+        cfLast = now
         if (!this.data.busy) s.x!.clearRect(0, 0, s.w, s.h) // 转场帧自己整屏重画，撒花只叠在上面
-        for (const c of stepConfetti(s.bits, dt, s.h)) {
+        for (const c of stepConfetti(cfBits, dt, s.h)) {
           s.x!.globalAlpha = c.a
           s.x!.fillStyle = c.c
           s.x!.fillRect(c.x, c.y, c.w, c.h)
         }
         s.x!.globalAlpha = 1
-        s.cfRaf = s.bits.length ? s.cv!.requestAnimationFrame(loop) : 0
-        if (!s.cfRaf && !this.data.busy) s.x!.clearRect(0, 0, s.w, s.h)
+        s.cfRaf = cfBits.length ? s.cv!.requestAnimationFrame(loop) : 0
+        if (!s.cfRaf) {
+          cfLast = 0
+          if (!this.data.busy) s.x!.clearRect(0, 0, s.w, s.h)
+        }
       }
       s.cfRaf = s.cv.requestAnimationFrame(loop)
     },
