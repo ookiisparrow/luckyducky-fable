@@ -52,15 +52,14 @@ beforeEach(() => {
 })
 
 describe('订单列表：加载', () => {
-  it('大白话：进页按 query 里的 tab 拉该状态的第一页；卡片带状态染色、金额和单价拆掉 ¥ 符号', async () => {
+  it('大白话：进页按 query 里的 tab 拉该状态的第一页（首次带回售后）；卡片金额拆掉 ¥ 符号、带缩略图', async () => {
     const page = await mount({ tab: 'pending' })
     page.onShow()
     await flush()
     expect(callAppMock).toHaveBeenCalledWith('getMyOrders', { cursor: undefined, limit: 20, status: 'pending', withAfterSales: true }) // 性能批 #3：一次带回售后
     expect(page.data).toMatchObject({ loading: false, loadFailed: false, cursor: 'c1', hasMore: true, anim: '' })
-    expect(page.data.shown[0]).toMatchObject({ id: 'o1', tint: 'purple', amountNum: '128.00' })
-    expect(page.data.shown[0].items[0].priceNum).toBe('64.00')
-    expect(page.data.shown[1].tint).toBe('sage')
+    expect(page.data.shown[0]).toMatchObject({ id: 'o1', amountNum: '128.00', count: 2 })
+    expect(page.data.shown[0].thumbs.map((t: { lineId: string }) => t.lineId)).toEqual(['L1'])
   })
 
   it('大白话：query 里的 tab 不认识就停在「全部」', async () => {
@@ -164,6 +163,7 @@ describe('订单列表：切 tab 与手势', () => {
     page.onTab({ currentTarget: { dataset: { key: 'shipped' } } })
     expect(page.data).toMatchObject({ tabKey: 'shipped', shown: [], cursor: null, hasMore: false, anim: '' })
     await flush()
+    // 本文件的桩回包不带 afterSales（＝售后没拿到）：切页签照旧继续带（拿到过才进新鲜期·#442 见 order-list-tabs.test）
     expect(callAppMock).toHaveBeenCalledWith('getMyOrders', { cursor: undefined, limit: 20, status: 'shipped', withAfterSales: true })
     expect(page.data.anim).toBe('anim-next')
 
