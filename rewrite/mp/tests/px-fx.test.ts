@@ -1,6 +1,6 @@
-// v5 像素撒花/转场（lib/pxFx·设计稿 party / fxEnter / fxRainbow 原参数移植）。
+// v5 像素撒花/暗场转场（lib/pxFx·设计稿 party / fxEnter 原参数移植；彩虹转场 2026-10-01 随首页「购买」取消动效删掉）。
 import { describe, it, expect, vi } from 'vitest'
-import { distField, ditherRuns, rainbowRuns, party, stepConfetti, fxTransit, fxToast, PX, PAPER, RAINBOW_DUR, type Bit, type Runs } from '../lib/pxFx'
+import { distField, ditherRuns, party, stepConfetti, fxTransit, fxToast, PX, type Bit, type Runs } from '../lib/pxFx'
 
 const W = 80
 const H = 60
@@ -21,18 +21,9 @@ describe('像素转场', () => {
     expect(Object.values(cover).every((w) => w === F.cols * PX)).toBe(true)
   })
 
-  it('大白话：彩虹先只把那颗键点亮成紫色；跑完时整屏是纸色（新页底色），跳页时接得上', () => {
-    const lit = rainbowRuns(F, -50, {})
-    expect(Object.keys(lit)).toEqual(['#8A5AE0'])
-    const cover = rowCover(lit)
-    expect(Object.values(cover).every((w) => w === KEY.right - KEY.left)).toBe(true) // 同一行键内格并成一段
-    const end = rainbowRuns(F, RAINBOW_DUR * 3, { rev: 0 })
-    expect(Object.keys(end)).toEqual([PAPER])
-  })
-
   it('大白话：拿不到特效层（老页面/没挂 px-fx）直接跳页，转场不挡路', async () => {
     const go = vi.fn()
-    await fxTransit({ selectComponent: () => null, createSelectorQuery: () => ({}) as never }, 'rainbow', '.x', go)
+    await fxTransit({ selectComponent: () => null, createSelectorQuery: () => ({}) as never }, '.x', go)
     expect(go).toHaveBeenCalledTimes(1)
   })
 })

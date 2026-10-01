@@ -20,7 +20,7 @@ let pageOpts: Record<string, any> = {}
   pageOpts = o as Record<string, any>
 }
 
-const fx = { toast: vi.fn() }
+const fx = { toast: vi.fn(), transit: vi.fn(), party: vi.fn() }
 const tabBar = { setActive: vi.fn(), bump: vi.fn() }
 
 async function mount(withFx = true): Promise<Record<string, any>> {
@@ -41,6 +41,8 @@ const tapId = (id: string) => ({ currentTarget: { dataset: { id } } })
 
 beforeEach(() => {
   fx.toast.mockReset()
+  fx.transit.mockReset()
+  fx.party.mockReset()
   tabBar.setActive.mockReset()
   tabBar.bump.mockReset()
   addMock.mockReset()
@@ -130,9 +132,23 @@ describe('首页跳转', () => {
   })
 
   it('大白话：「购买」——货架还没有小棉鸭就进第一件商品详情占位（拍板 18），不再滚到商品区', async () => {
-    const page = await mount(false) // 没特效层：转场直接放行跳转
+    const page = await mount(false)
     page.data.products = [{ id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }]
     await page.toProductsTop()
     expect((globalThis as any).wx.navigateTo).toHaveBeenCalledWith({ url: '/pages/detail/detail?id=yarn' })
+  })
+
+  it('大白话：「购买」点了直接进详情，不放彩虹转场、不撒花（老板 2026-10-01 取消动效）——挂着特效层也一样', async () => {
+    const page = await mount() // 挂着特效层
+    // 量键位置真能量到：页面要是还调撒花/转场，就真会走到特效层（否则那两句断言空转）
+    page.createSelectorQuery = () => ({
+      select: () => ({ boundingClientRect: (cb: (r: unknown) => void) => ({ exec: () => cb({ left: 0, top: 0, right: 80, bottom: 44 }) }) }),
+    })
+    page.data.products = [{ id: 'yarn', name: '补充棉线', tag: '', priceLabel: '¥29', wasLabel: '', cover: '' }]
+    page.toProductsTop()
+    expect((globalThis as any).wx.navigateTo).toHaveBeenCalledWith({ url: '/pages/detail/detail?id=yarn' }) // 同步就跳，不等转场
+    for (let i = 0; i < 8; i++) await Promise.resolve()
+    expect(fx.transit).not.toHaveBeenCalled()
+    expect(fx.party).not.toHaveBeenCalled()
   })
 })
