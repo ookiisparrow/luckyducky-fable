@@ -320,6 +320,17 @@ describe('confirmReceive / 订单与售后读（黄金：属主隔离·游标分
     expect(as.list.length).toBe(1)
     expect(as.list[0]._id).toBe('a1')
   })
+
+  it('大白话：带订单号只回本人这一单的售后（订单详情叠加用·#443）；拿别人的单号也查不到别人的售后；不带照旧回全部', async () => {
+    control.seed('afterSales', [
+      { _id: 'a1', _openid: 'oME', orderId: 'm1', status: 'applied', appliedAt: 1 },
+      { _id: 'a2', _openid: 'oME', orderId: 'm2', status: 'refunded', appliedAt: 2 },
+      { _id: 'a3', _openid: 'oOTHER', orderId: 'm0', status: 'applied', appliedAt: 3 },
+    ])
+    expect((await call('getMyAfterSales', { orderId: 'm2' })).list.map((a: any) => a._id)).toEqual(['a2'])
+    expect((await call('getMyAfterSales', { orderId: 'm0' })).list).toEqual([])
+    expect((await call('getMyAfterSales')).list.map((a: any) => a._id)).toEqual(['a2', 'a1'])
+  })
 })
 
 describe('refundNoFor（微信退款单号契约·根因#12·2026-07-05 案 A 真根因）', () => {

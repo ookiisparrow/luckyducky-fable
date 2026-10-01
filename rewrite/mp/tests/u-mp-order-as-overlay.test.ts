@@ -64,7 +64,7 @@ describe('订单详情叠加售后', () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'applied'), AS('o9', 'L1', 'refunded')] })
     const page = await detail()
     await page.reload()
-    expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100 })
+    expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100, orderId: 'o1' }) // 只拉本单售后（#443）
     expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请已提交，审核后原路退回', tone: '' }, asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: { L1: '退款中' } })
     expect(page.data.vm.status).toBe('paid') // 订单状态本身不动
 

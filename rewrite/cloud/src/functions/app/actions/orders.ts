@@ -654,12 +654,13 @@ export const countMyOrders = withOpenId(async ({ db, OPENID }): Promise<CountMyO
   return ok({ counts: { pending, paid, shipped } })
 })
 
-/** 本人售后单（游标分页·按申请时间倒序）。 */
+/** 本人售后单（游标分页·按申请时间倒序）；带 orderId 只回本人该单的（订单详情叠加·#443·他人单号照样查不到）。 */
 export const getMyAfterSales = withOpenId(async ({ db, OPENID, event }) => {
+  const orderId = str((event as any)?.orderId, 200)
   const paged = await pageQuery(
     db,
     COLLECTIONS.afterSales,
-    { _openid: OPENID },
+    orderId ? { _openid: OPENID, orderId } : { _openid: OPENID },
     'appliedAt',
     event as any,
     100
