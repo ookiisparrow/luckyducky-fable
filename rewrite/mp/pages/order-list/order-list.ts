@@ -23,25 +23,20 @@ const TABS = [
   { key: 'done', label: '已完成' },
 ]
 
-// 状态→设计染色（coolist-* tint）：进行中紫、已完成鸭黄、关闭/退款弱灰。仅视觉，不改状态语义。
-const TINT: Record<string, string> = {
-  pending: 'purple',
-  paid: 'purple',
-  shipped: 'purple',
-  done: 'sage',
-  closed: 'muted',
-  refund_required: 'muted',
-  payment_exception: 'muted',
-}
 // 去 ¥ 前缀（label 已含半角 ¥·拆出纯数字供模板把货币符号做小号处理，展示不改口径）。
 const stripCny = (s: string): string => (s || '').replace(/^¥/, '')
 
-type LineRow = OrderLineVM & { priceNum: string }
-type OrderRow = Omit<OrderVM, 'items'> & {
-  items: LineRow[]
-  thumbs: OrderLineVM[]
-  tint: string
+// 列表行＝模板用得到的字段，别的不进 setData（Issue #442·开发者工具实测整表 22KB）：订单的收件人地址、物流单号、
+// 商品明细等列表不显示，发到渲染层既白占传输与比对，也不该把收件人送过去。完整订单留在 _all（倒计时/写评价从那里取）。
+// 模板加字段时这里同步加；order-list-tabs.test 锁了键集合。
+type OrderRow = {
+  id: string
+  status: string
   amountNum: string
+  amountTitle: string
+  count: number
+  reviewedAll: boolean
+  thumbs: { lineId: string; cover: string }[] // 缩略图最多 3 张（设计稿 thumbs.slice(0,3)）
   label: string
   labelColor: string // 状态名字色（已退款绿字），空＝默认
   led: { tone: string; halo: string }
@@ -51,7 +46,7 @@ type OrderRow = Omit<OrderVM, 'items'> & {
   expired: boolean // 待支付倒计时已归零：藏「去支付」、右上角写「已超时」（云端关单前）
 }
 
-// 视图装饰：附 tint + 拆分货币符号 + 卡片状态名/状态灯/右上角（设计稿 B1 oview·不动 mapOrders 单源）。
+// 视图装饰：拆分货币符号 + 卡片状态名/状态灯/右上角（设计稿 B1 oview·不动 mapOrders 单源）。
 // 有售后时叠加「售后中 / 已退款」（云端退款不改订单状态·lib/mapAftersales afterSaleOverlay），订单状态本身不动。
 function decorate(o: OrderVM, as: Record<string, OrderAfterSales>): OrderRow {
   const now = Date.now()
@@ -59,11 +54,13 @@ function decorate(o: OrderVM, as: Record<string, OrderAfterSales>): OrderRow {
   const ov = afterSaleOverlay(o.items, as[o.id])
   const sh = statusHead(o, now)
   return {
-    ...o,
-    tint: TINT[o.status] || 'purple',
+    id: o.id,
+    status: o.status,
     amountNum: stripCny(o.amountLabel),
-    items: o.items.map((l) => ({ ...l, priceNum: stripCny(l.priceLabel) })),
-    thumbs: o.items.slice(0, 3), // 缩略图最多 3 张（设计稿 thumbs.slice(0,3)）
+    amountTitle: o.amountTitle,
+    count: o.count,
+    reviewedAll: o.reviewedAll,
+    thumbs: o.items.slice(0, 3).map((l: OrderLineVM) => ({ lineId: l.lineId, cover: l.cover })),
     label: ov ? ov.head : sh.label,
     labelColor: '', // 状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）
     led: ov ? ov.led : sh.led,
@@ -95,6 +92,7 @@ Page({
   _busy: false, // 网络动作在途锁（确认收货/取消）：重复点直接丢
   _all: [] as OrderVM[], // 全量已拉列表（迁出 data·wxml 不绑定它）：仅供翻页去重与游标基准；shown 才是渲染源，翻页用路径键 shown[N] 增量追加（根因#7 规模·整表重发传输 O(n²)）
   _as: {} as Record<string, OrderAfterSales>, // 本人售后按订单汇总（reload 并行拉·翻页复用）：卡片叠加「售后中 / 已退款」
+  _asAt: 0, // 上次带回售后的时刻（utils/fresh·#442）：30s 内且没做过订单写操作，切页签/重拉不再重带同一份售后
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
@@ -126,14 +124,16 @@ Page({
     const now = Date.now()
     const patch: Record<string, unknown> = {}
     let zeroHit = false
-    this.data.shown.forEach((o, i) => {
-      if (o.status !== 'pending') return
-      const r = listRight(o as unknown as OrderVM, now)
-      if (r.cd !== o.cd) patch['shown[' + i + '].cd'] = r.cd
-      if (r.text !== o.right) patch['shown[' + i + '].right'] = r.text
+    // 完整订单在 _all（行已瘦身·见 OrderRow），与 shown 同序一一对应：算时间用 o，对比显示值用 row
+    this._all.forEach((o, i) => {
+      const row = this.data.shown[i]
+      if (!row || o.status !== 'pending') return
+      const r = listRight(o, now)
+      if (r.cd !== row.cd) patch['shown[' + i + '].cd'] = r.cd
+      if (r.text !== row.right) patch['shown[' + i + '].right'] = r.text
       // 只在「未超时→超时」那一下触发刷新：刷回来仍待支付时 decorate 按时间重算 expired 仍为真，不会再刷
-      if (!o.expired && payLeftMs(o as unknown as OrderVM, now) === 0) {
-        const sh = statusHead(o as unknown as OrderVM, now) // 过点：状态名换「已超时」、灯换灰圈（UI 审查 15 问 6a）
+      if (!row.expired && payLeftMs(o, now) === 0) {
+        const sh = statusHead(o, now) // 过点：状态名换「已超时」、灯换灰圈（UI 审查 15 问 6a）
         patch['shown[' + i + '].expired'] = true
         patch['shown[' + i + '].label'] = sh.label
         patch['shown[' + i + '].led'] = sh.led
@@ -161,13 +161,18 @@ Page({
     // 且并存「上拉加载更多」死提示与「暂无订单」假空态。
     const tab = this.data.tabKey // 捕获本次请求的 tab·回包落地前复核，防快速切 tab 慢回包乱序覆盖（同 player playToken）
     const seq = ++this._seq // 代次：同 tab 内被更晚 reload（如取消后 reload）取代的旧回包丢弃
-    this.setData({ loading: true })
+    if (!this.data.loading) this.setData({ loading: true }) // 切 tab 已在同一次 setData 里置好加载态：不再多发一次（#442）
     // 本人售后随订单一次往返带回（性能批 #3·withAfterSales·云端最近 100 条）：卡片靠它叠加「售后中 / 已退款」（云端退款不改订单状态）；
     // 云端售后读失败不带 afterSales 键＝不叠加（保留上次拉到的）。翻页复用不重拉。
+    // 新鲜期内不重带（#442）：售后在切页签之间不会变；申请/撤回售后等写操作在 api 层标脏 orders，回来必重带。
     // ponytail: 只取最近 100 条售后，超出不叠加；上限升级路径＝云端按订单汇总售后态。
-    const r = await getMyOrders(undefined, 20, tab, true)
+    const withAs = !isFresh('orders', this._asAt, FRESH_MS)
+    const r = await getMyOrders(undefined, 20, tab, withAs)
     if (seq !== this._seq || tab !== this.data.tabKey) return // 过期回包（被更晚 reload 取代）或已切 tab：丢弃·不覆盖较新结果
-    if (r.ok && Array.isArray(r.afterSales)) this._as = afterSalesByOrder(mapAfterSales(r.afterSales))
+    if (r.ok && Array.isArray(r.afterSales)) {
+      this._as = afterSalesByOrder(mapAfterSales(r.afterSales))
+      this._asAt = Date.now()
+    }
     // 失败≠空态（根因#14）：失败不覆盖已有列表（onShow 返回抖动一次不该把待支付订单清空）；
     // 一无所有时落 loadFailed 给重试，不与「暂无订单」混同。
     if (!r.ok) {
