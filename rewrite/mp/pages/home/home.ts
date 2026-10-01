@@ -177,12 +177,7 @@ Page({
     if (payload) {
       cart.add(payload) // 数据侧动作照做（用户确实点了「+」）：连点每下都算、即便已切走本 tab 也不该丢单
       trackEvent('add_to_cart', 'home', payload.id, { sku: payload.sku || '', price: payload.price }) // 电商漏斗埋点（R41）
-      if (this.hidden) return // 已切走 home tab：角标同步/toast 是本页 UI 副作用，用户已看不到，静默跳过
-      if (typeof this.getTabBar === 'function') {
-        const bar = this.getTabBar() as unknown as LdTabBar
-        bar.setActive('home') // 角标随动（同 cart.ts refresh() 范式·重数一遍，过期回包也要同步，否则乱序回来时角标少算）
-        if (!stale) bar.bump?.() // 设计稿：加购后购物车角标弹一下（scale 1→1.5→1·320ms·动画在 custom-tab-bar 里）
-      }
+      if (this.hidden) return // 已切走 home tab：toast 是本页 UI 副作用，用户已看不到，静默跳过
       if (stale) return
       // 多规格被默认加了首规格时把规格名亮给用户（px-fx 自绘提示不受原生 toast 字数限制）——静默替选规格必须可见
       fxToast(this, payload.sku ? '已加入购物车 · ' + payload.sku : '已加入购物车')

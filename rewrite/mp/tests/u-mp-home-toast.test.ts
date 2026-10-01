@@ -1,5 +1,5 @@
 // 首页轻提示与跳转（v5 第 3 轮）：「+」加购走 px-fx 设计稿提示（像素 ✓ + 0.94 出场），不再用页内自绘 ping；
-// 加购后让 tab bar 角标弹一下；tab bar 重复点「首页」平滑回顶；页脚店名进关于页；「购买」没有小棉鸭时占位第一件商品。
+// 加购不再碰 tab bar（v6 Lite 5a 不显示购物车件数·2026-10-01）；tab bar 重复点「首页」平滑回顶；页脚店名进关于页；「购买」没有小棉鸭时占位第一件商品。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BRAND_NAME } from '../lib/brand'
@@ -49,29 +49,21 @@ beforeEach(() => {
 })
 
 describe('首页「+」加购提示', () => {
-  it('大白话：加购成功——设计稿带 ✓ 的提示（多规格带上规格名），购物车角标弹一下', async () => {
+  it('大白话：加购成功——设计稿带 ✓ 的提示（多规格带上规格名）；不碰 tab bar（v6 Lite 不显示件数，没有角标可弹）', async () => {
     byIdMock.mockResolvedValue({ id: 'p1', name: '小鸭', price: 128, skus: [{ name: '鹅黄', price: 128 }, { name: '浅粉', price: 128 }] })
     const page = await mount()
     await page.onAddProduct(tapId('p1'))
     expect(addMock).toHaveBeenCalledTimes(1)
     expect(fx.toast).toHaveBeenCalledWith('已加入购物车 · 鹅黄', true, undefined, undefined)
-    expect(tabBar.bump).toHaveBeenCalledTimes(1)
+    expect(tabBar.setActive).not.toHaveBeenCalled()
+    expect(tabBar.bump).not.toHaveBeenCalled()
   })
 
-  it('大白话：商品信息取不到——不带 ✓ 的普通提示，角标不弹', async () => {
+  it('大白话：商品信息取不到——不带 ✓ 的普通提示', async () => {
     byIdMock.mockResolvedValue(null)
     const page = await mount()
     await page.onAddProduct(tapId('p1'))
     expect(fx.toast).toHaveBeenCalledWith('商品信息获取失败，请稍后重试', false, undefined, undefined)
-    expect(tabBar.bump).not.toHaveBeenCalled()
-  })
-
-  it('大白话：tab bar 还没有 bump 方法也不崩（老 tab bar 照常加购）', async () => {
-    byIdMock.mockResolvedValue({ id: 'p1', name: '小鸭', price: 128 })
-    const page = await mount()
-    page.getTabBar = () => ({ setActive: vi.fn() })
-    await page.onAddProduct(tapId('p1'))
-    expect(fx.toast).toHaveBeenCalledWith('已加入购物车', true, undefined, undefined)
   })
 })
 
