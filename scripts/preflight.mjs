@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
  * 部署前置体检（B9 preflight）：一条命令确认「可部署」。只读、不部署、不改任何东西。
- * 机器自动核：质量闸全绿 / 生产线（rewrite/cloud）钱链函数无未部署漂移 / console-assets 正册齐 /
- *            .deploy-manifest 在册。
+ * 机器自动核：质量闸全绿 / 生产线（rewrite/cloud）钱链函数无未部署漂移（对照部署账本＝最新 deploy-* tag）/
+ *            console-assets 正册齐。
  * 再打印机器够不到、须人工核的清单（console-assets drift / 验收单）。
  * 详见 docs/运维手册.md「出事与上线」（部署后 smoke）。
  */
 import { execSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { MONEY_CHAIN, detectDrift, hashFnDist } from './lib/deploy-drift.mjs'
+import { MONEY_CHAIN, detectDrift, hashFnDist, readDeployLedger } from './lib/deploy-drift.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const pass = []
@@ -34,7 +34,13 @@ run('生产线（rewrite/cloud）钱链函数无未部署漂移（根因#8）', 
   // 部署时逐字节一致（hashFnDist 单源，见 scripts/lib/deploy-drift.mjs 头注）。
   execSync('npm run build:rw-cloud', { cwd: ROOT, stdio: 'pipe' })
   const dist = join(ROOT, 'rewrite/cloud/dist')
-  const deployed = JSON.parse(readFileSync(join(ROOT, '.deploy-manifest.json'), 'utf8')).functions || {}
+  try {
+    execSync('git fetch -q origin --tags', { cwd: ROOT, stdio: 'pipe' }) // 账本 tag 由部署机推上来，先拉
+  } catch {
+    // 离线就按本地 tag 算
+  }
+  const { source, functions: deployed } = readDeployLedger(ROOT)
+  pass.push(`部署账本：${source}`)
   const cur = {}
   for (const fn of MONEY_CHAIN) {
     const h = hashFnDist(dist, fn)
@@ -54,9 +60,6 @@ run('console-assets 正册齐（6 件）', () => {
     '04-视频点播VOD.md',
   ])
     if (!existsSync(join(ROOT, 'console-assets', f))) throw new Error(`缺 ${f}`)
-})
-run('.deploy-manifest.json 在册', () => {
-  if (!existsSync(join(ROOT, '.deploy-manifest.json'))) throw new Error('缺')
 })
 
 console.log('\n===== 部署前置体检（preflight）=====')

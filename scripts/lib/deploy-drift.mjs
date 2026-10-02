@@ -12,10 +12,43 @@
 // tcb 部署一律 ask，不按函数名分级。（观察点：app 粗粒度代理若未来 action 数继续增长，误报率会不会高到
 // 影响可用性——暂未实测，留待用后视实际体验判断要不要再细化，待办见 GitHub Issues。）
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const MONEY_CHAIN = ['app', 'payCallback', 'refundCallback', 'closeExpiredOrders']
+
+// 部署账本（2026-10-02）：deploy-fns 每次真部署打一个注释 tag `deploy-<UTC时间>`，指向部署时的提交，
+// 正文是 JSON {sha, deployed, functions}。取最新那个即「线上各函数是哪版」。
+// 为什么不再提交 .deploy-manifest.json：部署后得记得 commit 并推 main，实际 9-29 后 5 批云端改动部署了都没记，
+// 账本悄悄过时；tag 由脚本在部署那一刻打出、只推 tag，不靠人记、也不碰 main。
+// 没有 tag 时退回仓根 .deploy-manifest.json 当种子（第一次打 tag 后它就不再被读，可删）。
+export function readDeployLedger(root) {
+  const out = execFileSync(
+    'git',
+    // 按名排：名字就是 UTC 时间戳、字典序＝时间序；creatordate 只到秒，同秒两 tag 分不出先后
+    ['for-each-ref', '--sort=-refname', '--count=1', '--format=%(refname:short)%00%(contents)', 'refs/tags/deploy-*'],
+    { cwd: root, encoding: 'utf8' },
+  )
+  if (out.trim()) {
+    const [source, body] = out.split('\0')
+    return { source, functions: JSON.parse(body).functions || {} }
+  }
+  const seed = join(root, '.deploy-manifest.json')
+  if (existsSync(seed)) return { source: '.deploy-manifest.json（种子）', functions: JSON.parse(readFileSync(seed, 'utf8')).functions || {} }
+  return { source: '（无记录）', functions: {} }
+}
+
+// 真部署前提：在 main、HEAD 就是 origin/main、工作区干净——否则发上线的不是 main 上那份代码
+// （运维手册：本仓常从 worktree/分支部署；本地落后 origin 几十个提交也常见）。返回拦截理由，空＝放行。
+export function deployBlockers({ branch, head, originMain, dirty }) {
+  const why = []
+  if (branch !== 'main') why.push(`当前在 ${branch || '游离 HEAD'}，只从 main 部署`)
+  if (head !== originMain)
+    why.push(`HEAD ${head.slice(0, 8)} ≠ origin/main ${originMain.slice(0, 8)}：先 git pull；本地独有提交先走 PR 合进 main`)
+  if (dirty) why.push(`工作区有未提交改动：\n${dirty}`)
+  return why
+}
 
 // 纯逻辑：给「当前产物 hash 表 cur」「已部署 hash 表 deployed」，返回 fns 中有漂移项的描述数组。
 // cur[fn] 缺＝产物没打出来（构建漏产）；deployed[fn] 缺＝该函数从未部署；两者不等＝代码领先部署。

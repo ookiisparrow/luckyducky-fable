@@ -1,0 +1,39 @@
+# 红区闸 CI 镜像：PR 改到红区文件（名单单源 scripts/lib/red-paths.mjs），须老板给 PR 打上 `red-ok` 标签才绿。
+# 为什么：本地 pre-commit 的红区闸（RED_ALLOWED）只在装了 git hook 的机器上生效，云端 agent 的 PR 拦不到。
+# 与 pre-commit 同一模式：闸拦「顺手误用」，拦不住刻意绕过（打标签＝可见行为）。
+# 局限：仓库无分支保护时红叉只是提示，不能阻止合并。
+name: 红区闸
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  red-zone:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2 # PR 的合并提交 + 它的第一父（目标分支）
+
+      - name: 安装 Node 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: 改了红区须有 red-ok 标签
+        env:
+          RED_OK: ${{ contains(github.event.pull_request.labels.*.name, 'red-ok') }}
+        run: |
+          git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed.txt"
+          node --input-type=module -e "
+            import { readFileSync } from 'node:fs'
+            import { isRedPath } from './scripts/lib/red-paths.mjs'
+            const hits = readFileSync(process.env.RUNNER_TEMP + '/changed.txt', 'utf8').split('\n').filter(Boolean).filter(isRedPath)
+            if (!hits.length) { console.log('未触及红区'); process.exit(0) }
+            console.log('本 PR 触及红区（钱链 / 运维配置 / 身份闸）：\n  ' + hits.join('\n  '))
+            if (process.env.RED_OK === 'true') { console.log('已有 red-ok 标签（老板授权），放行'); process.exit(0) }
+            console.log('::error::触及红区但没有 red-ok 标签。红区改动须老板审过后给 PR 打 red-ok 标签。')
+            process.exit(1)
+          "
