@@ -1,0 +1,7 @@
+{
+  "component": true,
+  "usingComponents": {
+    "px-i": "/components/px-i/px-i",
+    "px-anim": "/components/px-anim/px-anim"
+  }
+}

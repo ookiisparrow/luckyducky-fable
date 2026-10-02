@@ -1,0 +1,139 @@
+/* 求助面板。标题栏 4 条（.lp-help-nav/-sq/-title/-close）和加桌引导共用，在 player.wxss。 */
+.lp-help-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.5);
+}
+.lp-help-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  color: var(--v5-ink);
+  padding: 20px 16px max(28px, env(safe-area-inset-bottom)); /* 去拖动条后上边距 12→20（15 问 14a） */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.lp-help-card,
+.lp-help-seg {
+  height: 56px;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lp-help-seg {
+  margin-top: 8px;
+}
+.lp-help-card-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lp-help-card-title {
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-help-card-sub,
+.lp-help-seg-dur {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.k-flat .lp-help-seg-dur {
+  color: var(--v5-ink-3);
+}
+.lp-help-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.lp-help-group-title {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
+.lp-help-topic {
+  padding-top: 16px;
+}
+.lp-help-topic-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.lp-help-topic-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v5-ink-2);
+}
+
+/* 常见问题问答（CMS help.faq）：发丝线分隔的问答行；q/a 字号随容器（KB 条目另有 .lp-help-faq-item 下的同名规则） */
+.lp-help-faq {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--v5-hair);
+  font-size: 15px;
+}
+.lp-help-faq-q {
+  font-weight: 500;
+  color: var(--v5-ink);
+}
+.lp-help-faq-a {
+  margin-top: 8px;
+  line-height: 1.6;
+  color: var(--v5-ink-2);
+}
+
+/* 帮助视频/常见问题空态（loading/empty/fail 共用容器，文案由 wxml 分支） */
+.lp-help-empty {
+  padding: 24px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--v5-ink-2);
+}
+.lp-help-empty-key {
+  align-self: stretch;
+  color: var(--v5-ink);
+}
+
+/* 常见问题条目（R37·KB 精选 FAQ）：同 CMS 问答行版式 */
+.lp-help-faq-item {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--v5-hair);
+}
+.lp-help-faq-item .lp-help-faq-q {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--v5-ink);
+}
+.lp-help-faq-item .lp-help-faq-a {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--v5-ink-2);
+}
+
+/* 内嵌播放视图（原生 <video controls>，不做自绘控制条——辅助内容非主路径） */
+.lp-help-play {
+  flex: 1;
+  min-height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--v5-dark);
+}
+.lp-help-play-video {
+  width: 100%;
+  height: 100%;
+}

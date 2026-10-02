@@ -1,20 +1,17 @@
-// 播放页行为：切段四个落点的 canPrev/canNext 与下一段预热、媒体错误重试预算、返回键逐层收口、
+// 播放页行为：切段四个落点的 canPrev/canNext 与下一段预热、媒体错误重试预算、返回键（面板开着先交给 help-sheet）、
 // 松手 seek 的 play 时机、进页并行暖取期望段地址。取址缓存用真实 lib/playbackCache，只桩云端 getPlaybackUrl。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import playerWxml from '../pages/player/player.wxml?raw'
 
-const { urlMock, trackMock, courseMock, goBackMock, faqMock } = vi.hoisted(() => ({
+const { urlMock, trackMock, courseMock, goBackMock } = vi.hoisted(() => ({
   urlMock: vi.fn(),
   trackMock: vi.fn(),
   courseMock: vi.fn(),
   goBackMock: vi.fn(),
-  faqMock: vi.fn(),
 }))
-vi.mock('../api/learning', () => ({ trackEvent: trackMock, getHelpVideos: vi.fn(), getPublicFaq: faqMock, getPlaybackUrl: urlMock }))
+vi.mock('../api/learning', () => ({ trackEvent: trackMock, getPlaybackUrl: urlMock }))
 vi.mock('../lib/courses', () => ({ getCourseByIdDetailed: courseMock }))
-vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null) }))
-vi.mock('../utils/customerService', () => ({ openCustomerService: vi.fn() }))
 vi.mock('../lib/nav', () => ({ goBackOrHome: goBackMock }))
 
 let pageOpts: Record<string, any> = {}
@@ -49,6 +46,8 @@ async function mount(): Promise<Record<string, any>> {
     if (cb) cb()
   }
   page.measureSeekRect = vi.fn()
+  page.help = { open: vi.fn(), back: vi.fn(() => false) } // components/help-sheet 桩：默认面板关着
+  page.selectComponent = (sel: string) => (sel === '#help' ? page.help : null)
   page.courseId = 'c1'
   page.course = COURSE
   return page
@@ -76,7 +75,6 @@ beforeEach(() => {
   trackMock.mockReset()
   courseMock.mockReset().mockResolvedValue({ failed: false, course: COURSE })
   goBackMock.mockReset()
-  faqMock.mockReset()
 })
 
 describe('首帧前不黑屏：起播前转圈、iOS 拦自动播放换播放键（UI 审查 2026-09-29·老板选「只转圈不加字」）', () => {
@@ -212,18 +210,12 @@ describe('媒体错误自动重试预算', () => {
 })
 
 describe('返回键：求助面板逐层收口，关了才走二次确认', () => {
-  it('大白话：内嵌播放 → 回列表；列表（视频/问答）→ 菜单；菜单 → 关面板', async () => {
+  it('大白话：面板开着——返回交给面板逐层收口（逐层规则在 help-sheet.test），不提示、不退', async () => {
     const page = await mount()
-    Object.assign(page.data, { helpPanel: 'videos', helpSrc: 'https://h', helpSegName: '起针' })
+    page.help.back.mockReturnValue(true)
     page.onBack()
-    expect(page.data).toMatchObject({ helpPanel: 'videos', helpSrc: '', helpSegName: '' })
     page.onBack()
-    expect(page.data.helpPanel).toBe('menu')
-    page.data.helpPanel = 'faq'
-    page.onBack()
-    expect(page.data.helpPanel).toBe('menu')
-    page.onBack()
-    expect(page.data.helpPanel).toBe('')
+    expect(page.help.back).toHaveBeenCalledTimes(2)
     expect(goBackMock).not.toHaveBeenCalled()
     expect((globalThis as any).wx.showToast).not.toHaveBeenCalled()
   })
@@ -363,40 +355,6 @@ describe('续播秒：只在真把地址交给视频时才消费，失败留给�
     await page.playSegment(seg('s2'), 'seg')
     expect(page.data).toMatchObject({ state: 'playing', initialTime: 0 })
     expect(page._wantAt).toBe(42)
-  })
-})
-
-describe('求助面板常见问题：失败≠没有', () => {
-  it('大白话：后台没配 CMS 问答时拉知识库——失败落 fail、真没有落 empty、有就 ok', async () => {
-    const cases: Array<[unknown, string]> = [
-      [{ ok: false, error: 'CALL_FAIL' }, 'fail'],
-      [{ ok: true, items: [] }, 'empty'],
-      [{ ok: true, items: [{ key: 'k', title: '要多久？', content: '3 小时' }] }, 'ok'],
-    ]
-    for (const [r, state] of cases) {
-      faqMock.mockResolvedValueOnce(r)
-      const page = await mount()
-      page.data.help = { ...page.data.help, faq: [] }
-      page.onHelpFaq()
-      expect(page.data).toMatchObject({ helpPanel: 'faq', helpFaqState: 'loading' })
-      await flush()
-      expect(page.data.helpFaqState).toBe(state)
-    }
-  })
-
-  it('大白话：后台已配 CMS 问答——直接进问答层，不写加载中、不再拉知识库', async () => {
-    const page = await mount()
-    page.data.help = { ...page.data.help, faq: [{ q: '要多久？', a: '3 小时' }] }
-    const patches: Record<string, unknown>[] = []
-    const set = page.setData
-    page.setData = function (patch: Record<string, unknown>, cb?: () => void) {
-      patches.push(patch)
-      set.call(this, patch, cb)
-    }
-    page.onHelpFaq()
-    expect(page.data.helpPanel).toBe('faq')
-    expect(patches.some((p) => p.helpFaqState === 'loading')).toBe(false)
-    expect(faqMock).not.toHaveBeenCalled()
   })
 })
 
