@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MONEY_CHAIN, detectDrift, hashFnDist } from '../../scripts/lib/deploy-drift.mjs'
+import { execFileSync } from 'node:child_process'
+import { MONEY_CHAIN, deployBlockers, detectDrift, hashFnDist, readDeployLedger } from '../../scripts/lib/deploy-drift.mjs'
 
 // 守卫 preflight「钱链改了未部署→红」的核心逻辑（根因#8 已提交≠已部署）。
 // 2026-06-16 实测漂移：钱链 [LD_ALERT] 等改了 4 天没部署、preflight 只验结构没验部署时效漏过。
@@ -154,4 +155,61 @@ describe('deploy-drift hashFnDist：产物内容 hash（即 deploy-fns.mjs 部�
       rmSync(dist, { recursive: true, force: true })
     }
   })
+})
+
+// 部署账本＝最新 deploy-* 注释 tag（2026-10-02：清单文件 9-29 后没再提交、已不可信；改成只推 tag 不推 main）。
+describe('deploy-drift readDeployLedger：账本读最新 deploy-* tag', () => {
+  // pre-commit 里跑时 git 注入 GIT_DIR/GIT_INDEX_FILE 等，子进程 git 会无视 cwd 直接写本仓
+  // （2026-10-02 实测：临时仓的 commit/tag 落进了本仓）。本组期间剥掉，readDeployLedger 也继承这份 env。
+  const saved = {}
+  beforeAll(() => {
+    for (const k of Object.keys(process.env).filter((k) => k.startsWith('GIT_'))) {
+      saved[k] = process.env[k]
+      delete process.env[k]
+    }
+  })
+  afterAll(() => Object.assign(process.env, saved))
+
+  const git = (cwd, args, input) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, input, encoding: 'utf8' })
+  const withRepo = (fn) => {
+    const d = mkdtempSync(join(tmpdir(), 'deploy-ledger-test-'))
+    try {
+      git(d, ['init', '-q'])
+      git(d, ['commit', '-q', '--allow-empty', '-m', 'x'])
+      fn(d)
+    } finally {
+      rmSync(d, { recursive: true, force: true })
+    }
+  }
+  const tag = (d, name, functions) => git(d, ['tag', '-a', name, '-F', '-'], JSON.stringify({ functions }))
+  const seed = (d, functions) => writeFileSync(join(d, '.deploy-manifest.json'), JSON.stringify({ functions }))
+
+  it('无 tag 无种子 → 空账本（诚实的未知态＝全部待部署）', () =>
+    withRepo((d) => expect(readDeployLedger(d).functions).toEqual({})))
+  it('无 tag → 退回种子 .deploy-manifest.json', () =>
+    withRepo((d) => {
+      seed(d, { app: 'seed' })
+      expect(readDeployLedger(d).functions).toEqual({ app: 'seed' })
+    }))
+  it('有 tag → 取最新那个，压过种子', () =>
+    withRepo((d) => {
+      seed(d, { app: 'seed' })
+      tag(d, 'deploy-20261001T000000Z', { app: 'old' })
+      tag(d, 'deploy-20261002T000000Z', { app: 'new' })
+      const l = readDeployLedger(d)
+      expect(l.functions).toEqual({ app: 'new' })
+      expect(l.source).toBe('deploy-20261002T000000Z')
+    }))
+})
+
+describe('deploy-drift deployBlockers：只从「干净的、与 origin 同步的 main」部署', () => {
+  const ok = { branch: 'main', head: 'a'.repeat(40), originMain: 'a'.repeat(40), dirty: '' }
+  it('三条全满足 → 放行', () => expect(deployBlockers(ok)).toEqual([]))
+  it('不在 main → 拦', () => expect(deployBlockers({ ...ok, branch: 'feat/x' })[0]).toContain('feat/x'))
+  it('游离 HEAD → 拦', () => expect(deployBlockers({ ...ok, branch: '' })).toHaveLength(1))
+  it('落后或领先 origin/main → 拦', () =>
+    expect(deployBlockers({ ...ok, originMain: 'b'.repeat(40) })[0]).toContain('origin/main'))
+  it('工作区有改动 → 拦', () =>
+    expect(deployBlockers({ ...ok, dirty: ' M rewrite/cloud/src/x.ts' })[0]).toContain('x.ts'))
 })
