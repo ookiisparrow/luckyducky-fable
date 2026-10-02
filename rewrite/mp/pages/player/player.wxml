@@ -159,6 +159,8 @@
   </view>
 
   <help-sheet id="help" status-bar-height="{{statusBarHeight}}" bind:pausemain="onHelpPauseMain" />
+  <!-- 隐形容器拦侧滑/安卓返回键，交给 stepBack：面板逐层退 → 加桌引导 → 回课程目录（同 leave-sheet 的机制） -->
+  <page-container show="{{backArmed}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onBeforeLeave" />
 
   <!-- 首次退出加桌引导（仅一次·分端文案·15 问 11a）：同全站浅色半屏。知道了＝继续退出；关闭键/遮罩＝留在播放页。
        iOS 标题含子集外的「序」，走黑体；两步说明是说明句，一律黑体。 -->

@@ -1,4 +1,4 @@
-// 播放页行为：切段四个落点的 canPrev/canNext 与下一段预热、媒体错误重试预算、返回键（面板开着先交给 help-sheet）、
+// 播放页行为：切段四个落点的 canPrev/canNext 与下一段预热、媒体错误重试预算、返回（面板逐层 → 加桌引导 → 回课程目录·侧滑同规则）、
 // 松手 seek 的 play 时机、进页并行暖取期望段地址。取址缓存用真实 lib/playbackCache，只桩云端 getPlaybackUrl。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -209,36 +209,89 @@ describe('媒体错误自动重试预算', () => {
   })
 })
 
-describe('返回键：求助面板逐层收口，关了才走二次确认', () => {
-  it('大白话：面板开着——返回交给面板逐层收口（逐层规则在 help-sheet.test），不提示、不退', async () => {
+describe('返回：面板逐层收口 → 加桌引导 → 回课程目录（自绘返回键与侧滑同一规则）', () => {
+  const wxNav = () => {
+    const w = (globalThis as any).wx
+    w.navigateBack = vi.fn()
+    w.redirectTo = vi.fn()
+    return w
+  }
+  const stack = (prev?: { route: string; options: Record<string, string> }) => {
+    ;(globalThis as any).getCurrentPages = () => (prev ? [prev, {}] : [{}])
+  }
+
+  it('大白话：面板开着——返回交给面板逐层收口（逐层规则在 help-sheet.test），不离开', async () => {
+    const w = wxNav()
+    stack()
     const page = await mount()
     page.help.back.mockReturnValue(true)
     page.onBack()
     page.onBack()
     expect(page.help.back).toHaveBeenCalledTimes(2)
-    expect(goBackMock).not.toHaveBeenCalled()
-    expect((globalThis as any).wx.showToast).not.toHaveBeenCalled()
+    expect(w.redirectTo).not.toHaveBeenCalled()
+    expect(w.navigateBack).not.toHaveBeenCalled()
   })
 
-  it('大白话：面板关着——第一按提示、窗口内第二按首次弹加桌引导；引导里点退出才真退', async () => {
+  it('大白话：首次离开先弹加桌引导、不走；再按返回只关引导；点「知道了」才去目录', async () => {
+    const w = wxNav()
+    stack()
     const page = await mount()
-    page.onBack()
-    expect((globalThis as any).wx.showToast).toHaveBeenCalledTimes(1)
     page.onBack()
     expect(page.data.deskGuide).toBe(true)
-    expect(goBackMock).not.toHaveBeenCalled()
-    page.onDeskGuideExit()
+    page.onBack()
     expect(page.data.deskGuide).toBe(false)
-    expect(goBackMock).toHaveBeenCalledTimes(1)
+    expect(w.redirectTo).not.toHaveBeenCalled()
+    page.onBack() // 引导已记为展示过 → 直接去目录
+    expect(w.redirectTo).toHaveBeenCalledWith({ url: '/pages/catalog/catalog?courseId=c1' })
   })
 
-  it('大白话：引导已展示过——窗口内第二按直接真退', async () => {
+  it('大白话：上一页就是本课目录 → 退回去；从「我」页/分享链进来 → 用本课目录替换播放页', async () => {
     store['ld_player_desk_guide_shown'] = 1
+    let w = wxNav()
+    stack({ route: 'pages/catalog/catalog', options: { courseId: 'c1' } })
+    let page = await mount()
+    page.onBack()
+    expect(w.navigateBack).toHaveBeenCalledTimes(1)
+    expect(w.redirectTo).not.toHaveBeenCalled()
+
+    w = wxNav()
+    stack({ route: 'pages/me/me', options: {} })
+    page = await mount()
+    page.onDeskGuideExit()
+    expect(w.redirectTo).toHaveBeenCalledWith({ url: '/pages/catalog/catalog?courseId=c1' })
+    expect(w.navigateBack).not.toHaveBeenCalled()
+    expect(page.data.backArmed).toBe(false) // 先撤拦截容器再导航
+  })
+
+  it('大白话：侧滑被拦——留在本页（面板/引导）就隔一拍重新挂上拦截；要离开就不再挂', async () => {
+    vi.useFakeTimers()
+    try {
+      const w = wxNav()
+      stack()
+      const page = await mount()
+      page.help.back.mockReturnValueOnce(true)
+      page.onBeforeLeave()
+      expect(page.data.backArmed).toBe(false)
+      vi.advanceTimersByTime(100)
+      expect(page.data.backArmed).toBe(true)
+
+      store['ld_player_desk_guide_shown'] = 1
+      page.onBeforeLeave()
+      vi.advanceTimersByTime(100)
+      expect(page.data.backArmed).toBe(false)
+      expect(w.redirectTo).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：打开求助面板时主视频先暂停', async () => {
     const page = await mount()
-    page.onBack()
-    page.onBack()
-    expect(goBackMock).toHaveBeenCalledTimes(1)
-    expect(page.data.deskGuide).toBe(false)
+    const pause = vi.fn()
+    ;(globalThis as any).wx.createVideoContext = () => ({ pause })
+    page.onHelp()
+    expect(pause).toHaveBeenCalledTimes(1)
+    expect(page.help.open).toHaveBeenCalledTimes(1)
   })
 })
 

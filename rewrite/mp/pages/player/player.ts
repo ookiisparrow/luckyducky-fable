@@ -24,7 +24,6 @@ import { getCourseByIdDetailed } from '../../lib/courses'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
 import { goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint } from '../../lib/pxFx'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 拖动文案刷新节流（ms）：位置由 seek.wxs 渲染层 60fps 跟手，curClock/snapName 文案经 onSeekTick 回逻辑层
@@ -35,10 +34,10 @@ const SEEK_TEXT_THROTTLE_MS = 100
 const MARK_SNAP_SEC = 3
 // 拖动预览浮层防出屏边距（rpx）。seekEdgePx() 换成 px，经 seekCfg.edgePx 交给 seek.wxs previewLeft() 夹取。
 const PREVIEW_EDGE_RPX = 64
-// 返回二次确认窗口（ms·设计拍板）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
-// 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
-const BACK_CONFIRM_MS = 2500
-// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
+// 侧滑/安卓返回键被隐形 <page-container> 吃掉后，隔一拍再重新挂上（show 真→真不会重挂，同 utils/exitGuard）。
+// ponytail: 这一拍内再侧滑会直接离页；真机嫌敏感再调
+const REARM_MS = 100
+// 首次离开播放页弹一次加桌引导（storage key 收敛·CLAUDE.md）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
 // segcap 文案三态：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
@@ -89,6 +88,7 @@ Page({
     seekCfg: null as { rect: { left: number; width: number }; durSec: number; marks: { at: number; name: string }[]; edgePx: number; snapSec: number } | null, // 拖动几何下发 seek.wxs（change:cfg 观察者接收·rect 量轨后 + durSec 首个 timeupdate 后组装·换段 durSec 归 0 拦 WXS 不响应）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
+    backArmed: true, // 隐形 <page-container> 拦侧滑/安卓返回键，交给 stepBack 逐层处理
   },
   courseId: '',
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome/catalog 范式·onUnload 置真）
@@ -117,7 +117,6 @@ Page({
   _seekTextAt: 0, // 拖动文案 setData 节流时间戳（SEEK_TEXT_THROTTLE_MS·onSeekTick 用·位置 WXS 60fps、文案 ~10fps）
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
-  _backAt: 0, // 返回二次确认判定锚点（BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
   _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 成功把非空 src 交给挂载 video 才消费清零——取址失败/url 为空不消费，留给重试续到秒）
   _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
@@ -590,8 +589,10 @@ Page({
     wx.vibrateShort({ type })
   },
 
-  // 求助面板在 components/help-sheet：求助键打开它；它要在面板里放视频时，先暂停主视频防两段同时出声
+  // 求助面板在 components/help-sheet。打开时先停主视频（关面板不自动恢复，用户自己点画面）；
+  // 面板里放帮助视频时它也会发 pausemain，两条路都只是暂停，重复无害
   onHelp() {
+    this.onHelpPauseMain()
     this.selectComponent('#help').open()
   },
   onHelpPauseMain() {
@@ -600,18 +601,15 @@ Page({
   // 加桌引导遮罩锁背景滚动的占位 handler（catch:touchmove 绑定的方法必须真实存在，否则真机报错）
   noop() {},
 
-  // 返回（设计拍板：每次返回都出现二次确认；首次成功退出加桌引导）：求助面板开着时先让它逐层
-  // 收口（help-sheet.back()），不计入退出确认；面板已关时才走二次确认。
-  onBack() {
-    if (this.selectComponent('#help')?.back()) return
-    const now = Date.now()
-    if (now - this._backAt > BACK_CONFIRM_MS) {
-      this._backAt = now
-      fxHint(this, '再按一次返回退出')
-      return
+  // 返回一步（自绘返回键、侧滑、安卓返回键共用一套规则）：求助面板开着先逐层收口 → 加桌引导开着就关掉 →
+  // 首次离开弹一次加桌引导 → 都不是才离开去课程目录。返回 true＝这一步留在本页。
+  stepBack(): boolean {
+    if (this.selectComponent('#help')?.back()) return true
+    if (this.data.deskGuide) {
+      this.setData({ deskGuide: false })
+      return true
     }
-    // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同
-    // 已展示——宁可少弹一次不可卡住用户退出）。
+    // storage 读失败视同已展示：宁可少弹一次，不能卡住用户离开
     let shown = true
     try {
       shown = !!wx.getStorageSync(DESK_GUIDE_KEY)
@@ -631,17 +629,37 @@ Page({
         ios = false
       }
       this.setData({ deskGuide: true, deskGuideIOS: ios })
-      return
+      return true
     }
-    goBackOrHome()
+    this.leaveToCatalog()
+    return false
   },
-  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下（不退）；「知道了」＝继续原本的退出。
+  onBack() {
+    this.stepBack()
+  },
+  // <page-container bindbeforeleave>：侧滑/安卓返回键被拦下（容器已自行收起）。按同一规则走一步，留在本页就重新挂上
+  onBeforeLeave() {
+    this.setData({ backArmed: false })
+    if (this.stepBack()) setTimeout(() => !this.unloaded && this.setData({ backArmed: true }), REARM_MS)
+  },
+  // 离开播放页去本课目录：上一页就是本课目录就退回去，否则（从「我」页/分享链进来）用目录页替换本页。
+  // 先撤掉拦截容器再导航，免得它把这次程序返回也吃掉
+  leaveToCatalog() {
+    this.setData({ backArmed: false }, () => {
+      const pages = getCurrentPages()
+      const prev = pages[pages.length - 2] as { route?: string; options?: Record<string, string> } | undefined
+      if (prev && prev.route === 'pages/catalog/catalog' && prev.options?.courseId === this.courseId) wx.navigateBack()
+      else if (this.courseId) wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.courseId })
+      else goBackOrHome()
+    })
+  },
+  // 加桌引导：关闭键/遮罩＝关弹窗留下；「知道了」＝继续离开去目录。
   onDeskGuideStay() {
     this.setData({ deskGuide: false })
   },
   onDeskGuideExit() {
     this.setData({ deskGuide: false })
-    goBackOrHome()
+    this.leaveToCatalog()
   },
 
   onPrev() {
@@ -675,6 +693,7 @@ Page({
   // reportWatchAt 仍只在 state==='playing' 时真报，此处多复位几次（如首次 onLoad 紧随的 onShow）也是无害 no-op。
   onShow() {
     if (this.data.current) this.watchReported = false
+    if (!this.data.backArmed) this.setData({ backArmed: true }) // 从别页回来，侧滑照样受 stepBack 管
   },
   onHide() {
     this.reportWatchAt()
