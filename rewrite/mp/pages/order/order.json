@@ -6,6 +6,7 @@
     "px-i": "/components/px-i/px-i",
     "px-anim": "/components/px-anim/px-anim",
     "px-truck": "/components/px-truck/px-truck",
+    "px-ground": "/components/px-ground/px-ground",
     "px-fx": "/components/px-fx/px-fx"
   }
 }

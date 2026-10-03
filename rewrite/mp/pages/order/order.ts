@@ -47,6 +47,7 @@ Page({
     dock: false, // 已关闭不出底部栏
     amountNum: '',
     canAfterSale: false,
+    ended: false, // 整单退完＝订单结束（reload 里算）
     paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
     holding: false, // 按住取消进行中（驱动键内红色进度条）
     expired: false, // 待支付倒计时已归零（藏「去支付」·云端关单前先按超时展示）
@@ -158,6 +159,7 @@ Page({
     const asOf = this._asList ? afterSalesByOrder(this._asList)[vm.id] : undefined
     const ov = afterSaleOverlay(vm.items, asOf)
     const wd = this._asList ? withdrawableLines(this._asList, vm.id) : {}
+    const ended = ov?.head === '已退款' // 整单退完＝订单结束：不出售后入口、货车换静止纸箱、进度收在「退款」（老板 2026-10-03）
     this.setData({
       loading: false,
       loadFailed: false,
@@ -172,9 +174,10 @@ Page({
       help: HELP.has(s),
       dock: s !== 'closed',
       amountNum: (vm.amountLabel || '').replace(/[^0-9.]/g, ''),
-      canAfterSale: ['paid', 'shipped', 'done'].includes(s),
-      steps: orderSteps(s),
-      truckPose: POSE[s] || 'park',
+      canAfterSale: ['paid', 'shipped', 'done'].includes(s) && !ended,
+      ended,
+      steps: orderSteps(s, ended),
+      truckPose: ov || s === 'refund_required' ? 'reverse' : POSE[s] || 'park', // 退货/售后/退款：货车倒车开回
       cargo: s !== 'closed' ? Math.min(3, vm.items.length) : 0,
       expired: s === 'pending' && payLeftMs(vm, Date.now()) === 0,
     })

@@ -11,7 +11,8 @@ import type { Plot } from './pixelAnim'
 export const PX_ROWS = 17
 
 export interface GroundScene {
-  draw(t: number, P: Plot, cols: number): boolean
+  /** skip＝步进后、落笔前问一次：None 照常画；Still 交给 CSS 烘焙层且画面静止（这一帧不画，draw 回 false 摘出调度）；Moving 交给烘焙层但车在移动（不画，调度继续） */
+  draw(t: number, P: Plot, cols: number, skip?: () => TakeResult): boolean
 }
 
 const K = '#1c1c1a'
@@ -27,6 +28,17 @@ const GR = '#9A9A92'
 const RD = '#D9483B'
 const COIN_HI = '#FFF3C4'
 
+/** 地面虚线色（巡航烘焙层的 CSS 地面取它） */
+export const GROUND_COLOR = G
+/** 车速基准：巡航 1、慢速 0.4。地面每格滚动时长＝GROUND_CELL_MS / 车速（JS 的 gOff 与烘焙层 CSS 地面同源，改这里两边一起变） */
+export const TRUCK_SPEED = { cruise: 1, slow: 0.4 }
+export const GROUND_CELL_MS = 40
+export const groundCellMs = (slow: boolean): number => GROUND_CELL_MS / (slow ? TRUCK_SPEED.slow : TRUCK_SPEED.cruise)
+/** 烘焙层只烘了这一档格边长（px-truck 的 scale）；别的 scale 回落逐行渐变 */
+export const TRUCK_CELL = 4
+/** draw 的 skip 回答：画布交不交给烘焙层 */
+export const Take = { None: 0, Still: 1, Moving: 2 } as const
+export type TakeResult = (typeof Take)[keyof typeof Take]
 const ground = (P: Plot, cols: number, off = 0) => {
   const go = Math.floor(off)
   for (let g = 0; g < cols; g++) if ((((g + go) % 4) + 4) % 4 < 2) P(g, PX_ROWS - 1, G)
@@ -86,9 +98,61 @@ export interface Truck extends GroundScene {
   go(o?: { back?: boolean }): number
   restart(): number
   stamp(): number
+  /** 车是否可交给 CSS 烘焙层（无掉箱/盖章/卸货/定位针）：move=false 为巡航/慢速循环（home＝车左缘列）；move=true 为开走/屏外/开回（x＝车左缘列，浮点）。ground＝地面相位（格） */
+  view(): { move: boolean; slow: boolean; shown: number; mir: boolean; home: number; x: number; ground: number } | null
+  /** 烘焙层播了 ms 毫秒后交还给 JS：把地面相位补上，免得接手时地面虚线跳一下 */
+  syncIdle(ms: number): void
 }
 
-export function createTruck(opts: { cargo?: number; pose?: string; arrive?: number; pin?: boolean } = {}): Truck {
+// ── 巡航烘焙层（components/px-truck 的 CSS 精灵图）──
+// 烘焙画面的坐标系：宽 SPR_COLS 格，车左缘放在 SPR_ORG（倒车镜像放 SPR_ORG_MIR），尾气最远漂 ~18 格。
+export const SPR_COLS = 46
+export const SPR_ORG = 20
+export const SPR_ORG_MIR = 2
+/** 巡航 / 慢速各自的循环时长（ms）= 车身颠、车轮高光、尾灯三者节拍的最小公倍数；烘焙每 SPR_STEP ms 取一帧 */
+export const IDLE_PERIOD = { cruise: 360, slow: 600 }
+export const SPR_STEP = 30
+// 固定循环的尾气（取代随机冒）：发射时刻 ms、速度系数；存活 340ms < 周期，首尾相接
+const PUFF_AT = {
+  cruise: [
+    [0, 0.6],
+    [80, 0.75],
+    [170, 0.66],
+    [250, 0.85],
+    [310, 0.7],
+  ],
+  slow: [
+    [0, 0.65],
+    [170, 0.8],
+    [330, 0.7],
+    [470, 0.75],
+  ],
+}
+function idlePuffs(t: number, slow: boolean, mir: boolean, x: number): Puff[] {
+  const period = slow ? IDLE_PERIOD.slow : IDLE_PERIOD.cruise
+  const out: Puff[] = []
+  PUFF_AT[slow ? 'slow' : 'cruise'].forEach(([at, v], j) => {
+    const age = (((t - at) % period) + period) % period
+    if (age >= 340) return
+    const f = age / 16.67
+    out.push({ x: x + (mir ? COLS : -1) + (mir ? 1 : -1) * v * f, y: TOP + 7 + (-0.1 - 0.05 * (j % 3)) * f, vx: 0, vy: 0, life: age, max: 340, c: G })
+  })
+  return out
+}
+
+type TruckOpts = { cargo?: number; pose?: string; arrive?: number; pin?: boolean }
+/** 生产用的货车（公开接口不含 sprite）。 */
+export function createTruck(opts: TruckOpts = {}): Truck {
+  const { sprite, ...pub } = buildTruck(opts)
+  void sprite
+  return pub
+}
+/** 仅烘焙器用：多一个 sprite(t, P)——把车摆到精灵图坐标系里画一帧「纯时间」的巡航画面（无地面；尾气走固定循环），会改内部状态。 */
+export function createTruckForBake(opts: TruckOpts = {}): Truck & { sprite(t: number, P: Plot): void } {
+  return buildTruck(opts)
+}
+
+function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void } {
   const clamp = (n: number) => Math.max(0, Math.min(3, Math.round(Number(n) || 0)))
   let cargo = clamp(opts.cargo || 0)
   let shown = cargo
@@ -191,13 +255,13 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
     },
     cruise: (_dt, _f, hm) => {
       x = hm
-      spd = 1
+      spd = TRUCK_SPEED.cruise
       exhaust(0.2, 0.6)
       return true
     },
     slowc: (_dt, _f, hm) => {
       x = hm
-      spd = 0.4
+      spd = TRUCK_SPEED.slow
       exhaust(0.1, 0.6)
       return true
     },
@@ -237,7 +301,7 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
     },
     back: (_dt, _f, hm) => {
       const u = Math.min(1, t / 560)
-      x = Math.round(bx0 + (hm - bx0) * (1 - Math.pow(1 - u, 3)))
+      x = bx0 + (hm - bx0) * (1 - Math.pow(1 - u, 3))
       spd = 1 - u
       if (u >= 1) {
         x = hm
@@ -309,7 +373,7 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
     const dropping = stepDrops(dt, f, hm)
     t += dt
     const moving = MODES[mode](dt, f, hm)
-    gOff += (dt / 40) * spd * (mir ? -1 : 1)
+    gOff += (dt / GROUND_CELL_MS) * spd * (mir ? -1 : 1)
     const fx = stepEffects(dt, f)
     return dropping || moving || fx
   }
@@ -363,7 +427,7 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
       })
     )
     L(17, TOP + 2 + oy, W)
-    const fr = mv ? Math.floor(clock / (spd < 0.6 ? 150 : 70)) % 4 : 0
+    const fr = mv ? Math.floor(clock / (spd < 0.6 ? 150 : 90)) % 4 : 0
     const spot = WHEEL_SPOTS[mir ? 3 - fr : fr]
     for (const wx of WHEELS)
       for (let r = 0; r < 4; r++)
@@ -377,7 +441,7 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
       L(0, TOP + 5 + oy, LT)
     }
     const running = mode === 'start' || mode === 'drive' || mode === 'cruise' || mode === 'restart'
-    if (!brk && running && Math.floor(clock / 120) % 2) L(COLS, TOP + 5 + oy, LT)
+    if (!brk && running && Math.floor(clock / 180) % 2) L(COLS, TOP + 5 + oy, LT)
     if (mode === 'slowc') L(0, TOP + 6 + oy, RD)
   }
 
@@ -421,14 +485,14 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
     for (let r = 0; r < sz; r++) for (let q = 0; q < sz; q++) P(Math.round(X) + q, Yy + r, q === Math.floor(sz / 2) ? D : Y)
   }
 
-  const paint = (P: Plot) => {
+  const paint = (P: Plot, noGround = false) => {
     const mv = spd > 0.01
     const sh = mode === 'start' || mode === 'restart' ? Math.floor(t / 50) % 2 : 0
-    const bob = mv && Math.floor(clock / (spd < 0.6 ? 160 : 90)) % 2 ? 1 : 0
+    const bob = mv && Math.floor(clock / (spd < 0.6 ? 150 : 90)) % 2 ? 1 : 0
     const ox = Math.round(x || 0)
     const oy = sh || bob ? -1 : 0
     const L: Plot = (lx, ly, col) => P(mir ? ox + COLS - 1 - lx : ox + lx, ly, col)
-    ground(P, w, gOff)
+    if (!noGround) ground(P, w, gOff)
     if (mode === 'away') return
     if (mv && spd > 0.5) for (let k = 0; k < 3; k++) for (let j = 1; j <= 3 + k; j++) L(-1 - j - k * 2, TOP + 2 + k * 2, G)
     for (const p of puffs) P(Math.round(p.x), Math.round(p.y), p.c)
@@ -440,14 +504,33 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
   }
 
   return {
-    draw(tt, P, cols) {
+    draw(tt, P, cols, skip) {
       w = cols
       const dt = lastT < 0 ? 16 : Math.min(48, tt - lastT)
       lastT = tt
       clock += dt
       const live = step(dt)
+      const sk = skip ? skip() : 0
+      if (sk) return sk === Take.Moving && (live || spd > 0.01) // 交给烘焙层：这一帧不画，画布留空
       paint(P)
       return live || spd > 0.01
+    },
+    view() {
+      if (opts.pin || drops.length || st || fly || uq || groundBoxes.length) return null
+      const idle = mode === 'cruise' || mode === 'slowc'
+      if (!idle && mode !== 'drive' && mode !== 'gone' && mode !== 'back' && mode !== 'away') return null
+      return { move: !idle, slow: mode === 'slowc', shown, mir, home: home(), x: x || 0, ground: gOff }
+    },
+    syncIdle(ms) {
+      gOff += (ms / groundCellMs(mode === 'slowc')) * (mir ? -1 : 1)
+    },
+    sprite(tt, P) {
+      w = SPR_COLS
+      x = mir ? SPR_ORG_MIR : SPR_ORG
+      clock = tt
+      spd = mode === 'slowc' ? TRUCK_SPEED.slow : TRUCK_SPEED.cruise
+      puffs = idlePuffs(tt, mode === 'slowc', mir, x)
+      paint(P, true)
     },
     setCargo(n) {
       const k = clamp(n)
@@ -476,7 +559,7 @@ export function createTruck(opts: { cargo?: number; pose?: string; arrive?: numb
       shown = cargo
       if (mode === 'park') mode = 'start'
       else {
-        vx = mode === 'slowc' ? 0.4 : 1
+        vx = mode === 'slowc' ? TRUCK_SPEED.slow : TRUCK_SPEED.cruise
         mode = 'drive'
       }
       t = 0

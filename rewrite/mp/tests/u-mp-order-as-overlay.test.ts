@@ -65,7 +65,7 @@ describe('订单详情叠加售后', () => {
     const page = await detail()
     await page.reload()
     expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100, orderId: 'o1' }) // 只拉本单售后（#443）
-    expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请已提交，审核后原路退回', tone: '' }, asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: { L1: '退款中' } })
+    expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请已提交，审核后原路退回', tone: '' }, asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: { L1: '退款中' }, truckPose: 'reverse' }) // 售后中：货车倒车开回
     expect(page.data.vm.status).toBe('paid') // 订单状态本身不动
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'approved')] })
@@ -76,15 +76,16 @@ describe('订单详情叠加售后', () => {
     expect(wxMock.navigateTo.mock.calls[0][0].url).toBe('/pages/aftersales/aftersales')
   })
 
-  it('大白话：全部商品都退完——「已退款」灰圈墨字；只退了一件——状态照旧，只那件标「已退款」', async () => {
+  it('大白话：全部商品都退完——「已退款」灰圈墨字、订单到此结束：不出「申请售后」、货车换静止纸箱、进度收在「退款」；只退了一件——状态照旧，只那件标「已退款」，还能申请售后', async () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded'), AS('o1', 'L2', 'refunded')] })
     const page = await detail()
     await page.reload()
-    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, headColor: '' })
+    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, headColor: '', canAfterSale: false, ended: true })
+    expect(page.data.steps.map((x: { label: string }) => x.label)).toEqual(['下单', '付款', '退款']) // 进度收在「退款」
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded')] })
     await page.reload()
-    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, headColor: '', asHas: true, lineTags: { L1: '已退款' } })
+    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, headColor: '', asHas: true, lineTags: { L1: '已退款' }, canAfterSale: true, ended: false })
     expect(page.data.sub.text).toBe('商家会在 48 小时内发货')
   })
 
@@ -97,7 +98,7 @@ describe('订单详情叠加售后', () => {
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'rejected')] })
     await page.reload()
-    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: {} })
+    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: {}, truckPose: 'drive' }) // 被拒的售后不叠加状态，货车照常
   })
 
   it('大白话：详情里申请退款成功→跳售后页→返回详情（onShow）显示「售后中 · 退款申请中」；返回时售后刷新没拉到也照样显示', async () => {

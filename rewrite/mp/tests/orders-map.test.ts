@@ -161,6 +161,12 @@ describe('订单进度四步（v5 订单详情：下单 / 付款 / 发货 / 收�
     expect(view('whatever')).toBe('done,todo,todo,todo')
     expect(orderSteps('paid').map((x) => x.label)).toEqual(['下单', '付款', '发货', '收货'])
   })
+  it('大白话：整单退完——进度走到头、收在「退款」：走过的步全黑、没有紫色当前步、没有灰色未到步（老板 2026-10-03）', () => {
+    const ended = (s: string) => orderSteps(s, true).map((x) => x.label + ':' + x.state).join(',')
+    expect(ended('paid')).toBe('下单:done,付款:done,退款:done')
+    expect(ended('shipped')).toBe('下单:done,付款:done,发货:done,退款:done')
+    expect(ended('done')).toBe('下单:done,付款:done,发货:done,收货:done,退款:done')
+  })
 })
 
 describe('订单卡右上角 / 详情状态卡小字（v5 B1·B2）', () => {

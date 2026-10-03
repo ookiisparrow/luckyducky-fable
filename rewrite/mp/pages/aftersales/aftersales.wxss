@@ -135,7 +135,7 @@ page {
   gap: 12px;
   text-align: center;
 }
-/* 空态纸箱：与有记录时的小货车同一条地面线（.as-truck 同样 groundGap−36：本页多一行 24px 大标题） */
+/* 空态纸箱：与有记录时的纸箱同一条地面线（.as-truck 同样 groundGap−36：本页多一行 24px 大标题） */
 .as-box {
   align-self: stretch;
   padding-top: 0;
