@@ -69,18 +69,18 @@ const chunk = (type, data) => {
 }
 
 /** 帧 → 横条 PNG（RGBA·每格放大成 cell×cell 实心方块，不依赖 image-rendering）。返回 base64 data URI。 */
-export function encodeStrip(frames, cell) {
-  const w = frames.length * GRID * cell
-  const h = GRID * cell
+export function encodeStrip(frames, cell, cols = GRID, rows = GRID) {
+  const w = frames.length * cols * cell
+  const h = rows * cell
   const raw = Buffer.alloc((w * 4 + 1) * h)
   for (let y = 0; y < h; y++) {
     const row = y * (w * 4 + 1)
     raw[row] = 0
     const gy = Math.floor(y / cell)
     for (let x = 0; x < w; x++) {
-      const fi = Math.floor(x / (GRID * cell))
-      const gx = Math.floor((x % (GRID * cell)) / cell)
-      const col = frames[fi][gy * GRID + gx]
+      const fi = Math.floor(x / (cols * cell))
+      const gx = Math.floor((x % (cols * cell)) / cell)
+      const col = frames[fi][gy * cols + gx]
       if (!col) continue
       const o = row + 1 + x * 4
       raw[o] = parseInt(col.slice(1, 3), 16)

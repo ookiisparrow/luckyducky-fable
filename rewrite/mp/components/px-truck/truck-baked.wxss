@@ -1,0 +1,14 @@
+/* 本文件由 scripts/gen-truck-bake.mjs 生成，勿手改。货车巡航：精灵图按 steps 切帧；地面是另一层 4px 虚线（色取 currentColor，由组件内联传入 GROUND_COLOR），按格步进滚动。 */
+@keyframes tkb-c{from{background-position:0 0}to{background-position:-2208px 0}}
+@keyframes tkb-s{from{background-position:0 0}to{background-position:-3680px 0}}
+.tkb{position:absolute;left:0;top:0;will-change:transform;height:68px;width:184px;background-repeat:no-repeat;background-size:auto 68px;animation-iteration-count:infinite;animation-timing-function:steps(12)}
+.tkb-c{animation-name:tkb-c;animation-duration:360ms}
+.tkb-s{animation-name:tkb-s;animation-duration:600ms;animation-timing-function:steps(20)}
+@keyframes tkg-l{from{background-position:0 0}to{background-position:-16px 0}}
+@keyframes tkg-r{from{background-position:0 0}to{background-position:16px 0}}
+.tkg{position:absolute;left:0;right:0;top:64px;height:4px;background-image:linear-gradient(to right,currentColor 8px,transparent 8px);background-size:16px 4px;background-repeat:repeat-x;animation-timing-function:steps(4);animation-iteration-count:infinite}
+.tkg-m{animation:none}
+.tkg-c{animation-name:tkg-l;animation-duration:160ms}
+.tkg-s{animation-name:tkg-l;animation-duration:400ms}
+.tkg-cm{animation-name:tkg-r;animation-duration:160ms}
+.tkg-sm{animation-name:tkg-r;animation-duration:400ms}

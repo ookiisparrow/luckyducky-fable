@@ -1,3 +1,8 @@
 <view class="pxc" style="width:100%;height:{{scale * 17}}px">
   <view wx:for="{{pxRows}}" wx:key="t" wx:if="{{item.g}}" class="pxr" style="top:{{item.t}}px;height:{{pxCell}}px;background:{{item.g}}"></view>
+  <block wx:if="{{bk}}">
+    <view wx:if="{{bk.mv}}" class="tkg tkg-m" style="color:{{bk.gc}};background-position:{{bk.gp}}px 0"></view>
+    <view wx:else class="tkg tkg-{{bk.k}}" style="color:{{bk.gc}};animation-delay:-{{bk.gd}}ms"></view>
+    <view class="tkb tkb-{{bk.s}}" style="transform:translate3d({{bk.tx}}px,0,0);background-image:url({{bk.img}})"></view>
+  </block>
 </view>

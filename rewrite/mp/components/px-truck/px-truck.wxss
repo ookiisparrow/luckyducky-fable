@@ -1,3 +1,5 @@
+@import './truck-baked.wxss';
+
 :host {
   display: block;
   width: 100%;
