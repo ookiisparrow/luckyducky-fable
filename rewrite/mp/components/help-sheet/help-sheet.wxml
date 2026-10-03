@@ -1,0 +1,105 @@
+<!-- 求助面板：浅色半屏，menu / videos / faq 三层；高度按内容，超出面板内滚，面板内播放时撑到导航栏下。
+     遮罩与面板都 catch:touchmove 锁背景滚动；faq 拉取失败走 fail 态，不装成「没有」。 -->
+<view class="lp-help-mask sh-mask {{helpOut ? 'out' : ''}}" wx:if="{{helpPanel}}" bind:tap="onHelpClose" catch:touchmove="noop">
+  <view class="lp-help-sheet sh-panel {{helpOut ? 'out' : ''}}" style="{{helpSrc ? 'top: ' + (statusBarHeight + 44) + 'px' : 'max-height: calc(100% - ' + (statusBarHeight + 44) + 'px)'}}" catch:tap="noop" catch:touchmove="noop">
+    <view class="lp-help-nav">
+      <view wx:if="{{helpPanel === 'videos' && helpSrc}}" class="k k-sm k-light lp-help-sq hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideoBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
+      <view wx:elif="{{helpPanel !== 'menu'}}" class="k k-sm k-light lp-help-sq hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpBackMenu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
+      <text class="lp-help-title">{{helpPanel === 'menu' ? '需要帮忙吗？' : (helpPanel === 'faq' ? help.faqTitle : (helpSrc ? (helpSegName || '正在播放') : help.videosTitle))}}</text>
+      <view class="lp-help-close" bind:tap="onHelpClose">
+        <view class="k k-sm k-light lp-help-sq hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="times" /></view>
+      </view>
+    </view>
+
+    <!-- menu 层 -->
+    <block wx:if="{{helpPanel === 'menu'}}">
+      <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpVideos" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <view class="lp-help-card-tx">
+          <text class="t-sys lp-help-card-title">{{help.videosTitle}}</text>
+          <text class="t-sys lp-help-card-sub">小段讲解都在这里</text>
+        </view>
+        <px-i name="chev" tone="var(--v5-ink-2)" />
+      </view>
+      <view class="k k-light lp-help-card" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpFaq" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+        <view class="lp-help-card-tx">
+          <text class="t-sys lp-help-card-title">{{help.faqTitle}}</text>
+          <text class="t-sys lp-help-card-sub">高频问题都在这里</text>
+        </view>
+        <px-i name="chev" tone="var(--v5-ink-2)" />
+      </view>
+      <view class="k k-48 k-light" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{help.contactTitle}}</view>
+    </block>
+
+    <!-- videos 子层：helpSrc 非空切到内嵌播放视图，否则主题列表 -->
+    <block wx:if="{{helpPanel === 'videos'}}">
+      <view wx:if="{{helpSrc}}" class="lp-help-play">
+        <video class="lp-help-play-video" src="{{helpSrc}}" controls autoplay bind:error="onHelpVideoError"></video>
+      </view>
+      <scroll-view wx:else class="lp-help-scroll" scroll-y>
+        <block wx:if="{{helpVideosState === 'ok'}}">
+          <view class="t-sys lp-help-group-title">全部课程通用</view>
+          <view class="lp-help-topic" wx:for="{{helpTopics}}" wx:key="id">
+            <view class="t-sys lp-help-topic-title">{{item.title}}</view>
+            <view class="lp-help-topic-sub t-sys" wx:if="{{item.sub}}">{{item.sub}}</view>
+            <view
+              class="k lp-help-seg {{seg.url ? 'k-light' : 'k-flat k-off'}}"
+              hover-start-time="20" hover-class="{{seg.url ? 'k-light-down' : 'none'}}"
+              hover-stay-time="100"
+              wx:for="{{item.segments}}"
+              wx:for-item="seg"
+              wx:key="id"
+              data-url="{{seg.url}}"
+              data-name="{{seg.name}}"
+              bind:tap="onHelpPlaySegment"
+             data-k="{{seg.url ? 'light' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+              <view class="lp-help-card-tx">
+                <text class="t-sys lp-help-card-title">{{seg.name}}</text>
+                <text class="t-sys lp-help-seg-dur {{seg.url ? 'mono' : ''}}">{{seg.url ? seg.dur : '整理中'}}</text>
+              </view>
+              <px-i wx:if="{{seg.url}}" name="chev" tone="var(--v5-ink-2)" />
+            </view>
+          </view>
+        </block>
+        <view class="lp-help-empty" wx:elif="{{helpVideosState === 'loading'}}">
+          <px-anim name="loader" size="2" />
+          <text>正在加载…</text>
+        </view>
+        <view class="lp-help-empty" wx:else>
+          <text>帮助视频整理中，先问客服吧</text>
+          <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        </view>
+      </scroll-view>
+    </block>
+
+    <!-- faq 子层：CMS 自由文本（help.faq）非空则优先；否则 KB 精选单源（getPublicFaq）。
+         接口失败走 helpFaqState=fail，真没有才空态导流客服（根因#14·失败≠没有 FAQ）。 -->
+    <block wx:if="{{helpPanel === 'faq'}}">
+      <scroll-view wx:if="{{help.faq.length > 0}}" class="lp-help-scroll" scroll-y>
+        <view class="lp-help-faq" wx:for="{{help.faq}}" wx:key="q">
+          <view class="t-sys lp-help-faq-q">{{item.q}}</view>
+          <view class="lp-help-faq-a t-sys">{{item.a}}</view>
+        </view>
+      </scroll-view>
+      <scroll-view wx:else class="lp-help-scroll" scroll-y>
+        <block wx:if="{{helpFaqState === 'ok'}}">
+          <view class="lp-help-faq-item" wx:for="{{helpFaqList}}" wx:key="key">
+            <view class="t-sys lp-help-faq-q">{{item.title}}</view>
+            <view class="lp-help-faq-a t-sys">{{item.content}}</view>
+          </view>
+        </block>
+        <view class="lp-help-empty" wx:elif="{{helpFaqState === 'loading'}}">
+          <px-anim name="loader" size="2" />
+          <text>加载中…</text>
+        </view>
+        <view class="lp-help-empty" wx:elif="{{helpFaqState === 'fail'}}">
+          <text>常见问题暂时查不到，请稍后再试</text>
+          <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        </view>
+        <view class="lp-help-empty" wx:else>
+          <text>常见问题还在整理中，先问客服吧</text>
+          <view class="k k-48 k-light lp-help-empty-key" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onHelpContact" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
+        </view>
+      </scroll-view>
+    </block>
+  </view>
+</view>

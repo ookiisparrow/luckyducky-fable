@@ -1,20 +1,17 @@
-// 播放页行为：切段四个落点的 canPrev/canNext 与下一段预热、媒体错误重试预算、返回键逐层收口、
+// 播放页行为：切段四个落点的 canPrev/canNext 与下一段预热、媒体错误重试预算、返回（面板逐层 → 加桌引导 → 回课程目录·侧滑同规则）、
 // 松手 seek 的 play 时机、进页并行暖取期望段地址。取址缓存用真实 lib/playbackCache，只桩云端 getPlaybackUrl。
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import playerWxml from '../pages/player/player.wxml?raw'
 
-const { urlMock, trackMock, courseMock, goBackMock, faqMock } = vi.hoisted(() => ({
+const { urlMock, trackMock, courseMock, goBackMock } = vi.hoisted(() => ({
   urlMock: vi.fn(),
   trackMock: vi.fn(),
   courseMock: vi.fn(),
   goBackMock: vi.fn(),
-  faqMock: vi.fn(),
 }))
-vi.mock('../api/learning', () => ({ trackEvent: trackMock, getHelpVideos: vi.fn(), getPublicFaq: faqMock, getPlaybackUrl: urlMock }))
+vi.mock('../api/learning', () => ({ trackEvent: trackMock, getPlaybackUrl: urlMock }))
 vi.mock('../lib/courses', () => ({ getCourseByIdDetailed: courseMock }))
-vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null) }))
-vi.mock('../utils/customerService', () => ({ openCustomerService: vi.fn() }))
 vi.mock('../lib/nav', () => ({ goBackOrHome: goBackMock }))
 
 let pageOpts: Record<string, any> = {}
@@ -49,6 +46,8 @@ async function mount(): Promise<Record<string, any>> {
     if (cb) cb()
   }
   page.measureSeekRect = vi.fn()
+  page.help = { open: vi.fn(), back: vi.fn(() => false) } // components/help-sheet 桩：默认面板关着
+  page.selectComponent = (sel: string) => (sel === '#help' ? page.help : null)
   page.courseId = 'c1'
   page.course = COURSE
   return page
@@ -76,7 +75,6 @@ beforeEach(() => {
   trackMock.mockReset()
   courseMock.mockReset().mockResolvedValue({ failed: false, course: COURSE })
   goBackMock.mockReset()
-  faqMock.mockReset()
 })
 
 describe('首帧前不黑屏：起播前转圈、iOS 拦自动播放换播放键（UI 审查 2026-09-29·老板选「只转圈不加字」）', () => {
@@ -211,42 +209,89 @@ describe('媒体错误自动重试预算', () => {
   })
 })
 
-describe('返回键：求助面板逐层收口，关了才走二次确认', () => {
-  it('大白话：内嵌播放 → 回列表；列表（视频/问答）→ 菜单；菜单 → 关面板', async () => {
+describe('返回：面板逐层收口 → 加桌引导 → 回课程目录（自绘返回键与侧滑同一规则）', () => {
+  const wxNav = () => {
+    const w = (globalThis as any).wx
+    w.navigateBack = vi.fn()
+    w.redirectTo = vi.fn()
+    return w
+  }
+  const stack = (prev?: { route: string; options: Record<string, string> }) => {
+    ;(globalThis as any).getCurrentPages = () => (prev ? [prev, {}] : [{}])
+  }
+
+  it('大白话：面板开着——返回交给面板逐层收口（逐层规则在 help-sheet.test），不离开', async () => {
+    const w = wxNav()
+    stack()
     const page = await mount()
-    Object.assign(page.data, { helpPanel: 'videos', helpSrc: 'https://h', helpSegName: '起针' })
+    page.help.back.mockReturnValue(true)
     page.onBack()
-    expect(page.data).toMatchObject({ helpPanel: 'videos', helpSrc: '', helpSegName: '' })
     page.onBack()
-    expect(page.data.helpPanel).toBe('menu')
-    page.data.helpPanel = 'faq'
-    page.onBack()
-    expect(page.data.helpPanel).toBe('menu')
-    page.onBack()
-    expect(page.data.helpPanel).toBe('')
-    expect(goBackMock).not.toHaveBeenCalled()
-    expect((globalThis as any).wx.showToast).not.toHaveBeenCalled()
+    expect(page.help.back).toHaveBeenCalledTimes(2)
+    expect(w.redirectTo).not.toHaveBeenCalled()
+    expect(w.navigateBack).not.toHaveBeenCalled()
   })
 
-  it('大白话：面板关着——第一按提示、窗口内第二按首次弹加桌引导；引导里点退出才真退', async () => {
+  it('大白话：首次离开先弹加桌引导、不走；再按返回只关引导；点「知道了」才去目录', async () => {
+    const w = wxNav()
+    stack()
     const page = await mount()
-    page.onBack()
-    expect((globalThis as any).wx.showToast).toHaveBeenCalledTimes(1)
     page.onBack()
     expect(page.data.deskGuide).toBe(true)
-    expect(goBackMock).not.toHaveBeenCalled()
-    page.onDeskGuideExit()
+    page.onBack()
     expect(page.data.deskGuide).toBe(false)
-    expect(goBackMock).toHaveBeenCalledTimes(1)
+    expect(w.redirectTo).not.toHaveBeenCalled()
+    page.onBack() // 引导已记为展示过 → 直接去目录
+    expect(w.redirectTo).toHaveBeenCalledWith({ url: '/pages/catalog/catalog?courseId=c1' })
   })
 
-  it('大白话：引导已展示过——窗口内第二按直接真退', async () => {
+  it('大白话：上一页就是本课目录 → 退回去；从「我」页/分享链进来 → 用本课目录替换播放页', async () => {
     store['ld_player_desk_guide_shown'] = 1
+    let w = wxNav()
+    stack({ route: 'pages/catalog/catalog', options: { courseId: 'c1' } })
+    let page = await mount()
+    page.onBack()
+    expect(w.navigateBack).toHaveBeenCalledTimes(1)
+    expect(w.redirectTo).not.toHaveBeenCalled()
+
+    w = wxNav()
+    stack({ route: 'pages/me/me', options: {} })
+    page = await mount()
+    page.onDeskGuideExit()
+    expect(w.redirectTo).toHaveBeenCalledWith({ url: '/pages/catalog/catalog?courseId=c1' })
+    expect(w.navigateBack).not.toHaveBeenCalled()
+    expect(page.data.backArmed).toBe(false) // 先撤拦截容器再导航
+  })
+
+  it('大白话：侧滑被拦——留在本页（面板/引导）就隔一拍重新挂上拦截；要离开就不再挂', async () => {
+    vi.useFakeTimers()
+    try {
+      const w = wxNav()
+      stack()
+      const page = await mount()
+      page.help.back.mockReturnValueOnce(true)
+      page.onBeforeLeave()
+      expect(page.data.backArmed).toBe(false)
+      vi.advanceTimersByTime(100)
+      expect(page.data.backArmed).toBe(true)
+
+      store['ld_player_desk_guide_shown'] = 1
+      page.onBeforeLeave()
+      vi.advanceTimersByTime(100)
+      expect(page.data.backArmed).toBe(false)
+      expect(w.redirectTo).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：打开求助面板时主视频先暂停', async () => {
     const page = await mount()
-    page.onBack()
-    page.onBack()
-    expect(goBackMock).toHaveBeenCalledTimes(1)
-    expect(page.data.deskGuide).toBe(false)
+    const pause = vi.fn()
+    ;(globalThis as any).wx.createVideoContext = () => ({ pause })
+    page.onHelp()
+    expect(pause).toHaveBeenCalledTimes(1)
+    expect(page.help.open).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -363,40 +408,6 @@ describe('续播秒：只在真把地址交给视频时才消费，失败留给�
     await page.playSegment(seg('s2'), 'seg')
     expect(page.data).toMatchObject({ state: 'playing', initialTime: 0 })
     expect(page._wantAt).toBe(42)
-  })
-})
-
-describe('求助面板常见问题：失败≠没有', () => {
-  it('大白话：后台没配 CMS 问答时拉知识库——失败落 fail、真没有落 empty、有就 ok', async () => {
-    const cases: Array<[unknown, string]> = [
-      [{ ok: false, error: 'CALL_FAIL' }, 'fail'],
-      [{ ok: true, items: [] }, 'empty'],
-      [{ ok: true, items: [{ key: 'k', title: '要多久？', content: '3 小时' }] }, 'ok'],
-    ]
-    for (const [r, state] of cases) {
-      faqMock.mockResolvedValueOnce(r)
-      const page = await mount()
-      page.data.help = { ...page.data.help, faq: [] }
-      page.onHelpFaq()
-      expect(page.data).toMatchObject({ helpPanel: 'faq', helpFaqState: 'loading' })
-      await flush()
-      expect(page.data.helpFaqState).toBe(state)
-    }
-  })
-
-  it('大白话：后台已配 CMS 问答——直接进问答层，不写加载中、不再拉知识库', async () => {
-    const page = await mount()
-    page.data.help = { ...page.data.help, faq: [{ q: '要多久？', a: '3 小时' }] }
-    const patches: Record<string, unknown>[] = []
-    const set = page.setData
-    page.setData = function (patch: Record<string, unknown>, cb?: () => void) {
-      patches.push(patch)
-      set.call(this, patch, cb)
-    }
-    page.onHelpFaq()
-    expect(page.data.helpPanel).toBe('faq')
-    expect(patches.some((p) => p.helpFaqState === 'loading')).toBe(false)
-    expect(faqMock).not.toHaveBeenCalled()
   })
 })
 

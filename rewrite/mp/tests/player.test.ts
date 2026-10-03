@@ -5,7 +5,8 @@ import { flattenSegments, navSegment, createPlaybackCache, formatClock, clampSee
 // wxml/wxss 无运行时可挂载，绑定与样式只能静态断言；页面行为（续播秒消费、FAQ 失败分治、seek 几何）在
 // u-mp-player-page.test.ts 挂载真页面测，seek.wxs 在 player-seek-wxs.test.ts 真跑。
 import playerWxmlRaw from '../pages/player/player.wxml?raw'
-import playerWxssRaw from '../pages/player/player.wxss?raw'
+import helpWxmlRaw from '../components/help-sheet/help-sheet.wxml?raw'
+import helpWxssRaw from '../components/help-sheet/help-sheet.wxss?raw'
 
 const COURSE = {
   id: 'c1',
@@ -239,11 +240,11 @@ describe('nearestMark（磁吸判定·拖动·纯函数）', () => {
   })
 })
 
-describe('求助面板 FAQ 失败分治的界面出口（静态·拉取分治在 u-mp-player-page）', () => {
+describe('求助面板 FAQ 失败分治的界面出口（静态·拉取分治在 help-sheet.test）', () => {
   it('大白话：wxml 有 fail 态「暂时查不到」，与「还在整理中」空态分开', () => {
-    expect(playerWxmlRaw).toContain("helpFaqState === 'fail'")
-    expect(playerWxmlRaw).toContain('暂时查不到')
-    expect(playerWxmlRaw).toContain('还在整理中')
+    expect(helpWxmlRaw).toContain("helpFaqState === 'fail'")
+    expect(helpWxmlRaw).toContain('暂时查不到')
+    expect(helpWxmlRaw).toContain('还在整理中')
   })
 })
 
@@ -253,16 +254,16 @@ describe('播放页死状态（静态·data 不含 segments 在 u-mp-player-page
   })
 })
 
-describe('播放页样式（静态）', () => {
+describe('求助面板样式（静态）', () => {
   it('大白话：内容站常见问题的问答样式，不被知识库条目的同名 class 盖掉', () => {
-    expect(playerWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-q \{/)
-    expect(playerWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-a \{/)
-    expect(playerWxssRaw.match(/^\.lp-help-faq-q \{/gm)).toHaveLength(1)
-    expect(playerWxssRaw.match(/^\.lp-help-faq-a \{/gm)).toHaveLength(1)
-    const cmsQ = playerWxssRaw.slice(playerWxssRaw.indexOf('.lp-help-faq-q {'), playerWxssRaw.indexOf('.lp-help-faq-a {'))
+    expect(helpWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-q \{/)
+    expect(helpWxssRaw).toMatch(/\.lp-help-faq-item \.lp-help-faq-a \{/)
+    expect(helpWxssRaw.match(/^\.lp-help-faq-q \{/gm)).toHaveLength(1)
+    expect(helpWxssRaw.match(/^\.lp-help-faq-a \{/gm)).toHaveLength(1)
+    const cmsQ = helpWxssRaw.slice(helpWxssRaw.indexOf('.lp-help-faq-q {'), helpWxssRaw.indexOf('.lp-help-faq-a {'))
     expect(cmsQ).not.toMatch(/font-size/)
-    const cmsAStart = playerWxssRaw.indexOf('.lp-help-faq-a {')
-    const cmsA = playerWxssRaw.slice(cmsAStart, playerWxssRaw.indexOf('}', cmsAStart))
+    const cmsAStart = helpWxssRaw.indexOf('.lp-help-faq-a {')
+    const cmsA = helpWxssRaw.slice(cmsAStart, helpWxssRaw.indexOf('}', cmsAStart))
     expect(cmsA).not.toMatch(/font-size/)
   })
 })

@@ -7,7 +7,7 @@
 // onSeekTick（过秒·刷文案+震动·~10fps）/ onSeekCommit（松手·真 seek）。关键动作节点磁吸（nearestMark 双源在 seek.wxs·
 // 对拍钉死）+ 拖动阻尼震感配方单源 lib/haptics（shouldTick/VIBE_GAP_MS/DRAG_TICK_GAP_MS）。
 // 拖动浮层＝时间浮窗 + 命中节点时的鸭黄气泡。雪碧图缩略图（R36·决策§31）的素材已随 VOD 转码回写 vodSpriteVtt，mp 侧尚未接入。
-import { trackEvent, getHelpVideos, getPublicFaq } from '../../api/learning'
+import { trackEvent } from '../../api/learning'
 import {
   flattenSegments,
   navSegment,
@@ -21,14 +21,9 @@ import {
 // 共享同一实例才能预热·拆回页面私有即断跨页预热）。
 import { playbackCache as cache } from '../../lib/playbackCache'
 import { getCourseByIdDetailed } from '../../lib/courses'
-import { getPageContent } from '../../lib/pageContent'
-import { openCustomerService } from '../../utils/customerService'
 import { shouldTick, VIBE_GAP_MS, DRAG_TICK_GAP_MS } from '../../lib/haptics'
-import { mapHelpVideos, mapPublicFaq, type HelpTopicVM, type FaqItemVM } from '../../lib/mapLearning'
-import { mapCatalogPlayer, type CatalogPlayerVM } from '../../lib/mapPages'
 import { goBackOrHome } from '../../lib/nav'
 import { keyDown, keyUp } from '../../lib/keyFx'
-import { fxHint } from '../../lib/pxFx'
 
 const TIME_UPDATE_THROTTLE_MS = 250
 // 拖动文案刷新节流（ms）：位置由 seek.wxs 渲染层 60fps 跟手，curClock/snapName 文案经 onSeekTick 回逻辑层
@@ -39,10 +34,10 @@ const SEEK_TEXT_THROTTLE_MS = 100
 const MARK_SNAP_SEC = 3
 // 拖动预览浮层防出屏边距（rpx）。seekEdgePx() 换成 px，经 seekCfg.edgePx 交给 seek.wxs previewLeft() 夹取。
 const PREVIEW_EDGE_RPX = 64
-// 返回二次确认窗口（ms·设计拍板）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
-// 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
-const BACK_CONFIRM_MS = 2500
-// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
+// 侧滑/安卓返回键被隐形 <page-container> 吃掉后，隔一拍再重新挂上（show 真→真不会重挂，同 utils/exitGuard）。
+// ponytail: 这一拍内再侧滑会直接离页；真机嫌敏感再调
+const REARM_MS = 100
+// 首次离开播放页弹一次加桌引导（storage key 收敛·CLAUDE.md）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
 // segcap 文案三态：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
@@ -91,17 +86,9 @@ Page({
     snapName: '', // 拖动磁吸命中的关键动作节点名（seeking 时气泡文案·onSeekTick 刷新·未命中为空串）
     markVMs: [] as { at: number; pct: number; name: string }[], // 关键动作节点位图（onTimeUpdate 首次拿到非零 durSec 时算一次，durSec 已有值后不重算）
     seekCfg: null as { rect: { left: number; width: number }; durSec: number; marks: { at: number; name: string }[]; edgePx: number; snapSec: number } | null, // 拖动几何下发 seek.wxs（change:cfg 观察者接收·rect 量轨后 + durSec 首个 timeupdate 后组装·换段 durSec 归 0 拦 WXS 不响应）
-    helpOut: false, // 求助面板退场动画中（240ms 后真关·15 问 11a）
-    helpPanel: '' as '' | 'menu' | 'videos' | 'faq', // 求助面板状态机：''=关闭·不阻断主视频播放
-    helpVideosState: 'loading' as 'loading' | 'ok' | 'empty', // 帮助视频子层拉取态（每次进入 videos 层重拉·短时 URL 过期特性）
-    helpTopics: [] as HelpTopicVM[], // 帮助视频主题分组 VM（mapHelpVideos 产出）
-    helpFaqState: 'loading' as 'loading' | 'ok' | 'empty' | 'fail', // 常见问题子层拉取态（R37·KB 精选 FAQ·失败≠空）
-    helpFaqList: [] as FaqItemVM[], // 精选 FAQ VM（mapPublicFaq 产出）
-    helpSrc: '', // 内嵌播放地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
-    helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
-    help: mapCatalogPlayer(null).help as CatalogPlayerVM['help'], // 求助面板三卡标题 + FAQ（CMS·首帧默认·到达覆盖）
+    backArmed: true, // 隐形 <page-container> 拦侧滑/安卓返回键，交给 stepBack 逐层处理
   },
   courseId: '',
   unloaded: false, // 已退页标记（await 恢复点复核·同 welcome/catalog 范式·onUnload 置真）
@@ -112,10 +99,6 @@ Page({
   firstFrameScene: 'enter' as 'enter' | 'seg' | 'retry',
   firstFrameReported: false,
   playToken: 0, // 切段请求令牌（防乱序回包覆盖）
-  helpVideosToken: 0, // 帮助视频子层请求令牌（防乱序回包覆盖·同 playToken 惯用法：
-  // 粗粒度 helpPanel==='videos' 判定无法区分「快速退出再进入」产生的新旧两次请求，慢的旧请求
-  // 若晚于新请求回包，会用旧数据把刚渲染好的新列表覆盖回去——必须用自增代次精确丢弃过期回包）。
-  helpFaqToken: 0, // 常见问题子层请求令牌（R37·同 helpVideosToken 惯用法·防「快速退出再进入」乱序回包覆盖）
   // 本段自动重试预算（计数而非一次性布尔：布尔跨整段播放生命周期
   // 不复位——同段先后两次独立的瞬时网络抖动（中途正常播放数分钟）会让第二次直接跳过自动重试落硬失败态）。
   // 预算 2 次：容两次独立抖动自愈；预算耗尽即硬失败（保住「防不可恢复媒体无限重取死循环」——
@@ -134,7 +117,6 @@ Page({
   _seekTextAt: 0, // 拖动文案 setData 节流时间戳（SEEK_TEXT_THROTTLE_MS·onSeekTick 用·位置 WXS 60fps、文案 ~10fps）
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
-  _backAt: 0, // 返回二次确认判定锚点（BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
   _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 成功把非空 src 交给挂载 video 才消费清零——取址失败/url 为空不消费，留给重试续到秒）
   _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
@@ -145,7 +127,6 @@ Page({
     // 顶栏按状态栏高度下移（v5 顶栏在文档流里、右侧 104px 固定留白给胶囊，不再按胶囊 rect 动态避让浮层）
     this.setData({ statusBarHeight: Number(info.statusBarHeight) || 0 })
     this.courseId = String(query.courseId || '')
-    void this.loadPageContent() // 求助面板文案/FAQ·与取课/取址互不依赖，并行发起（不阻塞首帧·默认已在 data）
     this._wantSeg = String(query.segmentId || '')
     this._wantAt = Math.max(0, Math.floor(Number(query.t) || 0)) // 续播秒（catalog/me 带 &t=·仅对 _wantSeg 生效·脏值归 0）
     await this.initCourse()
@@ -608,112 +589,27 @@ Page({
     wx.vibrateShort({ type })
   },
 
-  // CMS 求助面板文案 + FAQ（fail-soft·拉不到维持默认）：三卡标题回退默认；FAQ 空 → 维持诚实空态导流客服
-  // （不造假 Q&A·见 wxml faq 子层）。await 恢复点复核 unloaded。
-  async loadPageContent() {
-    const content = await getPageContent('catalogPlayer')
-    if (this.unloaded) return
-    this.setData({ help: mapCatalogPlayer(content).help })
-  },
-
-  // 求助面板入口：占常规播放键位的求助钮不直连客服，而是拉起底部 sheet——
-  // 客服真调用在面板卡1（onHelpContact）；播放不阻断
-  // （唯一暂停例外＝内嵌视频播放，见 onHelpPlaySegment）。
+  // 求助面板在 components/help-sheet。打开时先停主视频（关面板不自动恢复，用户自己点画面）；
+  // 面板里放帮助视频时它也会发 pausemain，两条路都只是暂停，重复无害
   onHelp() {
-    this.setData({ helpPanel: 'menu' })
+    this.onHelpPauseMain()
+    this.selectComponent('#help').open()
   },
-  // 卡1 联系客服。
-  onHelpContact() {
-    openCustomerService()
-  },
-  // 卡2 帮助视频：进子层 + 每次重拉（短时 URL 过期特性·辅助内容低频不缓存，与主播放地址缓存策略不同）。
-  onHelpVideos() {
-    this.setData({ helpPanel: 'videos', helpVideosState: 'loading', helpTopics: [] })
-    void this.loadHelpVideos()
-  },
-  async loadHelpVideos() {
-    const token = ++this.helpVideosToken // 本次进入子层的请求令牌·await 后复核，防慢回旧请求覆盖新请求
-    const r = await getHelpVideos()
-    // 令牌不匹配＝更晚的一次 onHelpVideos 已接管（含「退出再重进 videos 层」这种 helpPanel 状态不变但
-    // 请求已过期的场景，光判 helpPanel==='videos' 拦不住）：丢弃本次回包，不覆盖新数据。
-    if (token !== this.helpVideosToken) return
-    if (this.data.helpPanel !== 'videos') return // 用户已退出 videos 层（返回/关面板）：同样丢弃，不写脏 state
-    const topics = mapHelpVideos(r)
-    this.setData(topics.length ? { helpVideosState: 'ok', helpTopics: topics } : { helpVideosState: 'empty', helpTopics: [] })
-  },
-  // 卡3 常见问题（R37b：云端 FAQ 单源=客服知识库 KB，getPublicFaq 只回精选条目）：进子层 + 每次重拉
-  // （同 onHelpVideos 口径·辅助内容低频不缓存）。!ok / mapPublicFaq=null 落 fail，不装成「还在整理」；
-  // 真没有才空态导流客服。help.faq（CMS 自由文本）非空时该子层直接渲染 CMS，不必再打 KB 请求。
-  onHelpFaq() {
-    if ((this.data.help.faq || []).length > 0) {
-      this.setData({ helpPanel: 'faq' }) // CMS 自由文本已覆盖，wxml 走 help.faq 分支，跳过 KB 拉取
-      return
-    }
-    this.setData({ helpPanel: 'faq', helpFaqState: 'loading', helpFaqList: [] })
-    void this.loadHelpFaq()
-  },
-  async loadHelpFaq() {
-    const token = ++this.helpFaqToken // 本次进入子层的请求令牌·await 后复核，防慢回旧请求覆盖新请求
-    const r = await getPublicFaq()
-    if (token !== this.helpFaqToken) return // 更晚的一次 onHelpFaq 已接管，丢弃本次回包
-    if (this.data.helpPanel !== 'faq') return // 用户已退出 faq 层：同样丢弃，不写脏 state
-    if (!r.ok) {
-      this.setData({ helpFaqState: 'fail', helpFaqList: [] })
-      return
-    }
-    const list = mapPublicFaq(r) || []
-    this.setData(list.length ? { helpFaqState: 'ok', helpFaqList: list } : { helpFaqState: 'empty', helpFaqList: [] })
-  },
-  // 子层顶部返回箭头：回 menu（videos/faq 共用同一个方法）。
-  onHelpBackMenu() {
-    this.setData({ helpPanel: 'menu' })
-  },
-  // 关面板：scrim 点击 / grab 区关闭钮共用——helpSrc 一并清（卸载内嵌 <video>，防后台仍在解码占用流量）。
-  // 点遮罩/关闭键：先播退场（面板下滑 240ms·同全站半屏 closeSheet），再真关。返回键逐层收口不走这里（onBack 直接改状态）。
-  onHelpClose() {
-    if (this.data.helpOut) return
-    this.setData({ helpOut: true })
-    setTimeout(() => {
-      if (this.unloaded) return
-      this.setData({ helpOut: false, helpPanel: '', helpSrc: '', helpSegName: '' })
-    }, 240)
-  },
-  // 点可播段（url 非 null）→ 同一 sheet 内切到内嵌播放视图；先暂停主视频防双声（简化决策：
-  // 辅助内容用原生 <video controls>，不做自绘控制条，见 wxml 头注）。
-  onHelpPlaySegment(e: WechatMiniprogram.TouchEvent) {
-    const ds = e.currentTarget.dataset as { url?: string; name?: string }
-    const url = String(ds.url || '')
-    if (!url) return // 无地址段（url:null）置灰不可点——理论到不了这里，双保险
+  onHelpPauseMain() {
     wx.createVideoContext('lp-video', this).pause()
-    this.setData({ helpSrc: url, helpSegName: String(ds.name || '') })
   },
-  // 内嵌播放视图返回箭头：回列表（helpPanel 保持 'videos'）——不自动恢复主视频，用户自己点单击画面。
-  onHelpVideoBack() {
-    this.setData({ helpSrc: '', helpSegName: '' })
-  },
-  onHelpVideoError() {
-    fxHint(this, '这段视频暂时播放不了')
-  },
-  // 求助面板遮罩/壳体锁背景滚动的占位 handler（catch:touchmove 绑定必须真实存在，抄写错题本 E2：
-  // wxml 事件绑定与 ts 方法定义是一对，抄一半＝真机报错）。
+  // 加桌引导遮罩锁背景滚动的占位 handler（catch:touchmove 绑定的方法必须真实存在，否则真机报错）
   noop() {},
 
-  // 返回（设计拍板：每次返回都出现二次确认；首次成功退出加桌引导）：求助面板开着时先逐层
-  // 收口（四级链：内嵌播放→videos/faq 列表→menu→关面板），不计入退出确认；面板已关时才走二次确认。
-  onBack() {
-    const { helpSrc, helpPanel } = this.data
-    if (helpSrc || helpPanel) {
-      this.setData(helpSrc ? { helpSrc: '', helpSegName: '' } : { helpPanel: helpPanel === 'menu' ? '' : 'menu' })
-      return
+  // 返回一步（自绘返回键、侧滑、安卓返回键共用一套规则）：求助面板开着先逐层收口 → 加桌引导开着就关掉 →
+  // 首次离开弹一次加桌引导 → 都不是才离开去课程目录。返回 true＝这一步留在本页。
+  stepBack(): boolean {
+    if (this.selectComponent('#help')?.back()) return true
+    if (this.data.deskGuide) {
+      this.setData({ deskGuide: false })
+      return true
     }
-    const now = Date.now()
-    if (now - this._backAt > BACK_CONFIRM_MS) {
-      this._backAt = now
-      fxHint(this, '再按一次返回退出')
-      return
-    }
-    // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同
-    // 已展示——宁可少弹一次不可卡住用户退出）。
+    // storage 读失败视同已展示：宁可少弹一次，不能卡住用户离开
     let shown = true
     try {
       shown = !!wx.getStorageSync(DESK_GUIDE_KEY)
@@ -733,17 +629,37 @@ Page({
         ios = false
       }
       this.setData({ deskGuide: true, deskGuideIOS: ios })
-      return
+      return true
     }
-    goBackOrHome()
+    this.leaveToCatalog()
+    return false
   },
-  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下（不退）；「知道了」＝继续原本的退出。
+  onBack() {
+    this.stepBack()
+  },
+  // <page-container bindbeforeleave>：侧滑/安卓返回键被拦下（容器已自行收起）。按同一规则走一步，留在本页就重新挂上
+  onBeforeLeave() {
+    this.setData({ backArmed: false })
+    if (this.stepBack()) setTimeout(() => !this.unloaded && this.setData({ backArmed: true }), REARM_MS)
+  },
+  // 离开播放页去本课目录：上一页就是本课目录就退回去，否则（从「我」页/分享链进来）用目录页替换本页。
+  // 先撤掉拦截容器再导航，免得它把这次程序返回也吃掉
+  leaveToCatalog() {
+    this.setData({ backArmed: false }, () => {
+      const pages = getCurrentPages()
+      const prev = pages[pages.length - 2] as { route?: string; options?: Record<string, string> } | undefined
+      if (prev && prev.route === 'pages/catalog/catalog' && prev.options?.courseId === this.courseId) wx.navigateBack()
+      else if (this.courseId) wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.courseId })
+      else goBackOrHome()
+    })
+  },
+  // 加桌引导：关闭键/遮罩＝关弹窗留下；「知道了」＝继续离开去目录。
   onDeskGuideStay() {
     this.setData({ deskGuide: false })
   },
   onDeskGuideExit() {
     this.setData({ deskGuide: false })
-    goBackOrHome()
+    this.leaveToCatalog()
   },
 
   onPrev() {
@@ -777,6 +693,7 @@ Page({
   // reportWatchAt 仍只在 state==='playing' 时真报，此处多复位几次（如首次 onLoad 紧随的 onShow）也是无害 no-op。
   onShow() {
     if (this.data.current) this.watchReported = false
+    if (!this.data.backArmed) this.setData({ backArmed: true }) // 从别页回来，侧滑照样受 stepBack 管
   },
   onHide() {
     this.reportWatchAt()

@@ -15,6 +15,7 @@ import reviewsWxss from '../pages/reviews/reviews.wxss?raw'
 import aftersalesWxml from '../pages/aftersales/aftersales.wxml?raw'
 import logisticsWxml from '../pages/logistics/logistics.wxml?raw'
 import playerWxml from '../pages/player/player.wxml?raw'
+import helpWxml from '../components/help-sheet/help-sheet.wxml?raw'
 import myCoursesWxml from '../pages/my-courses/my-courses.wxml?raw'
 import meWxml from '../pages/me/me.wxml?raw'
 import loginWxml from '../components/login-sheet/login-sheet.wxml?raw'
@@ -133,24 +134,10 @@ describe('10a 播放页控制行：上一段/下一段是像素图标（v6 换�
 })
 
 describe('11a 求助面板与加桌引导：全站浅色半屏', () => {
-  it('大白话：求助面板高度按内容（播放子页才撑满）、有进退场动画；点遮罩/关闭先播退场 240ms 再关', async () => {
-    const w = live(playerWxml)
+  it('大白话：求助面板高度按内容（播放子页才撑满）、有进退场动画（点遮罩/关闭先播退场 240ms 的行为在 help-sheet.test）', () => {
+    const w = live(helpWxml)
     expect(w).toContain(`class="lp-help-sheet sh-panel {{helpOut ? 'out' : ''}}" style="{{helpSrc ? 'top: ' + (statusBarHeight + 44) + 'px' : 'max-height: calc(100% - ' + (statusBarHeight + 44) + 'px)'}}"`)
-    vi.resetModules()
-    ;(globalThis as any).wx = { getWindowInfo: () => ({ statusBarHeight: 47, screenHeight: 844, windowWidth: 390, windowHeight: 800 }) }
-    await import('../pages/player/player')
-    const p: Record<string, any> = Object.create(pageOpts)
-    p.data = { ...pageOpts.data, helpPanel: 'menu' }
-    p.setData = (x: Record<string, unknown>) => Object.assign(p.data, x)
-    vi.useFakeTimers()
-    try {
-      p.onHelpClose()
-      expect(p.data).toMatchObject({ helpOut: true, helpPanel: 'menu' })
-      vi.advanceTimersByTime(240)
-      expect(p.data).toMatchObject({ helpOut: false, helpPanel: '' })
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(live(playerWxml)).toContain('<help-sheet id="help" status-bar-height="{{statusBarHeight}}" bind:pausemain="onHelpPauseMain" />')
   })
   it('大白话：加桌引导——标题 + 关闭键 + 两步 +「知道了」；点遮罩/关闭＝留下，知道了＝继续退出', () => {
     const w = live(playerWxml)
