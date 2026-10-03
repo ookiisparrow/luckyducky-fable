@@ -102,12 +102,12 @@ describe('7b 评价页小字统一 13px', () => {
   })
 })
 
-describe('8b 售后页：货车先画，只有列表用骨架', () => {
-  it('大白话：加载中就画空车停好（不倒车入场），数据回来只加货；骨架与真实行同结构、不闪', () => {
+describe('8b 售后页：静止纸箱先画，只有列表用骨架', () => {
+  it('大白话：加载中就画好静止纸箱（没有货车），有记录时一直是同一只箱；骨架与真实行同结构、不闪', () => {
     const w = live(aftersalesWxml)
     expect(w).toContain(`<view wx:if="{{!loadFailed && (loading || list.length)}}" class="as-truck"`)
-    expect(w).toContain(`<px-truck pose="park" cargo="{{list.length ? 1 : 0}}" />`)
-    expect(w).not.toMatch(/arrive=|as-skel/)
+    expect(w).toContain(`<px-ground kind="box" />`)
+    expect(w).not.toMatch(/px-truck|arrive=|as-skel/)
     const sk = w.match(/<view wx:if="\{\{loading && !list.length\}\}" class="as-list">([\s\S]*?)\n {2}<\/view>/)?.[1] ?? ''
     expect(sk).toMatch(/class="as-row"[\s\S]*class="as-ico"[\s\S]*class="as-mid"/)
     expect(sk).not.toMatch(/(^|\s|")skel(\s|")/)

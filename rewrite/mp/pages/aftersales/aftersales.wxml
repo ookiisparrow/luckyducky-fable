@@ -5,8 +5,8 @@
 <view class="as">
   <text class="as-title">售后记录</text>
 
-  <!-- 小货车（15 问 8b）：加载中就先画空车停好，数据回来只把 cargo 0→1（车不重挂载、不重播入场·页面不跳）；失败隐藏、空态换纸箱 -->
-  <view wx:if="{{!loadFailed && (loading || list.length)}}" class="as-truck" style="padding-top: {{groundGap - 36}}px"><px-truck pose="park" cargo="{{list.length ? 1 : 0}}" /></view>
+  <!-- 静止纸箱（售后页不放货车）：加载中就画好，有记录时一直在（与空态同一只箱、同一条地面线·页面不跳）；失败隐藏 -->
+  <view wx:if="{{!loadFailed && (loading || list.length)}}" class="as-truck" style="padding-top: {{groundGap - 36}}px"><px-ground kind="box" /></view>
 
   <block wx:if="{{list.length}}">
     <view class="as-list">
