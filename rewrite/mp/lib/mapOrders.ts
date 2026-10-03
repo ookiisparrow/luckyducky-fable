@@ -159,9 +159,11 @@ const STEP_LABELS = ['下单', '付款', '发货', '收货']
 const STEP_AT: Record<string, number> = { pending: 0, paid: 1, shipped: 2, done: 3, closed: 0, refund_required: 1, payment_exception: 1 }
 const LIVE = ['pending', 'paid', 'shipped']
 
-/** 订单进度四步（v5 订单详情）：完成＝墨、当前＝紫、未到＝灰（设计稿 B2 steps）。 */
-export function orderSteps(status: string): Array<{ label: string; state: StepState }> {
+/** 订单进度四步（v5 订单详情）：完成＝墨、当前＝紫、未到＝灰（设计稿 B2 steps）。
+ *  refunded＝整单退完：订单到此结束，走过的步之后接「退款」、全墨（老板 2026-10-03）。 */
+export function orderSteps(status: string, refunded = false): Array<{ label: string; state: StepState }> {
   const at = STEP_AT[status] ?? 0
+  if (refunded) return [...STEP_LABELS.slice(0, at + 1), '退款'].map((label) => ({ label, state: 'done' }))
   const live = LIVE.includes(status)
   return STEP_LABELS.map((label, i) => ({ label, state: live && i === at ? 'cur' : i <= at ? 'done' : 'todo' }))
 }

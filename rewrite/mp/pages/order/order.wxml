@@ -5,7 +5,8 @@
 <v5-nav title="订单详情" />
 
 <view class="od" wx:if="{{vm}}">
-  <view class="od-truck" style="padding-top: {{groundGap}}px"><px-truck pose="{{truckPose}}" cargo="{{cargo}}" /></view>
+  <!-- 整单退完（ended）：订单结束，货车换静止纸箱（同一条地面线·同售后记录页） -->
+  <view class="od-truck" style="padding-top: {{groundGap}}px"><px-ground wx:if="{{ended}}" kind="box" /><px-truck wx:else pose="{{truckPose}}" cargo="{{cargo}}" /></view>
 
   <view class="od-body">
     <!-- 状态卡（UI 审查 15 问 6a）：灯 + 状态名（墨 17/500·与列表同名），下一行完整说明句（灰；只有待支付倒计时深黄） -->
@@ -120,7 +121,7 @@
         data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><view class="od-fill"></view><text class="od-danger-t">撤回申请</text></view>
     </view>
     <view wx:elif="{{canAfterSale}}" class="k k-light k-48 od-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onAfterSale" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">申请售后</view>
-    <view wx:if="{{vm.status === 'shipped'}}" class="k k-ink k-48 od-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onConfirm" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
+    <view wx:if="{{vm.status === 'shipped' && !ended}}" class="k k-ink k-48 od-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onConfirm" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">确认收货</view>
     <view wx:if="{{help}}" class="k k-light k-48 od-side" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onKefu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
   </view>
 </view>

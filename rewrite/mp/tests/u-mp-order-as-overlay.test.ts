@@ -76,15 +76,16 @@ describe('订单详情叠加售后', () => {
     expect(wxMock.navigateTo.mock.calls[0][0].url).toBe('/pages/aftersales/aftersales')
   })
 
-  it('大白话：全部商品都退完——「已退款」灰圈墨字；只退了一件——状态照旧，只那件标「已退款」', async () => {
+  it('大白话：全部商品都退完——「已退款」灰圈墨字、订单到此结束：不出「申请售后」、货车换静止纸箱、进度收在「退款」；只退了一件——状态照旧，只那件标「已退款」，还能申请售后', async () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded'), AS('o1', 'L2', 'refunded')] })
     const page = await detail()
     await page.reload()
-    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, headColor: '' })
+    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, headColor: '', canAfterSale: false, ended: true })
+    expect(page.data.steps.map((x: { label: string }) => x.label)).toEqual(['下单', '付款', '退款']) // 进度收在「退款」
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded')] })
     await page.reload()
-    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, headColor: '', asHas: true, lineTags: { L1: '已退款' } })
+    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, headColor: '', asHas: true, lineTags: { L1: '已退款' }, canAfterSale: true, ended: false })
     expect(page.data.sub.text).toBe('商家会在 48 小时内发货')
   })
 
