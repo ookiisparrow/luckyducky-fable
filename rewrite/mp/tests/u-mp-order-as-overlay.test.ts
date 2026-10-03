@@ -65,7 +65,7 @@ describe('订单详情叠加售后', () => {
     const page = await detail()
     await page.reload()
     expect(callAppMock).toHaveBeenCalledWith('getMyAfterSales', { cursor: undefined, limit: 100, orderId: 'o1' }) // 只拉本单售后（#443）
-    expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请已提交，审核后原路退回', tone: '' }, asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: { L1: '退款中' } })
+    expect(page.data).toMatchObject({ head: '售后中', sub: { text: '退款申请已提交，审核后原路退回', tone: '' }, asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: { L1: '退款中' }, truckPose: 'reverse' }) // 售后中：货车倒车开回
     expect(page.data.vm.status).toBe('paid') // 订单状态本身不动
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'approved')] })
@@ -97,7 +97,7 @@ describe('订单详情叠加售后', () => {
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'rejected')] })
     await page.reload()
-    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: {} })
+    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: {}, truckPose: 'drive' }) // 被拒的售后不叠加状态，货车照常
   })
 
   it('大白话：详情里申请退款成功→跳售后页→返回详情（onShow）显示「售后中 · 退款申请中」；返回时售后刷新没拉到也照样显示', async () => {

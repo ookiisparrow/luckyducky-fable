@@ -174,7 +174,7 @@ Page({
       amountNum: (vm.amountLabel || '').replace(/[^0-9.]/g, ''),
       canAfterSale: ['paid', 'shipped', 'done'].includes(s),
       steps: orderSteps(s),
-      truckPose: POSE[s] || 'park',
+      truckPose: ov || s === 'refund_required' ? 'reverse' : POSE[s] || 'park', // 退货/售后/退款：货车倒车开回
       cargo: s !== 'closed' ? Math.min(3, vm.items.length) : 0,
       expired: s === 'pending' && payLeftMs(vm, Date.now()) === 0,
     })
