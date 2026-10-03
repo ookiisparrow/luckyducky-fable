@@ -14,7 +14,7 @@ export const meta = {
 // Workflow({ scriptPath: '<repo>/.claude/workflows/batch-pipeline.mjs', args: {
 //   specPath: '/abs/path/spec.md',            // 必填：批次规格文件（执行者/评审员都读它）
 //   whitelist: ['docs/运维手册.md', 'rewrite/mp/pages/foo/'],  // 必填：允许改动路径；以 / 结尾=前缀匹配，否则精确匹配
-//   ignore: ['design/console.pen'],           // 选填：并行会话已知改动，边界断言忽略
+//   ignore: ['docs/运维手册.md'],             // 选填：并行会话已知改动，边界断言忽略
 //   lenses: [{ key: '正确性', prompt: '……' }], // 选填：定向评审镜头；无镜头评审员总是自动追加
 //   execModel: 'sonnet', execEffort: 'high',   // 选填：执行者档位（默认 sonnet/high）
 //   skipSpecLint: false,                       // 选填：规格已人工预审过可跳过预审段
@@ -90,14 +90,14 @@ if (!A.skipSpecLint) {
 }
 
 phase('实现')
-const exec = await agent('你是本仓 /refactor-batch 纪律下的批次执行者。第一步：读 ' + NOTEBOOK + '（执行者错题本——历任执行者踩过的坑，每条必须避开）。第二步：读批次规格 ' + A.specPath + ' 并严格执行全部步骤（先写会红的测试或检查→实现到绿→反向自检留证→记账；加守卫须过 .claude/skills/refactor-batch/SKILL.md「守卫准入」）。铁律：改动只允许落在白名单 ' + JSON.stringify(A.whitelist) + ' 内；不 git commit；不碰 packages/ 与 design/*.pen；npm run check 必须全绿（Bash timeout 给 600000）。规格冲突或现场与规格不符→记 openQuestions 停手，不擅自设计。返回精简结构化。', { label: 'exec:实现', model: MODEL, effort: EFFORT, schema: EXEC_SCHEMA })
+const exec = await agent('你是本仓 /refactor-batch 纪律下的批次执行者。第一步：读 ' + NOTEBOOK + '（执行者错题本——历任执行者踩过的坑）。第二步：读批次规格 ' + A.specPath + ' 并按它执行（先写会红的测试或检查→实现到绿→反向自检留证→记账；加守卫须过 .claude/skills/refactor-batch/SKILL.md「守卫准入」）。改动只允许落在白名单 ' + JSON.stringify(A.whitelist) + ' 内；不 git commit；npm run check 必须全绿（Bash timeout 给 600000）。规格冲突或现场与规格不符→记 openQuestions 停手，不擅自设计。返回精简结构化。', { label: 'exec:实现', model: MODEL, effort: EFFORT, schema: EXEC_SCHEMA })
 if (!exec || !exec.done) {
   log('执行者未完成，中止')
   return { aborted: 'exec-incomplete', exec }
 }
 
 phase('边界')
-const changed = await agent(boundaryPrompt, { label: 'boundary:改动清单', model: 'sonnet', schema: PATHS_SCHEMA })
+const changed = await agent(boundaryPrompt, { label: 'boundary:改动清单', model: 'sonnet', effort: 'low', schema: PATHS_SCHEMA })
 const paths1 = changed ? changed.paths : []
 const violations = paths1.filter((p) => !allowed(p) && !ignored(p))
 if (violations.length > 0) {
@@ -120,8 +120,8 @@ log('评审 findings ' + allFindings.length + ' 条，P0-P2 ' + serious.length +
 let fix = null
 if (serious.length > 0) {
   phase('修订')
-  fix = await agent('你是批次修订者。仓库 ' + REPO + '，working tree 有本批未提交改动。先读 ' + NOTEBOOK + ' 与规格 ' + A.specPath + '。逐条核实并修复以下 findings（核实为误报则给证据说明不修）；修完 npm run check 全绿（timeout 600000）；改动仍只许落在白名单 ' + JSON.stringify(A.whitelist) + '；不 commit、不碰 packages/ 与 design/*.pen。findings：\n' + JSON.stringify(serious, null, 2), { label: 'fix:修订', model: MODEL, effort: EFFORT, schema: EXEC_SCHEMA })
-  const changed2 = await agent(boundaryPrompt, { label: 'boundary:复核', phase: '修订', model: 'sonnet', schema: PATHS_SCHEMA })
+  fix = await agent('你是批次修订者。仓库 ' + REPO + '，working tree 有本批未提交改动。先读 ' + NOTEBOOK + ' 与规格 ' + A.specPath + '。逐条核实并修复以下 findings（核实为误报则给证据说明不修）；修完 npm run check 全绿（timeout 600000）；改动仍只许落在白名单 ' + JSON.stringify(A.whitelist) + '；不 commit。findings：\n' + JSON.stringify(serious, null, 2), { label: 'fix:修订', model: MODEL, effort: EFFORT, schema: EXEC_SCHEMA })
+  const changed2 = await agent(boundaryPrompt, { label: 'boundary:复核', phase: '修订', model: 'sonnet', effort: 'low', schema: PATHS_SCHEMA })
   const violations2 = (changed2 ? changed2.paths : []).filter((p) => !allowed(p) && !ignored(p))
   if (violations2.length > 0) {
     log('修订后边界断言失败：' + violations2.join('、'))
