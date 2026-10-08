@@ -35,12 +35,12 @@
 
   <view class="pe-form">
     <view class="pe-field">
-      <text class="t-sys pe-label">昵称</text>
+      <text class="t-sys pe-label t-cap">昵称</text>
       <input class="well pe-input {{focus === 'nickname' ? 'well-focus' : ''}}" type="nickname" value="{{nickname}}" bind:input="onNickname" maxlength="20"
         data-f="nickname" bind:focus="onFocus" bind:blur="onBlur" placeholder="起个名字" placeholder-class="pe-ph" />
     </view>
     <view class="pe-field">
-      <text class="t-sys pe-label">手机号 · 选填</text>
+      <text class="t-sys pe-label t-cap">手机号 · 选填</text>
       <input class="well pe-input {{focus === 'phone' ? 'well-focus' : ''}}" type="number" value="{{phone}}" bind:input="onPhone" maxlength="11"
         data-f="phone" bind:focus="onFocus" bind:blur="onBlur" placeholder="便于联系与售后" placeholder-class="pe-ph" />
     </view>
@@ -54,7 +54,7 @@
       <view class="pe-fill pe-fill-out"></view>
       <text class="pe-acct-t">退出登录</text>
     </view>
-    <text class="t-sys pe-acct-note">退出后用同一个微信再登录，资料和课程都会回来</text>
+    <text class="t-sys pe-acct-note t-cap">退出后用同一个微信再登录，资料和课程都会回来</text>
   </view>
 </view>
 </scroll-view>

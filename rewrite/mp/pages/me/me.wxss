@@ -98,11 +98,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.me-id-sub {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 /* 小键（高 32）：编辑 / 登录 / 重试 / 扫码激活 */
 .me-mini {
   position: relative;
@@ -218,11 +213,6 @@
   color: var(--v5-ink-2);
 }
 .me-cell-arrow {
-  color: var(--v5-ink-2);
-}
-.me-cell-l {
-  font-size: 13px;
-  font-weight: 300;
   color: var(--v5-ink-2);
 }
 

@@ -1,7 +1,7 @@
 // 像素画改用普通元素渲染（不再用 <canvas>：canvas 是原生组件，放在 scroll-view 里滚动会漂、会盖住 TabBar）。
 // 一帧 = 每行一条硬色标渐变；同色相邻格合并成一段，透明处留空。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { __resetForTest, mountPixelView, rowGradients } from '../lib/pixelView'
+import { __resetForTest, mountPixelView, pixelPageLifetimes, rowGradients } from '../lib/pixelView'
 
 describe('rowGradients', () => {
   it('大白话：同一行相邻同色格合并成一段，段与段之间是透明，最后收成透明', () => {
@@ -201,5 +201,17 @@ describe('mountPixelView 共享帧调度', () => {
     } finally {
       delete g.getCurrentPages
     }
+  })
+})
+
+describe('pixelPageLifetimes 页面前后台', () => {
+  it('大白话：页面切后台停画、回前台续画；组件还没挂上视图时切换不报错', () => {
+    const v = { kick: vi.fn(), setVisible: vi.fn(), destroy: vi.fn() }
+    const host = {}
+    const lt = pixelPageLifetimes((c) => (c === host ? v : undefined))
+    lt.hide.call(host)
+    lt.show.call(host)
+    expect(v.setVisible.mock.calls).toEqual([[false], [true]])
+    expect(() => lt.show.call({})).not.toThrow()
   })
 })

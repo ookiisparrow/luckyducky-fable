@@ -4,7 +4,7 @@
 // 带进度 p、truck、没烘过的尺寸/暗底组合回落原 JS 引擎（lib/pixelView）。
 // delay＝错峰起播（毫秒）；hold＝播到该时刻停住（只动一次）；p＝仅 loader：按进度逐格点亮；dark＝暗底换色。
 import { PIXEL_ANIMS, PIXEL_ANIM_DARK, type Plot } from '../../lib/pixelAnim'
-import { mountPixelView, type PixelView } from '../../lib/pixelView'
+import { mountPixelView, pixelPageLifetimes, type PixelView } from '../../lib/pixelView'
 import { BAKED_FRAMES, BAKED_SPRITES } from '../../lib/pixelBaked'
 
 const live = new WeakMap<object, PixelView>()
@@ -59,12 +59,5 @@ Component({
       live.delete(this)
     },
   },
-  pageLifetimes: {
-    show() {
-      live.get(this)?.setVisible(true)
-    },
-    hide() {
-      live.get(this)?.setVisible(false)
-    },
-  },
+  pageLifetimes: pixelPageLifetimes((c) => live.get(c)),
 })

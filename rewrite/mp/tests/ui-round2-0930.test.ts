@@ -1,6 +1,7 @@
 // UI 审查第二轮 15 问（2026-09-30·Claude Design「Lucky Ducky UI 审查 15 问」+ 落地规格文字版·老板选定）。
 // 6a 状态名/灯/说明句的行为由 orders-map / aftersales-map / p-mp-order(-list)-page 等测试钉住，这里只管版式。
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { live, rule } from './helpers/wxmlStatic'
 import { navBottom } from '../lib/ground'
 import checkoutWxml from '../pages/checkout/checkout.wxml?raw'
 import checkoutWxss from '../pages/checkout/checkout.wxss?raw'
@@ -24,12 +25,6 @@ import leaveWxml from '../components/leave-sheet/leave-sheet.wxml?raw'
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
   pageOpts = o as Record<string, any>
-}
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
-const rule = (s: string, sel: string) => {
-  const i = s.indexOf('\n' + sel + ' {')
-  expect(i, sel).toBeGreaterThanOrEqual(0)
-  return s.slice(i, s.indexOf('}', i))
 }
 
 describe('1c 地址卡拆三行：省市区 13 灰 / 详细地址 17·600 墨 / 收件人 15 灰', () => {

@@ -1,6 +1,7 @@
 // 底栏只用像素图标、回顶键去文案（老板 2026-09-30·照 Claude Design「App v5 字重」稿 data-tabbar / backTop）；
 // 底栏 2026-10-01 改照「App v6 Lite」5a 降存在感（交接说明 handoff/v6-lite-简化说明.md）。
 import { describe, it, expect } from 'vitest'
+import { live, rule } from './helpers/wxmlStatic'
 import tabWxml from '../custom-tab-bar/index.wxml?raw'
 import tabWxss from '../custom-tab-bar/index.wxss?raw'
 import tabJson from '../custom-tab-bar/index.json?raw'
@@ -8,9 +9,6 @@ import tokens from '../styles/tokens.wxss?raw'
 import homeWxml from '../pages/home/home.wxml?raw'
 import homeWxss from '../pages/home/home.wxss?raw'
 import { PIXEL_GLYPHS } from '../lib/pixelGlyph'
-
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
-const rule = (css: string, sel: string) => css.slice(css.indexOf('\n' + sel + ' {'), css.indexOf('}', css.indexOf('\n' + sel + ' {')))
 
 describe('底栏像素图标', () => {
   it('大白话：三个 tab 键只放像素图标，不写「首页 / 购物车 / 我」', () => {

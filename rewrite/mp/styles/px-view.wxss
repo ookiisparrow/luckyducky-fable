@@ -1,0 +1,11 @@
+/* 像素画容器与行（lib/pixelView 逐行渲染的结构）：px-anim / px-duck / px-ground / px-scene / px-truck 各自 @import。 */
+.pxc {
+  position: relative;
+  overflow: hidden;
+  will-change: transform; /* 自己一层：逐帧改行背景只重绘这一小块，不牵连整块滚动内容 */
+}
+.pxr {
+  position: absolute;
+  left: 0;
+  right: 0;
+}

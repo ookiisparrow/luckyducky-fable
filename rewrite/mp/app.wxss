@@ -173,6 +173,12 @@ textarea {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+/* 辅助小字：字段名、副标题、状态提示等 13px 细体次要墨色（挂在原类名旁，页面里别再写同款规则） */
+.t-cap {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--v5-ink-2);
+}
 /* v5 骨架屏：凹槽灰底 + 微光扫过（配下方 @keyframes ld-shimmer） */
 .skel {
   background: linear-gradient(90deg, var(--v5-sunk) 25%, var(--v5-card-press) 50%, var(--v5-sunk) 75%);
@@ -220,6 +226,17 @@ textarea {
   }
 }
 
+/* 贴底操作栏：固定在底部、按键横排；上方另放一块等高占位（各页 xx-dock-space），免得盖住内容 */
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  background: var(--v5-canvas);
+}
 /* v5 半屏（设计稿 openSheet/closeSheet·ENTER.sheet）：遮罩 .sh-mask 淡入 200ms、面板 .sh-panel 上滑 320ms；
    关：两者加 .out ——面板 240ms cubic-bezier(.4,0,1,1) 下滑、遮罩 200ms 淡出，JS 等 240ms 再撤节点。 */
 .sh-mask {

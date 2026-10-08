@@ -24,7 +24,7 @@
       <text class="rv-label {{rating ? 'on' : ''}}">{{ratingLabel}}</text>
 
       <view class="rv-more">
-        <text class="t-sys rv-cap">补充一下 · 选填</text>
+        <text class="t-sys rv-cap t-cap">补充一下 · 选填</text>
         <view class="rv-tags">
           <view wx:for="{{tags}}" wx:key="t" class="k k-sm rv-tag hit44 hit-wrap {{item.on ? 'k-light rv-tag-on' : 'k-flat'}}"
             hover-start-time="20" hover-class="{{item.on ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100" data-i="{{index}}" bind:tap="onTag" data-k="{{item.on ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">{{item.t}}</view>
@@ -37,7 +37,7 @@
         </view>
 
         <text class="t-sys rv-count {{text.length >= 500 ? 'rv-count-full' : text.length >= 450 ? 'rv-count-warn' : ''}}">{{text.length}}/500</text>
-        <text class="t-sys rv-cap">晒图最多 {{maxPhotos}} 张</text>
+        <text class="t-sys rv-cap t-cap">晒图最多 {{maxPhotos}} 张</text>
 
         <!-- 晒图：最多 maxPhotos 张，点缩略图预览、角标删除（角标外层 44×44 透明热区，看得见的仍是 20×20） -->
         <!-- 缩略图 +「＋」同一行：「＋」是最后一格，加满 maxPhotos 张后消失（UI 审查 6 问 5b） -->

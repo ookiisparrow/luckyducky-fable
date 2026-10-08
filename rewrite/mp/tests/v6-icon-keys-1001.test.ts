@@ -1,6 +1,7 @@
 // v6 像素图标化（Claude Design 交接包 design_handoff_v6_pixel_icons 2 · icon-picks 采纳 27 项；老板 2026-09-30 定第 2、3 类 19 项施工、
 // 代码里没有的 7 项跳过）：按键文案换像素图标；次键收成方键（.k-sq 宽＝高），主键宽度不变；在途态（提交中/保存中）照旧带字。
 import { describe, it, expect } from 'vitest'
+import { live } from './helpers/wxmlStatic'
 import appWxss from '../app.wxss?raw'
 import detailWxml from '../pages/detail/detail.wxml?raw'
 import cartWxml from '../pages/cart/cart.wxml?raw'
@@ -16,7 +17,6 @@ import loginWxml from '../components/login-sheet/login-sheet.wxml?raw'
 import privacyWxml from '../components/privacy-sheet/privacy-sheet.wxml?raw'
 import { PIXEL_GLYPHS } from '../lib/pixelGlyph'
 
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 // 取含 marker 的那颗键（开标签到对应 </view>·键内最多一层子 view）
 const keyOf = (w: string, marker: string) => live(w).match(new RegExp(`<view [^>]*${marker}[^>]*>(?:(?!<view )[\\s\\S])*?(?:<view[^>]*>(?:(?!<view )[\\s\\S])*?</view>(?:(?!<view )[\\s\\S])*?)*</view>`))?.[0] ?? ''
 const iconOnly = (k: string, icon: string) => {

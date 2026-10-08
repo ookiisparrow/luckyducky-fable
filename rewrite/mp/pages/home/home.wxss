@@ -205,11 +205,6 @@
   justify-content: center;
   gap: 12px;
 }
-.hm-ptr-t {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 
 /* ③ 商品横滑 */
 .hm-rail {
@@ -445,11 +440,6 @@
   padding: 16px 0;
   font-size: 17px;
   font-weight: 500;
-}
-.hm-faq-act {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 .hm-faq-body {
   display: block;

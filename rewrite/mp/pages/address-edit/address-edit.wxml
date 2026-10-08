@@ -7,12 +7,12 @@
   <scroll-view class="ae-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
     <view class="ae">
       <view class="ae-field">
-        <text class="t-sys ae-label">收货人</text>
+        <text class="t-sys ae-label t-cap">收货人</text>
         <input class="well ae-input {{focus === 'name' ? 'well-focus' : ''}}" value="{{name}}" data-field="name" bind:input="onInput" cursor-spacing="24" confirm-type="next" bind:confirm="onNameNext"
           bind:focus="onFocus" bind:blur="onBlur" maxlength="40" placeholder="姓名" placeholder-class="ae-ph" />
       </view>
       <view class="ae-field">
-        <text class="t-sys ae-label">手机号</text>
+        <text class="t-sys ae-label t-cap">手机号</text>
         <input class="well ae-input ae-mono {{focus === 'phone' ? 'well-focus' : ''}} {{phoneLack ? 'ae-warn' : ''}}" value="{{phone}}" data-field="phone" bind:input="onInput" cursor-spacing="24" focus="{{focusNext === 'phone'}}"
           bind:focus="onFocus" bind:blur="onBlur" type="number" maxlength="11" placeholder="11 位手机号" placeholder-class="ae-ph" />
         <view wx:if="{{phoneLack}}" class="t-sys ae-err">
@@ -21,17 +21,17 @@
         </view>
       </view>
       <view class="ae-field">
-        <text class="t-sys ae-label">所在地区</text>
+        <text class="t-sys ae-label t-cap">所在地区</text>
         <picker mode="region" value="{{regionArr}}" bind:change="onRegionChange">
           <view class="well ae-region" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
             <text class="ae-region-t {{region ? '' : 'ae-ph'}}">{{region || '选择省市区'}}</text>
-            <text class="t-sys ae-pick">选择</text>
+            <text class="t-sys ae-pick t-cap">选择</text>
             <px-i name="arrow" tone="var(--v5-ink-2)" />
           </view>
         </picker>
       </view>
       <view class="ae-field">
-        <text class="t-sys ae-label">详细地址</text>
+        <text class="t-sys ae-label t-cap">详细地址</text>
         <textarea class="well ae-area {{focus === 'detail' ? 'well-focus' : ''}}" value="{{detail}}" data-field="detail" bind:input="onInput" cursor-spacing="24"
           bind:focus="onFocus" bind:blur="onBlur" maxlength="120" auto-height="{{true}}" disable-default-padding="{{true}}"
           placeholder="街道、门牌号" placeholder-class="ae-ph" />

@@ -174,11 +174,6 @@
   font-size: 17px;
   font-weight: 500;
 }
-.ct-state-h {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .ct-retry {
   margin-top: 8px;
   width: 120px;

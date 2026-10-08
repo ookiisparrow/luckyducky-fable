@@ -20,11 +20,6 @@
   flex-direction: column;
   gap: 8px;
 }
-.ae-label {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .ae-input {
   width: 100%;
   height: 44px;
@@ -80,11 +75,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.ae-pick {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 /* 默认开关：凹槽轨道 + 键帽滑块，开＝滑到右侧并亮紫灯 */
 .ae-def {

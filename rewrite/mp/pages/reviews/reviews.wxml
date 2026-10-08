@@ -6,7 +6,7 @@
   <view class="rv-sum" wx:if="{{summary}}">
     <view class="rv-score">
       <text class="mono rv-num">{{summary.scoreLabel}}</text>
-      <text class="t-sys rv-count">{{summary.countLabel}}</text>
+      <text class="t-sys rv-count t-cap">{{summary.countLabel}}</text>
     </view>
     <view class="rv-bars">
       <view class="rv-bar" wx:for="{{summary.dist}}" wx:key="label">
@@ -36,7 +36,7 @@
         </view>
         <text class="mono rv-date">{{item.timeLabel}}</text>
       </view>
-      <text class="t-sys rv-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
+      <text class="t-sys rv-spec t-cap" wx:if="{{item.spec}}">{{item.spec}}</text>
       <text class="t-sys rv-text" wx:if="{{item.text}}">{{item.text}}</text>
       <!-- 这条评价自带的标签（只读小字·点上方汇总标签才是筛选） -->
       <view class="rv-itags" wx:if="{{item.tags.length}}">
@@ -69,7 +69,7 @@
   <view class="rv-state rv-fail" wx:if="{{!loading && loadFailed}}">
     <view class="rv-signal"><px-anim name="signal" size="4" /></view>
     <text class="rv-state-title">网络开小差</text>
-    <text class="t-sys rv-state-hint">评价没加载出来，请重试</text>
+    <text class="t-sys rv-state-hint t-cap">评价没加载出来，请重试</text>
     <view class="k k-light rv-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
   <!-- 云端回 NO_PRODUCT：确定性的「没有」，不给重试 -->
@@ -78,7 +78,7 @@
   </view>
   <view class="rv-state" wx:elif="{{!loading && !list.length}}">
     <text class="rv-state-title">还没有评价</text>
-    <text class="t-sys rv-state-hint">买过的钩友完成订单后可以来写第一条</text>
+    <text class="t-sys rv-state-hint t-cap">买过的钩友完成订单后可以来写第一条</text>
   </view>
   <view class="t-sys rv-loading rv-more" wx:if="{{paging}}"><px-anim name="loader" size="2" /><text>加载中</text></view>
   <view class="t-sys rv-more" wx:elif="{{hasMore}}">上拉加载更多</view>

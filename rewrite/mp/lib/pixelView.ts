@@ -228,3 +228,15 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
     },
   }
 }
+
+/** 像素组件共用的 pageLifetimes：页面切后台停画、回前台续画。view 取本组件挂着的视图（还没挂上＝undefined，跳过）。 */
+export function pixelPageLifetimes(view: (host: object) => PixelView | undefined) {
+  return {
+    show(this: object) {
+      view(this)?.setVisible(true)
+    },
+    hide(this: object) {
+      view(this)?.setVisible(false)
+    },
+  }
+}

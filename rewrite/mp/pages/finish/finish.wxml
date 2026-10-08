@@ -9,15 +9,15 @@
     <text class="t-sys fn-sub">小鸭孵出来了，以后就在「我」页陪着你。</text>
   </view>
   <view class="fn-stats" wx:if="{{name}}">
-    <view class="fn-row"><text class="t-sys fn-k">学完</text><view class="fn-leader"></view><text class="mono fn-v">{{lessonsLabel}}</text></view>
-    <view class="fn-row" wx:if="{{durLabel}}"><text class="t-sys fn-k">视频时长</text><view class="fn-leader"></view><text class="mono fn-v">{{durLabel}}</text></view>
+    <view class="fn-row"><text class="t-sys fn-k t-cap">学完</text><view class="fn-leader"></view><text class="mono fn-v">{{lessonsLabel}}</text></view>
+    <view class="fn-row" wx:if="{{durLabel}}"><text class="t-sys fn-k t-cap">视频时长</text><view class="fn-leader"></view><text class="mono fn-v">{{durLabel}}</text></view>
   </view>
 </view>
 
 <!-- 收礼人没有订单可评价（checkReviewable）：底部不出键，左上返回离开 -->
 <block wx:if="{{canReview}}">
 <view class="fn-dock-space"></view>
-<view class="fn-dock">
+<view class="fn-dock dock">
   <view class="k k-ink k-48 fn-main" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onReview" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去评价</view>
 </view>
 </block>

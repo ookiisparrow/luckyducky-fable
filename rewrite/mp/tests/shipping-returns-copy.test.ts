@@ -1,15 +1,12 @@
 // 顾客看见的运费/退货说法必须对齐已拍板政策（详情/购物车/结算/支付成功）。
 // rewrite/mp tsconfig 无 @types/node，走 ?raw（见 raw-imports.d.ts）。
 import { describe, expect, it } from 'vitest'
+import { live } from './helpers/wxmlStatic'
 import detailRaw from '../pages/detail/detail.wxml?raw'
 import cartRaw from '../pages/cart/cart.wxml?raw'
 import checkoutRaw from '../pages/checkout/checkout.wxml?raw'
 import paysuccessRaw from '../pages/paysuccess/paysuccess.wxml?raw'
 import kbRaw from '../../admin/src/pages/Kb.vue?raw'
-
-function live(src: string): string {
-  return src.replace(/<!--[\s\S]*?-->/g, '')
-}
 
 const detail = live(detailRaw)
 const cart = live(cartRaw)
