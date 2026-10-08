@@ -34,7 +34,7 @@ describe('登录与令牌（fail-closed）', () => {
     })
     const r = await c.login('my-secret-password')
     expect(r.ok).toBe(true)
-    expect(c.token()).toBe('tok-abc')
+    expect(storage.get('ldrw_admin_token')).toBe('tok-abc') // 存下的就是签发的令牌
     expect(c.who()).toBe('店主') // 登录存操作者名·Shell 显真实身份（换皮硬编码「管理员」）
     expect(sentBody).toContain('my-secret-password') // 只在登录请求里用一次
     await c.logout()

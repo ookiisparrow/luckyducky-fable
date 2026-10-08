@@ -76,7 +76,6 @@ export function createClient(deps: ClientDeps) {
   }
 
   return {
-    token: () => storage.get(TOKEN_KEY) || '',
     hasSession: () => !!storage.get(TOKEN_KEY),
     who: () => storage.get(WHO_KEY) || '', // 当前登录操作者名（Shell 底部身份条）
     /** 注册会话失效回调（壳层调一次·如 () => router.push('/login')）——会话失效导登录的单一出口。 */

@@ -30,7 +30,6 @@ export interface OrderVM {
   address: { name: string; phone: string; region: string; detail: string } | null
   goodsLabel: string
   shipLabel: string
-  couponLabel: string
   reviewedAll: boolean // 已完成且每行都评过：列表出灰底「已评价」、不出写评价
 }
 
@@ -133,8 +132,6 @@ export function mapOrder(raw: unknown): OrderVM | null {
     address: a ? { name: String(a.name || ''), phone: String(a.phone || ''), region: String(a.region || ''), detail: String(a.detail || '') } : null,
     goodsLabel: money(o.goods),
     shipLabel: Number(o.ship) > 0 ? money(o.ship) : '包邮',
-    // 主线顾客页不展示优惠券：历史单可能仍带 coupon 快照，标签恒空，实付走库内 amount。
-    couponLabel: '',
     reviewedAll: o.status === 'done' && items.length > 0 && items.every((l) => l.reviewed),
   }
 }

@@ -68,7 +68,6 @@ const STAMP_MARK = [
   [1, 3],
   [3, 3],
 ]
-const PIN = ['.PPP.', 'PPPPP', 'PPWPP', 'PPPPP', '.PPP.', '..P..', '..P..']
 const COIN = ['.DDD.', 'DYWYD', 'DYDYD', 'DYDYD', '.DDD.']
 const STAMP = ['.PPPPP.', 'PPPPPPP', '.PPPPP.', '...P...', '..PPP..', 'PPPPPPP']
 
@@ -98,7 +97,7 @@ export interface Truck extends GroundScene {
   go(o?: { back?: boolean }): number
   restart(): number
   stamp(): number
-  /** 车是否可交给 CSS 烘焙层（无掉箱/盖章/卸货/定位针）：move=false 为巡航/慢速循环（home＝车左缘列）；move=true 为开走/屏外/开回（x＝车左缘列，浮点）。ground＝地面相位（格） */
+  /** 车是否可交给 CSS 烘焙层（无掉箱/盖章/卸货）：move=false 为巡航/慢速循环（home＝车左缘列）；move=true 为开走/屏外/开回（x＝车左缘列，浮点）。ground＝地面相位（格） */
   view(): { move: boolean; slow: boolean; shown: number; mir: boolean; home: number; x: number; ground: number } | null
   /** 烘焙层播了 ms 毫秒后交还给 JS：把地面相位补上，免得接手时地面虚线跳一下 */
   syncIdle(ms: number): void
@@ -140,7 +139,7 @@ function idlePuffs(t: number, slow: boolean, mir: boolean, x: number): Puff[] {
   return out
 }
 
-type TruckOpts = { cargo?: number; pose?: string; arrive?: number; pin?: boolean }
+type TruckOpts = { cargo?: number; pose?: string; arrive?: number }
 /** 生产用的货车（公开接口不含 sprite）。 */
 export function createTruck(opts: TruckOpts = {}): Truck {
   const { sprite, ...pub } = buildTruck(opts)
@@ -172,8 +171,6 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
   let fly: { lx: number; ly: number; t: number } | null = null
   let st: { i: number; t: number; flown?: boolean } | null = null
   let uq: { i: number; k: number; t: number } | null = null
-  let pinY: number | null = opts.pin ? -34 : null
-  let pinV = 0
   let clock = 0
   let lastT = -1
   let w = 0
@@ -192,7 +189,7 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
     t = 520 - (opts.arrive || 0)
   } else settle()
 
-  const home = () => Math.round((w - COLS) / 2) + (mir ? -1 : 1) * (pose === 'unload' ? Math.ceil((cargo * GB) / 2) : 0) - (opts.pin ? 4 : 0)
+  const home = () => Math.round((w - COLS) / 2) + (mir ? -1 : 1) * (pose === 'unload' ? Math.ceil((cargo * GB) / 2) : 0)
   const gx = (k: number) => {
     const ox = Math.round(x || 0)
     return mir ? ox + COLS + 2 + k * GB : ox - 2 - GB - k * GB + 1
@@ -203,8 +200,8 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
     if (Math.random() < p) puffs.push({ x: (x || 0) + (mir ? COLS : -1), y: TOP + 7, vx: -dir * (v + Math.random() * 0.3), vy: -0.1 - Math.random() * 0.2, life: 0, max: 340, c: G })
   }
 
-  // 掉落的箱子/金币 + 顶上的定位针：返回是否还在动
-  const stepDrops = (dt: number, f: number, hm: number): boolean => {
+  // 掉落的箱子/金币：返回是否还在动
+  const stepDrops = (dt: number, f: number): boolean => {
     for (const d of drops) {
       if (d.land) {
         d.land += dt
@@ -222,14 +219,7 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
         puffs.push({ x: Math.round(x || 0) + bx + (k < 2 ? -1 : 5), y: TOP + by + (k % 2 ? 1 : -1), vx: k < 2 ? -0.35 : 0.35, vy: k % 2 ? 0.1 : -0.25, life: 0, max: 260, c: LT })
     }
     drops = drops.filter((d) => !d.land || d.land < 120)
-    let live = drops.length > 0
-    if (pinY != null && pinY < 0) {
-      pinV += 0.5 * f
-      pinY = Math.min(0, pinY + pinV * f)
-      live = true
-      if (pinY === 0) for (let k = 0; k < 4; k++) puffs.push({ x: hm + COLS + 6 + (k < 2 ? -1 : 5), y: PX_ROWS - 2, vx: k < 2 ? -0.3 : 0.3, vy: -0.2, life: 0, max: 220, c: G })
-    }
-    return live
+    return drops.length > 0
   }
 
   // 卸货：箱子一个个落到车旁地面
@@ -370,7 +360,7 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
     const hm = home()
     spd = 0
     if (x == null) x = hm
-    const dropping = stepDrops(dt, f, hm)
+    const dropping = stepDrops(dt, f)
     t += dt
     const moving = MODES[mode](dt, f, hm)
     gOff += (dt / GROUND_CELL_MS) * spd * (mir ? -1 : 1)
@@ -445,18 +435,6 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
     if (mode === 'slowc') L(0, TOP + 6 + oy, RD)
   }
 
-  // 定位针（pin 模式）
-  const paintPin = (P: Plot) => {
-    if (pinY == null) return
-    const pxx = Math.round(x || 0) + COLS + 4
-    const py = PX_ROWS - 1 - PIN.length + Math.round(pinY)
-    PIN.forEach((r, yy) =>
-      [...r].forEach((ch, xx) => {
-        if (ch !== '.') P(pxx + xx, py + yy, ch === 'W' ? W : P1)
-      })
-    )
-  }
-
   // 盖章落下再抬起
   const paintStamp = (L: Plot) => {
     if (!st) return
@@ -498,7 +476,6 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
     for (const p of puffs) P(Math.round(p.x), Math.round(p.y), p.c)
     paintCargo(P, L, oy)
     paintBody(L, oy, mv)
-    paintPin(P)
     paintStamp(L)
     paintFly(P)
   }
@@ -516,7 +493,7 @@ function buildTruck(opts: TruckOpts): Truck & { sprite(t: number, P: Plot): void
       return live || spd > 0.01
     },
     view() {
-      if (opts.pin || drops.length || st || fly || uq || groundBoxes.length) return null
+      if (drops.length || st || fly || uq || groundBoxes.length) return null
       const idle = mode === 'cruise' || mode === 'slowc'
       if (!idle && mode !== 'drive' && mode !== 'gone' && mode !== 'back' && mode !== 'away') return null
       return { move: !idle, slow: mode === 'slowc', shown, mir, home: home(), x: x || 0, ground: gOff }

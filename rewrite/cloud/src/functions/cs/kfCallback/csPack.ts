@@ -81,7 +81,7 @@ type PackAssets = {
   scripts: Record<string, string>
 }
 
-const assets = PACK as PackAssets
+export const assets = PACK as PackAssets
 
 export const PACK_REQUIRED_SCRIPTS = [
   'triage',
@@ -114,10 +114,6 @@ export function packSessionId(euid: string): string {
 
 export function handoffDocId(euid: string, epoch: number): string {
   return 'handoff:' + euid + ':' + String(epoch)
-}
-
-export function loadPackAssets(): PackAssets {
-  return assets
 }
 
 export function looksPackagingDamage(text: string): boolean {

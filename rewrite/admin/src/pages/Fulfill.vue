@@ -293,11 +293,7 @@ async function doShip(order: FulfillOrder, trackingNo: string) {
   focusScan()
 }
 const shippedCount = computed(() => sessionLog.value.filter((e) => e.ok).length)
-const fmtClock = (ts: number) => {
-  const d = new Date(ts)
-  const p = (x: number) => String(x).padStart(2, '0')
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
+const fmtClock = (ts: number) => new Date(ts).toTimeString().slice(0, 8) // 本地 HH:MM:SS
 
 function go(n: number) {
   if (n < 1 || n > 3) return

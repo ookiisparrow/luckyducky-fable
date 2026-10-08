@@ -40,7 +40,6 @@ describe('货车巡航预渲染', () => {
     expect(tr.view()).toMatchObject({ slow: false, shown: 2, mir: false })
     expect(T.createTruck({ pose: 'slow', cargo: 1 }).view()).toMatchObject({ slow: true })
     expect(T.createTruck({ pose: 'park', cargo: 1 }).view()).toBeNull()
-    expect(T.createTruck({ pose: 'drive', pin: true }).view()).toBeNull()
     tr.stamp()
     expect(tr.view()).toBeNull()
     const go = T.createTruck({ pose: 'park', cargo: 1 })

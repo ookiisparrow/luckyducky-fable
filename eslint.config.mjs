@@ -63,12 +63,6 @@ export default [
     },
   },
 
-  // 配置文件本身用 Node 环境
-  {
-    files: ['**/*.config.js', '**/vite.config.js'],
-    languageOptions: { globals: { ...globals.node } },
-  },
-
   // 后台与坐席台的 .vue 里 <script lang="ts"> 用 TS 解析器（espree 解不了 TS 语法）；后台禁 alert。
   {
     files: ['rewrite/admin/src/**/*.vue', 'rewrite/agent/src/**/*.vue'],

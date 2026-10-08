@@ -1,8 +1,4 @@
 /* 结业页（v5「字重」稿 C10） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 孵化小鸭：顶栏下 groundGap 处落地（屏高<700 为 56、其余 120·lib/ground·全站同一条地面线） */
 .fn-egg {
   padding: 0 16px 12px;

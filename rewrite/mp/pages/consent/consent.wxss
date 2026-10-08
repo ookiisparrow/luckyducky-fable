@@ -1,8 +1,4 @@
 /* 数据共享授权（v5 稿 D7）：声明文案/handler 不动·只换版式。 */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 .cs {
   padding: 4px 16px 16px;
   display: flex;

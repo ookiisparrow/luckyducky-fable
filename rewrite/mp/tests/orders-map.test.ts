@@ -29,7 +29,7 @@ describe('订单映射（黄金 §七：脏单归一·纵深防御）', () => {
     expect(vm.amountLabel).toBe('¥258.50') // 恒两位小数
     expect(vm.items[1].priceLabel).toBe('¥22.50')
     expect(vm.count).toBe(3)
-    expect(vm.couponLabel).toBe('') // 历史单 coupon=20 也不展示优惠券标签；实付仍用库内 amount
+    expect(vm).not.toHaveProperty('couponLabel') // 顾客页不展示优惠券：历史单 coupon=20 也不出标签；实付仍用库内 amount
     expect(vm.shipLabel).toBe('包邮')
     expect(vm.createdAtLabel).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
     expect(JSON.stringify(vm)).not.toContain('undefined')

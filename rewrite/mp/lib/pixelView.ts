@@ -133,9 +133,8 @@ export function rowGradients(cells: Cell[], rows: number, cell: number, cols = I
 /**
  * 挂到组件上：组件 data 里维护 pxRows（[{ t: 顶部 px, g: 渐变 }]）与 pxH；wxml 用 .pxc 容器 + 行 view 渲染（见 px-anim.wxml）。
  * @param draw 每帧回调：t＝可见累计毫秒（暂停期间不走表），P 画一格；返回 false＝画面静止，停帧
- * @param loop false＝只画一帧
  */
-export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: (t: number, P: Plot) => boolean | void, loop = true): PixelView {
+export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: (t: number, P: Plot) => boolean | void): PixelView {
   let cols = 0
   let rows = 0
   let ready = false
@@ -180,10 +179,10 @@ export function mountPixelView(host: Host, dims: PixelDims, cell: number, draw: 
     elapsed += lastNow ? Math.min(120, now - lastNow) : FRAME_MS
     lastNow = now
     const more = paint()
-    if (!(loop && more && shown && inView)) live.delete(step)
+    if (!(more && shown && inView)) live.delete(step)
   }
   const kick = () => {
-    if (!ready || !loop || !shown || !inView || dead || live.has(step)) return
+    if (!ready || !shown || !inView || dead || live.has(step)) return
     lastNow = 0
     live.set(step, { host, page })
     wake()

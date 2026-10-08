@@ -1,8 +1,4 @@
 /* 编辑收货地址（v5「字重」稿 A7） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 整页一列：顶栏 + 表单（scroll-view 自己滚·leave-sheet 武装时页面级滚动被冻结）+ 底部键 */
 .ae-page {
   height: 100vh;

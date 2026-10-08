@@ -59,14 +59,10 @@ export type AtomicPlayCtx = {
   skipOptional?: boolean
 }
 
-const assets = ASSETS as AtomicAssets
+export const assets = ASSETS as AtomicAssets
 
 const STITCH_MS = 8000
 const SHORT_MAX = 8
-
-export function loadAtomicAssets(): AtomicAssets {
-  return assets
-}
 
 /** 相对 lib 的路径（如 emotion/surprise/01-啊）→ trim 后原文。禁止改写。 */
 export function atomicText(rel: string): string {

@@ -13,11 +13,9 @@ const HAIR = ['#111111', 0.14]
 // 颜色写 [hex, 透明度]；down＝按下态（规格：键座 −1 格、外硬投影收为 0；面色沿用现有按下色）。
 export const SKINS = {
   card: { r: [3, 1, 1], face: '#ffffff', ring: HAIR, down: { face: '#f3f3f0' } },
-  cardOn: { r: [3, 1, 1], face: '#ffffff', ring: '#8a5ae0' },
   well: { r: [3, 1, 1], face: '#ededea', hl: '#e3e3df' },
   wellOn: { r: [3, 1, 1], face: '#ededea', ring: '#8a5ae0' },
   wellWarn: { r: [3, 1, 1], face: '#ededea', ring: '#f4bd3f' },
-  wellErr: { r: [3, 1, 1], face: '#ededea', ring: '#d9483b' },
   toast: { r: [3, 1, 1], face: ['#111111', 0.88] },
   sheet: { r: [4, 2, 1, 1], top: true, face: '#fafaf8' },
 }
@@ -43,7 +41,7 @@ const DOWN_ALIAS = {
 const HOSTS = ['.px-skin', '.well', '.sh-panel', '.ld-toast']
 export const ALIAS_CLASSES = [...Object.values(ALIAS), ...Object.values(DOWN_ALIAS)].flat().flatMap((sel) => sel.match(/[a-z][\w-]*/g))
 // 只裁外形（照片/缩略图/标签/头像）：按原圆角档
-export const CLIPS = { 4: [1], 6: [2, 1], 8: [3, 1, 1] }
+export const CLIPS = { 4: [1], 6: [2, 1] }
 
 const col = (c) => (Array.isArray(c) ? c : [c, 1])
 
@@ -177,7 +175,7 @@ export function render() {
   const out = [
     '/* 由 scripts/gen-px-skin.mjs 生成，勿手改（Claude Design「像素化落地规格.md」2c/3a·老板 2026-09-30）。',
     '   .px-<皮肤>：元素本身透明、::before 贴阶梯点阵九宫格（元素需 position 非 static）；.px-<皮肤>-down 为按下态。',
-    '   .px-clip-4/6/8：按原圆角档把照片/缩略图/标签裁成阶梯外形。.px-circle-*：固定尺寸像素圆。 */',
+    '   .px-clip-4/6：按原圆角档把照片/缩略图/标签裁成阶梯外形。.px-circle-*：固定尺寸像素圆。 */',
     `${HOSTS.join(',\n')} {\n  position: relative;\n  isolation: isolate;\n}`,
     '.px-skin {\n  background: transparent;\n  border-radius: 0;\n  box-shadow: none;\n}',
     `${HOSTS.map((h) => h + '::before').join(',\n')} {\n  content: "";\n  position: absolute;\n  left: 0;\n  top: 0;\n  right: 0;\n  bottom: 0;\n  z-index: -1;\n  pointer-events: none;\n  box-sizing: border-box;\n}`,

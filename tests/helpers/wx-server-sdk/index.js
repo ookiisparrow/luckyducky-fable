@@ -13,11 +13,8 @@
 const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
   store: {},
   openid: 'openid-default',
-  cloudPayCalls: [],
-  cloudPayFail: false,
   callFunctionCalls: [],
   callFunctionResult: null,
-  callFunctionFail: false,
   openapiCalls: [],
   openapiResult: null,
   openapiFail: false,
@@ -333,33 +330,9 @@ const cloud = {
     G.callFunctionCalls.push(JSON.parse(JSON.stringify(params)))
     // 注入钩子（测试并发：可在「调用进行中」改库，模拟回调抢先翻状态）。默认无。
     if (typeof G.callFunctionImpl === 'function') await G.callFunctionImpl(params)
-    if (G.callFunctionFail) throw new Error('CALL_FUNCTION_FAIL')
     return JSON.parse(JSON.stringify(G.callFunctionResult != null ? G.callFunctionResult : { result: {} }))
   },
-  // 云调用支付 mock：记录调用入参；cloudPayFail 时模拟下单失败（pay 测试用）
-  cloudPay: {
-    unifiedOrder: async (params) => {
-      G.cloudPayCalls.push(JSON.parse(JSON.stringify(params)))
-      if (G.cloudPayFail) return { returnCode: 'FAIL', returnMsg: 'mock fail' }
-      return {
-        returnCode: 'SUCCESS',
-        resultCode: 'SUCCESS',
-        payment: {
-          appId: 'test-appid',
-          timeStamp: '1718000000',
-          nonceStr: 'mock-nonce',
-          package: 'prepay_id=mock',
-          signType: 'MD5',
-          paySign: 'mock-sign',
-        },
-      }
-    },
-  },
-  uploadFile: async ({ cloudPath, fileContent }) => {
-    // 记录上传字节数，供「真实尺寸」测试断言分片重组无截断（根因#8）
-    G.lastUpload = { cloudPath, bytes: fileContent ? fileContent.length : 0 }
-    return { fileID: 'cloud://test/' + cloudPath }
-  },
+  uploadFile: async ({ cloudPath }) => ({ fileID: 'cloud://test/' + cloudPath }),
   getTempFileURL: async ({ fileList }) => {
     const list = fileList || []
     // 记录每次调用的批大小：真 sdk 单次 fileList 上限 50，getTempUrls 分批逻辑靠此断言（桩对齐真 SDK）
@@ -414,13 +387,9 @@ const control = {
     for (const k of Object.keys(G.store)) delete G.store[k]
     G.openid = 'openid-default'
     G.unionid = ''
-    G.cloudPayCalls = []
-    G.cloudPayFail = false
     G.callFunctionCalls = []
     G.callFunctionResult = null
-    G.callFunctionFail = false
     G.callFunctionImpl = null
-    G.lastUpload = null
     G.openapiCalls = []
     G.openapiResult = null
     G.openapiFail = false
@@ -446,15 +415,6 @@ const control = {
   },
   dump(coll) {
     return clone(G.store[coll] || [])
-  },
-  lastUpload() {
-    return G.lastUpload ? { ...G.lastUpload } : null
-  },
-  cloudPayCalls() {
-    return JSON.parse(JSON.stringify(G.cloudPayCalls))
-  },
-  setCloudPayFail(v) {
-    G.cloudPayFail = !!v
   },
   callFunctionCalls() {
     return JSON.parse(JSON.stringify(G.callFunctionCalls))
@@ -493,9 +453,6 @@ const control = {
   // 逼真机「集合未建」（根因#8）：标记集合未 createCollection·其 add/update 抛错·验代码有 createCollection 兜底
   markUncreated(name) {
     ;(G.uncreated = G.uncreated || new Set()).add(name)
-  },
-  setCallFunctionFail(v) {
-    G.callFunctionFail = !!v
   },
   // 云调用 mock 控制（发货上传）
   openapiCalls() {
