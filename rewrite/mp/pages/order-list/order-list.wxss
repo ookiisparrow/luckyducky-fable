@@ -96,11 +96,6 @@ page {
   font-size: 17px;
   font-weight: 500;
 }
-.ol-time {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 /* 待支付倒计时（设计稿：等宽 600 15px 琥珀 + 13/300「后自动取消」·与详情同口径） */
 .ol-cd {
   display: flex;
@@ -144,11 +139,6 @@ page {
 .ol-total {
   font-size: 17px;
   font-weight: 600;
-}
-.ol-amt-t {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 .ol-acts {
   display: flex;
@@ -238,11 +228,6 @@ page {
 .ol-state-t {
   font-size: 17px;
   font-weight: 500;
-}
-.ol-state-h {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 .ol-retry {
   margin-top: 8px;

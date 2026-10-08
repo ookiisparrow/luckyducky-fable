@@ -12,7 +12,7 @@
     <!-- 收货地址 -->
     <view wx:if="{{address}}" class="k-card co-card co-addr px-skin px-card" hover-start-time="20" hover-class="k-card-down" bind:tap="onPickAddress">
       <view class="co-addr-top">
-        <text class="t-sys co-k">收货地址</text>
+        <text class="t-sys co-k t-cap">收货地址</text>
         <view class="t-sys co-change"><text>更换</text><px-i name="arrow" /></view>
       </view>
       <text class="t-sys co-region">{{address.region}}</text>
@@ -34,8 +34,8 @@
         </view>
         <view class="co-item-mid">
           <text class="t-sys co-item-name">{{item.name}}</text>
-          <text wx:if="{{item.step}}" class="t-sys co-item-sub">{{item.sku || item.tag}}</text>
-          <text wx:else class="t-sys co-item-sub">{{item.sku || item.tag}}{{item.sku || item.tag ? ' · ' : ''}}×{{item.qty}}</text>
+          <text wx:if="{{item.step}}" class="t-sys co-item-sub t-cap">{{item.sku || item.tag}}</text>
+          <text wx:else class="t-sys co-item-sub t-cap">{{item.sku || item.tag}}{{item.sku || item.tag ? ' · ' : ''}}×{{item.qty}}</text>
         </view>
         <view wx:if="{{item.step}}" class="co-item-right">
           <text class="mono co-item-price">¥{{item.priceNum}}</text>
@@ -55,7 +55,7 @@
 
     <!-- 搭配购买：只有真能卖的加项才露整块；checkoutConst 里 hook/yarn 是占位，空则整块不渲染。 -->
     <view class="co-card co-items px-skin px-card" wx:if="{{addons.length}}">
-      <text class="t-sys co-k co-addon-head">搭配购买</text>
+      <text class="t-sys co-k t-cap co-addon-head">搭配购买</text>
       <view class="co-item" wx:for="{{addons}}" wx:key="id" hover-start-time="20" hover-class="k-row-down" data-id="{{item.id}}" bind:tap="onToggleAddon">
         <view class="k k-sm k-light co-check"><px-i wx:if="{{item.added}}" name="check" tone="var(--v5-violet)" /></view>
         <text class="t-sys co-item-name co-addon-name">{{item.name}}</text>
@@ -65,9 +65,9 @@
 
     <!-- 金额明细（点线引导）：运费行仍用 shipLabel（SHIP=0 显示「包邮」）；政策说明另起一行，不算钱 -->
     <view class="co-sum">
-      <view class="co-sum-row"><text class="t-sys co-k">商品</text><view class="co-leader"></view><text class="mono co-v">{{goodsLabel}}</text></view>
-      <view class="co-sum-row"><text class="t-sys co-k">运费</text><view class="co-leader"></view><text class="mono co-v">顺丰速运 · {{shipLabel}}</text></view>
-      <text class="t-sys co-policy">包邮到家 · 售后无忧</text>
+      <view class="co-sum-row"><text class="t-sys co-k t-cap">商品</text><view class="co-leader"></view><text class="mono co-v">{{goodsLabel}}</text></view>
+      <view class="co-sum-row"><text class="t-sys co-k t-cap">运费</text><view class="co-leader"></view><text class="mono co-v">顺丰速运 · {{shipLabel}}</text></view>
+      <text class="t-sys co-policy t-cap">包邮到家 · 售后无忧</text>
     </view>
   </view>
   </scroll-view>
@@ -80,7 +80,7 @@
       <text class="co-link hit44" data-type="privacy" bind:tap="onAgreement">《隐私政策》</text>
     </view>
     <view class="co-total">
-      <text class="t-sys co-k">应付</text>
+      <text class="t-sys co-k t-cap">应付</text>
       <text class="mono co-amount">¥{{amountNum}}</text>
     </view>
     <!-- 在途反馈：像素 loader + 「提交中」→ 建单成功打勾「已提交」（停 600ms）→ 调支付参数期间转圈「正在拉起支付」

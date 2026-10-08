@@ -85,11 +85,6 @@ page {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ca-sku {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .ca-right {
   display: flex;
   flex-direction: column;
@@ -183,11 +178,6 @@ page {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.ca-sum-k {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 .ca-leader {
   flex: 1;

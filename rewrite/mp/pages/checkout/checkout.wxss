@@ -25,12 +25,6 @@ page {
   gap: 8px;
 }
 
-.co-k {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
-
 /* 地址 */
 .co-addr {
   padding: 16px;
@@ -125,11 +119,6 @@ page {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.co-item-sub {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .co-item-price {
   font-size: 15px;
   font-weight: 600;
@@ -223,11 +212,6 @@ page {
 }
 .co-v {
   font-size: 15px;
-}
-.co-policy {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 
 /* 底部：应付 + 提交（主键宽度随设计稿公式：与详情页 加购1:直买1.25 的主键对齐不跳） */
