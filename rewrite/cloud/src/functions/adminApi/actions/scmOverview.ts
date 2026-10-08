@@ -1,7 +1,7 @@
 import { reply, type Ctx } from '../lib'
 import { listMaterialDocs, recentStockLedger } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
+import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS, YARN_L_KNOTTED_RE } from '@ldrw/shared'
 
 // 进销存总览（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=总览面，与 scmPlanner 同级只读聚合）。
 // 没有聚合看板的话，低库存/应付/在途要跑 5 页各看各的——本 action 把「今天该干啥」一屏拼出来，
@@ -12,7 +12,6 @@ import { OUTWORK_ORDER_STATUS, PURCHASE_ORDER_STATUS } from '@ldrw/shared'
 // 的每条查询链都显式 .limit()；计数一律走 db .count()（精确·不封顶·不受 limit 影响）——不编数（根因#8）。
 // rewrite/cloud/tests/scm-overview-bounded.test.ts 源码扫描本文件 getScmOverview 函数体：每条含 `.get()` 的查询链必须同链带 `.limit(`。
 
-const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/ // 与 scmPlanner.ts 同契约：带结＝外协产物，不外购
 const PAYABLE_SCAN_CAP = 200 // 未结外协单内存分组上限（超界不误报精确总额，改标 truncated）
 const RECENT_LEDGER_N = 8
 
@@ -37,7 +36,7 @@ export async function getScmOverview({ db }: Ctx) {
       qty: m.stock as number,
       threshold: m.threshold as number,
       gap: (m.threshold as number) - (m.stock as number),
-      suggest: (KNOTTED_RE.test(String(m._id)) ? 'outwork' : 'purchase') as 'outwork' | 'purchase',
+      suggest: (YARN_L_KNOTTED_RE.test(String(m._id)) ? 'outwork' : 'purchase') as 'outwork' | 'purchase', // 带结＝外协产物，不外购
     }))
     .sort((a, b) => b.gap - a.gap)
 

@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { COLLECTIONS } from '@ldrw/shared'
 import { main as feedbackNotify } from '../src/functions/timers/feedbackNotify'
+import { captureAlerts } from './helpers/alerts'
 
 const CURSOR = COLLECTIONS.feedbackNotifyCursor
 const FB = COLLECTIONS.feedback
@@ -29,17 +30,10 @@ describe('feedbackNotify 游标不越过没处理的意见', () => {
     control.setBeforeGet(async ({ coll }: { coll: string }) => {
       if (coll === FB) throw new Error('READ_FAIL')
     })
-    const seen: string[] = []
-    const orig = console.error
-    console.error = (...a: unknown[]) => {
-      seen.push(String(a[0]))
-    }
     let r: any
-    try {
+    const seen = await captureAlerts(async () => {
       r = await feedbackNotify()
-    } finally {
-      console.error = orig
-    }
+    })
     expect(r.ok).toBe(true)
     expect(r.cursorAdvanced).toBe(false)
     expect(r.newFeedback).toBe(0)
@@ -98,17 +92,10 @@ describe('feedbackNotify 游标不越过没处理的意见', () => {
       { _id: 'a', category: 'bug', content: '甲', createdAt: t0 },
       { _id: 'b', category: 'idea', content: '乙', createdAt: t1 },
     ])
-    const seen: string[] = []
-    const orig = console.error
-    console.error = (...a: unknown[]) => {
-      seen.push(String(a[0]))
-    }
     let r: any
-    try {
+    const seen = await captureAlerts(async () => {
       r = await feedbackNotify()
-    } finally {
-      console.error = orig
-    }
+    })
     expect(r.newFeedback).toBe(2)
     expect(r.cursorAdvanced).toBe(true)
     expect(r.capped).toBe(false)

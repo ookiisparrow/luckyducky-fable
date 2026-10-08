@@ -113,13 +113,8 @@ export async function saveCheckpoints({ db, data }: Ctx) {
   const failedIds: string[] = []
   for (const d of old?.data || []) {
     if (!keepIds.has(d._id)) {
-      const err = await db
-        .collection(COLLECTIONS.checkpoints)
-        .doc(d._id)
-        .remove()
-        .then(() => null)
-        .catch((e: any) => e || new Error('REMOVE_FAIL'))
-      if (err) failedIds.push(d._id)
+      const failed = await db.collection(COLLECTIONS.checkpoints).doc(d._id).remove().then(() => false, () => true)
+      if (failed) failedIds.push(d._id)
     }
   }
   // 扫描失败≠没有旧节点：删没删净未知，按 GC 未删净报（不另起错误码——前端只在 ok/GC_REMOVE_FAIL 时刷 baseRev）。

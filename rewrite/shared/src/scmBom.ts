@@ -5,7 +5,7 @@
  * 每产品三个填空（三档毛线颜色 + 专属包装料号 + 专属卡片料号）。最大团(L)用带结、中/小团(M/S)用原团。
  *
  * 组装与备货计算器共用本解析——配方语义只此一处（纯函数零 IO，模板/差异位由调用方读库后喂入）。
- * 料号命名契约见 scmKey.ts。
+ * 毛线料号命名契约见本文件 yarnMaterialId 与 YARN_L_*_RE（scmKey.ts 管的是 fg 组合键定界）。
  */
 
 type YarnTier = 'L' | 'M' | 'S'
@@ -30,6 +30,10 @@ export interface BomProfile {
 export function yarnMaterialId(color: string, tier: YarnTier, form: YarnForm): string {
   return `yarn:${color}:${tier}:${form}`
 }
+
+/** 最大团原团 / 带结料号的识别式（捕获组 1＝颜色）：外协发料只认原团、收货只认带结；带结不外购。 */
+export const YARN_L_RAW_RE = /^yarn:([a-z][a-z0-9-]*):L:raw$/
+export const YARN_L_KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
 type ResolveBomResult =
   | { ok: true; lines: Array<{ materialId: string; qty: number }> }

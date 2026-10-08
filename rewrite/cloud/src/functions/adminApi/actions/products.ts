@@ -183,23 +183,14 @@ export async function deleteDraft({ db, data }: Ctx) {
     .map((en: any) => String(en?.fileId || ''))
     .filter(Boolean)
   const orphans = [...new Set([...all, ...queued])].filter((u) => !covers.has(u)) // cover 永不删
-  const prodErr = await db
-    .collection(COLLECTIONS.products)
-    .doc(id)
-    .remove()
-    .then(() => null)
-    .catch((e: any) => e || new Error('REMOVE_FAIL'))
-  if (prodErr) {
+  const prodFailed = await db.collection(COLLECTIONS.products).doc(id).remove().then(() => false, () => true)
+  if (prodFailed) {
     // products 删失败：发布面未下、drafts 保留不动——不继续删 drafts，管理员可在草稿列表重试删除
     await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'products' })
     return reply(200, err('REMOVE_FAIL'))
   }
-  const draftErr = await drafts
-    .doc(id)
-    .remove()
-    .then(() => null)
-    .catch((e: any) => e || new Error('REMOVE_FAIL'))
-  if (draftErr) {
+  const draftFailed = await drafts.doc(id).remove().then(() => false, () => true)
+  if (draftFailed) {
     // products 已删成功（发布面已下）、drafts 残留：如实报失败并留痕，注明状态——重试删除即可收敛
     await notifyAlert('anomaly', 'deleteDraft', 'REMOVE_FAIL', { id, stage: 'drafts', note: 'products already removed' })
     return reply(200, err('REMOVE_FAIL'))

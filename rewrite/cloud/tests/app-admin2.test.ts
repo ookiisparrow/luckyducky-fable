@@ -7,9 +7,9 @@ import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
 import { getDb } from '../src/kit'
+import { stripComments } from './helpers/source-scan'
 
 const SRC = (p: string) => join(dirname(fileURLToPath(import.meta.url)), '..', 'src', p)
-const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 const ENSURE_DRAFTS = /ensure\(\s*db\s*,\s*(?:['"]productsDraft['"]|COLLECTIONS\.productsDraft)\s*\)/
 
 const post = (action: string, data: Record<string, unknown> = {}) =>

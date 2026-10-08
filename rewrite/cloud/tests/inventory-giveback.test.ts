@@ -7,19 +7,7 @@ import { control } from 'wx-server-sdk'
 import { restoreStock, reserveStock } from '../src/kit'
 import { isDocMissing, isEmptyDoc } from '../src/kit/db'
 import { COLLECTIONS } from '@ldrw/shared'
-
-function captureAlerts(fn: () => Promise<void>): Promise<string[]> {
-  const seen: string[] = []
-  const orig = console.error
-  console.error = (...a: unknown[]) => {
-    seen.push(String(a[0]))
-  }
-  return fn()
-    .then(() => seen)
-    .finally(() => {
-      console.error = orig
-    })
-}
+import { captureAlerts } from './helpers/alerts'
 
 beforeEach(() => {
   control.reset()

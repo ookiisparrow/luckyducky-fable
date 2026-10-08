@@ -3,7 +3,7 @@
 // 两类守卫：
 // ① 源码扫描——configChecklist.ts 里 `process.env` 只允许出现在 `!!`/`Boolean(` 布尔语境（防裸读值），
 //    且任何 `.where(...)` 起的查询链只要调了 `.get()` 就必须同链带 `.limit(`（根因#7 有界纪律）。
-//    结构抄既有源码扫描型守卫（scm-overview-bounded.test.ts 的 stripComments 范式，防 E1 注释假绿）。
+//    结构抄既有源码扫描型守卫（tests/helpers/source-scan 的 stripComments，防 E1 注释假绿）。
 // ② 行为哨兵——mock env + seed DB 塞入 SENTINEL_ 前缀哨兵串，断言 getConfigChecklist 响应体
 //    JSON.stringify 后不含任一哨兵串（探测规则只判「配了没」、绝不把探到的值吐回前端）。
 //
@@ -17,14 +17,10 @@ import { dirname, join } from 'node:path'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
+import { stripComments } from './helpers/source-scan'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = join(HERE, '..', 'src', 'functions', 'adminApi', 'actions', 'configChecklist.ts')
-
-/** 剥单行注释与块注释（E1 教训：裸写正则会被注释文本假命中）。 */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-}
 
 const raw = readFileSync(SRC, 'utf8')
 const body = stripComments(raw)

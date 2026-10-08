@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as payCallback } from '../src/functions/callbacks/payCallback'
+import { captureAlerts } from './helpers/alerts'
 
 const cb = (e: Record<string, unknown>) => payCallback(e) as Promise<any>
 
@@ -11,20 +12,6 @@ const seedOrder = (over: Record<string, unknown> = {}) =>
   control.seed('orders', [
     { _id: 'o1', id: 'o1', _openid: 'oME', status: 'pending', amount: 178, createdAt: Date.now(), reserved: [], ...over },
   ])
-
-// 捕获 [LD_ALERT] 单出口（观测语义验证）：restoreStock/notifyAlert 均经 console.error 打结构化行。
-function captureAlerts(fn: () => Promise<unknown>): Promise<string[]> {
-  const seen: string[] = []
-  const orig = console.error
-  console.error = (...a: unknown[]) => {
-    seen.push(String(a[0]))
-  }
-  return Promise.resolve(fn())
-    .then(() => seen)
-    .finally(() => {
-      console.error = orig
-    })
-}
 
 beforeEach(() => {
   control.reset()

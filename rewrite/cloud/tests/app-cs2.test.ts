@@ -1,6 +1,5 @@
 // 黄金 cs-agent §四/§五/§六/§七（分流引擎/防吞单/归档/CSAT 编排）。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import {
   firstSeen,
@@ -20,7 +19,8 @@ import {
 } from '../src/functions/cs/kfCallback/dispatch'
 import { archiveInbound, archiveOutbound, payloadText } from '../src/functions/cs/kfCallback/archive'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
-import { kfSignature, getDb } from '../src/kit'
+import { getDb } from '../src/kit'
+import { kfSyncEvent } from './helpers/kf-envelope'
 
 const db = () => getDb()
 
@@ -418,26 +418,7 @@ describe('端到端（验签→拉取→分流→归档→游标推进）', () =
         return {}
       },
     })
-    // 构造加密回调事件
-    const key = Buffer.from(AES + '=', 'base64')
-    const iv = key.subarray(0, 16)
-    const xml = '<xml><Token>SYNC</Token><OpenKfId>kf-e2e</OpenKfId></xml>'
-    const msgBuf = Buffer.from(xml, 'utf8')
-    const len = Buffer.alloc(4)
-    len.writeUInt32BE(msgBuf.length, 0)
-    let buf = Buffer.concat([crypto.randomBytes(16), len, msgBuf, Buffer.from('corp-1', 'utf8')])
-    const pad = 32 - (buf.length % 32 || 32) || 32
-    buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
-    cipher.setAutoPadding(false)
-    const enc = Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
-    const sig = kfSignature('cbtok', '1', '2', enc)
-
-    const r: any = await kfCallback({
-      httpMethod: 'POST',
-      queryStringParameters: { msg_signature: sig, timestamp: '1', nonce: '2' },
-      body: `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`,
-    })
+    const r: any = await kfCallback(kfSyncEvent({ token: 'cbtok', aesKey: AES, corpId: 'corp-1', openKfId: 'kf-e2e' }))
     expect(r.statusCode).toBe(200)
     expect(sendCalls.length).toBe(1) // 关键词命中 → 高亮菜单发出
     expect(sendCalls[0].msgtype).toBe('msgmenu')
@@ -480,24 +461,7 @@ async function postKfUserText(content: string, msgid: string): Promise<{ sendCal
       return {}
     },
   })
-  const key = Buffer.from(AES + '=', 'base64')
-  const iv = key.subarray(0, 16)
-  const xml = '<xml><Token>SYNC</Token><OpenKfId>kf-sec</OpenKfId></xml>'
-  const msgBuf = Buffer.from(xml, 'utf8')
-  const len = Buffer.alloc(4)
-  len.writeUInt32BE(msgBuf.length, 0)
-  let buf = Buffer.concat([crypto.randomBytes(16), len, msgBuf, Buffer.from('corp-1', 'utf8')])
-  const pad = 32 - (buf.length % 32 || 32) || 32
-  buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
-  cipher.setAutoPadding(false)
-  const enc = Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
-  const sig = kfSignature('cbtok', '1', '2', enc)
-  await kfCallback({
-    httpMethod: 'POST',
-    queryStringParameters: { msg_signature: sig, timestamp: '1', nonce: '2' },
-    body: `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`,
-  })
+  await kfCallback(kfSyncEvent({ token: 'cbtok', aesKey: AES, corpId: 'corp-1', openKfId: 'kf-sec' }))
   return { sendCalls }
 }
 

@@ -70,13 +70,8 @@ export async function saveKb({ db, data }: Ctx) {
   const failedIds: string[] = []
   for (const d of (old && old.data) || []) {
     if (!keep.has(d._id)) {
-      const err = await db
-        .collection(COLLECTIONS.kb)
-        .doc(d._id)
-        .remove()
-        .then(() => null)
-        .catch((e: any) => e || new Error('REMOVE_FAIL'))
-      if (err) failedIds.push(d._id)
+      const failed = await db.collection(COLLECTIONS.kb).doc(d._id).remove().then(() => false, () => true)
+      if (failed) failedIds.push(d._id)
     }
   }
   if (failedIds.length) {

@@ -15,18 +15,9 @@ const CLI_PATH = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli'
 const APP_VERSION_REL = 'rewrite/mp/lib/appVersion.ts'
 const AT_RE = /const DEV_PUSH_AT = '[^']*'/
 
+// 上海时间 YYYY-MM-DD HH:mm（sv-SE 区域格式即 ISO 样式，同 mac-sync-ends.mjs shanghaiStamp）
 export function shanghaiNow(now = Date.now()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-  const p = Object.fromEntries(fmt.formatToParts(new Date(now)).map((x) => [x.type, x.value]))
-  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`
+  return new Date(now).toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai', hourCycle: 'h23' }).slice(0, 16)
 }
 
 export function withPushAt(src, at) {
