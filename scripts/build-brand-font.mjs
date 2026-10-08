@@ -4,8 +4,8 @@
  *
  * 为什么分层（字体分层批·2026-07-16 工作流实测定档）：源 OTF 单字重 ~14MB 塞不进 2MB 主包（远程加载
  * 不变）；旧产物「GB2312 一级 3755 字整包」每档 ~965KB、冷启动两档 ~1.9MB 全下完首屏才换字。真实上屏
- * 只 ~890 字，其中 tab 首屏闭包仅 ~430 字——分层后首屏所需从 1.9MB 降到 ~220KB（-88%）：
- *   tier1（每档 ~110KB）= tab 页闭包+custom-tab-bar+brand-splash+app 闭包+seed 商品/课程标题+ASCII+标点
+ * 的字远少于整包，tab 首屏闭包更少——分层后首屏只下 tier1（各层字数与体积以 assets/brand-fonts/ 产物为准）：
+ *   tier1 = tab 页闭包+custom-tab-bar+brand-splash+app 闭包+seed 商品/课程标题+ASCII+标点
  *   tier2 = 其余页闭包
  * v5（老板 2026-09-28 拍板）：圆体只留给按钮/标题/界面固定文案，正文长段和用户内容走黑体——只收真用圆体显示
  * 的字，不设 GB2312 兜底层。挑字口径见 lib/brand-font-charset.mjs。

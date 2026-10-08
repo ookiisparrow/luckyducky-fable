@@ -2,7 +2,7 @@
 // 像素皮肤生成器（Claude Design「像素化落地规格.md」2c/3a·老板 2026-09-30 定稿；按键后改回平滑）→ rewrite/mp/styles/px-skin.wxss
 // 卡片/凹槽/半屏/提示框的阶梯圆角 + 描边 + 顶高光全部画进一张点阵 SVG，用 border-image 九宫格贴在 ::before 上——
 // 不用 box-shadow/border-radius（阶梯会把外投影裁掉·描边在拐角断开）。点阵算法照搬设计稿 pixelize.js 的 pz-step。
-// 一格 = 2px。改完跑 `node scripts/gen-px-skin.mjs`；tests/px-skin.test.ts 核对产物与本脚本一致。
+// 一格 = 2px。改完跑 `node scripts/gen-px-skin.mjs`；tests/scripts/pixelize.test.js 核对产物与本脚本一致。
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 

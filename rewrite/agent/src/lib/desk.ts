@@ -93,7 +93,7 @@ export function mapQueue(list: unknown, now: number): QueueItem[] {
   return out
 }
 
-// 快捷回复 + 页内提醒（直接复用后端 listKb，不新建 listQuickReplies）。
+// 快捷回复 + 页内提醒（直接复用后端 listKb）。
 export interface KbEntry {
   key: string
   question: string

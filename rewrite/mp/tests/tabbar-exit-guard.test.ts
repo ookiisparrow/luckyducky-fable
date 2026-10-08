@@ -7,7 +7,7 @@
 // wxml 挂了 page-container（wxml 无运行时，静态断言）。
 // 真机覆盖边界（安卓返回键可靠·iOS 侧滑未证实·胶囊 X/home 键/鸿蒙永远拦不到）属根因#8·机器守不了，见 utils/exitGuard 头注。
 import { describe, it, expect, vi, afterEach } from 'vitest'
-// app.json 走 ?raw + JSON.parse（rewrite/mp tsconfig 未开 resolveJsonModule·同 home-cards 的 ?raw 范式）
+// app.json 走 ?raw + JSON.parse（rewrite/mp tsconfig 未开 resolveJsonModule）
 import appJsonRaw from '../app.json?raw'
 import homeRaw from '../pages/home/home.ts?raw'
 import cartRaw from '../pages/cart/cart.ts?raw'

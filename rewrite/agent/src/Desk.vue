@@ -70,7 +70,7 @@ function openMedia(m: Msg) {
   if (c.state === 'loaded' && c.url) window.open(c.url, '_blank')
 }
 
-// 快捷回复 + 页内提醒（直接复用后端 listKb，不新建 listQuickReplies）。
+// 快捷回复 + 页内提醒（直接复用后端 listKb）。
 const NOTIFY_KEY = 'ldrw_agent_notify_enabled'
 const baseTitle = document.title // 还原基准单源＝index.html 定的标题，不复制字面量、避免漂移
 

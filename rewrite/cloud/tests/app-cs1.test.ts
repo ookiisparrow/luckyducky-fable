@@ -251,8 +251,7 @@ describe('csAccess 归属闸（黄金 §二）', () => {
   })
 })
 
-// kfSendText（黄金 §四·2026-07-23 拓扑收编批：原 cs/kfSend 独立函数收编进 kit/wecom.ts）。
-// SERVER_ONLY 用例删除：收编后不再是独立可调用云函数，越权发送边界随函数消失——权限改由外层
+// kfSendText（黄金 §四·实现在 kit/wecom.ts）。它不是独立可调用云函数，权限由外层
 // adminApi 网关闸（口令 + scope + 接待窗口，见 app-admin6.test.ts sendAgentMessage 用例）负责。
 describe('kfSendText / kfHealthProbe（黄金 §四/§十一）', () => {
   it('大白话：缺参拒；未配置拒；配齐后取 token 失败拒', async () => {
@@ -335,8 +334,7 @@ const stubFetchMedia = (router: (url: string) => { json?: any; binary?: Buffer }
   }
 }
 
-// kfFetchMedia（B5·顾客发图坐席可见·平台接缝单点#12·2026-07-23 拓扑收编批：原 cs/kfMedia 独立函数
-// 收编进 kit/wecom.ts）。SERVER_ONLY 用例删除：理由同上 kfSendText——收编后无独立可调用边界。
+// kfFetchMedia（B5·顾客发图坐席可见·平台接缝单点#12·实现在 kit/wecom.ts）。权限归属同上 kfSendText。
 describe('kf/media/get 下载 + kfFetchMedia（B5·顾客发图坐席可见·平台接缝单点#12）', () => {
   it('大白话：二进制响应→拿到原样字节；JSON 错误响应（media_id 过期/失效）→统一按过期语义回传', async () => {
     stubFetchMedia((url) => {
@@ -355,7 +353,7 @@ describe('kf/media/get 下载 + kfFetchMedia（B5·顾客发图坐席可见·平
     expect(bad.errcode).toBe(40007)
   })
 
-  it('大白话：缺参拒；未配置拒；配齐后经直连下载并回 Buffer（收编后跨函数 JSON 序列化约束消失·不再转 base64）', async () => {
+  it('大白话：缺参拒；未配置拒；配齐后经直连下载并回 Buffer（不转 base64）', async () => {
     expect(((await kfFetchMedia('')) as any).error).toBe('BAD_ARGS')
     expect(((await kfFetchMedia('m1')) as any).error).toBe('KF_NOT_CONFIGURED')
 

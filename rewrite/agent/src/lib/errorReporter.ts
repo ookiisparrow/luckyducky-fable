@@ -3,10 +3,8 @@ import type { App } from 'vue'
 // 刻意孪生·改必同步：rewrite/admin/src/lib/errorReporter.ts（除 source='admin|agent' 外保持同构）。
 // 坐席台前端错误上报（治病根#14 client-error 通道 web 半边·与 admin 版同构：不建跨包共享模块——
 // agent package.json 不依赖 @ldrw/shared 也不依赖 admin，两包各自独立部署，同构副本沿用本仓既有先例即
-// rewrite/agent/src/api/client.ts 对 admin client.ts 的「同构小副本」写法，见其文件头注。两文件各 ~60 行，
-// Rule of Three 未到，不值得为此新开一个 rewrite/web-shared 包）。行为细节见 admin 版 lib/errorReporter.ts
-// 头注：三件套捕获 → 打 adminApi `reportClientError` action → 落 anomalies 账本，会话内去重+封顶 MAX_REPORTS=20。
-// 与 admin 版唯一差异：source 写死 'agent'。
+// rewrite/agent/src/api/client.ts 对 admin client.ts 的「同构小副本」写法，见其文件头注。
+// Rule of Three 未到，不值得为此新开共享包）。行为细节见 admin 版头注。
 
 export interface ReportableClient {
   hasSession(): boolean

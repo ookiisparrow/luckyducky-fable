@@ -10,7 +10,7 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 import ScmOverview from '../src/pages/ScmOverview.vue'
 import { consumeOutworkHandoff, consumePurchaseHandoff } from '../src/lib/scmHandoff'
 
-// 形状照云端 getScmOverview（cloud/tests/app-scm.test.ts 总览段）
+// 形状照云端 getScmOverview（rewrite/cloud/tests/app-scm.test.ts 总览段）
 const overview = {
   ok: true,
   lowStock: [

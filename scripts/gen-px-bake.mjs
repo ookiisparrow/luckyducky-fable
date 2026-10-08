@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 像素图标预渲染生成器：lib/pixelAnim.ts 的 draw → 精灵图 + keyframes（核心见 scripts/lib/bake-px.mjs）。
 // 产物：rewrite/mp/lib/pixelBaked.ts、rewrite/mp/components/px-anim/px-baked.wxss。改完 pixelAnim 必须重跑；
-// tests/px-baked.test.ts 核对产物与本脚本一致，且逐毫秒与 draw 对拍。
+// tests/scripts/px-baked.test.js 核对产物与本脚本一致，且逐毫秒与 draw 对拍。
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'

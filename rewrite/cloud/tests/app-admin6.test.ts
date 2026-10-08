@@ -29,9 +29,8 @@ const S = (id: string, status: string, extra: Record<string, unknown> = {}) => (
   ...extra,
 })
 
-// sendAgentMessage/closeConversation(CSAT)/getMediaUrl 经 kit 直连 kfSendText/kfFetchMedia（2026-07-23
-// 拓扑收编批·不再有 cloud.callFunction 接缝可注入桩）——改用 app-cs1.test.ts 同款微信 HTTP 层 mock：
-// 纯 JSON（gettoken/send_msg）用 stubFetch，media/get 二进制+JSON 双形用 stubFetchMedia。
+// sendAgentMessage/closeConversation(CSAT)/getMediaUrl 经 kit 直连 kfSendText/kfFetchMedia，用 app-cs1.test.ts
+// 同款微信 HTTP 层 mock：纯 JSON（gettoken/send_msg）用 stubFetch，media/get 二进制+JSON 双形用 stubFetchMedia。
 const ENV_KEYS = ['WXKF_CORPID', 'WXKF_SECRET'] as const
 let fetchBackup: any
 const stubFetch = (router: (url: string, body?: any) => any) => {
@@ -303,7 +302,7 @@ describe('坐席回复与会话流（黄金 §四：接缝发送·归档·失败
   it('大白话：kfSendText 网络层意外抛错（非 wxkf API 的 errcode，是 fetch 本身失败）不能被误判为发送成功——绝不假成功归档（B1）', async () => {
     stubFetch((url) => {
       if (url.includes('gettoken')) return { access_token: 'T', expires_in: 7200 }
-      throw new Error('NETWORK_DOWN') // send_msg 阶段网络层意外抛错（同原 callFunction reject 场景·收编后无该接缝，改于此层复现）
+      throw new Error('NETWORK_DOWN') // send_msg 阶段网络层意外抛错
     })
     const countBefore = control.dump('conversations').length
     const r = await post('sendAgentMessage', A1, { sessionId: 's1', text: '这条也发不出去' })

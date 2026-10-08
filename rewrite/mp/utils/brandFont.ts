@@ -1,8 +1,9 @@
 // 品牌字体（文源圆体 WenYuan Rounded SC）分层远程加载单源（实测定档）——
 // 两层字族 + URL + 缓存 + 调度集中一处。改域名/文件名/分层只改这里（+ 构建脚本 scripts/build-brand-font.mjs）。
 //
-// 为什么分层（整包 GB2312 一级 3755 字两档 ~1.9MB，全下完首屏才换字）：真实上屏只 ~890 字，
-// tab 首屏闭包仅 ~430 字。分层后首屏所需 220KB（-88%），好网络下大概率赶在 brand-splash 2s 窗口内到达：
+// 为什么分层（整包 GB2312 一级 3755 字两档 ~1.9MB，全下完首屏才换字）：真实上屏的字远少于整包，
+// tab 首屏闭包更少。分层后首屏只下 tier1（各层字数与体积以 assets/brand-fonts/ 的 tier*.txt 与 woff 产物为准），
+// 好网络下大概率赶在 brand-splash 2s 窗口内到达：
 //   tier1（首屏）→ tier2（二级页）。v5（老板 2026-09-28 拍板）：圆体只留给按钮/标题/界面固定文案，正文长段和
 //   用户内容（昵称/地址/评价）走黑体 .t-sys，所以只收真用圆体的字、不设 GB2312 兜底层。
 // 逐层接力加载（上层落定才起下层=带宽让给首屏）；每层一个字族，回退栈 T1→T2→系统字
@@ -18,7 +19,7 @@
 // 持久缓存（官方文件系统文档背书「本地用户文件清理时机跟代码包一样」=跨冷启动持久·上限 200MB）：
 //   首启 downloadFile → copyFile 落 USER_DATA_PATH/brand-fonts/ → 二次冷启动本地直读零网络（飞行模式也有
 //   品牌字）。文件名带版本号（v10）＝天然缓存失效：版本升级后旧文件名不再被引用，启动时顺手清理。
-//   CDN 侧 max-age 仅 120s 几乎次次回源（实测），本地缓存是把「每次冷启 1.9MB」降为零的主杠杆。
+//   CDN 侧 max-age 仅 120s 几乎次次回源（实测），本地缓存是把「每次冷启都下载字库」降为零的主杠杆。
 //
 // 弱网加固：downloadFile 显式 timeout + 失败退避重试 2 次（3s/8s）——防「瞬断=整会话系统字」。
 //
@@ -28,7 +29,7 @@
 // ⚠ 用默认域名 cloudbase-….tcloudbaseapp.com（DigiCert·同视频域名 CA）不用自有 www.luckyducky.cn
 //   （TrustAsia·手机微信对 CA 挑剔）。域名须在小程序后台「downloadFile 合法域名」内。
 // ⚠ base64 Data URL 官方地板=基础库 3.7.9（更低版本属未定义行为碰巧能用）；分层后单文件 base64 过桥
-//   110KB→147KB 字符，远小于整包 1.3MB/档。
+//   的体积远小于整包一档。
 
 export const BRAND_FONT_FAMILY = 'WenYuan Rounded SC' // tier1（首屏·族名沿用，消费方零改动）
 export const BRAND_FONT_FAMILY_T2 = 'WenYuan Rounded SC T2' // tier2（二级页）
@@ -99,7 +100,7 @@ function prepareCacheDir(fs: WechatMiniprogram.FileSystemManager, dir: string): 
   })
 }
 
-// 二级页字库（tier2·190KB）在首层落定后再缓一拍：首启那 2–3 秒首页图片/商品/内容云调用正在抢带宽（性能批 #6·老板 2026-10-01）；
+// 二级页字库（tier2）在首层落定后再缓一拍：首启那 2–3 秒首页图片/商品/内容云调用正在抢带宽（性能批 #6·老板 2026-10-01）；
 // 本地缓存命中时读盘极快，这个延时只在首启真下载时有感；期间进二级页缺字走回退栈（与原来 tier2 晚于 tier1 到达同款体验）
 const TIER2_DEFER_MS = 3000
 

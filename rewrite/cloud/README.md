@@ -21,7 +21,7 @@ tests/         各域测试 + kit 原语 + 契约哨兵（contract-shape.test.ts
 **kit/ 逐文件职责**：
 
 - `db.ts` SDK 初始化+数据库句柄单一入口 · `gate.ts` 身份/权限闸（withOpenId/withAdminGate/isServerCall·fail-closed）· `reply.ts` 统一响应形状单源 · `validate.ts` 输入边界收口
-- `transition.ts` 状态机流转原语（携合法流转表·CAS）· `ids.ts` 确定性 `_id` 幂等建档 · `paging.ts` 统一 cursor/limit 分页协议
+- `transition.ts` 状态机流转原语（CAS·from/to 由调用方传入，应来自 `@ldrw/shared` 状态机声明）· `ids.ts` 确定性 `_id` 幂等建档 · `paging.ts` 统一 cursor/limit 分页协议
 - `throttle.ts` 限频闸（admin 防爆破/用户高频写限流）· `notify.ts` 三方支付通知防伪封装（defineNotifyCallback）
 - `anomaly.ts` 异常落库收集器（防静默失败）· `observe.ts` 告警统一出口（`[LD_ALERT]`）· `botpush.ts` 企微群机器人推送单一收口 · `audit.ts` 管理端操作审计留痕 · `inspect.ts` 巡检机原语
 - `inventory.ts` 成品库存原子原语（预留+乐观 CAS 防超卖）· `scmStock.ts` 原料账唯一读写口（幂等流水）
