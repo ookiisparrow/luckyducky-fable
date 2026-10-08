@@ -114,12 +114,7 @@ describe('pageQuery（游标翻页·属主隔离·黄金 G）', () => {
 })
 
 describe('pageQuery order 参数（Round8·根因#7 收口·order 可选 asc/desc·默认 desc 零漂移）', () => {
-  it('大白话：不传 order 仍是既有 desc 行为（默认参数零漂移）', async () => {
-    const p = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 10 })
-    expect(p.list[0].createdAt).toBe(1024)
-    expect(p.list[9].createdAt).toBe(1015)
-  })
-
+  // 不传 order 默认降序：由上方「首页按排序键降序」用例锁住（不传 order 时首条＝1024）。
   it('大白话：order=asc 首页按排序键升序取 limit 条，续页游标续取剩余、不丢不重', async () => {
     const p1 = await pageQuery(getDb(), 'orders', { _openid: 'oME' }, 'createdAt', { limit: 10 }, 20, 'asc')
     expect(p1.list.length).toBe(10)

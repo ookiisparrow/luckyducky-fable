@@ -52,8 +52,14 @@ describe('购物车 onShow', () => {
 
   it('大白话：云目录首拉还没回来就切回购物车——也先把本地车刷出来（不等云目录）', async () => {
     const page = await mount()
+    const { getAllProducts } = await import('../lib/catalog')
+    vi.mocked(getAllProducts).mockReturnValue(new Promise<never>(() => {})) // 云目录首拉一直不回
+    ;(globalThis as any).wx = { getWindowInfo: () => ({ statusBarHeight: 20 }) }
+    void page.onLoad() // 卡在等云目录
+    expect(page.data.items).toHaveLength(1) // 进页即上屏本地车
+    page.data.items = []
     page.onShow()
-    expect(page.data.items).toHaveLength(1)
+    expect(page.data.items).toHaveLength(1) // 切回也不等云目录
     expect(setActive).toHaveBeenCalledWith('cart')
   })
 })
