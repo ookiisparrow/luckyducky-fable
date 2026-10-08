@@ -9,7 +9,7 @@ import { serialSave } from './serialSave'
 import { SAVE_OK_MESSAGE } from './mapPageContent'
 import { failText, writeFailText } from './status'
 
-type AutoState = '' | 'saving' | 'saved' | 'error'
+export type AutoState = '' | 'saving' | 'saved' | 'error'
 
 interface ContentIO {
   load: () => Promise<TypedResult<{ content: unknown }>> // 回包内容字段须叫 content

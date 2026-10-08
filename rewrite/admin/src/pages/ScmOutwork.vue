@@ -2,6 +2,7 @@
 // 外协单：发织女大团原团 → 收同色带结团 → 应付=收×计件价·损耗=发−收 → 结算销账。
 import { ref, onMounted, computed } from 'vue'
 import { Plus, ClipboardList } from 'lucide-vue-next'
+import { yarnMaterialId, YARN_L_RAW_RE, YARN_L_KNOTTED_RE } from '@ldrw/shared'
 import { listOutworks, saveOutwork, issueOutwork, receiveOutwork, settleOutwork, cancelOutwork, listMaterials, listSuppliers } from '../api/scm'
 import { materialHuman, outworkStatusLabel, yuanToFen, fenLabel, scmErrorText } from '../lib/mapScm'
 import { dateTime } from '../lib/format'
@@ -32,8 +33,8 @@ const confirmKey = ref('')
 
 // 发出的大团原团 → 收回的同色带结团料号（非大团原团回 ''）；上限预览与收货预填共用
 const knottedOf = (id: unknown) => {
-  const m = /^yarn:([a-z0-9-]+):L:raw$/.exec(String(id))
-  return m ? `yarn:${m[1]}:L:knotted` : ''
+  const m = YARN_L_RAW_RE.exec(String(id))
+  return m ? yarnMaterialId(m[1], 'L', 'knotted') : ''
 }
 // 收货引导预览（裸表单得手抄颜色/自己算应付损耗/收超发也不拦）
 // 发的每个 raw 色 → 对应 knotted 同色的应收上限
@@ -64,8 +65,8 @@ async function reload() {
   listFailed.value = !o.ok
   pager.reset(o)
   const all = m.ok ? m.list : []
-  rawL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:raw$/.test(String(x._id)))
-  knottedL.value = all.filter((x) => /^yarn:[a-z0-9-]+:L:knotted$/.test(String(x._id)))
+  rawL.value = all.filter((x) => YARN_L_RAW_RE.test(String(x._id)))
+  knottedL.value = all.filter((x) => YARN_L_KNOTTED_RE.test(String(x._id)))
   workers.value = s.ok ? (s.list || []).filter((x) => x.type === 'outworker') : []
   // 分路报错（照 ScmBom.reload）：物料/织女挂掉不装空目录
   const err = loadErrors([[o, '外协单'], [m, '物料主档'], [s, '织女名单']])
@@ -267,14 +268,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 状态提示行（成功绿/失败红·覆盖 .ld-status 的灰） */
-.is-ok {
-  color: var(--ld-green);
-}
-.is-err {
-  color: var(--ld-red);
-}
-
 /* 草稿/收货表单：整宽字段 + 多列料行（本页独有的表单语言·kit 无表单原语） */
 .field {
   display: block;

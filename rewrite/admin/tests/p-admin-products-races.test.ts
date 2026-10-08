@@ -20,6 +20,7 @@ vi.mock('../src/lib/compressImage', () => ({ compressImage: vi.fn().mockResolved
 import Products from '../src/pages/Products.vue'
 import { compressImage } from '../src/lib/compressImage'
 import { transportErrorText } from '../src/lib/mapSystem'
+import { pending } from './helpers/pending'
 
 const draft = (id: string, name: string) => ({ id, name, price: '99', skus: [], images: [], params: [], detailSections: [], kit: [] })
 let w: VueWrapper<any>
@@ -46,11 +47,6 @@ afterEach(async () => {
   await flushPromises()
 })
 
-const pending = () => {
-  let release: (v: unknown) => void = () => {}
-  const p = new Promise((r) => (release = r))
-  return { p, release: (v: unknown) => release(v) }
-}
 const open = async (i: number) => {
   await w.findAll('button').filter((b) => b.text() === '编辑')[i].trigger('click')
   await flushPromises()

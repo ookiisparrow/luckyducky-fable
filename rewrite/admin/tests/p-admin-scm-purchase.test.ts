@@ -16,15 +16,11 @@ const api = vi.hoisted(() => ({
 vi.mock('../src/api/scm', () => api)
 
 import ScmPurchase from '../src/pages/ScmPurchase.vue'
+import { pending } from './helpers/pending'
 
 // 形状照云端 listPurchases / savePurchase（金额是分）
 const draft = { _id: 'po1', supplierId: 's1', status: 'draft', lines: [{ materialId: 'tool:hook', qty: 2, unitPriceFen: 150 }], totalFen: 300, createdAt: 1 }
 const ordered = { _id: 'po2', supplierId: 's1', status: 'ordered', lines: [], totalFen: 1000, createdAt: 2 }
-const pending = () => {
-  let release: (v: unknown) => void = () => {}
-  const p = new Promise((r) => (release = r))
-  return { p, release: (v: unknown) => release(v) }
-}
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset()
   api.listPurchases.mockResolvedValue({ ok: true, list: [draft, ordered], nextCursor: 'c1', hasMore: true })

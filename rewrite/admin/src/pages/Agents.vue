@@ -75,28 +75,23 @@ async function toggle(row: AgentRow) {
   void reload()
 }
 
+// 行内编辑（no-alert 纪律·低频操作）：第一次点进入编辑态，再点「存」才提交
+const editingId = ref('')
+const editingVal = ref('')
 async function bindWecom(row: AgentRow) {
-  const v = prompt2(row)
-  if (v === null) return
-  const r = await setAgentWecomUserId(row.id, v)
+  if (editingId.value !== row.id) {
+    editingId.value = row.id
+    editingVal.value = row.wecomUserId
+    return
+  }
+  editingId.value = ''
+  const r = await setAgentWecomUserId(row.id, editingVal.value.trim())
   if (!r.ok) {
     note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : writeFailText('绑定失败', r.error))
     return
   }
   note(true, '', '')
   void reload()
-}
-// 简易输入（no-alert 纪律下用内联输入更好·此处低频操作用行内编辑）
-const editingId = ref('')
-const editingVal = ref('')
-function prompt2(row: AgentRow): string | null {
-  if (editingId.value !== row.id) {
-    editingId.value = row.id
-    editingVal.value = row.wecomUserId
-    return null
-  }
-  editingId.value = ''
-  return editingVal.value.trim()
 }
 
 onMounted(reload)
@@ -186,12 +181,6 @@ onMounted(reload)
 <style scoped>
 /* 本页独有：建号表单栅格 · 一次性口令回显卡（绿·抄后关闭）· 企微绑定内联编辑输入 · 表格单元辅助。
  * 页头/卡/徽章/空态/按钮/表格骨架/状态行已交共享原语（PageHeader/Card/Badge/EmptyState/UiButton/.ld-table/.ld-status）。 */
-.is-err {
-  color: var(--ld-red);
-}
-.is-ok {
-  color: var(--ld-green);
-}
 
 /* 建号表单：三字段 + 建号按钮一行（窄屏交由栅格自然换行·kit 无表单原语） */
 .form-grid {

@@ -40,6 +40,7 @@ import ScmPurchase from '../src/pages/ScmPurchase.vue'
 import ScmOutwork from '../src/pages/ScmOutwork.vue'
 import ScmMaterials from '../src/pages/ScmMaterials.vue'
 import ScmBom from '../src/pages/ScmBom.vue'
+import { pending } from './helpers/pending'
 
 type W = VueWrapper
 interface Case {
@@ -213,11 +214,6 @@ const CASES: Case[] = [
 
 const NET = { ok: false, status: 0, error: 'NETWORK:Failed to fetch' }
 const netText = transportErrorText(NET.error)
-const pending = () => {
-  let release: (v: unknown) => void = () => {}
-  const p = new Promise((r) => (release = r))
-  return { p, release: (v: unknown) => release(v) }
-}
 
 beforeEach(() => {
   for (const group of Object.values(api)) for (const f of Object.values(group)) f.mockReset().mockResolvedValue({ ok: true, list: [], entries: [], messages: [], nextCursor: null, hasMore: false })

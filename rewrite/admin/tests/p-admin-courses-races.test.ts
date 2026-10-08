@@ -21,6 +21,7 @@ vi.mock('vue-router', () => ({
 
 import Courses from '../src/pages/Courses.vue'
 import { isUploadLocked } from '../src/lib/uploadLock'
+import { pending } from './helpers/pending'
 
 const course = (id: string, title: string) => ({
   id,
@@ -28,11 +29,6 @@ const course = (id: string, title: string) => ({
   rev: 1,
   chapters: [{ title: '章', lessons: [{ name: '课时', segments: [{ name: '段一', dur: '01:00', videoFileId: '' }] }] }],
 })
-const pending = () => {
-  let release: (v: unknown) => void = () => {}
-  const p = new Promise((r) => (release = r))
-  return { p, release: (v: unknown) => release(v) }
-}
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset()
