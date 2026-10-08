@@ -9,7 +9,7 @@
     <view class="wl-hit" bind:tap="onBack" hover-start-time="20" hover-class="wl-hit-down" hover-stay-time="100" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
       <view class="k k-sm k-light wl-back"><px-i name="back" /></view>
     </view>
-    <text wx:if="{{phase === 'nocode' || (phase === 'result' && kind !== 'activated')}}" class="t-sys wl-nav-t">激活课程</text>
+    <text wx:if="{{phase === 'nocode' || (phase === 'result' && kind !== 'activated')}}" class="t-sys wl-nav-t t-cap">激活课程</text>
   </view>
 
   <!-- 没带码进来：只能用微信扫激活卡（不给输入框） -->

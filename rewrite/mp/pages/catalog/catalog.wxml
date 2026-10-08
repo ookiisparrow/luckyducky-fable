@@ -7,14 +7,14 @@
   <view class="ct-state" wx:if="{{state === 'failed'}}">
     <px-anim name="signal" size="4" />
     <text class="ct-state-t">网络开小差</text>
-    <text class="t-sys ct-state-h">目录没加载出来，请重试</text>
+    <text class="t-sys ct-state-h t-cap">目录没加载出来，请重试</text>
     <view class="k k-light ct-retry" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
   </view>
 
   <!-- 课程不存在（courseId 缺失或云端查无此课）：给出路，扫码进来的用户到此不能没路走 -->
   <view class="ct-state" wx:elif="{{state === 'missing'}}">
     <text class="ct-state-t">没找到这门课</text>
-    <text class="t-sys ct-state-h">可能课程已下架，或者这个链接不对</text>
+    <text class="t-sys ct-state-h t-cap">可能课程已下架，或者这个链接不对</text>
     <view class="k k-light ct-go" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoCourses" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去我的课程看看</view>
   </view>
 

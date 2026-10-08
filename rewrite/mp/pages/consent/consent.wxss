@@ -49,16 +49,6 @@
 .cs-dock-space {
   height: calc(60px + max(28px, env(safe-area-inset-bottom)));
 }
-.cs-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
-  display: flex;
-  gap: 8px;
-  background: var(--v5-canvas);
-}
 /* 撤回：普通浅色键、轻点即撤（撤回同意须与同意同样便捷·不做长按） */
 .cs-main {
   flex: 1;

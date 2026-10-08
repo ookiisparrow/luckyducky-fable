@@ -17,7 +17,7 @@
   <view slot="refresher" class="hm-ptr">
     <px-anim wx:if="{{refreshing}}" name="loader" size="2" />
     <px-anim wx:else name="loader" size="3" p="{{pullP}}" />
-    <text class="t-sys hm-ptr-t">{{refreshing ? '正在刷新' : pullP >= 1 ? '松手刷新' : '下拉刷新'}}</text>
+    <text class="t-sys hm-ptr-t t-cap">{{refreshing ? '正在刷新' : pullP >= 1 ? '松手刷新' : '下拉刷新'}}</text>
   </view>
 
   <!-- 回顶锚点（scroll-into-view 目标·零高度不占版式） -->
@@ -153,7 +153,7 @@
       <view class="hm-faq-row" hover-start-time="20" hover-class="k-row-down" data-index="{{index}}" bind:tap="toggleFaq">
         <text class="mono hm-no {{openFaq === index ? 'hm-no-on' : ''}}">{{index < 9 ? '0' : ''}}{{index + 1}}</text>
         <text class="hm-faq-title">{{item.title}}</text>
-        <text class="t-sys hm-faq-act">{{openFaq === index ? '收起' : '展开'}}</text>
+        <text class="t-sys hm-faq-act t-cap">{{openFaq === index ? '收起' : '展开'}}</text>
       </view>
       <text wx:if="{{openFaq === index}}" class="t-sys hm-faq-body enter-rise">{{item.body}}</text>
     </view>

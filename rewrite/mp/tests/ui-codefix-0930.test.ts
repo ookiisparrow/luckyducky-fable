@@ -1,5 +1,6 @@
 // UI 审查第二轮·纯代码小修（2026-09-30·老板「纯代码问题可以直接处理」）+ 结业页「去评价」对收礼人不再是死路。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { live, rule } from './helpers/wxmlStatic'
 import appWxss from '../app.wxss?raw'
 import homeWxml from '../pages/home/home.wxml?raw'
 import orderWxml from '../pages/order/order.wxml?raw'
@@ -26,13 +27,7 @@ let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
   pageOpts = o as Record<string, any>
 }
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 const tagOf = (w: string, marker: string) => live(w).match(new RegExp(`<[a-z-]+[^>]*${marker}[^>]*>`))?.[0] ?? ''
-const rule = (s: string, sel: string) => {
-  const i = s.indexOf('\n' + sel + ' {')
-  expect(i, sel).toBeGreaterThanOrEqual(0)
-  return s.slice(i, s.indexOf('}', i))
-}
 
 describe('结业页「去评价」：收礼人（没有已完成订单）不再被带去空列表', () => {
   async function mount() {
@@ -64,7 +59,7 @@ describe('结业页「去评价」：收礼人（没有已完成订单）不再�
     await p.onLoad({ courseId: 'c1' })
     expect(p.data.canReview).toBe(false)
     const w = live(finishWxml)
-    expect(w).toMatch(/<block wx:if="\{\{canReview\}\}">\s*<view class="fn-dock-space"><\/view>\s*<view class="fn-dock">\s*<view class="k k-ink k-48 fn-main"[^>]*bind:tap="onReview"[^>]*>去评价<\/view>\s*<\/view>\s*<\/block>/)
+    expect(w).toMatch(/<block wx:if="\{\{canReview\}\}">\s*<view class="fn-dock-space"><\/view>\s*<view class="fn-dock dock">\s*<view class="k k-ink k-48 fn-main"[^>]*bind:tap="onReview"[^>]*>去评价<\/view>\s*<\/view>\s*<\/block>/)
     expect(w).not.toMatch(/课程目录|onCatalog/)
     expect(p.onCatalog).toBeUndefined()
   })

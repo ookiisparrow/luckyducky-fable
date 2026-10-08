@@ -108,11 +108,6 @@
   flex-direction: column;
   gap: 12px;
 }
-.rv-cap {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .rv-tags {
   display: flex;
   flex-wrap: wrap;

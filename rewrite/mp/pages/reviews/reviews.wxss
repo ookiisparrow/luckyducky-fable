@@ -20,11 +20,6 @@
   font-weight: 600;
   line-height: normal; /* 设计稿 A3 未设行高 */
 }
-.rv-count {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .rv-bars {
   flex: 1;
   display: flex;
@@ -114,11 +109,6 @@
   font-size: 13px;
   color: var(--v5-ink-2);
 }
-.rv-spec {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .rv-text {
   font-size: 17px;
   font-weight: 500;
@@ -184,11 +174,6 @@
 .rv-state-title {
   font-size: 17px;
   font-weight: 500;
-}
-.rv-state-hint {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 .rv-retry {
   margin-top: 8px;

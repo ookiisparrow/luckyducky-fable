@@ -2,6 +2,7 @@
 // 登录接口带「已同意协议」标记（只有勾过协议才带 true）；登录半屏告知默认开启；授权页只放一颗键：
 // 服务端确认已撤回＝「重新开启」，其余（已开启/未知/拉取失败）一律「撤回授权」——任何时候都能撤回。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { live, rule } from './helpers/wxmlStatic'
 import loginSheetWxml from '../components/login-sheet/login-sheet.wxml?raw'
 import loginSheetTs from '../components/login-sheet/login-sheet.ts?raw'
 import meTs from '../pages/me/me.ts?raw'
@@ -21,7 +22,6 @@ let storage: Record<string, unknown>
 const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 
 beforeEach(() => {
   storage = {}
@@ -59,8 +59,7 @@ describe('登录带「已同意协议」标记', () => {
   it('大白话：登录半屏协议勾选下方告知「登录即默认开启受托客服数据共享，可随时撤回」', () => {
     expect(live(loginSheetWxml)).toMatch(/<text class="t-sys ls-cs-note">登录即默认开启受托客服数据共享，可随时撤回<\/text>/)
     // 与「已阅读并同意」同字号同粗细（老板 2026-09-30：原先继承页面 500 显得太粗）
-    const rule = (sel: string) => loginSheetWxss.slice(loginSheetWxss.indexOf('\n' + sel + ' {'), loginSheetWxss.indexOf('}', loginSheetWxss.indexOf('\n' + sel + ' {')))
-    const weight = (sel: string) => /font-weight: (\d+)/.exec(rule(sel))?.[1]
+    const weight = (sel: string) => /font-weight: (\d+)/.exec(rule(loginSheetWxss, sel))?.[1]
     expect(weight('.ls-cs-note')).toBe(weight('.ls-agree-t'))
     expect(weight('.ls-cs-note')).toBe('300')
   })

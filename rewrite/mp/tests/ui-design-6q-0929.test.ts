@@ -1,5 +1,6 @@
 // UI 审查 6 问（2026-09-29·Claude Design「Lucky Ducky UI 审查 6 问」老板选定 1c·2a·3a·4b·5b·6b）+ 结业页底栏遮挡修复。
 import { describe, it, expect, afterEach } from 'vitest'
+import { live, rule } from './helpers/wxmlStatic'
 import { mapCatalog } from '../lib/mapLearning'
 import { groundGap } from '../lib/ground'
 import welcomeWxml from '../pages/welcome/welcome.wxml?raw'
@@ -18,7 +19,6 @@ import logisticsWxss from '../pages/logistics/logistics.wxss?raw'
 import paysuccessWxss from '../pages/paysuccess/paysuccess.wxss?raw'
 import finishWxss from '../pages/finish/finish.wxss?raw'
 import meWxss from '../pages/me/me.wxss?raw'
-import reviewEggWxss from '../pages/review/review.wxss?raw'
 import aftersalesWxss from '../pages/aftersales/aftersales.wxss?raw'
 import homeWxml from '../pages/home/home.wxml?raw'
 import cartWxml from '../pages/cart/cart.wxml?raw'
@@ -26,16 +26,10 @@ import checkoutWxml from '../pages/checkout/checkout.wxml?raw'
 import orderWxml from '../pages/order/order.wxml?raw'
 import aftersalesWxml from '../pages/aftersales/aftersales.wxml?raw'
 
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 const classOf = (wxml: string, marker: string): string => {
   const m = live(wxml).match(new RegExp(`class="([^"]*(?<![\\w-])${marker}(?![\\w-])[^"]*)"`))
   expect(m, `找不到 ${marker}`).toBeTruthy()
   return m![1]
-}
-const rule = (wxss: string, sel: string): string => {
-  const i = wxss.indexOf(sel + ' {')
-  expect(i, `缺 ${sel}`).toBeGreaterThanOrEqual(0)
-  return wxss.slice(i, wxss.indexOf('}', i))
 }
 
 describe('1c 激活成功页：主键贴底 + 主图按屏高压矮', () => {
@@ -65,7 +59,7 @@ describe('2a 地面线留白：屏高 < 700 用 56，其余 120（按屏幕高�
     expect(groundGap()).toBe(120)
   })
   it('大白话：九处地面线页面不再写死 120px（售后页不再写死 84/88），统一走 groundGap', () => {
-    for (const s of [cartWxss, checkoutWxss, orderWxss, logisticsWxss, paysuccessWxss, finishWxss, meWxss, reviewEggWxss]) expect(s).not.toMatch(/padding: 120px/)
+    for (const s of [cartWxss, checkoutWxss, orderWxss, logisticsWxss, paysuccessWxss, finishWxss, meWxss, reviewWxss]) expect(s).not.toMatch(/padding: 120px/)
     expect(aftersalesWxss).not.toMatch(/padding(-top)?: (84|88)px/)
   })
 })
@@ -141,6 +135,6 @@ describe('6b 订单列表：「去支付」全用浅色键，墨黑留给详情�
 
 describe('结业页底栏不遮内容', () => {
   it('大白话：固定底栏前有等高占位', () => {
-    expect(live(finishWxml)).toMatch(/<view class="fn-dock-space"><\/view>\s*<view class="fn-dock"/)
+    expect(live(finishWxml)).toMatch(/<view class="fn-dock-space"><\/view>\s*<view class="fn-dock dock"/)
   })
 })

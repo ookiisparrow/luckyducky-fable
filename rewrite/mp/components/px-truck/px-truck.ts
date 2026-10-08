@@ -8,7 +8,7 @@
 // ②③ 的素材由 scripts/gen-truck-bake.mjs 生成（lib/truckBaked），选哪层由 lib/truckLayer.layerOf(truck.view()) 决定；
 // 动作/姿态变化先交还 JS（leave），同一帧由 takeOver 决定撤层还是换层。
 import { createTruck, PX_ROWS, Take, TRUCK_CELL, type TakeResult, type Truck } from '../../lib/pixelTruck'
-import { mountPixelView, type PixelView } from '../../lib/pixelView'
+import { mountPixelView, pixelPageLifetimes, type PixelView } from '../../lib/pixelView'
 import { layerOf, type Layer } from '../../lib/truckLayer'
 
 const live = new WeakMap<object, { truck: Truck; cv: PixelView; since: number; leaving: boolean }>()
@@ -95,14 +95,7 @@ Component({
       live.delete(this)
     },
   },
-  pageLifetimes: {
-    show() {
-      live.get(this)?.cv.setVisible(true)
-    },
-    hide() {
-      live.get(this)?.cv.setVisible(false)
-    },
-  },
+  pageLifetimes: pixelPageLifetimes((c) => live.get(c)?.cv),
   methods: {
     go(o?: { back?: boolean }): number {
       const l = live.get(this)

@@ -26,7 +26,7 @@
   </view>
 
   <view class="fb-field">
-    <text class="t-sys fb-label">联系方式 · 选填</text>
+    <text class="t-sys fb-label t-cap">联系方式 · 选填</text>
     <input class="well fb-input {{focus === 'contact' ? 'well-focus' : ''}}" value="{{contact}}" bind:input="onContact" maxlength="100"
       data-f="contact" bind:focus="onFocus" bind:blur="onBlur"
       placeholder="微信号或手机号，方便回复你" placeholder-class="fb-ph" />

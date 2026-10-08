@@ -30,9 +30,8 @@ Page({
     busy: false,
     welcome: mapWelcome(null) as WelcomeVM, // W1/W2 文案·首帧即默认（CMS 到达后覆盖·不空屏）
   },
-  home: null as unknown,
   // 首页内容（背景图·lib/pageContent 会话缓存，首页来过即零请求·#444）与 activateCourse（兑课）互不依赖：并行发起省一次云调用往返（0.7-1.4s/次）。
-  // 页实例持有而非模块级——同 home 一样跟着本次 onLoad 走，避免跨实例复用陈旧 promise。
+  // 页实例持有而非模块级——跟着本次 onLoad 走，避免跨实例复用陈旧 promise。
   homeReady: null as Promise<ApiResult> | null,
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onEnter 进课回包在途用户已退出本页（自绘导航无返回箭头，但侧滑/物理键仍可退），迟到回包不再 redirectTo
   onUnload() {
@@ -67,7 +66,7 @@ Page({
     const contentReady = this.homeReady ?? Promise.resolve({ ok: false } as ApiResult)
     const [result, content] = await Promise.all([activateCourse(code), contentReady])
     if (this.unloaded) return // await 恢复点复核（同 onEnter 范式）：用户已退出本页——不再 setData
-    this.home = content.ok ? content.home : null // bgFor null-safe：取不到就走回退链，不阻塞结果屏
+    const home = content.ok ? content.home : null // bgFor null-safe：取不到就走回退链，不阻塞结果屏
     const view = activationView(result)
     this.setData({
       busy: false,
@@ -75,7 +74,7 @@ Page({
       kind: view.kind,
       courseId: view.courseId,
       courseTitle: '',
-      bg: bgFor(this.home, view.courseId, view.kind),
+      bg: bgFor(home, view.courseId, view.kind),
       errCopy: ACTIVATION_ERR_COPY[view.reason || 'network'],
     })
     if (view.kind === 'activated' && view.courseId) {

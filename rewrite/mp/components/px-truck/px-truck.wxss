@@ -1,18 +1,9 @@
 @import './truck-baked.wxss';
+@import '../../styles/px-view.wxss';
 
 :host {
   display: block;
   width: 100%;
   line-height: 0;
   pointer-events: none;
-}
-.pxc {
-  position: relative;
-  overflow: hidden;
-  will-change: transform; /* 自己一层：逐帧改行背景只重绘这一小块，不牵连整块滚动内容 */
-}
-.pxr {
-  position: absolute;
-  left: 0;
-  right: 0;
 }

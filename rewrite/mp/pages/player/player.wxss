@@ -472,7 +472,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.lp-help-card-sub,
 .lp-help-seg-dur {
   font-size: 13px;
   font-weight: 300;
@@ -484,11 +483,6 @@
 .lp-help-scroll {
   flex: 1;
   min-height: 0;
-}
-.lp-help-group-title {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
 }
 .lp-help-topic {
   padding-top: 16px;

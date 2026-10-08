@@ -1,6 +1,6 @@
 // 像素小鸭场景 <px-scene kind="hats|charm|share" scale="4">：首页「品牌」段三幕，图形见 lib/pixelScenes。
 import { createScene } from '../../lib/pixelScenes'
-import { mountPixelView, type PixelView } from '../../lib/pixelView'
+import { mountPixelView, pixelPageLifetimes, type PixelView } from '../../lib/pixelView'
 
 const live = new WeakMap<object, PixelView>()
 
@@ -28,12 +28,5 @@ Component({
       live.delete(this)
     },
   },
-  pageLifetimes: {
-    show() {
-      live.get(this)?.setVisible(true)
-    },
-    hide() {
-      live.get(this)?.setVisible(false)
-    },
-  },
+  pageLifetimes: pixelPageLifetimes((c) => live.get(c)),
 })

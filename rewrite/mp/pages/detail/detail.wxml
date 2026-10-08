@@ -45,7 +45,7 @@
 
   <view class="pd-specs" wx:if="{{vm.params.length}}">
     <view class="pd-spec" wx:for="{{vm.params}}" wx:key="k">
-      <text class="t-sys pd-spec-k">{{item.k}}</text>
+      <text class="t-sys pd-spec-k t-cap">{{item.k}}</text>
       <text class="pd-spec-v">{{item.v}}</text>
     </view>
   </view>
@@ -77,7 +77,7 @@
   </view>
 
   <view class="pd-dock-space"></view>
-  <view class="pd-dock">
+  <view class="pd-dock dock">
     <view class="k k-light k-48 pd-cs k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onService" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="service" /></view>
     <!-- 加购成功后两颗键合并成「去结算」（老板拍板 8·宽度占两键合计）；换款式（detail.ts onSelectSku）恢复 -->
     <view wx:if="{{added}}" class="k k-ink k-48 pd-go enter-fade" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onGoCheckout" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">去结算</view>
@@ -99,12 +99,12 @@
 <view class="pd-state pd-fail" wx:elif="{{!loading && loadFailed}}">
   <view class="pd-signal"><px-anim name="signal" size="4" /></view>
   <text class="pd-state-title">网络开小差</text>
-  <text class="t-sys pd-state-hint">商品加载失败，请重试</text>
+  <text class="t-sys pd-state-hint t-cap">商品加载失败，请重试</text>
   <view class="k k-light pd-state-btn" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重试</view>
 </view>
 <view class="pd-state" wx:elif="{{!loading}}">
   <text class="pd-state-title">商品不存在或已下架</text>
-  <text class="t-sys pd-state-hint">回首页看看别的吧</text>
+  <text class="t-sys pd-state-hint t-cap">回首页看看别的吧</text>
   <view class="k k-light pd-state-btn" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">回首页</view>
 </view>
 

@@ -2,6 +2,7 @@
 // 课程、进度全回来·本机地址簿也留着）。删除个人资料挪到隐私政策正文末尾（更深的位置）：确认后删，**已解锁课程与学习进度保留**
 // （隐私政策第六条·决策记录 §39）。删成清本地地址、登录态、继续学习旧卡、授权提示；删失败什么都不清。Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { live } from './helpers/wxmlStatic'
 import meWxml from '../pages/me/me.wxml?raw'
 import peWxml from '../pages/profile-edit/profile-edit.wxml?raw'
 import agWxml from '../pages/agreement/agreement.wxml?raw'
@@ -43,8 +44,6 @@ beforeEach(() => {
   deleteAccountMock.mockReset()
 })
 afterEach(() => vi.useRealTimers())
-
-const live = (w: string) => w.replace(/<!--[\s\S]*?-->/g, '')
 
 async function mount(path: 'profile-edit' | 'agreement', query: Record<string, string> = {}) {
   vi.resetModules()
