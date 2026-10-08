@@ -540,8 +540,7 @@ onMounted(async () => {
                 <input v-model="wantHome" type="checkbox" />
                 <span>{{ HOME_FEATURE_ASK }}</span>
               </label>
-              <UiButton v-if="row.state === 'preparing' || row.state === 'onsale'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm(row.state) : draftSyncLabel(row.state) }}</UiButton>
-              <UiButton v-if="row.state === 'unlisted'" variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
+              <UiButton variant="primary" size="sm" @click="doPublish(row.id)">{{ confirmKey === 'pub:' + row.id ? draftSyncConfirm(row.state) : draftSyncLabel(row.state) }}</UiButton>
               <UiButton v-if="row.state === 'unlisted'" variant="ghost" size="sm" @click="doRepublish(row.id)">{{ confirmKey === 're:' + row.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
               <UiButton v-if="row.state === 'onsale'" variant="danger" size="sm" @click="doUnpublish(row.id)">{{ confirmKey === 'off:' + row.id ? '确认从橱窗拿下？' : '从橱窗拿下' }}</UiButton>
               <button class="icon-btn ld-icon-btn" title="更多操作" @click="toggleMore(row.id, $event)">
@@ -678,8 +677,7 @@ onMounted(async () => {
       <!-- 嵌入向导步 1-3 时隐藏「保存草稿/关闭」：doSave 会 edit.value=null 关掉编辑器、而 embed 无列表可回→步面板变空白死胡同；
            embed 下 autosave（900ms + 离页补存）已负责持久化，切步/上架走向导自身按钮 -->
       <div v-if="!embed" class="editor-ops">
-        <UiButton v-if="editState === 'onsale'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('onsale') : draftSyncLabel('onsale') }}</UiButton>
-        <UiButton v-if="editState === 'unlisted'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm('unlisted') : draftSyncLabel('unlisted') }}</UiButton>
+        <UiButton v-if="editState !== 'preparing'" variant="primary" :disabled="busy" @click="doPublish(String(edit.id))">{{ confirmKey === 'pub:' + edit.id ? draftSyncConfirm(editState) : draftSyncLabel(editState) }}</UiButton>
         <UiButton v-if="editState === 'unlisted'" variant="ghost" :disabled="busy" @click="doRepublish(String(edit.id))">{{ confirmKey === 're:' + edit.id ? restoreSaleConfirm() : restoreSaleLabel() }}</UiButton>
         <UiButton :variant="editState === 'preparing' ? 'primary' : 'ghost'" :disabled="busy" @click="doSave">保存草稿</UiButton>
         <UiButton variant="ghost" @click="closeEditor">关闭</UiButton>

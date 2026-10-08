@@ -11,7 +11,7 @@ import { b64SizeOk } from '../../lib/mapProducts'
 import { launchErrorText } from '../../lib/mapSystem'
 import { compressImage } from '../../lib/compressImage'
 import UiButton from '../ui/Button.vue'
-import Badge from '../ui/Badge.vue'
+import SaveToolbar from './SaveToolbar.vue'
 import Card from '../ui/Card.vue'
 import EmptyState from '../ui/EmptyState.vue'
 
@@ -48,13 +48,7 @@ async function onHero(ev: Event) {
 
 <template>
   <div v-if="model">
-    <div class="pc-toolbar">
-      <Badge v-if="autoState === 'saving'" tone="amber" dot>自动保存中…</Badge>
-      <Badge v-else-if="autoState === 'saved'" tone="green" dot>已自动保存</Badge>
-      <Badge v-else-if="autoState === 'error'" tone="red" dot>自动保存失败</Badge>
-      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存' }}</UiButton>
-    </div>
-    <p v-if="message" class="ld-status">{{ message }}</p>
+    <SaveToolbar :auto-state="autoState" :busy="busy" :message="message" @save="save" />
 
     <div class="pc-split">
       <div class="pc-forms">

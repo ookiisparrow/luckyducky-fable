@@ -18,6 +18,7 @@ vi.mock('../src/api/scm', () => api)
 vi.mock('../src/api/products', () => ({ listDrafts: api.listDrafts }))
 
 import ScmBom from '../src/pages/ScmBom.vue'
+import { pending } from './helpers/pending'
 
 // 形状照云端 getBomSetup / listAssemblies / previewAssembly
 const SETUP = {
@@ -29,11 +30,6 @@ const SETUP = {
   ],
 }
 const lines = (materialId: string) => ({ ok: true, lines: [{ materialId, name: materialId, uom: 'count', need: 2, stock: 1, short: 1, missing: false }] })
-const pending = () => {
-  let release: (v: unknown) => void = () => {}
-  const p = new Promise((r) => (release = r))
-  return { p, release: (v: unknown) => release(v) }
-}
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset()

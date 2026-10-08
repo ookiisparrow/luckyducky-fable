@@ -26,6 +26,21 @@ body {
   font-size: 13px;
   color: var(--ld-content-2);
 }
+.ld-status.is-ok {
+  color: var(--ld-green);
+}
+.ld-status.is-err {
+  color: var(--ld-red);
+}
+/* 刷新/执行中的图标转圈：:class="{ 'ld-spin': busy }" */
+.ld-spin {
+  animation: ld-spin 0.9s linear infinite;
+}
+@keyframes ld-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* 页面内反复出现的小型结构原语（病根#5）：只收敛布局与既有 token 引用，
  * 页面专属尺寸/交互态仍留在 scoped 样式。 */

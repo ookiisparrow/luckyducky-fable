@@ -12,6 +12,7 @@ import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import { useLatest } from '../lib/latest'
 import { loadErrors } from '../lib/status'
 import type { AdminFgSummary, AdminRestockPlan } from '@ldrw/shared'
+import { yarnMaterialId } from '@ldrw/shared'
 import ScmFlowTabs from '../components/ScmFlowTabs.vue'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
@@ -21,7 +22,7 @@ import UiButton from '../components/ui/Button.vue'
 const router = useRouter()
 // 去开单联动（否则算完缺口只能手抄颜色/料号/数量去另一页开单·流程割裂）：带数据跳转·目标页 consume 预填
 function goOutworkOrder() {
-  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g) => ({ materialId: `yarn:${g.color}:L:raw`, qty: Number(g.rawToIssue) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
+  setOutworkHandoff({ lines: (plan.value?.outworkGaps || []).map((g) => ({ materialId: yarnMaterialId(g.color, 'L', 'raw'), qty: Number(g.rawToIssue) || 0 })).filter((l: { qty: number }) => l.qty > 0) })
   void router.push('/scm-outwork')
 }
 function goPurchaseOrder(g: AdminRestockPlan['purchaseGroups'][number]) {

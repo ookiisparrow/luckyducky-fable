@@ -109,7 +109,7 @@ onMounted(load)
   <div class="ld-page">
     <PageHeader title="数据看板" sub="经营与学习数据一屏总览 · 数字来自云端真实记录">
       <UiButton variant="ghost" size="sm" :disabled="busy" @click="load">
-        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ 'ld-spin': busy }" />
         <span>{{ busy ? '刷新中…' : '刷新' }}</span>
       </UiButton>
     </PageHeader>
@@ -210,14 +210,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .ok-line {
   margin: 0;
   font-size: 13px;

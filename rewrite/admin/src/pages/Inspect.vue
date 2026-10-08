@@ -62,7 +62,7 @@ onMounted(load)
       sub="定时/手动核对基础运行 · 主动探出静默失败（付了钱没发货 / 多退钱 / 待退款死信…）· 不依赖 AI"
     >
       <UiButton :disabled="running" @click="runNow">
-        <PlayCircle :size="16" :stroke-width="1.8" :class="{ spin: running }" />
+        <PlayCircle :size="16" :stroke-width="1.8" :class="{ 'ld-spin': running }" />
         <span>{{ running ? '巡检中…' : '立即巡检' }}</span>
       </UiButton>
     </PageHeader>
@@ -112,16 +112,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-/* 立即巡检按钮内 loading 图标转圈（本页独有） */
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* 未处理异常告警条（红底可点入口·本页独有语义块·无 kit alert 原语） */
 .alert {
   display: flex;

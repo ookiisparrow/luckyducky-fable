@@ -11,6 +11,7 @@ import { dateTime } from '../lib/format'
 import { setPurchaseHandoff, setOutworkHandoff } from '../lib/scmHandoff'
 import { useLoadStatus } from '../lib/status'
 import type { AdminScmOverview } from '@ldrw/shared'
+import { yarnMaterialId, YARN_L_KNOTTED_RE } from '@ldrw/shared'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import KpiCard from '../components/ui/KpiCard.vue'
@@ -37,14 +38,12 @@ const payables = computed(() => vm.value?.payables || [])
 const recentLedger = computed(() => vm.value?.recentLedger || [])
 const inTransit = computed(() => vm.value?.inTransit || { purchaseCount: 0, outworkCount: 0 })
 
-const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
-
 // 缺料行去开单（同 ScmPlanner goOutworkOrder/goPurchaseOrder 中转手法）：带结缺口＝应发同色大团原团（1:1）；
 // 采购缺口按行预填料号+缺口量，供应商留空（lowStock 不带 supplierId·到采购页手选）。
 function fixRow(row: AdminScmOverview['lowStock'][number]) {
   if (row.suggest === 'outwork') {
-    const m = KNOTTED_RE.exec(String(row.materialId))
-    const rawId = m ? `yarn:${m[1]}:L:raw` : String(row.materialId)
+    const m = YARN_L_KNOTTED_RE.exec(String(row.materialId))
+    const rawId = m ? yarnMaterialId(m[1], 'L', 'raw') : String(row.materialId)
     setOutworkHandoff({ lines: [{ materialId: rawId, qty: Number(row.gap) || 0 }] })
     void router.push('/scm-outwork')
   } else {
@@ -74,7 +73,7 @@ function ledgerBadge(l: AdminScmOverview['recentLedger'][number]) {
   <div class="ld-page">
     <PageHeader title="供应链总览" sub="今天该干啥一屏看——缺料预警 · 应付未结 · 在途单据 · 最近流水，卡片直达对应页">
       <UiButton variant="ghost" size="sm" :disabled="busy" @click="reload">
-        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ 'ld-spin': busy }" />
         <span>{{ busy ? '刷新中…' : '刷新' }}</span>
       </UiButton>
     </PageHeader>
@@ -155,12 +154,6 @@ function ledgerBadge(l: AdminScmOverview['recentLedger'][number]) {
 </template>
 
 <style scoped>
-.is-err {
-  color: var(--ld-red);
-}
-.is-ok {
-  color: var(--ld-green);
-}
 .num {
   justify-content: flex-end;
   text-align: right;
@@ -168,14 +161,6 @@ function ledgerBadge(l: AdminScmOverview['recentLedger'][number]) {
 .short {
   color: var(--ld-red);
   font-weight: 700;
-}
-.spin {
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .side-col {

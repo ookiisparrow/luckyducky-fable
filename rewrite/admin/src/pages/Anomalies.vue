@@ -89,7 +89,7 @@ onMounted(load)
   <div class="ld-page">
     <PageHeader title="异常监测" sub="运行期异常与告警账本 · 同类去重（次数累加）· 高危 [LD_ALERT] 单出口实时推企微">
       <UiButton variant="ghost" size="sm" :disabled="busy" @click="load">
-        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ 'ld-spin': busy }" />
         <span>{{ busy ? '刷新中…' : '刷新' }}</span>
       </UiButton>
     </PageHeader>
@@ -213,13 +213,5 @@ onMounted(load)
   align-self: center;
   display: flex;
   align-items: center;
-}
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

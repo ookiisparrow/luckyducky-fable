@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../src/api/scm', () => api)
 
 import ScmOutwork from '../src/pages/ScmOutwork.vue'
+import { pending } from './helpers/pending'
 
 const issued = {
   _id: 'ow1',
@@ -86,11 +87,6 @@ describe('ScmOutwork.vue 列表', () => {
   })
 })
 
-const pending = () => {
-  let release: (v: unknown) => void = () => {}
-  const p = new Promise((r) => (release = r))
-  return { p, release: (v: unknown) => release(v) }
-}
 const status = (w: Awaited<ReturnType<typeof mountPage>>) => (w.find('.ld-status').exists() ? w.find('.ld-status').text() : '')
 const issued2 = { ...issued, _id: 'ow4' }
 

@@ -107,7 +107,7 @@ onMounted(load)
     <PageHeader title="人工配置清单" :sub="`${totalItems || '…'} 项散落配置一屏「配了没」 · 探不到的（企微/微信客服/小程序后台）恒需人工核对`">
       <Badge tone="neutral" dot>零回显 · 只回状态不回密钥</Badge>
       <UiButton variant="ghost" :disabled="loading" @click="load">
-        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: loading }" />
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ 'ld-spin': loading }" />
         <span>{{ loading ? '探测中…' : '重新探测' }}</span>
       </UiButton>
     </PageHeader>
@@ -183,15 +183,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* 说明 banner（同 Settings.vue roadmap 语言：lilac 底·虚线描边） */
 .banner {
   padding: 12px 16px;

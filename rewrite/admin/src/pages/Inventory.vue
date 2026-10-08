@@ -122,7 +122,7 @@ onMounted(reload)
   <div class="ld-page">
     <PageHeader title="实物库存" sub="实物库存按 SKU 追踪 · 下单即预留、超时/退款自动回补、缺货自动售罄">
       <UiButton variant="ghost" size="sm" :disabled="busy" @click="reload">
-        <RefreshCw :size="14" :stroke-width="1.8" :class="{ spin: busy }" />
+        <RefreshCw :size="14" :stroke-width="1.8" :class="{ 'ld-spin': busy }" />
         <span>{{ busy ? '刷新中…' : '刷新' }}</span>
       </UiButton>
     </PageHeader>
@@ -212,14 +212,6 @@ onMounted(reload)
 </template>
 
 <style scoped>
-.spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 /* 工具条：搜索靠右 + 内嵌搜索图标（.ld-toolbar/.ld-chip/.ld-search 走全局 console.css） */
 .search-r {
   margin-left: auto;

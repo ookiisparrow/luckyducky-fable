@@ -12,8 +12,8 @@ import { launchErrorText } from '../../lib/mapSystem'
 import { compressImage } from '../../lib/compressImage'
 import { usePageContent } from '../../lib/usePageContent'
 import UiButton from '../ui/Button.vue'
+import SaveToolbar from './SaveToolbar.vue'
 import Card from '../ui/Card.vue'
-import Badge from '../ui/Badge.vue'
 import EmptyState from '../ui/EmptyState.vue'
 
 const { model, message, busy, autoState, save } = usePageContent('home', normalizeHome, homePayload, {
@@ -70,13 +70,7 @@ function addFooterLink() {
 
 <template>
   <div v-if="model">
-    <div class="pc-toolbar">
-      <Badge v-if="autoState === 'saving'" tone="amber" dot>自动保存中…</Badge>
-      <Badge v-else-if="autoState === 'saved'" tone="green" dot>已自动保存</Badge>
-      <Badge v-else-if="autoState === 'error'" tone="red" dot>自动保存失败</Badge>
-      <UiButton :disabled="busy" @click="save">{{ busy ? '保存中…' : '保存' }}</UiButton>
-    </div>
-    <p v-if="message" class="ld-status">{{ message }}</p>
+    <SaveToolbar :auto-state="autoState" :busy="busy" :message="message" @save="save" />
 
     <div class="pc-split">
       <div class="pc-forms">
