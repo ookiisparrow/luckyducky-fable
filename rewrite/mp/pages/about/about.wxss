@@ -1,8 +1,4 @@
 /* 关于我们（v5 稿 D5） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 .ab {
   padding: 12px 16px 16px;
   display: flex;

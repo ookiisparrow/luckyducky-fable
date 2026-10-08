@@ -1,8 +1,4 @@
 /* 编辑资料（v5「字重」稿 D3 + 放弃编辑确认） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 整页一列：顶栏 + 滚动内容 + 底坞（同 checkout·放弃确认武装时页面级滚动被冻，只让中间 scroll-view 滚） */
 .pe-page {
   height: 100vh;

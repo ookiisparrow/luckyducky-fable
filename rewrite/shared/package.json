@@ -4,15 +4,6 @@
   "private": true,
   "description": "全仓契约单源：金额 Fen 品牌类型 / 状态机声明（类型级派生）/ 集合册 / 错误码册。",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json"
-  }
+  "main": "src/index.ts",
+  "types": "src/index.ts"
 }

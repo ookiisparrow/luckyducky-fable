@@ -1,8 +1,4 @@
 /* 激活页（v5「字重」稿 C1 / C2 / C3）：整屏纵向 flex——顶栏 + 内容 + 底部操作区（贴底，主键 48 高）。 */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 .wl {
   min-height: 100vh;
   display: flex;

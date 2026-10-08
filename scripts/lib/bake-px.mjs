@@ -12,12 +12,12 @@ export const PERIOD = { shield: 2000, checkin: 2000, heart: 1100, hourglass: 260
 export const VARIANTS = {
   signal: [[2, false], [4, false]],
   loader: [[2, false], [2, true]],
-  coin: [[2, false], [4, false]],
+  coin: [[2, false]],
   hourglass: [[2, false]],
   checkin: [[2, true]],
   shield: [[4, false]],
   heart: [[4, false]],
-  alert: [[2, false], [4, false]],
+  alert: [[2, false]],
 }
 
 /** 采样一整个循环：返回去重后的帧（长 169 的颜色数组，'' ＝透明）与切帧时刻。落格规则同 lib/pixelView.plotInto：四舍五入、越界丢、后写覆盖。 */

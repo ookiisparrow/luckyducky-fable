@@ -55,7 +55,7 @@ async function mount(): Promise<Record<string, any>> {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
-const seg = (id: string) => ({ chapterTitle: '', lessonId: id === 's3' ? 'l2' : 'l1', lessonName: '', segmentId: id, segName: '', hasVideo: true, marks: [] })
+const seg = (id: string) => ({ lessonId: id === 's3' ? 'l2' : 'l1', lessonName: '', segmentId: id, segName: '', hasVideo: true, marks: [] })
 const fetchedSegs = () => urlMock.mock.calls.map((c) => c[1])
 
 beforeEach(() => {

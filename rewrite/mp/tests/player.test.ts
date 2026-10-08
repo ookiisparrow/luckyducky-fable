@@ -200,7 +200,6 @@ describe('lessonStrip（课时内分段条映射·P1/P4 segstrip 数据源）', 
   })
   it('大白话：播放中（completed 缺省）——当前段之前 done、当前段 cur、之后 todo，按位置序诚实近似', () => {
     const s = lessonStrip(COURSE, 's5')!
-    expect(s.chapterTitle).toBe('第一章')
     expect(s.lessonName).toBe('收针')
     expect(s.segIndex).toBe(2)
     expect(s.segTotal).toBe(2)

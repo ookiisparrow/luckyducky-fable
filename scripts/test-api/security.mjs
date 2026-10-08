@@ -44,7 +44,7 @@ async function main() {
   for (const bad of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'prototype']) {
     await check(`action=${bad} 应被拒（原型链防护）`, async () => {
       const r = await callFn(FUNCS.app, bad, {});
-      return { ok: isGatewayRejected(r), detail: JSON.stringify(r.result).slice(0, 120), ms: 0 };
+      return { ok: isGatewayRejected(r), detail: JSON.stringify(r.result).slice(0, 120) };
     });
   }
 
@@ -52,40 +52,40 @@ async function main() {
   for (const bad of ['../../etc/passwd', 'a;rm -rf /', '$(whoami)', '`id`', 'getProducts;drop table']) {
     await check(`action=${bad.slice(0, 20)}... 应被拒（命令/路径注入）`, async () => {
       const r = await callFn(FUNCS.app, bad, {});
-      return { ok: isGatewayRejected(r), detail: JSON.stringify(r.result).slice(0, 120), ms: 0 };
+      return { ok: isGatewayRejected(r), detail: JSON.stringify(r.result).slice(0, 120) };
     });
   }
 
   // 3. 参数注入（云数据库 NoSQL 注入尝试）
   await check('data 注入 $gt 操作符应安全处理', async () => {
     const r = await callFn(FUNCS.app, 'getProducts', { price: { $gt: '' }, '||': true });
-    return { ok: isSafe(r), detail: JSON.stringify(r.result).slice(0, 150), ms: 0 };
+    return { ok: isSafe(r), detail: JSON.stringify(r.result).slice(0, 150) };
   });
 
   // 4. XSS 注入（写入字段再读出验证转义/无害）
   await check('XSS payload 注入不应回显可执行脚本', async () => {
     const payload = '<script>alert(1)</script>';
     const r = await callFn(FUNCS.app, 'getProducts', { name: payload, search: payload });
-    return { ok: isSafe(r), detail: JSON.stringify(r.result).slice(0, 150), ms: 0 };
+    return { ok: isSafe(r), detail: JSON.stringify(r.result).slice(0, 150) };
   });
 
   // 5. 边界输入
   await check('超长输入（100KB）不应崩溃', async () => {
     const big = 'A'.repeat(100000);
     const r = await callFn(FUNCS.app, 'getProducts', { search: big });
-    return { ok: r.ok || isGatewayRejected(r), detail: r.error || JSON.stringify(r.result).slice(0, 100), ms: 0 };
+    return { ok: r.ok || isGatewayRejected(r), detail: r.error || JSON.stringify(r.result).slice(0, 100) };
   });
 
   await check('Unicode/emoji 输入正常处理', async () => {
     const r = await callFn(FUNCS.app, 'getProducts', { search: '🔥测试🏷️' });
-    return { ok: r.ok, detail: JSON.stringify(r.result).slice(0, 100), ms: 0 };
+    return { ok: r.ok, detail: JSON.stringify(r.result).slice(0, 100) };
   });
 
   // 6. 敏感信息泄露（错误信息不应含堆栈/密钥）
   await check('错误响应不泄露内部堆栈/密钥', async () => {
     const r = await callFn(FUNCS.app, 'getProducts', {});
     const err = JSON.stringify(r).toLowerCase();
-    return { ok: !/(secretkey|secretid|access.?key|stack trace|at .*\.js:)/.test(err), detail: '检查响应体', ms: 0 };
+    return { ok: !/(secretkey|secretid|access.?key|stack trace|at .*\.js:)/.test(err), detail: '检查响应体' };
   });
 
   console.log(`\n════════ 结果：${passed} 通过 / ${failed} 失败 / 共 ${passed + failed} ════════`);

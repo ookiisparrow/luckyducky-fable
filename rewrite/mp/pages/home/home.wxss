@@ -1,9 +1,4 @@
 /* 首页（v5「字重」稿 A1）。尺寸用 px 对齐设计稿（390 宽基准）；色值只来自 tokens.wxss 的 --v5-*。 */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
-
 /* 顶栏：状态栏 + 44 logo 条（右侧留给胶囊） */
 .hm-bar {
   position: fixed;

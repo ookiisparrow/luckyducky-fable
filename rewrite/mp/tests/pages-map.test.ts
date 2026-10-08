@@ -1,7 +1,8 @@
-// 五页 CMS 内容映射黄金（同 mapHome 黄金 §九）：整档 null / 逐块缺 /
+// 五页 CMS 内容映射黄金（四页在 lib/mapPages、「我」页在 lib/mapMe；同 mapHome 黄金 §九）：整档 null / 逐块缺 /
 // 逐字段空 都回退设计默认——CMS 拉不到或字段被误清空时页面永不空白（fail-soft）。逐 mapper 钉默认回退行为。
 import { describe, it, expect } from 'vitest'
-import { mapWelcome, mapCatalogPlayer, mapMe, mapAbout, mapAgreement } from '../lib/mapPages'
+import { mapWelcome, mapCatalogPlayer, mapAbout, mapAgreement } from '../lib/mapPages'
+import { mapMe } from '../lib/mapMe'
 
 describe('mapWelcome（W1 恭喜屏 + W2 三件事·缺档回退默认·不空屏）', () => {
   it('大白话：整档 null → W1 三字段 + W2 三点位全默认，且每点位带图标', () => {

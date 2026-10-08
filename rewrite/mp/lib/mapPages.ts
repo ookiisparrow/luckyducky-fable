@@ -1,7 +1,7 @@
-// 五页 CMS 内容映射（纯函数·vitest 钉行为）：云端 getPageContent → 视图模型。
+// 四页 CMS 内容映射（纯函数·vitest 钉行为）：云端 getPageContent → 视图模型（「我」页在 lib/mapMe.ts）。
 // 内容纪律（同 mapHome）：整档 null / 逐块缺 / 逐字段空 都回退「设计默认文案」——CMS 拉不到或
 // 字段被误清空时页面永不空白、不报错（fail-soft）。默认值 = 各页面重设计原稿，逐字搬入本文件单源。
-// welcome.warning（不可退货告知义务）空则强制回默认，不允许被清空；me 未知 key 忽略、visible===false 才隐藏；
+// welcome.warning（不可退货告知义务）空则强制回默认，不允许被清空；
 // about/agreement sections 空数组用默认全文；catalogPlayer.catalog.heroImage 空 → undefined（页面走 bgFor 回退链）。
 import { BRAND_NAME, BRAND_SLOGAN_EN } from './brand'
 
@@ -121,12 +121,6 @@ export function mapCatalogPlayer(content: unknown): CatalogPlayerVM {
     },
   }
 }
-
-// ═══════════════ 「我」页 me → 拆至 lib/mapMe.ts（原名 re-export·消费方不变）═══════════════
-// 为什么拆：me 是 tab 首屏页，其 ts import 闭包决定品牌字体 tier1（首屏子集）字符面；本文件的
-// 协议/隐私法务长文只在二级页上屏，同住会把 511 字拖进首屏子集（守卫 rw-mp-font-tier-subset-covers）。
-// me.ts 直引 lib/mapMe；这里 re-export 保住「五页 mapper 单源入口」与既有测试/守卫引用。
-export { mapMe } from './mapMe'
 
 // ═══════════════ 关于我们 about ═══════════════
 interface AboutSectionVM {

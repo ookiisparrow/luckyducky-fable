@@ -1,4 +1,4 @@
-// 像素小货车 <px-truck id="truck" cargo="2" pose="park|drive|slow|unload|pay|broken|reverse" arrive="160" pin scale="4" />
+// 像素小货车 <px-truck id="truck" cargo="2" pose="park|drive|slow|unload|pay|broken|reverse" arrive="160" scale="4" />
 // 满宽、17 格高；图形与状态机见 lib/pixelTruck。页面经 this.selectComponent('#truck') 调 go/restart/stamp，
 // 返回需要等待的毫秒数（等车开走再跳转；0＝没动，直接跳）。
 // 三条渲染路径（scale=4 才有烘焙，别的 scale 一律走①）：
@@ -25,7 +25,6 @@ Component({
     cargo: { type: Number, value: 0 },
     pose: { type: String, value: 'park' },
     arrive: { type: Number, value: -1 }, // ≥0＝进场时从屏外开进来（延迟 ms）
-    pin: { type: Boolean, value: false },
     scale: { type: Number, value: 4 },
   },
   data: { bk: null as Layer | null },
@@ -52,7 +51,6 @@ Component({
         cargo: this.data.cargo,
         pose: this.data.pose,
         arrive: this.data.arrive >= 0 ? this.data.arrive : undefined,
-        pin: this.data.pin,
       })
       let cols = 0
       const self = this

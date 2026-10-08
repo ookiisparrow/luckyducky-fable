@@ -1,8 +1,4 @@
 /* 用户协议 / 隐私政策（v5 稿 D6）：只管版式不动内容。 */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 .ag {
   padding: 4px 16px 24px;
   display: flex;

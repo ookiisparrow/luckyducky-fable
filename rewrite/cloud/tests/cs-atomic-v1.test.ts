@@ -9,8 +9,8 @@ import {
   assemblePackagingBubbles,
   atomicText,
   detectPackagingFacets,
+  assets,
   listAtomicLib,
-  loadAtomicAssets,
   playSequence,
   stitchUtterance,
 } from '../src/functions/cs/kfCallback/csAtomic'
@@ -131,7 +131,6 @@ const jevPackaging = async () => ({
 
 describe('atomic-v1 包装优先级组装', () => {
   it('大白话：构建打进的原子库有门闩/新情绪/理赔，没有 GitHub 地址', () => {
-    const assets = loadAtomicAssets()
     expect(assets.id).toBe('atomic-v1')
     expect(assets.route.emotionAlways).toBe(true)
     expect(assets.route.gate && assets.route.gate.recentOrderRequiredForBusiness).toBe(true)

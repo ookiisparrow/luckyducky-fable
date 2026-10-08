@@ -28,7 +28,6 @@ export interface CoursePub {
 }
 
 export interface FlatSegment {
-  chapterTitle: string
   lessonId: string
   lessonName: string
   segmentId: string
@@ -62,7 +61,6 @@ export function flattenSegments(course: unknown): FlatSegment[] {
       for (const s of Array.isArray(l.segments) ? l.segments : []) {
         if (!s || !s.id) continue
         out.push({
-          chapterTitle: String(ch.title || ''),
           lessonId: String(l.id),
           lessonName: String(l.name || ''),
           segmentId: String(s.id),
@@ -156,7 +154,6 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
 }
 
 export interface LessonStrip {
-  chapterTitle: string
   lessonName: string
   lessonNo: string // 课时跨章连续序号，1-based，padStart(2,'0')，如 '04'
   segIndex: number // 当前段在本课时内的 1-based 序
@@ -188,7 +185,6 @@ export function lessonStrip(course: unknown, currentSegId: string, completed?: b
         return 'todo'
       })
       return {
-        chapterTitle: String(ch.title || ''),
         lessonName: String(l.name || ''),
         lessonNo: String(lessonNo).padStart(2, '0'),
         segIndex: idx + 1,

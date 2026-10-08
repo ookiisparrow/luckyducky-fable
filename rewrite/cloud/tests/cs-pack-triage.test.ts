@@ -10,7 +10,7 @@ import {
   emptyPackSession,
   handoffDocId,
   handoffMissingFields,
-  loadPackAssets,
+  assets,
   matchTriageRule,
   packSessionId,
   packagingMustNotAskOrderId,
@@ -47,7 +47,6 @@ const ev = (over: Record<string, unknown> = {}) => ({
 
 describe('Config Pack 挂载', () => {
   it('大白话：构建打进的包里有话术和规则，没有 GitHub 地址', () => {
-    const assets = loadPackAssets()
     expect(assets.pack_id).toBe('lucky-ducky-2026-09-19')
     expect(assets.brief.gate && assets.brief.gate.mode).toBe('jev_total_intake')
     expect(assets.triage_rules.rules.some((r) => r.script === 'aftersale_packaging')).toBe(true)
@@ -80,18 +79,17 @@ describe('Config Pack 挂载', () => {
     expect(rule && rule.requiredSlots).toEqual(['severity_photo_hint'])
     expect(rule && rule.doNotAsk).toEqual(['order_id'])
     expect(packagingMustNotAskOrderId(rule)).toBe(true)
-    const pack = loadPackAssets()
-    const r30 = pack.triage_rules.rules.find((r) => r.id === 'R30_aftersale_packaging')
+    const r30 = assets.triage_rules.rules.find((r) => r.id === 'R30_aftersale_packaging')
     expect(r30 && r30.comment).toMatch(/只要合照，禁止要订单号/)
     expect(r30 && r30.do_not_ask).toEqual(['order_id'])
-    const photo = pack.slots_schema.slots.find((s) => s.name === 'severity_photo_hint')
+    const photo = assets.slots_schema.slots.find((s) => s.name === 'severity_photo_hint')
     expect(photo && photo.required_for).toContain('packaging')
     expect(photo && photo.ask_variants_packaging).toEqual([
       atomicText('business/packaging/ask_photo_01'),
       atomicText('business/packaging/ask_photo_02'),
       atomicText('business/packaging/ask_photo_03'),
     ])
-    const order = pack.slots_schema.slots.find((s) => s.name === 'order_id')
+    const order = assets.slots_schema.slots.find((s) => s.name === 'order_id')
     expect(order && order.required_for).not.toContain('packaging')
     expect(order && String(order.note || '')).toMatch(/禁止要订单号/)
   })

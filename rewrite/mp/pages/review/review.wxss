@@ -1,8 +1,4 @@
 /* 写评价（v5 稿 B3） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 整页纵向三段：顶栏占位 / 滚动内容 / 底部发布栏（放弃拦截武装会冻结页面级滚动，滚动放 scroll-view 里） */
 .rv-page {
   height: 100vh;
