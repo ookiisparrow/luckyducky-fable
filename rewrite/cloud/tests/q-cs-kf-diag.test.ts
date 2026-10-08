@@ -2,10 +2,9 @@
 // 日志里一行业务输出都没有，外面分不出停在哪一步）。每次事件留 [kf-diag] 行：用的哪套配置（尾号）、拉消息返回码
 // 与条数、每条走的分支、回复返回码——绝不含消息原文、访问令牌、应用密钥。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
-import { kfSignature } from '../src/kit'
+import { kfSyncEvent } from './helpers/kf-envelope'
 
 const AES = 'c'.repeat(43)
 const SECRET_TEXT = '我的私密内容123'
@@ -44,21 +43,7 @@ function mockWecom(sync: Record<string, unknown>) {
 }
 
 async function fire(openKfId = 'kf-abcd1234') {
-  const key = Buffer.from(AES + '=', 'base64')
-  const msgBuf = Buffer.from(`<xml><Token>SYNC</Token><OpenKfId>${openKfId}</OpenKfId></xml>`, 'utf8')
-  const len = Buffer.alloc(4)
-  len.writeUInt32BE(msgBuf.length, 0)
-  let buf = Buffer.concat([crypto.randomBytes(16), len, msgBuf, Buffer.from('corp-9876', 'utf8')])
-  const pad = 32 - (buf.length % 32 || 32) || 32
-  buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, key.subarray(0, 16))
-  cipher.setAutoPadding(false)
-  const enc = Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
-  const r: any = await kfCallback({
-    httpMethod: 'POST',
-    queryStringParameters: { msg_signature: kfSignature('cbtok', '1', '2', enc), timestamp: '1', nonce: '2' },
-    body: `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`,
-  })
+  const r: any = await kfCallback(kfSyncEvent({ token: 'cbtok', aesKey: AES, corpId: 'corp-9876', openKfId }))
   expect(r.statusCode).toBe(200)
 }
 

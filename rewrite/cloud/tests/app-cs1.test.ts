@@ -1,6 +1,5 @@
 // 黄金 cs-agent §二/§三/§八/§九/§十一。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
 import { main as kfHealthProbe } from '../src/functions/timers/kfHealthProbe'
@@ -19,24 +18,11 @@ import {
   kfSendText,
   kfFetchMedia,
 } from '../src/kit'
+import { kfEncrypt } from './helpers/kf-envelope'
 
 const call = (action: string, data: Record<string, unknown> = {}) => app({ action, data }) as Promise<any>
 
-// WXBizMsgCrypt 正向加密（测试构造密文·与 decryptKfMessage 互为逆运算）
-const AES_KEY = 'a'.repeat(43)
-function encryptKf(encodingAESKey: string, message: string, receiveId: string): string {
-  const key = Buffer.from(encodingAESKey + '=', 'base64')
-  const iv = key.subarray(0, 16)
-  const msg = Buffer.from(message, 'utf8')
-  const len = Buffer.alloc(4)
-  len.writeUInt32BE(msg.length, 0)
-  let buf = Buffer.concat([crypto.randomBytes(16), len, msg, Buffer.from(receiveId, 'utf8')])
-  const pad = 32 - (buf.length % 32 || 32) || 32
-  buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
-  cipher.setAutoPadding(false)
-  return Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
-}
+const AES_KEY = 'a'.repeat(43) // 测试构造密文用 kfEncrypt（tests/helpers/kf-envelope·与 decryptKfMessage 互为逆运算）
 
 const ENV_KEYS = ['WXKF_CORPID', 'WXKF_SECRET'] as const
 let fetchBackup: any
@@ -66,7 +52,7 @@ describe('验签与解密（黄金 §十一·全场最关键）', () => {
   })
 
   it('大白话：解密是加密的真逆运算（取回原文与接收方 id）；声明长度越界抛错不返回错位切片', () => {
-    const enc = encryptKf(AES_KEY, '<xml><Token>t1</Token></xml>', 'corp-1')
+    const enc = kfEncrypt(AES_KEY, '<xml><Token>t1</Token></xml>', 'corp-1')
     const dec = decryptKfMessage(AES_KEY, enc)
     expect(dec.message).toBe('<xml><Token>t1</Token></xml>')
     expect(dec.receiveId).toBe('corp-1')
@@ -81,7 +67,7 @@ describe('验签与解密（黄金 §十一·全场最关键）', () => {
     })
     const xml = '<xml><Token>sync-t</Token><OpenKfId>kf-1</OpenKfId></xml>'
     const mk = (receiveId: string, sigOk = true) => {
-      const enc = encryptKf(AES_KEY, xml, receiveId)
+      const enc = kfEncrypt(AES_KEY, xml, receiveId)
       const sig = sigOk ? kfSignature('tok', '1', '2', enc) : 'bad-sig'
       return {
         httpMethod: 'POST',
@@ -102,7 +88,7 @@ describe('验签与解密（黄金 §十一·全场最关键）', () => {
 
   it('大白话：GET 验 URL——签名对回明文回显；签名错回空', async () => {
     const cb = defineKfCallback({ creds: () => ({ token: 'tok', aesKey: AES_KEY }), onEvent: async () => {} })
-    const echostr = encryptKf(AES_KEY, 'PLAIN-ECHO', 'corp-1')
+    const echostr = kfEncrypt(AES_KEY, 'PLAIN-ECHO', 'corp-1')
     const ok1 = await cb({
       httpMethod: 'GET',
       queryStringParameters: { msg_signature: kfSignature('tok', '1', '2', echostr), timestamp: '1', nonce: '2', echostr },

@@ -1,11 +1,11 @@
 // kfCallback 每条消息的 DB 读放大：wxkf 配置每事件只读一次，kfIdentity 每条消息只读一次。
 // 行为（回复、入站/出站归档带 openid、未绑定时桥接写入）与读次数一起锁住。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import { COLLECTIONS } from '@ldrw/shared'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
-import { kfSignature, getDb } from '../src/kit'
+import { getDb } from '../src/kit'
+import { kfSyncEvent } from './helpers/kf-envelope'
 import { kfUserHasRecentOrder } from '../src/functions/cs/kfCallback/dispatch'
 
 const AES = 'b'.repeat(43)
@@ -69,21 +69,7 @@ async function postText(euid: string, text: string | object, unionid = '', urls:
       return {}
     },
   })
-  const key = Buffer.from(AES + '=', 'base64')
-  const msgBuf = Buffer.from('<xml><Token>SYNC</Token><OpenKfId>kf-r</OpenKfId></xml>', 'utf8')
-  const len = Buffer.alloc(4)
-  len.writeUInt32BE(msgBuf.length, 0)
-  let buf = Buffer.concat([crypto.randomBytes(16), len, msgBuf, Buffer.from('corp-1', 'utf8')])
-  const pad = 32 - (buf.length % 32 || 32) || 32
-  buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, key.subarray(0, 16))
-  cipher.setAutoPadding(false)
-  const enc = Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
-  const r: any = await kfCallback({
-    httpMethod: 'POST',
-    queryStringParameters: { msg_signature: kfSignature('cbtok', '1', '2', enc), timestamp: '1', nonce: '2' },
-    body: `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`,
-  })
+  const r: any = await kfCallback(kfSyncEvent({ token: 'cbtok', aesKey: AES, corpId: 'corp-1', openKfId: 'kf-r' }))
   expect(r.statusCode).toBe(200)
   return sendCalls
 }

@@ -6,20 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { recordAnomaly, notifyAlert } from '../src/kit'
 import { COLLECTIONS, anomalyFingerprint } from '@ldrw/shared'
-
-// 捕获 notifyAlert 的 [LD_ALERT] 结构化行（现落 console.error·观测批接企微推送时签名不变）
-function captureAlerts(fn: () => Promise<void>): Promise<string[]> {
-  const seen: string[] = []
-  const orig = console.error
-  console.error = (...a: unknown[]) => {
-    seen.push(String(a[0]))
-  }
-  return fn()
-    .then(() => seen)
-    .finally(() => {
-      console.error = orig
-    })
-}
+import { captureAlerts } from './helpers/alerts'
 
 beforeEach(() => control.reset())
 

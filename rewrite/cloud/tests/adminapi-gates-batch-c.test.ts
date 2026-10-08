@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
+import { captureAlerts } from './helpers/alerts'
 
 const SUPER = 'super-secret-key'
 const post = (action: string, key: string, data: Record<string, unknown> = {}, ip = '1.1.1.1') =>
@@ -16,20 +17,6 @@ const post = (action: string, key: string, data: Record<string, unknown> = {}, i
     headers: { 'x-forwarded-for': ip },
     body: JSON.stringify({ action, key, data }),
   }).then((r: any) => ({ status: r.statusCode, ...JSON.parse(r.body) }))
-
-// [LD_ALERT] 行捕获（alert()→console.error 同步落结构化行）
-function captureAlerts(fn: () => Promise<void>): Promise<string[]> {
-  const seen: string[] = []
-  const orig = console.error
-  console.error = (...a: unknown[]) => {
-    seen.push(String(a[0]))
-  }
-  return fn()
-    .then(() => seen)
-    .finally(() => {
-      console.error = orig
-    })
-}
 
 const seedSuper = () => control.seed('adminConfig', [{ _id: 'auth', keyHash: sha(SUPER), role: 'superadmin' }])
 

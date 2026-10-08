@@ -1,7 +1,7 @@
 import { reply, type Ctx } from '../lib'
 import { applyStockMoves, listMaterialDocs, transition, pageQuery, notifyAlert, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/shared'
+import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS, YARN_L_RAW_RE, YARN_L_KNOTTED_RE } from '@ldrw/shared'
 
 // 进销存外协线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=外协全部 action）。
 // 业务定稿：织女把起手结做在**最大团**毛线上——发最大团原团（按色）→ 收同色带结团入库 →
@@ -11,9 +11,7 @@ import { asFen, OUTWORK_ORDER_STATUS, OUTWORK_ORDER_TRANSITIONS } from '@ldrw/sh
 // RBAC：不登记 ACTION_CAPS → 默认拒 admin:write＝仅超管（外包坐席天然无权）；写类 action 自动审计（shouldAudit）。
 // 金额纪律：pieceRateFen / payableFen 全链整数「分」（Fen·根因#4）；数量一律正整数（团数·守卫 scm-uom-integer 纪律）。
 
-// 料号命名契约（与 shared/scmBom yarnMaterialId 同源）：发料只收最大团原团、收货只收同色最大团带结（业务定稿）
-const L_RAW = /^yarn:([a-z][a-z0-9-]*):L:raw$/
-const L_KNOTTED = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
+// 料号识别式单源 shared/scmBom（YARN_L_*_RE）：发料只收最大团原团、收货只收同色最大团带结（业务定稿）
 
 // 集合名写字面量 'outworkOrders'：rw-status-transitions-declared 按字面量或 COLLECTIONS.x 归属集合对账
 // transition 边与 status 写入——普通变量会让本文件逃出对账面
@@ -85,7 +83,7 @@ export async function saveOutwork({ db, data, agentId }: Ctx) {
   const lines = cleanLines(data.issueLines)
   if (!lines) return reply(400, err('BAD_LINES'))
   for (const l of lines) {
-    if (!L_RAW.test(l.materialId))
+    if (!YARN_L_RAW_RE.test(l.materialId))
       return reply(400, err('ISSUE_L_RAW_ONLY', { materialId: l.materialId }))
   }
   const known = await knownMaterialIds()
@@ -187,11 +185,11 @@ export async function receiveOutwork({ db, data, agentId }: Ctx) {
   // 发料对照表：颜色 → 发出团数（收货只能是发过的颜色、每色收 ≤ 发·防收比发多/凭空入库）
   const issuedByColor = new Map<string, number>()
   for (const l of order.issueLines || []) {
-    const m = L_RAW.exec(String(l.materialId))
+    const m = YARN_L_RAW_RE.exec(String(l.materialId))
     if (m) issuedByColor.set(m[1], (issuedByColor.get(m[1]) || 0) + l.qty)
   }
   for (const l of lines) {
-    const m = L_KNOTTED.exec(l.materialId)
+    const m = YARN_L_KNOTTED_RE.exec(l.materialId)
     if (!m)
       return reply(400, err('RECEIVE_L_KNOTTED_ONLY', { materialId: l.materialId })) // 收回的只能是带结最大团
     const issued = issuedByColor.get(m[1])

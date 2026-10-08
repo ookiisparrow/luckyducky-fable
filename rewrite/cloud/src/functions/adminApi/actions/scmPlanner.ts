@@ -1,7 +1,7 @@
 import { reply, type Ctx } from '../lib'
 import { listMaterialDocs, sumLedgerByItemKey, getDocOrNull, str, err } from '../../../kit'
 import { COLLECTIONS } from '@ldrw/shared'
-import { resolveBom, yarnMaterialId } from '@ldrw/shared'
+import { resolveBom, yarnMaterialId, YARN_L_KNOTTED_RE } from '@ldrw/shared'
 
 // 进销存备货计算器（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=计划面）。
 // **只读**：目标套数 × 门3 resolveBom（与组装同一解析·配方语义单源）→ 对比主档库存 → 缺口两分：
@@ -10,8 +10,6 @@ import { resolveBom, yarnMaterialId } from '@ldrw/shared'
 //   ② 采购缺口——按供应商分列（够扣不出行·未建档料点名+归「未挂供应商」组）。
 // fail-closed：无模板/无差异位/坏 targets 即拒（不静默补默认·根因#8）。RBAC：默认拒 admin:write＝仅超管。
 // getFgSummary 同文件另一只读视角：不算缺口，是 stockLedger fg 流水事后按产品汇总（打包累计/发货累计），不动账。
-
-const KNOTTED_RE = /^yarn:([a-z][a-z0-9-]*):L:knotted$/
 
 export async function getRestockPlan({ db, data }: Ctx) {
   const targets = Array.isArray(data.targets) ? data.targets : []
@@ -43,7 +41,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
   // ① 外协缺口：带结缺口 → 应送同色 L 原团（1 原团织 1 带结）·派生原团需求叠进采购口径
   const outworkGaps: any[] = []
   for (const [id, n] of [...need.entries()]) {
-    const m = KNOTTED_RE.exec(id)
+    const m = YARN_L_KNOTTED_RE.exec(id)
     if (!m) continue
     const gap = Math.max(0, n - stockOf(id))
     if (gap <= 0) continue
@@ -56,7 +54,7 @@ export async function getRestockPlan({ db, data }: Ctx) {
   const groups = new Map<string, any>()
   const missingMaterials: string[] = []
   for (const [id, n] of [...need.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    if (KNOTTED_RE.test(id)) continue // 带结不外购（外协产出）
+    if (YARN_L_KNOTTED_RE.test(id)) continue // 带结不外购（外协产出）
     const m: any = byId.get(id)
     if (!m) missingMaterials.push(id)
     const stock = stockOf(id)

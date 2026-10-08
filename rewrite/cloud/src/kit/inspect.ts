@@ -31,6 +31,23 @@ const PENDING_OVERDUE_MS = PAY_WINDOW_MS + 3600 * 1000
 // 故此判据不误伤正常行；脏/缺则 fail-closed 报给人看（算不准就别假装守恒/已退清成立）。
 const okMoney = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
 
+// 售后行按订单累加已退额（整数分）。refundAmount 脏/缺的行绝不参与累加——Number('abc')→NaN 会把整单已退额
+// 污染成 NaN，而 NaN<cap 恒 false → 未退清被当成已退清漏报；脏行的订单记进 dirty，由调用方 fail-closed 报出。
+// 逐行先换算成整数分再累加（不累加元浮点后一次性取整）：整数域比较无需容差。
+function sumRefundedFen(rows: any[]): { refunded: Map<string, number>; dirty: Set<string> } {
+  const refunded = new Map<string, number>()
+  const dirty = new Set<string>()
+  for (const a of rows) {
+    const orderId = String(a.orderId)
+    if (!okMoney(a.refundAmount)) {
+      dirty.add(orderId)
+      continue
+    }
+    refunded.set(orderId, (refunded.get(orderId) || 0) + toFen(a.refundAmount))
+  }
+  return { refunded, dirty }
+}
+
 // 主扫描读失败一律抛给 runInspection 标红（失败≠空态：读不到就报绿＝真钱漏了却说没事）；
 // 只有「集合还没建」才等于真没有数据。
 
@@ -137,16 +154,8 @@ const CHECKS: Check[] = [
         throw e
       })
       const _ = db.command
-      const refundedFen = new Map<string, number>()
-      const suspect = new Set<string>() // 金额字段脏/缺 → 无从证明守恒 → 一律报（宁可多报一次）
-      for (const a of rows) {
-        const orderId = String(a.orderId)
-        if (!okMoney(a.refundAmount)) {
-          suspect.add(orderId)
-          continue
-        }
-        refundedFen.set(orderId, (refundedFen.get(orderId) || 0) + toFen(a.refundAmount))
-      }
+      // suspect：金额字段脏/缺 → 无从证明守恒 → 一律报（宁可多报一次）
+      const { refunded: refundedFen, dirty: suspect } = sumRefundedFen(rows)
       // 批量读订单实付（_.in 分块·照 recallScan IN_CHUNK=100·杜绝 ≤500 键逐条串行 doc.get 的 N+1）；
       // payment_exception 的退款入口按实际到账 paidFee 退款，所以钱守恒也必须用 paidFee 做分母；
       // 其他订单仍用订单实付 amount。分母脏/缺记 null，与售后金额脏一样 fail-closed 报出来。
@@ -238,18 +247,9 @@ const CHECKS: Check[] = [
         .map((o) => String(o._id))
       // payment_exception 退款完成后仍保留原订单状态（退款真相在 afterSales），所以像
       // refund_required 一样按「已退清」过滤；查询失败时空集兜底，宁可多报不能漏报。
-      const exceptionRefunded = new Map<string, number>()
-      const exceptionDirty = new Set<string>() // refundAmount 脏/缺 → 无从证明已退清 → 报异常（fail-closed·与 money-conserved 同口径）
       const exceptionAs = await afterSalesOf(db, exceptionRows.map((o) => String(o._id)), 'refunded')
-      for (const a of exceptionAs.rows) {
-        if (!okMoney(a.refundAmount)) {
-          // 脏值绝不能参与累加：Number('abc')→NaN 会把整单已退额污染成 NaN，而 NaN<cap 恒 false
-          // → 该异常单被当成「已退清」漏报。与 money-conserved 同口径，脏即报（宁可多报）。
-          exceptionDirty.add(String(a.orderId))
-          continue
-        }
-        exceptionRefunded.set(String(a.orderId), (exceptionRefunded.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
-      }
+      // exceptionDirty：refundAmount 脏/缺 → 无从证明已退清 → 报异常（fail-closed·与 money-conserved 同口径）
+      const { refunded: exceptionRefunded, dirty: exceptionDirty } = sumRefundedFen(exceptionAs.rows)
       const exceptionIds = exceptionRows
         .filter((o) => {
           if (exceptionDirty.has(String(o._id))) return true // 退款额脏 → 无从证明已退清 → 报（fail-closed）
@@ -273,18 +273,9 @@ const CHECKS: Check[] = [
       // 分母＝**该单实际可退上限** refundableCapFen(o)，不是 order.amount。
       // fail-closed：查询失败 → catch 兜空 → 该单已退额算 0 → 仍计死信（宁可多报一次，不可漏报真死信）；
       // amount 缺失/为 0 同理按未退清计（不让脏数据把死信静默洗白）。
-      const refundedByOrder = new Map<string, number>()
-      const deadDirty = new Set<string>() // refundAmount 脏/缺 → 无从证明退清 → 计死信（fail-closed·与 exception 分支同口径）
       const deadAs = await afterSalesOf(db, deadRows.map((o) => String(o._id)), 'refunded')
-      for (const a of deadAs.rows) {
-        if (!okMoney(a.refundAmount)) {
-          // 脏值绝不参与累加：NaN 污染整单已退额→NaN<cap 恒 false→真实未退死信被洗绿漏报
-          deadDirty.add(String(a.orderId))
-          continue
-        }
-        // 逐行先换算成整数分再累加（不累加元浮点后一次性取整）：整数域比较无需容差，杜绝浮点噪声。
-        refundedByOrder.set(String(a.orderId), (refundedByOrder.get(String(a.orderId)) || 0) + toFen(a.refundAmount))
-      }
+      // deadDirty：refundAmount 脏/缺 → 无从证明退清 → 计死信（fail-closed·与 exception 分支同口径）
+      const { refunded: refundedByOrder, dirty: deadDirty } = sumRefundedFen(deadAs.rows)
       const deadIds = deadRows
         .filter((o) => {
           if (deadDirty.has(String(o._id))) return true // 退款额脏 → 无从证明退清 → 保守计死信

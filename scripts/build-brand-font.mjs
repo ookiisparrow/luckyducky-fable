@@ -34,9 +34,8 @@
  * 重跑、提交新产物（txt+woff 全套）、把 woff 重新部署到托管 /fonts/（README 部署节）。
  */
 import { execFileSync } from 'node:child_process'
-import { writeFileSync, mkdirSync, statSync, existsSync, mkdtempSync } from 'node:fs'
+import { writeFileSync, mkdirSync, statSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
 import { deriveTierCharsets, ASCII, CJK_PUNCT } from './lib/brand-font-charset.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -56,7 +55,7 @@ const WEIGHTS = [
 function run() {
   const srcDir = process.env.BRAND_FONT_SRC
   if (!srcDir) {
-    console.error('✗ 需设 BRAND_FONT_SRC=源 OTF 目录（含 WenYuanRoundedSC-{Light,Medium,Bold,Heavy}.otf·84MB 不入仓）')
+    console.error('✗ 需设 BRAND_FONT_SRC=源 OTF 目录（含 WenYuanRoundedSC-{Medium,Bold,Heavy}.otf·不入仓）')
     process.exit(1)
   }
   const pyftsubset = process.env.PYFTSUBSET || 'pyftsubset'
@@ -64,18 +63,16 @@ function run() {
   const { tier1, tier2 } = deriveTierCharsets(ROOT)
   // ASCII+标点只进 tier1（后层不重复·三层互斥）
   const tiers = [
-    { name: 'tier1', text: [...tier1].join('') + ASCII + CJK_PUNCT, cjk: tier1.size },
-    { name: 'tier2', text: [...tier2].join(''), cjk: tier2.size },
+    { name: 'tier1', text: [...tier1].join('') + ASCII + CJK_PUNCT },
+    { name: 'tier2', text: [...tier2].join('') },
   ]
   console.log(`分层字符集：tier1=${tier1.size} CJK（+ASCII/标点）· tier2=${tier2.size}`)
 
   mkdirSync(OUT_DIR, { recursive: true })
-  const tmp = mkdtempSync(join(tmpdir(), 'ld-font-'))
 
   for (const t of tiers) {
-    // txt 与 woff 同批产出（守卫读 txt·禁止只改 txt 不建 woff）
-    writeFileSync(join(OUT_DIR, `${t.name}.txt`), t.text)
-    const charsetFile = join(tmp, `${t.name}.txt`)
+    // txt 与 woff 同批产出（守卫读 txt·禁止只改 txt 不建 woff）；pyftsubset 直接读这份 txt
+    const charsetFile = join(OUT_DIR, `${t.name}.txt`)
     writeFileSync(charsetFile, t.text)
     for (const w of WEIGHTS) {
       const srcPath = join(srcDir, w.src)

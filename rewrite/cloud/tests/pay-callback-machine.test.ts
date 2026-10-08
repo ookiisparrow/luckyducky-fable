@@ -4,16 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as payCallback } from '../src/functions/callbacks/payCallback'
-
-// 捕获 notifyAlert 的 [LD_ALERT] 行
-function captureAlerts(fn: () => Promise<unknown>): Promise<string[]> {
-  const seen: string[] = []
-  const orig = console.error
-  console.error = (...a: unknown[]) => { seen.push(String(a[0])) }
-  return fn()
-    .then(() => seen)
-    .finally(() => { console.error = orig })
-}
+import { captureAlerts } from './helpers/alerts'
 
 const order = (over: Record<string, unknown> = {}) => ({
   _id: 'o1',

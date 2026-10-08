@@ -13,28 +13,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { funcSlice } from './helpers/source-scan'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = (p: string) => join(HERE, '..', 'src', p)
-
-/** 剥单行注释与块注释（E1 教训：裸写正则会被注释文本假命中）。 */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-}
-
-/** 截取「从某导出函数声明起、到下一个指名函数声明前（或文件末尾）」的源码片段（剥注释后）——
- *  防同文件其余合法保留裸 limit 的函数被误扫进本函数的断言范围。 */
-function funcSlice(rawSrc: string, name: string, until: string[] = []): string {
-  const src = stripComments(rawSrc)
-  const start = new RegExp(`(export\\s+)?async\\s+function\\s+${name}\\s*\\(`).exec(src)
-  if (!start) throw new Error(`未找到函数 ${name}`)
-  let end = src.length
-  for (const u of until) {
-    const m = new RegExp(`(export\\s+)?async\\s+function\\s+${u}\\s*\\(`).exec(src.slice(start.index + 1))
-    if (m) end = Math.min(end, start.index + 1 + m.index)
-  }
-  return src.slice(start.index, end)
-}
 
 const purchaseSrc = readFileSync(SRC('functions/adminApi/actions/scmPurchase.ts'), 'utf8')
 const outworkSrc = readFileSync(SRC('functions/adminApi/actions/scmOutwork.ts'), 'utf8')

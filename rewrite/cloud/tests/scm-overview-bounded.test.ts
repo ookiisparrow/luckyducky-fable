@@ -2,8 +2,8 @@
 // 只要该链调用了 `.get()`，就必须在同一条链上也带 `.limit(`（禁止裸取封顶外的无界扫描）；计数
 // 一律走 `.count()`（精确·不受 limit 影响·不编数）。
 //
-// 守卫结构抄既有源码扫描型守卫（rewrite/cloud/tests/scm-paging-bounded.test.ts 的 stripComments+
-// funcSlice 范式，本文件按「查询链」而非「函数声明」再切一层）：读源文件文本 → 剥注释（防 E1 注释假绿）
+// 守卫结构用源码扫描公用工具（tests/helpers/source-scan 的 stripComments+
+// funcSlice，本文件按「查询链」而非「函数声明」再切一层）：读源文件文本 → 剥注释（防 E1 注释假绿）
 // → 取 getScmOverview 函数体切片 → 按 `db.collection(` 切成一条条查询链 → 逐链核验含 `.get()` 的链必含
 // `.limit(`；并核验 inTransit 计数确实调了 `.count()`（非全量拉取内存数）。
 //
@@ -12,22 +12,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { funcSlice } from './helpers/source-scan'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = join(HERE, '..', 'src', 'functions', 'adminApi', 'actions', 'scmOverview.ts')
-
-/** 剥单行注释与块注释（E1 教训：裸写正则会被注释文本假命中）。 */
-function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-}
-
-/** 截取「从某导出函数声明起到文件末尾」的源码片段（剥注释后）——本文件只有一个 action，无需 until 边界。 */
-function funcSlice(rawSrc: string, name: string): string {
-  const src = stripComments(rawSrc)
-  const start = new RegExp(`(export\\s+)?async\\s+function\\s+${name}\\s*\\(`).exec(src)
-  if (!start) throw new Error(`未找到函数 ${name}`)
-  return src.slice(start.index)
-}
 
 /** 按 `db.collection(` 切成一条条查询链（每条从此关键字起到下一条同关键字前）。 */
 function chains(body: string): string[] {

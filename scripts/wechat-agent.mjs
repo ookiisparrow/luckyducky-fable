@@ -5,17 +5,7 @@
  * 官方调用方式：wechatide -c <clientName> <toolName> [flags...]
  * 文档：docs/运维手册.md「工具」（官方完整手册在本机开发者工具安装目录的 wechatide-skill/）
  *
- * 用法：
- *   node scripts/wechat-agent.mjs status              # 门禁检查（认证）
- *   node scripts/wechat-agent.mjs open                # 打开项目窗口
- *   node scripts/wechat-agent.mjs compile [page]      # 编译并打开页面
- *   node scripts/wechat-agent.mjs debug [page]        # 官方 API 真机调试（自动开窗+编译+触发）
- *   node scripts/wechat-agent.mjs preview [page]      # 推送预览到微信
- *   node scripts/wechat-agent.mjs net                 # 读网络请求
- *   node scripts/wechat-agent.mjs console [pattern]   # 读 console（默认全部）
- *   node scripts/wechat-agent.mjs read-data [page]    # automator 读页面数据（IPv6 连接）
- *   node scripts/wechat-agent.mjs nav <url>           # automator 导航（如 /pages/detail/detail?id=x）
- *   node scripts/wechat-agent.mjs eval <js>           # automator 执行 JS（如 '1+1'）
+ * 用法：node scripts/wechat-agent.mjs help（子命令表以 help 文本为准）
  *
  * automator 连接：ws://[::1]:9420（IPv6！不是 127.0.0.1）
  * 依赖：node_modules/miniprogram-automator（项目已装）
@@ -186,13 +176,13 @@ const help = `
   node scripts/wechat-agent.mjs status              # 门禁检查（认证）
   node scripts/wechat-agent.mjs open                # 打开项目窗口
   node scripts/wechat-agent.mjs compile [page]      # 编译并打开页面
-  node scripts/wechat-agent.mjs debug [page]        # 官方 API 真机调试
+  node scripts/wechat-agent.mjs debug [page]        # 官方 API 真机调试（自动开窗+编译+触发）
   node scripts/wechat-agent.mjs preview [page]      # 推送预览到微信（零扫码）
   node scripts/wechat-agent.mjs net                 # 读网络请求
-  node scripts/wechat-agent.mjs console [pattern]   # 读 console（可带 grep 模式）
+  node scripts/wechat-agent.mjs console [pattern]   # 读 console（可带 grep 模式·默认全部）
   node scripts/wechat-agent.mjs read-data [page]    # automator 读页面数据（IPv6）
-  node scripts/wechat-agent.mjs nav <url>           # automator 导航
-  node scripts/wechat-agent.mjs eval <js>           # automator 执行 JS
+  node scripts/wechat-agent.mjs nav <url>           # automator 导航（如 /pages/detail/detail?id=x）
+  node scripts/wechat-agent.mjs eval <js>           # automator 执行 JS（如 '1+1'）
 
 环境变量: WECHAT_AGENT_CLIENT 客户端名（默认 ldrw-cli）
 `;

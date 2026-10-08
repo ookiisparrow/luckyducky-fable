@@ -1,12 +1,12 @@
 // 客服批内时间预算：函数超时会在一批 50 条处理到一半时硬杀，而已认领（seen）的消息下次按重复跳过＝吞消息。
 // 预算要在每条消息认领前检查：用尽就停，剩下的不认领、游标不推进，下次回调重拉时补处理。
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import crypto from 'node:crypto'
 import { control } from 'wx-server-sdk'
 import { COLLECTIONS } from '@ldrw/shared'
 import { main as kfCallback } from '../src/functions/cs/kfCallback/index'
 import { processKfBatch } from '../src/functions/cs/kfCallback/dispatch'
-import { kfSignature, getDb } from '../src/kit'
+import { getDb } from '../src/kit'
+import { kfSyncEvent } from './helpers/kf-envelope'
 
 const AES = 'b'.repeat(43)
 const seenIds = () => control.dump(COLLECTIONS.kfState).map((d: any) => String(d._id)).filter((id) => id.startsWith('seen:'))
@@ -71,21 +71,7 @@ async function callback(slowSend: boolean): Promise<string[]> {
       return {}
     },
   })
-  const key = Buffer.from(AES + '=', 'base64')
-  const msgBuf = Buffer.from('<xml><Token>SYNC</Token><OpenKfId>kf-b</OpenKfId></xml>', 'utf8')
-  const len = Buffer.alloc(4)
-  len.writeUInt32BE(msgBuf.length, 0)
-  let buf = Buffer.concat([crypto.randomBytes(16), len, msgBuf, Buffer.from('corp-1', 'utf8')])
-  const pad = 32 - (buf.length % 32 || 32) || 32
-  buf = Buffer.concat([buf, Buffer.alloc(pad, pad)])
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, key.subarray(0, 16))
-  cipher.setAutoPadding(false)
-  const enc = Buffer.concat([cipher.update(buf), cipher.final()]).toString('base64')
-  const r: any = await kfCallback({
-    httpMethod: 'POST',
-    queryStringParameters: { msg_signature: kfSignature('cbtok', '1', '2', enc), timestamp: '1', nonce: '2' },
-    body: `<xml><Encrypt><![CDATA[${enc}]]></Encrypt></xml>`,
-  })
+  const r: any = await kfCallback(kfSyncEvent({ token: 'cbtok', aesKey: AES, corpId: 'corp-1', openKfId: 'kf-b' }))
   expect(r.statusCode).toBe(200)
   return [...new Set(repliedTo)]
 }
