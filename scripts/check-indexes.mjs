@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 生产索引核对（运维脚本，只读面：仅调用 manager.database.describeCollection 读索引，
 // 不建/改/删任何索引）。对照 console-assets/03-复合索引期望表.md 的期望态。
-// 不进 npm run check（同 db-export.mjs，见 guardPlan）。用法见 docs/运维手册.md「备份与索引」。
+// 不进 npm run check（同 db-export.mjs）。用法见 docs/运维手册.md「备份与索引」。
 //
 //   npm run db:check-indexes                          # 全量对照
 //   npm run db:check-indexes -- --priority=P0          # 只查 P0
