@@ -666,6 +666,56 @@ export const repoChecks = [
     },
   },
   {
+    // CSS 变量引用存在性（编译器替身·根因#8）：wxss/CSS 没有编译器，var(--名) 拼错或令牌删了漏改，
+    // 运行时只会静默回退成默认值（掉色），check 全绿。2026-10-08 批 6 反向自检实证：把 var(--v5-card-press)
+    // 改成不存在的名字，结构守卫与全部测试仍绿。定义只认同一包内的 `--名:` 声明（mp 在 styles/tokens.wxss，
+    // admin 在 src/styles/tokens.css）。刻意例外行内加 structure-ok。
+    id: 'rw-css-vars-defined',
+    roots: ['#8'],
+    desc: 'CSS 变量引用存在性（根因#8·编译器替身）：rewrite/mp（wxss/wxml/ts）、rewrite/admin/src 与 rewrite/agent/src（css/vue/ts）里每个 var(--名) 引用，须在同一包内有 `--名:` 定义——拼错或删令牌漏改只会静默掉色；某包零引用即红（病根#16「空样本＝绿」）',
+    run() {
+      const bad = []
+      const SURFACES = [
+        { dir: 'rewrite/mp', exts: ['.wxss', '.wxml', '.ts'] },
+        { dir: 'rewrite/admin/src', exts: ['.css', '.vue', '.ts'] },
+        { dir: 'rewrite/agent/src', exts: ['.css', '.vue', '.ts'] },
+      ]
+      // 块注释与 HTML 注释置换为等长空白（保行号）；找引用时再剥 // 行注释，防注释里提到的旧令牌误报
+      const blank = (s) => s.replace(/<!--[\s\S]*?-->|\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      for (const { dir, exts } of SURFACES) {
+        const base = join(ROOT, dir)
+        if (!existsSync(base)) {
+          bad.push(`${dir} 缺失——rw-css-vars-defined 扫描面消失（病根#16）`)
+          continue
+        }
+        const defs = new Set()
+        const uses = []
+        const walkC = (d) => {
+          for (const name of lsScan(d)) {
+            if (name === 'tests') continue
+            const p = join(d, name)
+            if (statSync(p).isDirectory()) walkC(p)
+            else if (exts.some((e) => name.endsWith(e))) {
+              const src = blank(readFileSync(p, 'utf8'))
+              for (const m of src.matchAll(/(?<![\w-])(--[\w-]+)\s*:/g)) defs.add(m[1])
+              const code = name.endsWith('.ts') || name.endsWith('.vue') ? stripComments(src) : src
+              code.split('\n').forEach((line, i) => {
+                if (line.includes('structure-ok')) return
+                for (const m of line.matchAll(/var\(\s*(--[\w-]+)/g)) uses.push({ name: m[1], at: `${relative(ROOT, p)}:${i + 1}` })
+              })
+            }
+          }
+        }
+        walkC(base)
+        if (!uses.length) bad.push(`${dir} 下零个 var(--…) 引用——本守卫扫描面空转（病根#16「空样本＝绿」）；先查扫描后缀与正则是否失配`)
+        for (const u of uses)
+          if (!defs.has(u.name))
+            bad.push(`${u.at} 引用 ${u.name}，但 ${dir} 内没有它的定义——拼错或令牌删了漏改，运行时静默掉色（根因#8）`)
+      }
+      return bad
+    },
+  },
+  {
     // 小程序包体积（根因#8：超了只有真机冷启才感知）：一次遍历会进上传包的文件，查三件事——
     // ① 主包估算 ≤ 1.5MiB（微信硬顶 2MiB 的 75%；.ts 按 ×1.05 估编译后体积）；② 位图单张 ≤ 200KB、合计 ≤ 400KB
     // （内容图走云存储，进包的只该是品牌兜底）；③ 字体不进包（二进制或 base64 内嵌都不行，~14MB 字重会撑爆），
