@@ -8,7 +8,7 @@ const OPTS = { max: 5, windowMs: 60_000, lockMs: 600_000 }
 beforeEach(() => control.reset())
 afterEach(() => vi.restoreAllMocks())
 
-// 计数探针（批C·限频热路径先红）：spy 挂在共享原型上（Query/DocRef 每次 new 实例但方法在
+// 计数探针（批C·限频热路径）：spy 挂在共享原型上（Query/DocRef 每次 new 实例但方法在
 // prototype 上，spyOn 一次即拦所有后续调用）——用来数「同窗未超限」这条热路径实际发了几次库操作。
 // getSpy 数 doc(id).get()（DocRef.prototype.get）；updateSpy 数 where(cond).update()（Query.prototype.update，
 // 与 doc(id).update() 不同原型，不会误数 throttleReset 等走 doc().update 的调用）。
@@ -78,7 +78,7 @@ describe('限频热路径库调用次数（批C·盲发条件更新——先红�
     const over = await throttleHit('fastpath', o) // 同窗第二次：目标实现应盲发 1 次条件更新直接命中
     expect(over).toBe(false)
     expect(updateSpy).toHaveBeenCalledTimes(1) // 目标：恰 1 次条件更新
-    expect(getSpy).not.toHaveBeenCalled() // 目标：热路径不读；当前实现会先 get 一次 → 本行现在应为红
+    expect(getSpy).not.toHaveBeenCalled() // 目标：热路径不读
   })
 
   it('大白话：命中上限后——盲发条件更新条件不满足（已到上限）→ 回落读+判定路径，仍正确拒绝', async () => {

@@ -22,18 +22,18 @@ atomic-v1/
 
 ## 情绪节点表（二级档）
 
-| signal key | 目录 | 中文 | 何时用 | 条数（种子） |
-|---|---|---|---|---|
-| `surprise` | `emotion/surprise` | 惊讶 | 负面首次或事件变化/升级各触发1次；未升级不重复 | 22 |
-| `empathy` | `emotion/empathy` | 共情 | 非我方责任也能体谅情绪（从 packaging 迁出） | 3 |
-| `soothe` | `emotion/soothe` | 安抚 | 能处理时先稳住，别着急 | 5 |
-| `apology` | `emotion/apology` | 道歉 | **仅**已确认我方失职（不做单独「歉意升级」档） | 3 |
-| `awkward` | `emotion/awkward` | 尴尬 | 同事件未升级的再次负面；事件升级则再惊讶 | 5 |
-| `ack` | `emotion/ack` | 确认收到 | 收到 / 我看着了 / 图收到了 | 5 |
-| `neutral` | `emotion/neutral` | 中性承接 | 平静接话，不升温不降温 | 5 |
-| `celebrate` | `emotion/celebrate` | 祝贺/开心 | 问题解决、好评、顺利签收 | 5 |
-| `boundary` | `emotion/boundary` | 边界礼貌拒绝 | 超范围要求，礼貌稳住不硬答应 | 5 |
-| `default` | → surprise | — | 未识别信号时回落惊讶 | — |
+| signal key | 目录 | 中文 | 何时用 |
+|---|---|---|---|
+| `surprise` | `emotion/surprise` | 惊讶 | 负面首次或事件变化/升级各触发1次；未升级不重复 |
+| `empathy` | `emotion/empathy` | 共情 | 非我方责任也能体谅情绪 |
+| `soothe` | `emotion/soothe` | 安抚 | 能处理时先稳住，别着急 |
+| `apology` | `emotion/apology` | 道歉 | **仅**已确认我方失职（不做单独「歉意升级」档） |
+| `awkward` | `emotion/awkward` | 尴尬 | 同事件未升级的再次负面；事件升级则再惊讶 |
+| `ack` | `emotion/ack` | 确认收到 | 收到 / 我看着了 / 图收到了 |
+| `neutral` | `emotion/neutral` | 中性承接 | 平静接话，不升温不降温 |
+| `celebrate` | `emotion/celebrate` | 祝贺/开心 | 问题解决、好评、顺利签收 |
+| `boundary` | `emotion/boundary` | 边界礼貌拒绝 | 超范围要求，礼貌稳住不硬答应 |
+| `default` | → surprise | — | 未识别信号时回落惊讶 |
 
 ### 程度循环（≤3 步）
 

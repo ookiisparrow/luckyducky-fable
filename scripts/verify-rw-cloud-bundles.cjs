@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 /**
- * 活线产物行为验证（盲区体检批4·根因#8「构建过≠真能用」在部署产物层的镜像·病根#16 配套）：
- * 把 esbuild 产物（rewrite/cloud/dist/<fn>/index.js）当真云函数 require 进来跑。
+ * 活线产物行为验证：把 esbuild 产物（rewrite/cloud/dist/<fn>/index.js）当真云函数 require 进来跑。
  *
- * 为什么要有：三道闸（编辑 hook/pre-commit/CI）此前从不构建任何真实生产产物——esbuild 特有
- * 的问题（external 声明错、动态 require 未排除、摇树误删）在 check 全绿下直接流入生产；
- * 旧 verify-cloud-bundles.cjs 只验冻结旧线（其头注自declared），活线产物层是验证真空。
+ * 为什么要有：esbuild 特有的问题（external 声明错、动态 require 未排除、摇树误删）在 check 全绿下
+ * 也会流入生产，只有跑产物本身才看得见。
  *
- * 验证面（专守「打包不破坏」，深行为归 vitest 对 src 的 2000+ 例）：
+ * 验证面（专守「打包不破坏」，深行为归 vitest 对 src 的测试）：
  *   ① 全部函数产物可 require 且导出 main 函数（bundle require 图完整·external 解析正确）；
  *   ② 网关 fail-closed 冒烟在**产物层**活着：app 未知 action 拒 BAD_ARGS、无身份拒 NO_OPENID。
  *      （adminApi 为 HTTP 触发形态，契约冒烟归 vitest 网关测试；此处验加载面即可——其

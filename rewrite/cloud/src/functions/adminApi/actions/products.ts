@@ -119,7 +119,7 @@ export async function saveDraft({ db, data }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
   const p = cleanProduct(data.product)
   if (!p) return reply(400, err('BAD_PRODUCT'))
-  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft)
   // 换图缓期 GC：整份覆盖前先取旧草稿+发布档，算被撤且非 cover 的孤儿图，缓期入 drafts.pendingGc
   // （单队列之家=草稿档）；不立删——admin listDrafts/mp 详情给这些图签过临时址，同步删=在场会话见 404。
   // pendingGc 是服务端衍生字段（cleanProduct 白名单不含它·客户端注入不了）：从旧草稿读、覆盖时带回。
@@ -165,7 +165,7 @@ export async function deleteDraft({ db, data }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
   const id = str(data.id, 200)
   if (!id) return reply(400, err('NO_ID'))
-  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft)
   // 图册立即删（不走缓期的例外）：两档文档一并删除后 pendingGc 无处安身、商品已不存在（在场详情会话本已死），
   // 立即删可接受。先读两档收 fileID（删档后无从取），cover 位仍豁免（订单快照引用）。走 diffOrphans 同源
   // 的 collectImgs：只认 cover/images 字段的 cloud:// fileID，绝不列文件夹（防误删共居的卡片/首页/目录图）。
@@ -228,7 +228,7 @@ export async function publishProduct({ db, data }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
   const id = str(data.id, 200)
   if (!id) return reply(400, err('NO_ID'))
-  await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
+  await ensure(db, COLLECTIONS.productsDraft)
   const got = await readDoc(drafts.doc(id).get())
   if (!got.ok) return reply(200, err('DOC_READ_FAIL'))
   if (!got.data) return reply(400, err('NO_DRAFT'))

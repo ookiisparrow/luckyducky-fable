@@ -409,8 +409,7 @@ describe('码批次（黄金：数量闸·聚合·列码 cursor 分页）', () =
     expect((await post('createBatch', { courseId: 'c1' })).error).toBe('BAD_ARGS')
     expect((await post('createBatch', { courseId: 'c1', count: 0 })).error).toBe('BAD_ARGS')
 
-    // createBatch 域内直调 generateQrcodes（2026-07-23 拓扑收编批：原 cloud.callFunction 打 genQrcodes
-    // 独立函数已收编·断言从「调用了哪个函数」改为断言「qrcodes 集合真实写入」）。
+    // createBatch 域内直调 generateQrcodes：断言落在 qrcodes 集合的真实写入上。
     control.seed('courses', [{ _id: 'c1', title: '钩织入门' }])
     const r = await post('createBatch', { courseId: 'c1', count: 9999 })
     expect(r.ok).toBe(true)

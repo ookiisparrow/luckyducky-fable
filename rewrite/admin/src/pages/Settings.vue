@@ -34,7 +34,7 @@ const ok = ref(false)
 const busy = ref(false)
 // 密钥不明文常驻：正在填的新地址默认密码态、点眼睛临时显示
 const showWebhook = ref(false)
-let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）·同 HomeContent
+let loaded = false // 载入成功（含首次空配置）才放开保存——载入失败时空表单一保存会抹掉已存 webhook/urlPrefix（钱链告警安全网·病根#14）
 
 const pushing = computed(() => (!!alertWebhook.value.trim() && webhookOk(alertWebhook.value.trim())) || hookSet.value)
 const enabled = (code: string) => events.value[code] !== false
@@ -147,7 +147,7 @@ async function clearHook() {
       </Card>
     </div>
 
-    <!-- 项数不手抄（曾写死「12 项」与清单页动态计数 27 打架·客观计数以清单页为准） -->
+    <!-- 项数不手抄·客观计数以清单页为准 -->
     <Card title="人工配置清单" sub="散落配置一屏「配了没」 · 环境变量/DB字段/纯人工外部后台项一次核对">
       <button class="entry" @click="router.push('/config-checklist')">
         <span>去查看</span>

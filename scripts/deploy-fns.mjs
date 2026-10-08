@@ -3,15 +3,11 @@
  * 部署自动化：build:rw-cloud → 按产物内容 hash 算清单 → 与部署账本（最新 deploy-* tag）diff
  * → 报告变更函数 →（仅 DEPLOY_ALLOWED=1）逐函数 tcb 部署 → 打 deploy-<UTC时间> tag 记账并推送。
  *
- * 【指针大迁移·盲区体检批3·病根#16 ⑤】本脚本曾是 M5 切换（2026-07-09）最大的残留指针：
- * 生产已换 rewrite/cloud 15 函数，这里仍 build:cloud + packages/cloud/dist + 38 函数旧 manifest
- * ——hash 恰好匹配就报「变更待部署 0 个」假全清（app 函数落后 git 半月无人察觉的工具根因）；
- * 不匹配则会把冻结旧线覆盖上生产、复活已删的 26 函数。现已改指活线；旧 manifest 一并删除
- * （云端实际部署版本未知 ⇒ 无清单=全部待部署，是诚实的未知态；首次授权部署后重建真清单）。
+ * 账本读取与种子（无 deploy-* tag 时退回仓根 .deploy-manifest.json）见 scripts/lib/deploy-drift.mjs 的 readDeployLedger。
  *
- * 三道部署保险：① 默认/`--dry-run` 只报告不部署；② 真部署须 `DEPLOY_ALLOWED=1`；
+ * 部署保险：① 默认/`--dry-run` 只报告不部署；② 真部署须 `DEPLOY_ALLOWED=1`；
  * ③ 跑本脚本本身就过 guard-deploy 部署闸确认（Claude 会话内）；④ 真部署只从「干净的、等于 origin/main 的 main」发
- * （deployBlockers）——此前任意 worktree/分支/落后的本地都能直接发上线。
+ * （deployBlockers）——否则任意 worktree/分支/落后的本地都能直接发上线。
  *
  * 账本（2026-10-02）：部署完打注释 tag `deploy-<UTC时间>`（指向本次部署的提交，正文＝各函数 hash JSON），
  * 只推 tag、不推 main。中途某函数失败也照样记下已发出去的那几个。回滚目标＝上一个 deploy-* tag。

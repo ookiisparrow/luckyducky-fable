@@ -15,10 +15,7 @@ beforeEach(() => {
   control.setOpenId('')
 })
 
-// 激活码生成（黄金 §一：数量合法·防废码·批次不撞）——原为独立函数
-// 收编进 adminApi/actions/batches.ts generateQrcodes，原 kit.withAdminGate 管理闸不迁（唯一调用方
-// createBatch 已过 adminApi 外层网关 checkKey + ACTION_CAPS，见 app-admin2.test.ts 码批次用例覆盖）——
-// ADMIN_ONLY 用例随之删除，本层只测生成逻辑本身（数量/课程校验、码唯一性、批次号不撞）。
+// 本层只测生成逻辑（数量/课程校验、码唯一性、批次号不撞）；管理闸在 adminApi 外层网关（checkKey + ACTION_CAPS）。
 describe('激活码生成（黄金 §一：数量合法·防废码·批次不撞）', () => {
   const db = getDb()
   beforeEach(() => control.seed('courses', [{ _id: 'c1', title: '钩织入门' }]))
@@ -40,7 +37,6 @@ describe('激活码生成（黄金 §一：数量合法·防废码·批次不撞
   })
 })
 
-// seedProducts 用例整段删除：函数已退役·2026-07-23 拓扑收编批（种子源 shared/seed/products.ts 一并删除）。
 describe('seed / init 管理闸（黄金 §十二：防覆盖生产数据·清单=单源全量）', () => {
   it('大白话：普通用户种数据一律拒且不写库（防覆盖生产课程）；后台放行且幂等重跑不重复建档', async () => {
     control.setOpenId('oUser')

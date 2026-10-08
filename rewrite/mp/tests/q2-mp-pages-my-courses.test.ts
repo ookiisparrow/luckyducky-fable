@@ -1,5 +1,5 @@
 // 我的课程页行为：三路（已进课/课程目录/进度）拼课卡、失败≠空态（首次失败亮重试·已有课卡刷新失败只轻提示·
-// 目录失败同判失败）、进度读不到落「未知」而非 0%、真没课落输码引导、过期回包丢弃、点课/输码跳转。
+// 目录失败同判失败）、进度读不到落「未知」而非 0%、真没课落空态、过期回包丢弃、点课跳转。
 // 只桩云调用（callApp），api/lib/courses/mapLearning 用真的。Page 桩同 p-mp-order-page.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -73,7 +73,7 @@ describe('我的课程：加载', () => {
     expect(callAppMock.mock.calls).toContainEqual(['getCourses', { ids: ['c1'] }])
   })
 
-  it('大白话：真的没进过课——落空态（给输码引导），不亮重试', async () => {
+  it('大白话：真的没进过课——落空态，不亮重试', async () => {
     handlers.getMyLearning = () => ({ ok: true, courses: [], progress: [] })
     const page = await mount()
     await page.reload()

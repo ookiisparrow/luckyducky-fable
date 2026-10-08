@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 数据备份导出（运维脚本，只读面：读集合 → 触发 manager-node 官方导出 API → 下载到本地，
-// 不建/改/删任何云端资源——只读红线见批次授权，实现细节见 git 历史本批提交信息）。
-// 不进 npm run check（同 deploy-fns.mjs / preflight.mjs 等既有运维脚本惯例，见 guardPlan：
+// 不建/改/删任何云端资源）。
+// 不进 npm run check（同 deploy-fns.mjs / preflight.mjs 等既有运维脚本惯例：
 // 「脚本存在性」不是摆设守卫值得守的东西）。用法见 docs/运维手册.md「备份与索引」。
 //
 //   npm run db:export                              # 导出 DEFAULT_COLLECTIONS
@@ -14,7 +14,7 @@
 // 的 COS 临时对象——经真实类型定义核实，storage.deleteFile 内部走 storage.batchDeleteFile，
 // 是「小程序 wx.cloud 云存储」桶的删除接口（cloudPathToFileId 转换），与 database.export 使用
 // 的「DatabaseMigrateExport 任务」内部管理的临时 COS 对象根本不是同一命名空间——调用大概率
-// 报错，且这本身是一次真实的 delete 类云端调用，与本批「绝不写/删/改云端资源」的红线冲突。
+// 报错，且这本身是一次真实的 delete 类云端调用，与本脚本「绝不写/删/改云端资源」的红线冲突。
 // 本实现不做该清理：临时导出对象留给腾讯云侧 DatabaseMigrateExport 任务自身的生命周期管理
 // （只影响 Tencent 内部临时存储，非我方业务集合/文件），本脚本只关心下载到本地的副本。
 
@@ -106,7 +106,7 @@ async function main() {
         hadFailure = true
         console.error(`[db-export] ${name} 超时`)
       } else {
-        // 空集合（云端 ErrorMsg「记录条数为0」）是正常现象，不算失败（8/6 首备确认）
+        // 空集合（云端 ErrorMsg「记录条数为0」）是正常现象，不算失败
         if (info.ErrorMsg && /记录条数为0|does not exist/i.test(info.ErrorMsg)) {
           entry.status = 'empty'
           entry.count = 0
