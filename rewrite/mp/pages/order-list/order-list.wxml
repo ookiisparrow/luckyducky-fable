@@ -37,7 +37,7 @@
     <view class="ol-state" wx:if="{{!loading && loadFailed}}">
       <view class="ol-signal"><px-anim name="signal" size="4" /></view>
       <text class="ol-state-t">网络开小差</text>
-      <text class="t-sys ol-state-h">订单没加载出来，请重试</text>
+      <text class="t-sys ol-state-h t-cap">订单没加载出来，请重试</text>
       <view class="k k-light ol-retry k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="replay" /></view>
     </view>
     <view class="ol-state ol-empty" wx:elif="{{!loading && !shown.length}}">
@@ -51,8 +51,8 @@
         <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
         <text class="ol-status" style="{{item.labelColor ? 'color:' + item.labelColor : ''}}">{{item.label}}</text>
-        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time">后取消</text></view>
-        <text wx:elif="{{item.right}}" class="t-sys ol-time">{{item.right}}</text>
+        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time t-cap">后取消</text></view>
+        <text wx:elif="{{item.right}}" class="t-sys ol-time t-cap">{{item.right}}</text>
       </view>
       <view class="ol-row">
         <view class="ol-thumbs">
@@ -62,7 +62,7 @@
         </view>
         <view class="ol-amt">
           <text class="mono ol-total">¥{{item.amountNum}}</text>
-          <text class="t-sys ol-amt-t">{{item.amountTitle}} · 共 {{item.count}} 件</text>
+          <text class="t-sys ol-amt-t t-cap">{{item.amountTitle}} · 共 {{item.count}} 件</text>
         </view>
       </view>
       <!-- 操作键：待支付＝按住取消 + 去支付；待收货＝查看物流 + 确认收货；已完成＝写评价（浅色键），

@@ -38,20 +38,20 @@
     <view class="k-card od-card od-logi px-skin px-card" wx:if="{{vm.trackingNo}}" hover-start-time="20" hover-class="k-card-down" bind:tap="onViewLogistics">
       <view class="od-logi-top">
         <view class="od-logi-no">
-          <text class="t-sys od-k" wx:if="{{vm.shipCompany}}">{{vm.shipCompany}}</text>
+          <text class="t-sys od-k t-cap" wx:if="{{vm.shipCompany}}">{{vm.shipCompany}}</text>
           <text class="mono od-track" user-select>{{vm.trackingNo}}</text>
         </view>
         <view class="t-sys od-more"><text>查看物流</text><px-i name="arrow" /></view>
       </view>
       <view class="od-logi-bot">
-        <text class="t-sys od-k">物流状态以承运方为准</text>
+        <text class="t-sys od-k t-cap">物流状态以承运方为准</text>
         <view class="k k-sm k-flat od-mini hit44" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" catch:tap="onCopyTracking" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
       </view>
     </view>
 
     <!-- 收货地址（历史快照·只读） -->
     <view class="od-card px-skin px-card" wx:if="{{vm.address}}">
-      <text class="t-sys od-k">收货地址</text>
+      <text class="t-sys od-k t-cap">收货地址</text>
       <text class="t-sys od-region">{{vm.address.region}}</text>
       <text class="t-sys od-detail">{{vm.address.detail}}</text>
       <view class="od-who">
@@ -68,7 +68,7 @@
         </view>
         <view class="od-item-mid">
           <text class="t-sys od-item-name">{{item.name}}</text>
-          <text class="t-sys od-item-sub">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
+          <text class="t-sys od-item-sub t-cap">{{item.spec}}{{item.spec ? ' · ' : ''}}×{{item.qty}}</text>
           <text wx:if="{{lineTags[item.lineId]}}" class="t-sys od-as-tag px-clip-4">{{lineTags[item.lineId]}}</text>
         </view>
         <view class="od-item-r">
@@ -80,8 +80,8 @@
         </view>
       </view>
       <view class="od-sum">
-        <view class="od-sum-row" wx:if="{{vm.goodsLabel}}"><text class="t-sys od-k">商品</text><view class="od-leader"></view><text class="mono od-v">{{vm.goodsLabel}}</text></view>
-        <view class="od-sum-row"><text class="t-sys od-k">运费</text><view class="od-leader"></view><text class="mono od-v">{{vm.shipLabel}}</text></view>
+        <view class="od-sum-row" wx:if="{{vm.goodsLabel}}"><text class="t-sys od-k t-cap">商品</text><view class="od-leader"></view><text class="mono od-v">{{vm.goodsLabel}}</text></view>
+        <view class="od-sum-row"><text class="t-sys od-k t-cap">运费</text><view class="od-leader"></view><text class="mono od-v">{{vm.shipLabel}}</text></view>
         <view class="od-sum-row"><text class="od-total-k">{{vm.amountTitle}}</text><view class="od-leader"></view><text class="mono od-total-v">{{vm.amountLabel}}</text></view>
       </view>
     </view>
@@ -89,19 +89,19 @@
     <!-- 订单信息 -->
     <view class="od-info">
       <view class="od-info-row">
-        <text class="t-sys od-k">订单编号</text>
+        <text class="t-sys od-k t-cap">订单编号</text>
         <text class="mono od-info-v" user-select>{{vm.id}}</text>
         <view class="k k-sm k-flat od-mini hit44" hover-start-time="20" hover-class="k-flat-down" hover-stay-time="100" bind:tap="onCopyOrderNo" data-k="flat" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">复制</view>
       </view>
       <view class="od-info-row" wx:if="{{vm.createdAtLabel}}">
-        <text class="t-sys od-k">下单时间</text>
+        <text class="t-sys od-k t-cap">下单时间</text>
         <text class="mono od-info-v">{{vm.createdAtLabel}}</text>
       </view>
     </view>
   </view>
 
   <view class="od-dock-space" wx:if="{{dock}}"></view>
-  <view class="od-dock" wx:if="{{dock}}">
+  <view class="od-dock dock" wx:if="{{dock}}">
     <view class="k k-light k-48 od-back k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
     <block wx:if="{{vm.status === 'pending'}}">
       <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条；轻点提示「按住取消订单」） -->
@@ -145,14 +145,14 @@
 <view class="od-state-page" style="padding-top: {{groundGap}}px" wx:elif="{{!loading && loadFailed}}">
   <px-anim name="signal" size="4" />
   <text class="od-state-t">网络开小差</text>
-  <text class="t-sys od-k">订单没加载出来，请重试</text>
+  <text class="t-sys od-k t-cap">订单没加载出来，请重试</text>
   <view class="k k-light od-retry k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onRetryLoad" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="replay" /></view>
 </view>
 
 <!-- 订单不存在 -->
 <view class="od-state-page" style="padding-top: {{groundGap}}px" wx:elif="{{!loading}}">
   <text class="od-state-t">订单不存在</text>
-  <text class="t-sys od-k">可能已被删除或不属于当前账号</text>
+  <text class="t-sys od-k t-cap">可能已被删除或不属于当前账号</text>
 </view>
 
 <!-- 申请售后半屏（设计稿 sheet aftersales·拍板 7）：退款/换货/补发 三段 + 原因标签（无理由默认） + 多件单选商品 + 预计退款 + 取消/提交。
@@ -162,7 +162,7 @@
   <view class="sh-panel as-panel {{asOut ? 'out' : ''}}">
     <view class="as-t">
       <text class="as-h">申请售后</text>
-      <block wx:for="{{asLines}}" wx:key="lineId"><text wx:if="{{item.lineId === asLine}}" class="t-sys as-sub">{{item.name}}{{item.spec ? ' · ' + item.spec : ''}}</text></block>
+      <block wx:for="{{asLines}}" wx:key="lineId"><text wx:if="{{item.lineId === asLine}}" class="t-sys as-sub t-cap">{{item.name}}{{item.spec ? ' · ' + item.spec : ''}}</text></block>
     </view>
     <view class="well as-seg">
       <view wx:for="{{asTypes}}" wx:key="*this" class="k as-seg-k hit44 {{asType === item ? 'k-light as-on' : ''}} {{asBlock && item === '退款' ? 'as-seg-off' : ''}}" hover-start-time="20" hover-class="{{asType === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
@@ -172,14 +172,14 @@
          被拒的行（拍板 5·被拒维持永久锁）：写清「已被拒绝，有疑问联系客服」+「联系客服」键（带订单上下文复制） -->
     <view wx:if="{{asBlock || asRej}}" class="as-note">
       <view class="as-note-col">
-        <text wx:if="{{asBlock}}" class="t-sys as-block">退款不可选：{{asBlock}}</text>
-        <text wx:if="{{asRej}}" class="t-sys as-block">{{asRej}}：已被拒绝，有疑问联系客服</text>
+        <text wx:if="{{asBlock}}" class="t-sys as-block t-cap">退款不可选：{{asBlock}}</text>
+        <text wx:if="{{asRej}}" class="t-sys as-block t-cap">{{asRej}}：已被拒绝，有疑问联系客服</text>
       </view>
       <view wx:if="{{asRejKefu}}" class="k k-sm k-light as-kefu hit44" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"
         bind:tap="onAsKefu" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">联系客服</view>
     </view>
     <view class="as-group" wx:if="{{asLines.length > 1}}">
-      <text class="t-sys as-cap">商品</text>
+      <text class="t-sys as-cap t-cap">商品</text>
       <scroll-view class="as-lines" scroll-y="{{true}}">
         <view class="as-chips">
           <view wx:for="{{asLines}}" wx:key="lineId" class="k as-chip hit44 hit-wrap {{asLine === item.lineId ? 'k-light' : 'k-flat'}}" hover-start-time="20" hover-class="{{asLine === item.lineId ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
@@ -188,7 +188,7 @@
       </scroll-view>
     </view>
     <view class="as-group">
-      <text class="t-sys as-cap">原因</text>
+      <text class="t-sys as-cap t-cap">原因</text>
       <view class="as-chips">
         <view wx:for="{{asReasons}}" wx:key="*this" class="k as-chip hit44 hit-wrap {{asReason === item ? 'k-light' : 'k-flat'}}" hover-start-time="20" hover-class="{{asReason === item ? 'k-light-down' : 'k-flat-down'}}" hover-stay-time="100"
           data-v="{{item}}" bind:tap="onAsReason" data-k="{{asReason === item ? 'light' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i wx:if="{{asReason === item}}" name="led" tone="var(--v5-violet)" />{{item}}</view>

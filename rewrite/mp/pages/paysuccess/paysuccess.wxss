@@ -28,12 +28,6 @@ page {
   align-items: baseline;
   gap: 8px;
 }
-.ps-k,
-.ps-note {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .ps-amount {
   font-size: 22px;
   font-weight: 600;
@@ -41,16 +35,6 @@ page {
 .ps-no {
   font-size: 13px;
   color: var(--v5-ink-2);
-}
-.ps-dock {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
-  display: flex;
-  gap: 8px;
-  background: var(--v5-canvas);
 }
 .ps-home {
   flex: 1;

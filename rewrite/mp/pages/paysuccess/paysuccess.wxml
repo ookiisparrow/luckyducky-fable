@@ -11,16 +11,16 @@
       <text class="ps-title">支付成功</text>
     </view>
     <view class="ps-paid" wx:if="{{hasAmount}}">
-      <text class="t-sys ps-k">实付款</text>
+      <text class="t-sys ps-k t-cap">实付款</text>
       <text class="mono ps-amount">¥{{amountYuan}}</text>
     </view>
     <!-- 履约口径（已拍板·shipping-returns-copy 测试钉）：可留顺丰，只承诺 48 小时内发出，不写次日达 -->
-    <text class="t-sys ps-note">顺丰速运 · 48 小时内发出 · 包邮到家 · 售后无忧</text>
+    <text class="t-sys ps-note t-cap">顺丰速运 · 48 小时内发出 · 包邮到家 · 售后无忧</text>
     <text class="mono ps-no" wx:if="{{orderId}}">No. {{orderId}}</text>
   </view>
 </view>
 
-<view class="ps-dock">
+<view class="ps-dock dock">
   <view class="k k-light k-48 ps-home k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onGoHome" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="home" /></view>
   <view class="k k-ink k-48 ps-order" hover-start-time="20" hover-class="k-ink-down" hover-stay-time="100" bind:tap="onViewOrder" data-k="ink" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">查看订单</view>
 </view>

@@ -20,11 +20,6 @@ page {
   flex-direction: column;
   gap: 4px;
 }
-.lg-co {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-2);
-}
 .lg-track {
   font-size: 22px;
   font-weight: 600;

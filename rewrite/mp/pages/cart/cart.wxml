@@ -20,7 +20,7 @@
           </view>
           <view class="ca-mid" data-id="{{item.id}}" catch:tap="onOpen" hover-start-time="20" hover-class="press-fade" hover-stay-time="100">
             <text class="t-sys ca-name">{{item.name}}</text>
-            <text class="t-sys ca-sku" wx:if="{{item.sku}}">{{item.sku}}</text>
+            <text class="t-sys ca-sku t-cap" wx:if="{{item.sku}}">{{item.sku}}</text>
           </view>
           <view class="ca-right">
             <text class="mono ca-price {{item.selected ? '' : 'ca-price-off'}}">¥{{item.priceNum}}</text>
@@ -48,7 +48,7 @@
 
     <view class="ca-foot">
       <view class="ca-sum">
-        <text class="t-sys ca-sum-k">小计</text>
+        <text class="t-sys ca-sum-k t-cap">小计</text>
         <view class="ca-leader"></view>
         <text class="mono ca-sum-v">{{totalLabel}}</text>
       </view>
