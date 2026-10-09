@@ -1,8 +1,4 @@
 /* 购物车（v5「字重」稿 A4）：头（标题+小货车）固定、列表滚、底（小计+结算）固定在 TabBar 上方 */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 .ca {
   box-sizing: border-box;
   height: 100vh;

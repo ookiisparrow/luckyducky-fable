@@ -72,7 +72,8 @@ describe('订单详情：加载', () => {
     await flush()
     page.onHide()
     expect(callAppMock).toHaveBeenCalledWith('getOrderById', { id: 'o1' })
-    expect(page.data).toMatchObject({ loading: false, loadFailed: false, amountNum: '128.00', canAfterSale: false, head: '待支付', truckPose: 'park' })
+    expect(page.data).toMatchObject({ loading: false, loadFailed: false, canAfterSale: false, head: '待支付', truckPose: 'park' })
+    expect(page.data.vm.amountLabel.replace(/[^0-9.]/g, '')).toBe('128.00') // 底部合计显示的金额
     expect(page.data.sub.text).toMatch(/^1[34]:\d{2} 后自动取消，请尽快支付$/)
     expect(page.data.sub.tone).toBe('warn')
     expect(page.data.steps.map((x: { state: string }) => x.state)).toEqual(['cur', 'todo', 'todo', 'todo'])

@@ -1,8 +1,4 @@
 /* 我的订单（v5「字重」稿 B1 / E2 / E3） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 .ol {
   min-height: 100vh;
   box-sizing: border-box;

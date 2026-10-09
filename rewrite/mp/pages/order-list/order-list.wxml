@@ -50,7 +50,7 @@
       <view class="ol-head">
         <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
-        <text class="ol-status" style="{{item.labelColor ? 'color:' + item.labelColor : ''}}">{{item.label}}</text>
+        <text class="ol-status">{{item.label}}</text>
         <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time t-cap">后取消</text></view>
         <text wx:elif="{{item.right}}" class="t-sys ol-time t-cap">{{item.right}}</text>
       </view>

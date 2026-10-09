@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { notifyAlert, isDocMissing, isEmptyDoc, isCollectionMissing, err } from '../../kit'
-import { COLLECTIONS, PAID_ORDER_STATUSES, type CollectionName } from '@ldrw/shared'
+import { COLLECTIONS, type CollectionName } from '@ldrw/shared'
 
 // 账号有界扫描命中上限告警（根因#7 分页协议纪律的账号扫描版）：keyHash 加盐后多账号查找从
 // 「等值精确查询」退化为「limit(N) 有界扫描 + 客户端逐条比对」（checkKey 多账号分支、createAgent 撞口令
@@ -108,11 +108,6 @@ export async function activationFor(db: any, openid: string, productId: string) 
   }
 }
 
-// 已付营收口径（看板 GMV）：pending/closed 未付不计。真正单源在 @ldrw/shared order.ts 的 PAID_ORDER_STATUSES
-// （与订单状态机声明同处）；这里的 PAID_STATUSES 只做转发，给 dashboard.ts 用。财务对账（reconciliation.ts）
-// 按「已收到钱」算，口径更宽，直接从 @ldrw/shared 引 MONEY_RECEIVED_STATUSES，不走这里。
-export const PAID_STATUSES: readonly string[] = PAID_ORDER_STATUSES
-
 // 钱链内部异常（txAlerts 单源）：金额不符单 / 退款金额不符 / 审批超 1h 未到回调的卡单。
 // 看板（dashboard）与财务对账（reconciliation）共用此单源——同 activationFor 范式，防两处漂移
 // （钱链异常是 money 正确性判据，散两份易一处改漏）。各项走定向 where 精确（稀少·小集合·不从样本 filter）。
@@ -197,11 +192,11 @@ export function principalOf(a: any) {
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h·一个工作班次；过期重登（企微内静默 OAuth 无感）
 const SESSION_MAX = 8 // 单账号并存会话上限（多设备够用·防 sessions 数组无界膨胀）
 
-/** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。
- *  企微免登带 wecomUserId 记进 uid，resolveSession 据此让改绑/解绑前签的令牌失效。 */
 /** 会话令牌的长相（issueSession 签发：32 字节随机数的十六进制）。 */
 export const isSessionTokenShape = (key: string): boolean => /^[0-9a-f]{64}$/.test(key)
 
+/** 签发会话令牌：写进账号 doc.sessions（剪过期/超容），返回令牌明文（只此一次·不再可取回）。
+ *  企微免登带 wecomUserId 记进 uid，resolveSession 据此让改绑/解绑前签的令牌失效。 */
 export async function issueSession(db: any, docId: string, via: 'pwd' | 'wecom', wecomUserId = ''): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex')
   const now = Date.now()

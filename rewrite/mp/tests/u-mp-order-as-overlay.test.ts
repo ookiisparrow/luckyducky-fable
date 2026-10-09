@@ -2,6 +2,9 @@
 // 页面另拉本人售后按单叠加「售后中 / 已退款」与行标；拉失败静默不叠加。只桩云调用（callApp），其余用真的。
 // Page 桩同 p-mp-order-page / p-mp-order-list-page。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { live } from './helpers/wxmlStatic'
+import orderWxml from '../pages/order/order.wxml?raw'
+import orderListWxml from '../pages/order-list/order-list.wxml?raw'
 
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
@@ -80,12 +83,12 @@ describe('订单详情叠加售后', () => {
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded'), AS('o1', 'L2', 'refunded')] })
     const page = await detail()
     await page.reload()
-    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, headColor: '', canAfterSale: false, ended: true })
+    expect(page.data).toMatchObject({ head: '已退款', asLed: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, canAfterSale: false, ended: true })
     expect(page.data.steps.map((x: { label: string }) => x.label)).toEqual(['下单', '付款', '退款']) // 进度收在「退款」
 
     handlers.getMyAfterSales = () => ({ ok: true, list: [AS('o1', 'L1', 'refunded')] })
     await page.reload()
-    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, headColor: '', asHas: true, lineTags: { L1: '已退款' }, canAfterSale: true, ended: false })
+    expect(page.data).toMatchObject({ head: '待发货', asLed: { tone: 'var(--v5-ink)', halo: '' }, asHas: true, lineTags: { L1: '已退款' }, canAfterSale: true, ended: false })
     expect(page.data.sub.text).toBe('商家会在 48 小时内发货')
   })
 
@@ -157,8 +160,8 @@ describe('订单列表叠加售后', () => {
     expect(listAsCalls()).toHaveLength(1)
     expect(asCalls()).toHaveLength(0) // 列表不再另拉 getMyAfterSales
     const [o1, o2, o3] = page.data.shown
-    expect(o1).toMatchObject({ label: '售后中', led: { tone: 'var(--v5-ink)', halo: '' }, right: '退款申请中', truck: false, labelColor: '' })
-    expect(o2).toMatchObject({ label: '已退款', led: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, right: '已原路退回', labelColor: '' })
+    expect(o1).toMatchObject({ label: '售后中', led: { tone: 'var(--v5-ink)', halo: '' }, right: '退款申请中', truck: false })
+    expect(o2).toMatchObject({ label: '已退款', led: { tone: 'rgba(17,17,17,.28)', halo: 'none' }, right: '已原路退回' })
     expect(o3).toMatchObject({ label: '待发货', right: '48 小时内发货' })
 
     handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o4', 'shipped')], nextCursor: null, hasMore: false }) // 翻页回包不带售后
@@ -171,7 +174,14 @@ describe('订单列表叠加售后', () => {
     handlers.getMyOrders = () => ({ ok: true, list: [ORDER('o1', 'shipped')], nextCursor: null, hasMore: false })
     const page = await list()
     await page.reload()
-    expect(page.data.shown[0]).toMatchObject({ label: '待收货', truck: true, labelColor: '' })
+    expect(page.data.shown[0]).toMatchObject({ label: '待收货', truck: true })
     expect(wxMock.showToast).not.toHaveBeenCalled()
+  })
+})
+
+describe('状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）', () => {
+  it('大白话：订单详情的状态标题、订单列表的状态名都不带内联字色，颜色只落在状态灯上', () => {
+    expect(live(orderWxml)).toMatch(/<text class="od-head">\{\{head\}\}<\/text>/)
+    expect(live(orderListWxml)).toMatch(/<text class="ol-status">\{\{item\.label\}\}<\/text>/)
   })
 })

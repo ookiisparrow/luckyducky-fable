@@ -101,11 +101,14 @@ describe('结算页：旧价与空地址簿（UX 修复）', () => {
   })
 })
 
+// 合计件数＝页面条目（含已勾搭配购）数量之和——结算页不单存件数字段，断言落在真正渲染的条目上
+const qtySum = (page: any) => page.data.items.reduce((n: number, l: any) => n + l.qty, 0)
+
 describe('结算页：渲染', () => {
   it('大白话：进页画出默认地址、条目两位小数单价、合计件数与实付；包邮', async () => {
     const page = await mount()
     page.onShow()
-    await vi.waitFor(() => expect(page.data.count).toBe(3))
+    await vi.waitFor(() => expect(qtySum(page)).toBe(3))
     expect(page.data.address).toMatchObject({ name: '鸭', phone: '13800000000' })
     expect(page.data.items.map((l: any) => [l.id, l.qty, l.priceNum])).toEqual([
       ['p1', 2, '128.00'],
@@ -118,7 +121,7 @@ describe('结算页：渲染', () => {
     const page = await mount()
     await page.refresh()
     page.onToggleAddon({ currentTarget: { dataset: { id: 'hook' } } })
-    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    await vi.waitFor(() => expect(qtySum(page)).toBe(4))
     expect(page.data.amountNum).toBe('317.00')
     page.onPickAddress()
     expect(wxMock.navigateTo).toHaveBeenCalledWith({ url: '/pages/address/address?pick=1' })
@@ -256,7 +259,7 @@ describe('结算页：提交', () => {
   it('大白话：刷新等商品数据期间用户点了提交（草稿被清空）——刷新回来不能拿空草稿重画页面', async () => {
     const page = await mount()
     await page.refresh()
-    expect(page.data.count).toBe(3)
+    expect(qtySum(page)).toBe(3)
     let release!: (v: unknown) => void
     getAllProductsMock.mockReturnValueOnce(new Promise((r) => (release = r)))
     const pending = page.refresh()
@@ -266,7 +269,7 @@ describe('结算页：提交', () => {
     expect(ck.getDraft().items).toEqual([])
     release([{ id: 'p1', images: ['https://img/fresh.png'] }])
     await pending
-    expect(page.data.count).toBe(3)
+    expect(qtySum(page)).toBe(3)
     expect(page.data.items.map((l: any) => l.id)).toEqual(['p1', 'p2'])
     expect(page.data.amountNum).toBe('278.00')
   })
@@ -321,11 +324,11 @@ describe('结算页：改数量（老板拍板 9）', () => {
     const page = await mount()
     await page.refresh()
     page.onQtyInc(tap(page.data.items[1].lineId)) // 云朵鸭 1→2
-    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    await vi.waitFor(() => expect(qtySum(page)).toBe(4))
     expect(page.data.items.map((l: any) => l.qty)).toEqual([2, 2])
     expect(page.data.amountNum).toBe('300.00')
     page.onQtyDec(tap(page.data.items[0].lineId)) // 小鸭 2→1
-    await vi.waitFor(() => expect(page.data.count).toBe(3))
+    await vi.waitFor(() => expect(qtySum(page)).toBe(3))
     expect(page.data.amountNum).toBe('172.00')
     expect(cart.getItems().map((it) => it.qty)).toEqual([2, 1])
   })
@@ -357,7 +360,7 @@ describe('结算页：改数量（老板拍板 9）', () => {
     createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
     await page.onSubmit()
     page.onQtyInc(tap(page.data.items[1].lineId))
-    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    await vi.waitFor(() => expect(qtySum(page)).toBe(4))
     await page.onSubmit()
     expect(createOrderMock.mock.calls[1][0]).toEqual([
       { id: 'p1', sku: '', qty: 2 },
@@ -371,7 +374,7 @@ describe('结算页：改数量（老板拍板 9）', () => {
     const page = await mount()
     await page.refresh()
     page.onQtyInc(tap(page.data.items[0].lineId))
-    await vi.waitFor(() => expect(page.data.count).toBe(4))
+    await vi.waitFor(() => expect(qtySum(page)).toBe(4))
     expect(page.data.items.map((l: any) => [l.qty, l.priceNum])).toEqual([
       [3, '99.00'],
       [1, '22.00'],

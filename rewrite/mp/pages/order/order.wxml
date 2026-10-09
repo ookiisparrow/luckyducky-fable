@@ -15,7 +15,7 @@
         <view class="od-state-l">
           <px-anim wx:if="{{vm.status === 'pending' && !expired}}" name="hourglass" size="2" />
           <px-i wx:elif="{{asLed}}" name="led" tone="{{asLed.tone}}" halo="{{asLed.halo}}" />
-          <text class="od-head" style="{{headColor ? 'color:' + headColor : ''}}">{{head}}</text>
+          <text class="od-head">{{head}}</text>
         </view>
         <text class="t-sys od-sub od-sub-{{sub.tone}}" wx:if="{{sub.text}}">{{sub.text}}</text>
       </view>

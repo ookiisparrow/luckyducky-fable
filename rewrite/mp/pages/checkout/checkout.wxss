@@ -1,8 +1,4 @@
 /* 确认订单（v5「字重」稿 A5） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 整页一列：顶栏 + 小货车 + 滚动内容 + 底坞（设计稿 A5：车在滚动区外不跟着滚） */
 .co {
   height: 100vh;

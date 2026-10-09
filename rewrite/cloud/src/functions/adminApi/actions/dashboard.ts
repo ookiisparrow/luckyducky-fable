@@ -1,12 +1,14 @@
-import { reply, getTxAlerts, PAID_STATUSES, type Ctx } from '../lib'
+import { reply, getTxAlerts, type Ctx } from '../lib'
 import { listOrders } from './orders'
-import { COLLECTIONS } from '@ldrw/shared'
+import { COLLECTIONS, PAID_ORDER_STATUSES } from '@ldrw/shared'
 
 // —— 数据看板（不做「≤1000 条/表内存聚合」，那样会静默少算）——
 // 计数走 .count()（精确·不封顶）；GMV 走 DB aggregate 对 paid 订单求和（精确·不封顶）；
 // 钱链异常走定向 where（稀少·小集合·精确不漏老单）；最近订单走 orderBy 取真·最新 5（createOrder
 // 必写 createdAt → orderBy 不漏单）。仅 热度/卡点 仍「近 SAMPLE 条样本」近似（progress
 // 超 SAMPLE 时 approx 标注、前端显「近 N 估算」）。
+// 已付口径（GMV、转化速览）＝ PAID_ORDER_STATUSES：pending/closed 未付不计。财务对账（reconciliation.ts）按「已收到钱」
+// 算，口径更宽，走 MONEY_RECEIVED_STATUSES，不用这里的口径。
 const SAMPLE = 1000
 
 // 待发货＝shipOne 会放行的首发单：paid、无 feeMismatch、不被退款拦。退款从不改订单状态，全额退款的单
@@ -59,7 +61,7 @@ export async function getDashboard(ctx: Ctx) {
     db
       .collection(COLLECTIONS.orders)
       .aggregate()
-      .match({ status: _.in(PAID_STATUSES) })
+      .match({ status: _.in(PAID_ORDER_STATUSES) })
       .group({ _id: null, gmv: $.sum('$amount') })
       .end()
       .then((r: any) => (r.list && r.list[0] ? Number(r.list[0].gmv) || 0 : 0)),
@@ -74,8 +76,8 @@ export async function getDashboard(ctx: Ctx) {
         .orderBy('createdAt', 'desc')
         .limit(5)
     ),
-    // 转化速览：已支付订单数（口径同 GMV·PAID_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
-    cnt(db.collection(COLLECTIONS.orders).where({ status: _.in(PAID_STATUSES) })),
+    // 转化速览：已支付订单数（口径同 GMV·PAID_ORDER_STATUSES）——下单→支付→激活 各环节量级（指示性·非同批追踪）
+    cnt(db.collection(COLLECTIONS.orders).where({ status: _.in(PAID_ORDER_STATUSES) })),
     // 最近动态混合流：近期激活/进课 + 退款申请，与最近订单合并成一条时间轴（各 orderBy+limit 有界）
     rows(
       db

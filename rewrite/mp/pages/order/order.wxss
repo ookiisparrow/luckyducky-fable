@@ -1,8 +1,4 @@
 /* 订单详情（v5「字重」稿 B2） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 小货车：顶栏下 groundGap 处落地（屏高<700 为 56、其余 120·lib/ground·全站同一条地面线） */
 .od-truck {
   padding: 0 16px 12px;
