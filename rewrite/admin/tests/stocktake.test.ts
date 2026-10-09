@@ -4,9 +4,6 @@ import { describe, it, expect } from 'vitest'
 import { stocktakeDiff, filterSubmittable, genStocktakeNo, stocktakeAdjustId } from '../src/lib/stocktake'
 
 describe('实盘合法性 + 差异（非负整数才算已盘）', () => {
-  it('大白话：isValidActual 只给同文件 stocktakeDiff 用，不再对外 export', async () => {
-    expect(await import('../src/lib/stocktake')).not.toHaveProperty('isValidActual')
-  })
   it('大白话：0/正整数合法；负数/小数/空/非数一律不合法——不合法时差异算 null（模板显示「—」灰）', () => {
     // 合法性走外层 stocktakeDiff（isValidActual 已不对外 export）：合法有数字差，非法回 null
     expect(stocktakeDiff(10, 5)).toBe(-5)

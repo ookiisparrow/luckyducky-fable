@@ -519,7 +519,7 @@ describe('顾客发图坐席可见（B5·图片消息下载延迟到坐席首次
 
   // getKfMedia（kit/wecom.ts）按 errcode 细分：仅 40007（不合法的媒体文件id·media_id 过期/不存在的实际
   // 表现）判 expired:true；其余错误码（access_token 失效/频控/系统繁忙等真故障）expired:false 原样透出，
-  // 走 !out.expired 的 DOWNLOAD_FAILED/notifyAlert 分支——债#getMediaUrl-errcode 修复后此分支经真实链路可达
+  // 走 !out.expired 的 DOWNLOAD_FAILED/notifyAlert 分支——getMediaUrl 错误码修复后此分支经真实链路可达
   // （此前 getKfMedia 对任意 JSON 错误响应恒回 expired:true，该分支走不到，对坐席是误导）。
   it('大白话：非过期类错误码（如频控/系统繁忙）细分为 DOWNLOAD_FAILED，不再统一误判 EXPIRED', async () => {
     stubFetchMedia((url) => (url.includes('gettoken') ? { json: { access_token: 'T', expires_in: 7200 } } : { json: { errcode: 45009 } }))

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 压测台（债#19）——**只打独立测试环境，绝不碰生产**。
+ * 压测台——**只打独立测试环境，绝不碰生产**。
  *
  * 为什么这么测：本仓从未压测、全靠看码推断（根因#8）。我们改的 throttle CAS / dashboard
  * count·aggregate 全建立在一个**未验的假设**上：「真微信云 `where().update()` 是原子的、
@@ -137,7 +137,7 @@ function $sum(db) {
   return db.command.aggregate.sum('$amount')
 }
 
-// ③ 频控端到端（债#19·根因#13/#8）：忠实复刻 throttle.ts 的 bumpWindowed 并发关键路径——
+// ③ 频控端到端（根因#13/#8）：忠实复刻 throttle.ts 的 bumpWindowed 并发关键路径——
 //    N 并发「命中」同一 key（大窗口、测试期不翻滚）：首写靠 add({_id}) 撞号即失败（恰一胜、其余
 //    转 update）+ 窗内 CAS 自增 where({_id,旧窗,旧计数}).update。验真库下**恰 max 放行、无丢更新、
 //    无泄漏**——allowed>max 即丢更新让超额请求漏过频控（这正是「频控只桩绿」要证伪的真风险）。

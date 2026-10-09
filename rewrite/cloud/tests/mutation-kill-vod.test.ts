@@ -107,7 +107,7 @@ function stubFetch(script: Scripted[]): Recorded[] {
   return calls
 }
 
-// [LD_ALERT] 行捕获（同 flow.test.ts 范式：alert 单出口＝console.error 一行，逐字符断言杀字面量变异）
+// [LD_ALERT] 行捕获（同 mutation-kill-flow.test.ts 范式：alert 单出口＝console.error 一行，逐字符断言杀字面量变异）
 let errLines: string[] = []
 let spy: ReturnType<typeof vi.spyOn>
 
