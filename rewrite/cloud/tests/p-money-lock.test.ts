@@ -204,14 +204,15 @@ describe('adminApi 行为锁（shipOne / 退款 / 网关）', () => {
     expect(control.dump('stockLedger')).toEqual([])
   })
 
-  it('大白话：条件写没命中且回读也失败——按 BAD_STATUS:unknown 拒', async () => {
+  it('大白话：条件写没命中且回读也失败——回 DOC_READ_FAIL，不报成状态不对（#400-3）', async () => {
     seedOrder({ shipUploadLock: 'busy', shipUploadLockAt: Date.now() })
     let reads = 0
     control.setBeforeGet(async (a: any) => {
       if (a.coll === 'orders' && a.id && ++reads === 2) throw new Error('MOCK_READ_FAIL')
     })
     const r = await post('shipOrder', { id: 'o1', company: '顺丰', trackingNo: 'SF1', ackRefundedQty: {} })
-    expect(r.error).toBe('BAD_STATUS:unknown')
+    expect(r.error).toBe('DOC_READ_FAIL')
+    expect(reads).toBe(2)
   })
 
   it('大白话：陈旧锁抢占写也没命中（别人刚抢到新锁）——回 SHIP_IN_PROGRESS，不告警不上传', async () => {
