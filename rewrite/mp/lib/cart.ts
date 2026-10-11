@@ -1,7 +1,5 @@
-// 购物车模块 store：
-// 行身份=「商品 id + 规格 sku」双键（同商品不同规格各成独立行·同规格合并加量）；
-// 持久化 wx.storage、回灌必过 sanitizeCart 清洗（脏条目丢弃·防旧数据撑乱列表）；
-// 合计走「分」整数累加再回两位小数展示（元浮点直加会漂·金额恒两位小数）。
+// 购物车：一行＝「商品 id + 规格 sku」（同商品不同规格各成一行，同规格合并加量）。
+// 存 wx.storage，读回必过 sanitizeCart（脏条目丢弃）。合计按「分」整数累加——元的浮点直接相加会有尾差。
 import { readStorage, writeStorage } from '../utils/storage'
 
 export interface CartItem {
@@ -19,8 +17,7 @@ export interface CartItem {
 const KEY = 'ld:cart'
 let items: CartItem[] | null = null // 惰性加载（测试可先桩 wx 再触发）
 
-/** 回灌契约（单一来源）：有 id、price 是数字、有 name、qty 正整数才有效；
- *  小数数量直接丢弃不 floor；selected 归一布尔；sku 缺失归一空串（历史无规格数据兼容双键定位）。 */
+/** 有 id、price 是数字、有 name、qty 是正整数才留（小数数量整条丢、不取整）；sku 缺失归空串（兼容无规格的旧数据）。 */
 function sanitizeCart(raw: unknown): CartItem[] {
   const list = raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items) ? ((raw as Record<string, unknown>).items as unknown[]) : []
   const out: CartItem[] = []
@@ -52,8 +49,7 @@ function save(): void {
 
 const keyOf = (id: string, sku: string) => (it: CartItem) => it.id === id && it.sku === (sku || '')
 
-/** 行唯一键（wx:key 用）：id+sku 双键合成——单用 id 会撞 key（同商品不同规格各成独立行，见文件头行身份注释）。
- *  仅在视图层派生（getItems 返回值），不进持久化 schema。 */
+/** 行唯一键（wx:key 用）：单用 id 会撞（同商品不同规格是两行）。只在视图层派生，不存进 storage。 */
 export function lineIdOf(id: string, sku: string): string {
   return id + '__' + (sku || '')
 }
@@ -73,8 +69,7 @@ export function remove(id: string, sku = ''): void {
   save()
 }
 
-/** 相对增减：读内存态当前 qty 再 ±delta（钳位 ≥1）。步进器用它、不传渲染层旧值——
- *  防一次 setData 往返内快速连点，多次读同一旧 data-qty 做绝对 setQty 丢增量（lost update）。 */
+/** 相对增减（最少 1）。步进器用它而不是传页面上的数量：连点时页面还没刷新，多次读到同一个旧值会丢掉增量。 */
 export function bump(id: string, delta: number, sku = ''): void {
   const it = load().find(keyOf(id, sku))
   if (it) it.qty = Math.max(1, it.qty + delta)
@@ -93,18 +88,16 @@ export function getItems(): Array<CartItem & { lineId: string }> {
 
 export const selectedCount = (): number => load().reduce((n, it) => (it.selected ? n + it.qty : n), 0)
 
-/** 选中合计·分（整数·结算下单用同一口径——0.1 元这类价 ×100 浮点会带尾数，逐行 Math.round 后必为整数）。 */
+/** 选中合计（分）。逐行 Math.round：0.1 元 ×100 浮点会带尾数。 */
 export function selectedTotalFen(): number {
   return load().reduce((n, it) => (it.selected ? n + Math.round(it.price * 100) * it.qty : n), 0)
 }
 
-/** 选中合计展示（恒两位小数·由分整数派生）。 */
 export function selectedTotalLabel(): string {
   return '¥' + (selectedTotalFen() / 100).toFixed(2)
 }
 
-/** 结算完成扣减：按「本次实际提交数量」精确扣——部分数量剩余保留；扣到 0 移除该行；
- *  双键定位不串同商品其他规格行。 */
+/** 下单成功后按实际提交数量扣，扣到 0 才删行（结算页可能只买了车里的一部分数量）。 */
 export function consume(lines: Array<{ id: string; sku?: string; qty: number }>): void {
   const list = load()
   for (const line of lines) {
@@ -121,9 +114,9 @@ export function __resetForTest(): void {
   items = null
 }
 
-/** 这一行的现价（元）：从「当前商品原档」取——有规格按规格名找规格价，无规格用商品价（同云端 createOrder priceItems 口径）。
- *  商品不在货架（停售/删档/原档未加载）、规格没了、价不合法 → null：调用方不动这一行，
- *  交给下单时云端拒单（UNLISTED_ITEM/UNKNOWN_ITEM/UNKNOWN_SKU）+ checkout.dropRejectedLine 点名移出，不静默丢。 */
+/** 这一行的现价（元），取法同云端 createOrder：有规格取规格价，否则取商品价。
+ *  查不到（下架/删档/规格没了/价不合法）回 null，调用方不动这一行——留给下单时云端拒单、
+ *  checkout.dropRejectedLine 点名移出，不在这里悄悄删。 */
 export function latestPrice(line: { id: string; sku: string }, allRaw: Record<string, unknown>[]): number | null {
   const p = allRaw.find((x) => String(x.id || x._id || '') === line.id) as Record<string, any> | undefined
   if (!p) return null
@@ -146,10 +139,8 @@ export function syncPrices(allRaw: Record<string, unknown>[]): boolean {
   return changed
 }
 
-/** 展示层覆盖：云端 getProducts 下发的 cover 是约 2h 时效的 https 临时址
- *  （非持久 cloud:// fileID·见云端 catalog.ts），而购物车行的 cover 会持久化进
- *  wx.storage——隔天回灌旧址早已过期，缩略图会挂。按行 id 从「当前商品原档」（页面已拉取的全量列表）
- *  查最新 cover 展示；查不到（商品已删/停售/原档未加载）回退行内持久 cover，不改持久化契约本身。 */
+/** 展示用封面：云端给的 cover 是约 2 小时过期的临时地址，存在购物车里的旧地址隔天就挂了。
+ *  优先用刚拉到的商品列表里的新地址，查不到才退回存的旧地址。 */
 export function freshCover(line: { id: string; cover: string }, allRaw: Record<string, unknown>[]): string {
   const p = allRaw.find((x) => String(x.id || x._id || '') === line.id)
   const fresh = p && typeof p.cover === 'string' ? p.cover.trim() : ''

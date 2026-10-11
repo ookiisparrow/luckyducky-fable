@@ -1,7 +1,6 @@
-// 支付结果映射（纯函数·vitest 钉）：云端 pay 契约 → 页面动作。
-// 响应形状哨兵见 rewrite/cloud/tests/contract-shape.test.ts·cloud 改键该测试会红·同步时两头一起改。
-// fail-closed：收银台五参缺任一即判错不拉起（半空参数拉起=收银台闪退·比不拉更糟）；
-// BAD_STATUS:paid 判已付（并发已付幂等成功·不吓用户）。
+// 云端 pay 回包 → 页面动作。云端改回包字段时 rewrite/cloud/tests/contract-shape.test.ts 会红，两头一起改。
+// 收银台五个参数缺任一就判错不拉起：半空参数拉起会让收银台闪退，比不拉更糟。
+// BAD_STATUS:paid 按已付处理（并发下别处已付成功，不该吓用户）。
 type SignType = 'MD5' | 'HMAC-SHA256' | 'RSA'
 
 interface PaymentParams {
@@ -14,7 +13,7 @@ interface PaymentParams {
 
 const SIGN_TYPES: readonly string[] = ['MD5', 'HMAC-SHA256', 'RSA']
 
-// 必须与 rewrite/shared/src/order.ts 的 buildBadStatus('paid') 输出逐字一致——mp 进不了 @ldrw/shared（开发者工具编译限制），手动同步，改一处两处都要改
+// 手抄自 shared buildBadStatus('paid')（mp 引不了 @ldrw/shared），两边须逐字一致，check-structure 会核
 const PAID_BAD_STATUS = 'BAD_STATUS:paid'
 
 type PayOutcome =
@@ -33,16 +32,16 @@ export function mapPayResult(r: unknown): PayOutcome {
       const clean: Record<string, string> = {}
       for (const f of fields) {
         const v = p[f]
-        if (typeof v !== 'string' || !v) return { kind: 'error', message: '支付参数不完整，请稍后再试' } // 半空不拉起
+        if (typeof v !== 'string' || !v) return { kind: 'error', message: '支付参数不完整，请稍后再试' }
         clean[f] = v
       }
-      if (!SIGN_TYPES.includes(clean.signType)) return { kind: 'error', message: '支付参数不完整，请稍后再试' } // 非法签名类型同 fail-closed
+      if (!SIGN_TYPES.includes(clean.signType)) return { kind: 'error', message: '支付参数不完整，请稍后再试' }
       return { kind: 'request', payment: clean as unknown as PaymentParams }
     }
     return { kind: 'error', message: '支付参数不完整，请稍后再试' }
   }
   const e = String(res.error || '')
-  if (e.startsWith(PAID_BAD_STATUS)) return { kind: 'paid' } // 已付幂等
+  if (e.startsWith(PAID_BAD_STATUS)) return { kind: 'paid' }
   if (e === 'ORDER_CLOSED') return { kind: 'closed', message: '订单已超时关闭，请重新下单' }
   if (e === 'PAY_NOT_ENABLED') return { kind: 'error', message: '支付暂未开通' }
   if (e === 'UNIFIED_ORDER_FAIL') return { kind: 'error', message: '支付通道繁忙，稍后再试' }
