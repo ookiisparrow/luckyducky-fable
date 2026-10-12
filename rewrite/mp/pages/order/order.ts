@@ -22,6 +22,9 @@ const lineText = (l: { name: string; spec: string }): string => l.name + (l.spec
 
 // 待退款 / 支付异常：状态卡出「联系客服」（说明句已含原因·UI 审查 15 问 6a 起不再另起警示行）
 const HELP = new Set(['refund_required', 'payment_exception'])
+// 云端判微信那边已付、回调还没落库：库里仍是 pending，但不能再让人去支付或取消（云端取消不问微信，
+// 会把已付的钱关进已关闭单，只能人工退）
+const CONFIRMING = { head: '已付款，正在确认', sub: { text: '微信已收到付款，订单状态稍后更新', tone: '' } }
 // 小货车姿态（设计稿 tpose）：待发货/待收货在路上、完成卸货、待退款倒车，其余停着
 const POSE: Record<string, string> = { paid: 'drive', shipped: 'drive', done: 'unload', refund_required: 'reverse' }
 
@@ -47,6 +50,7 @@ Page({
     canAfterSale: false,
     ended: false, // 整单退完＝订单结束（reload 里算）
     paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
+    confirming: false, // 云端回过 ORDER_ALREADY_PAID（微信已付、回调没落库）：订单离开待付款前都按「已付款，正在确认」显示
     holding: false, // 按住取消进行中（驱动键内红色进度条）
     expired: false, // 待支付倒计时已归零（藏「去支付」·云端关单前先按超时展示）
     steps: [] as Array<{ label: string; state: StepState }>, // 进度四步（v5·纯展示派生）
@@ -97,7 +101,7 @@ Page({
   },
   tick() {
     const vm = this.data.vm
-    if (!vm || vm.status !== 'pending') return
+    if (!vm || vm.status !== 'pending' || this.data.confirming) return // 正在确认：倒计时不再改卡片、不判超时
     const now = Date.now()
     const sub = detailSub(vm, now)
     if (sub.text !== this.data.sub.text || sub.tone !== this.data.sub.tone) this.setData({ sub })
@@ -158,16 +162,18 @@ Page({
     const ov = afterSaleOverlay(vm.items, asOf)
     const wd = this._asList ? withdrawableLines(this._asList, vm.id) : {}
     const ended = ov?.head === '已退款' // 整单退完＝订单结束：不出售后入口、货车换静止纸箱、进度收在「退款」（老板 2026-10-03）
+    const confirming = this.data.confirming && s === 'pending' // 回调到了（不再 pending）就自然退出
     this.setData({
       loading: false,
       loadFailed: false,
       vm,
-      head: ov ? ov.head : statusHead(vm, Date.now()).label,
+      confirming,
+      head: confirming ? CONFIRMING.head : ov ? ov.head : statusHead(vm, Date.now()).label,
       asLed: ov ? ov.led : statusHead(vm, Date.now()).led,
       asHas: !!asOf,
       lineTags: asOf ? asOf.lines : {},
       wdLines: vm.items.map((it) => it.lineId).filter((id) => wd[id]),
-      sub: ov ? { text: ov.detail, tone: '' } : detailSub(vm, Date.now()),
+      sub: confirming ? CONFIRMING.sub : ov ? { text: ov.detail, tone: '' } : detailSub(vm, Date.now()),
       help: HELP.has(s),
       dock: s !== 'closed',
       canAfterSale: ['paid', 'shipped', 'done'].includes(s) && !ended,
@@ -175,7 +181,7 @@ Page({
       steps: orderSteps(s, ended),
       truckPose: ov || s === 'refund_required' ? 'reverse' : POSE[s] || 'park', // 退货/售后/退款：货车倒车开回
       cargo: s !== 'closed' ? Math.min(3, vm.items.length) : 0,
-      expired: s === 'pending' && payLeftMs(vm, Date.now()) === 0,
+      expired: s === 'pending' && !confirming && payLeftMs(vm, Date.now()) === 0,
     })
     if (this.pickHint && s === 'done') {
       this.pickHint = false
@@ -284,7 +290,7 @@ Page({
   },
   async cancelNow() {
     const vm = this.data.vm
-    if (!vm || vm.status !== 'pending') return
+    if (!vm || vm.status !== 'pending' || this.data.confirming) return
     tapHaptic()
     const r = await this.withLoading('正在取消', () => cancelOrder(this.orderId))
     if (!r || this.unloaded) return // 在途重复触发 / await 恢复点复核：用户已退出详情页——非钱副作用，静默收尾即可
@@ -314,6 +320,11 @@ Page({
     if (outcome.kind === 'paid') {
       fxToast(this, '已支付')
       settle()
+      return
+    }
+    if (outcome.kind === 'confirming') {
+      this.setData({ confirming: true, head: CONFIRMING.head, sub: CONFIRMING.sub }) // 先上屏：重拉失败也不能退回「待付款」
+      settle() // 重新拉订单：回调到了就翻已付
       return
     }
     if (outcome.kind === 'request') {

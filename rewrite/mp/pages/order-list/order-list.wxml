@@ -50,8 +50,8 @@
       <view class="ol-head">
         <px-anim wx:if="{{item.truck}}" class="ol-truck" name="truck" size="2" />
         <px-i wx:else name="led" tone="{{item.led.tone}}" halo="{{item.led.halo}}" />
-        <text class="ol-status">{{item.label}}</text>
-        <view wx:if="{{item.cd}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time t-cap">后取消</text></view>
+        <text class="ol-status">{{item.status === 'pending' && confirmingId === item.id ? '已付款，正在确认' : item.label}}</text>
+        <view wx:if="{{item.cd && confirmingId !== item.id}}" class="ol-cd"><text class="mono ol-cd-n">{{item.cd}}</text><text class="t-sys ol-time t-cap">后取消</text></view>
         <text wx:elif="{{item.right}}" class="t-sys ol-time t-cap">{{item.right}}</text>
       </view>
       <view class="ol-row">
@@ -67,7 +67,7 @@
       </view>
       <!-- 操作键：待支付＝按住取消 + 去支付；待收货＝查看物流 + 确认收货；已完成＝写评价（浅色键），
            每行都评过＝灰底「已评价」标签不可点（拍板 6·云端订单接口带 reviewedLineIds） -->
-      <view class="ol-acts" wx:if="{{item.status === 'pending'}}">
+      <view class="ol-acts" wx:if="{{item.status === 'pending' && confirmingId !== item.id}}">
         <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条）：外层接按住手势 + 吞掉 tap 不进详情，内层是键帽 -->
         <view class="ol-hold" data-id="{{item.id}}" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd" catch:tap="noop">
           <view class="k k-sm k-light ol-act hit44 ol-danger {{holding === item.id ? 'ol-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"

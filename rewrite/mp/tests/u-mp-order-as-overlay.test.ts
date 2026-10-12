@@ -182,6 +182,7 @@ describe('订单列表叠加售后', () => {
 describe('状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）', () => {
   it('大白话：订单详情的状态标题、订单列表的状态名都不带内联字色，颜色只落在状态灯上', () => {
     expect(live(orderWxml)).toMatch(/<text class="od-head">\{\{head\}\}<\/text>/)
-    expect(live(orderListWxml)).toMatch(/<text class="ol-status">\{\{item\.label\}\}<\/text>/)
+    // 内容可带「已付款，正在确认」三元式（#475），标签本身不许有 style
+    expect(live(orderListWxml)).toMatch(/<text class="ol-status">\{\{[^}]*item\.label\}\}<\/text>/)
   })
 })

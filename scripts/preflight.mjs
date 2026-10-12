@@ -72,6 +72,6 @@ console.log(`
   □ 验收单 X（集合权限档位·以 COLLECTIONS 单源为准）/ Y（支付黄金路径）/ Z（退款黄金路径）真机重走
   □ cloudbaserc.json：functionRoot 已是 rewrite/cloud/dist。部署源就是这份活线产物。
     函数个数、内存、超时以 cloudbaserc.json 的 functions 为准。
-  □ 数据兼容：重构 _id 方案与现网一致＝无需迁移；债#14（users/progress 确定性_id）属切换后改进
+  □ 数据兼容：重构 _id 方案与现网一致＝无需迁移；users/progress 确定性 _id 属切换后改进
 真部署（deploy-fns）须 DEPLOY_ALLOWED=1 + 用户拍板。本体检不触发任何部署。`)
 process.exit(fail.length ? 1 : 0)

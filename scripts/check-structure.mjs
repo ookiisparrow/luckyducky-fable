@@ -8,8 +8,7 @@
  *
  * 两类规则：
  *   repoChecks —— 仓级断言（跑一次）：扫 package.json / 配置 / 目录形状。
- *   fileRules  —— 逐文件（B2 起按主张追加：禁多端回退、禁运行时引 data/、禁 kit 外裸 init…）。
- *                 B1 为空数组——引擎就位，规则随批次长出。
+ *   fileRules  —— 逐文件（禁 kit 外裸用云原语、金额走分、依赖方向…，按主张追加）。
  *
  * 用法：
  *   node scripts/check-structure.mjs            # 全量（repoChecks + fileRules）
@@ -23,7 +22,6 @@ import { join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { builtinModules } from 'node:module'
 import { findDeadExports, findPhantomDeps, checkBudget, collectImportSpecifiers } from './lib/slim-scan.mjs'
-import { allDeployNames } from './lib/deploy-aliases.mjs' // 部署别名单源（产物→云函数名·adminApi 亦部署为 adminApiV2·病根#16）
 import { deriveTierCharsets } from './lib/brand-font-charset.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -358,10 +356,10 @@ export const repoChecks = [
         }
       }
       const bad = []
-      // 别名展开（病根#16）：adminApi 产物亦部署为 adminApiV2（/adminv2·admin 前端调用方）——单源 lib/deploy-aliases.mjs
-      const expanded = allDeployNames(actual)
+      // 产物名＝云端函数名（adminApi 只部署自身，线上不存在 adminApiV2·病根#16）
+      const expanded = [...new Set(actual)]
       for (const name of expanded) if (!configured.has(name)) bad.push(`活线云函数 ${name} 缺 cloudbaserc.json 配置——真部署会卡交互确认、答 y 即按默认参数覆盖线上真值（根因#8/#16）`)
-      for (const name of configured) if (!expanded.includes(name)) bad.push(`cloudbaserc.json 配了不存在的函数 ${name}——孤儿配置（部署别名请登记 scripts/lib/deploy-aliases.mjs）`)
+      for (const name of configured) if (!expanded.includes(name)) bad.push(`cloudbaserc.json 配了不存在的函数 ${name}——孤儿配置（源码里没有这个云函数，删掉这条配置）`)
       return bad
     },
   },
@@ -786,23 +784,22 @@ export const repoChecks = [
         return rel.endsWith('.wxml') || rel.endsWith('.vue') ? s.replace(/<!--[\s\S]*?-->/g, '') : s
       }
       const brandFile = 'rewrite/mp/lib/brand.ts'
-      const shopFile = 'rewrite/mp/lib/shop.ts' // 店铺全名单源（与 brand.ts 分家的理由见该文件头注：首屏字体子集）
       const absBrand = join(ROOT, brandFile)
       if (!existsSync(absBrand)) bad.push(`${brandFile} 缺失（店名单一来源，R23⑲）`)
       else if (!new RegExp(`BRAND_NAME\\s*=\\s*['"]${NAME}['"]`).test(readFileSync(absBrand, 'utf8')))
         bad.push(`${brandFile} 未导出 BRAND_NAME='${NAME}'——店名单源缺定值（R23⑲）`)
-      // ① NAME / 官方旗舰店 单源：只在 brand.js，别处引 BRAND_NAME（限引它的 miniapp/admin 两端）
+      // ① 店名 NAME 单源在 lib/brand.ts，别处引 BRAND_NAME；「官方旗舰店」后缀见下
       for (const dir of ['rewrite/mp', 'rewrite/admin/src', 'rewrite/agent/src']) {
         for (const f of walk(join(ROOT, dir), EXTS)) {
           const rel = relative(ROOT, f)
           const s = strip(rel, readFileSync(f, 'utf8'))
           if (rel !== brandFile && s.includes(NAME))
             bad.push(`${rel} 硬编码店名「${NAME}」——须引 rewrite/mp/lib/brand.ts 的 BRAND_NAME 单源（病根#5）`)
-          // 店铺全名单源住 lib/shop.ts 而非 brand.ts（2026-07-25 体检批 P3）：brand.ts 在首页闭包内，
-          // 「旗舰店」并进去会被 rw-mp-font-tier-subset-covers 算作 tier1 首屏字，而首屏子集里没有这三个字
-          // → 真机静默掉系统字体。拆开后本字落 tier2（详见 lib/shop.ts 头注）。
-          if (rel !== shopFile && s.includes('官方旗舰店'))
-            bad.push(`${rel} 硬编码「官方旗舰店」店铺后缀——须引 lib/shop.ts 的 SHOP_FULL_NAME 单源（病根#5·债#30）`)
+          // 店铺全名「官方旗舰店」不许硬编码：原单源 lib/shop.ts 已随 v5 店铺行下线删除（#408），现全仓不该出现。
+          // 要恢复店铺行时先新建单源文件并在这里豁免它；别并进 brand.ts——brand.ts 在首页闭包内，「旗舰店」会被
+          // rw-mp-font-tier-subset-covers 算作 tier1 首屏字，而首屏子集里没有这三个字 → 真机静默掉系统字体。
+          if (s.includes('官方旗舰店'))
+            bad.push(`${rel} 硬编码「官方旗舰店」店铺后缀——须走店铺全名单源（原 lib/shop.ts 已随 v5 店铺行下线；恢复时新建单源并在本守卫豁免，勿并进 brand.ts）（病根#5）`)
           // 英文口号同样单源（2026-07-25 体检批 P3）：paysuccess 曾硬编码「Get Ducky Get Lucky」，
           // 与 brand.ts 的「Get ducky get lucky」大小写不一致——同一句口号全 App 两种写法。
           // 大小写不敏感匹配：正是大小写漂移本身要抓，不能只比字面量。
@@ -855,7 +852,7 @@ export const repoChecks = [
     },
   },
   {
-    // 云环境目录单源（病根#5·债#30① + Issue #106）：生产/测试 env id 只在 scripts/lib/env.mjs
+    // 云环境目录单源（病根#5 + Issue #106）：生产/测试 env id 只在 scripts/lib/env.mjs
     // 以 PROD_ENV / TEST_ENV 字面量定义；ENV_CATALOG 给出 stub|test|prod-readonly 选择子。
     // scripts/ 递归扫（含 test-api/）禁再抄门牌号——抄漏会让「拒生产」闸与压测目标不一致。
     // guard-deploy 的 id 仅在确认消息文案（非逻辑常量）·豁免。
@@ -1301,7 +1298,7 @@ export const repoChecks = [
   {
     id: 'rw-openapi-perm-declared',
     roots: ['#12', '#8'],
-    desc: '新线云调用权限随产物声明（根因#12/#8·债#26）：rewrite/cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记（据此产 config.json）——否则部署产物缺权限、云调用被微信拒',
+    desc: '新线云调用权限随产物声明（根因#12/#8）：rewrite/cloud 源每个 cloud.openapi.<ns>.<method> 调用须在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记（据此产 config.json）——否则部署产物缺权限、云调用被微信拒',
     run() {
       const bad = []
       const srcRoot = join(ROOT, 'rewrite/cloud/src')
@@ -1320,7 +1317,7 @@ export const repoChecks = [
       if (!existsSync(buildMjs)) return ['rewrite/cloud/build.mjs 缺失——新线云函数无部署产物形态（M1 收口·根因#12）']
       const build = readFileSync(buildMjs, 'utf8')
       if (!/OPENAPI_PERMS/.test(build) || !/config\.json/.test(build))
-        bad.push('rewrite/cloud/build.mjs 未见 OPENAPI_PERMS 登记或 config.json 产出——产物不带 openapi 权限声明（根因#12·债#26）')
+        bad.push('rewrite/cloud/build.mjs 未见 OPENAPI_PERMS 登记或 config.json 产出——产物不带 openapi 权限声明（根因#12）')
       for (const c of calls)
         if (!build.includes(`'${c}'`) && !build.includes(`"${c}"`))
           bad.push(`新线云调用 cloud.openapi.${c} 未在 rewrite/cloud/build.mjs OPENAPI_PERMS 登记——产物 config.json 缺权限「${c}」（根因#12）`)
@@ -1331,7 +1328,7 @@ export const repoChecks = [
     // 新线隐私授权（R27㉒）+ consent 页（数据共享同意的 C 端半边）。
     // 原生形态：app.json __usePrivacyCheck__ + lib/privacyGate 挂 onNeedPrivacyAuthorization + app.ts 启动注册
     // + privacy-sheet 组件（agreePrivacyAuthorization 能力按钮）；涉隐私接口页扫描制——哪页调隐私接口哪页必挂
-    // 弹窗（挂载可达性·债#25 教训：闸全局触发、弹窗挂不到就渲不出=授权链静默断）。consent 页写 dataConsent
+    // 弹窗（挂载可达性教训：闸全局触发、弹窗挂不到就渲不出=授权链静默断）。consent 页写 dataConsent
     // （服务端为真值·本地只提示），me 页有入口（可达性）。
     id: 'rw-mp-privacy-gated',
     roots: ['R27'],
@@ -1370,7 +1367,7 @@ export const repoChecks = [
           const ts = rd(`pages/${p}/${p}.ts`)
           if (!PRIV.test((wxml || '') + (ts || ''))) continue
           if (!wxml || !wxml.includes('<privacy-sheet'))
-            bad.push(`pages/${p} 调涉隐私接口但 wxml 未挂 <privacy-sheet/>——闸触发弹窗渲不出·授权链静默断（债#25）`)
+            bad.push(`pages/${p} 调涉隐私接口但 wxml 未挂 <privacy-sheet/>——闸触发弹窗渲不出·授权链静默断`)
           const pj = rd(`pages/${p}/${p}.json`)
           if (!pj || !pj.includes('privacy-sheet')) bad.push(`pages/${p}/${p}.json 未注册 privacy-sheet 组件`)
         }
@@ -1881,11 +1878,8 @@ export const repoChecks = [
 
 // ============== 逐文件规则（fileRules）==============
 // 形状：{ id, inScope(absPath)->bool, test(line, {file, lines, i})->msg|null }
-// 按主张追加（B3 起：禁 #ifdef 多端回退、禁 api 运行时引 data/…）。
+// 按主张追加。
 export const fileRules = [
-  // —— 以下 4 条为旧线（packages/）5 条守卫的 rewrite/ 镜像（批1·治理重心搬到活代码线）——
-  // 旧线守卫扫描面锁死 packages/ 路径，对唯一在迭代的 rewrite/ 空转；本批不改旧条（继续守 packages/
-  // 冻结基线），另立新条落地到 rewrite/。SRC_DIRS 已扩到含 'rewrite'（见下方 A.0），否则新条也是装饰。
   {
     // T2 域分组（根因账本 #5）镜像：rewrite/cloud 云函数业务代码禁裸用 cloud.init()/getWXContext()。
     id: 'rw-kit-only-cloud-primitives',
@@ -1972,7 +1966,7 @@ export const typeAndTestGuards = [
     id: 'rw-flow-observable',
     mechanism: 'test',
     roots: ['#12', '#8', '#14'],
-    reverseTest: 'rewrite/cloud/tests/flow.test.ts',
+    reverseTest: 'rewrite/cloud/tests/mutation-kill-flow.test.ts',
   },
   {
     id: 'order-status-union',
@@ -2012,28 +2006,28 @@ export const typeAndTestGuards = [
   { id: 'pay-config-fail-closed', mechanism: 'test', roots: ['#3'], reverseTest: 'rewrite/cloud/tests/app-orders.test.ts' },
   { id: 'fen-money-chain', mechanism: 'test', roots: ['#4'], reverseTest: 'rewrite/cloud/tests/e2e-refund-conservation.test.ts' },
   { id: 'paging-contract', mechanism: 'test', roots: ['#7'], reverseTest: 'rewrite/cloud/tests/paging.test.ts' },
-  // 发货上传 fail-soft（根因#12 + 合规债#26）：微信发货上传失败绝不反噬本地发货——shipOrder 仍翻 shipped、
+  // 发货上传 fail-soft（根因#12 + 合规）：微信发货上传失败绝不反噬本地发货——shipOrder 仍翻 shipped、
   // 留痕 wxShipError、打 [LD_ALERT] sev=money 告警人工补录；上传成功留痕 wxShipUploaded。reverseTest 锁此行为。
   { id: 'shipping-upload-fail-soft', mechanism: 'test', roots: ['#12'], reverseTest: 'rewrite/cloud/tests/app-admin3.test.ts' },
-  // 商品停售生效（债#12）：unpublishProduct 置 listed:false 后 getProducts 不再下发该商品（顾客端列表消失），
+  // 商品停售生效（R13 上下架）：unpublishProduct 置 listed:false 后 getProducts 不再下发该商品（顾客端列表消失），
   // republishProduct 恢复；旧无 listed 字段的商品视为可售（兼容）。reverseTest 锁此端到端行为。
-  { id: 'product-unpublish-effective', mechanism: 'test', roots: ['债#12'], reverseTest: 'rewrite/cloud/tests/app-catalog.test.ts' },
-  // 停售商品挡交易入口（审核 P1·债#12 + 根因#3 信任边界 fail-closed）：软下架（listed:false）此前只挡 getProducts
+  { id: 'product-unpublish-effective', mechanism: 'test', roots: ['R13'], reverseTest: 'rewrite/cloud/tests/app-catalog.test.ts' },
+  // 停售商品挡交易入口（审核 P1·R13 + 根因#3 信任边界 fail-closed）：软下架（listed:false）此前只挡 getProducts
   // 列表，createOrder 不校验——旧购物车/缓存/直调云函数仍能买已停售品。本守卫锁 createOrder 对 listed:false 主商品
   // fail-closed（UNLISTED_ITEM·不建单不扣库存），且 publishProduct 重新上架保留旧 listed（不隐式复活销售）。reverseTest 锁此组合行为。
-  { id: 'createorder-rejects-unlisted', mechanism: 'test', roots: ['债#12', '#3'], reverseTest: 'rewrite/cloud/tests/app-orders.test.ts' },
-  // 评价列表分页端到端（根因#7·债#13）：getReviews 列表 cursor 翻页（>limit 返 nextCursor·续页接上），
+  { id: 'createorder-rejects-unlisted', mechanism: 'test', roots: ['R13', '#3'], reverseTest: 'rewrite/cloud/tests/app-orders.test.ts' },
+  // 评价列表分页端到端（根因#7）：getReviews 列表 cursor 翻页（>limit 返 nextCursor·续页接上），
   // 汇总仅首页基于 bounded 样本返回（approx 标注）。reverseTest 锁此行为。
   { id: 'reviews-paged-effective', mechanism: 'test', roots: ['#7'], reverseTest: 'rewrite/cloud/tests/app-reviews.test.ts' },
-  // 评价汇总真全量精确（债#13 后半·根因#7 固定样本失真）：评分/计数/星级分布走 count()+aggregate(sum)·不封顶·approx 恒 false
+  // 评价汇总真全量精确（根因#7 固定样本失真）：评分/计数/星级分布走 count()+aggregate(sum)·不封顶·approx 恒 false
   // （与 dashboard GMV 同范式·#18续）；标签仍近样本 top-5。reverseTest 灌 250 条（>200 样本上限）锁「不被截断」。
-  { id: 'reviews-summary-exact', mechanism: 'test', roots: ['#7', '债#13'], reverseTest: 'rewrite/cloud/tests/app-reviews.test.ts' },
+  { id: 'reviews-summary-exact', mechanism: 'test', roots: ['#7'], reverseTest: 'rewrite/cloud/tests/app-reviews.test.ts' },
   // 用户反馈写库行为端到端（运营钩子①·待办#23）：submitFeedback 缺身份 fail-closed（NO_OPENID·根因#3）、
   // content 空/越长截断、category 白名单越界归 other、超 10 次/分 RATE_LIMITED（根因#13）。reverseTest 锁此行为。
-  { id: 'feedback-throttled-gated', mechanism: 'test', roots: ['#13', '债#23'], reverseTest: 'rewrite/cloud/tests/app-misc.test.ts' },
-  // 企微推送 fail-soft（债#23续·根因#13）：pushBotAlert 推送失败/网络异常/非企微 webhook 一律返回 ok:false
+  { id: 'feedback-throttled-gated', mechanism: 'test', roots: ['#13'], reverseTest: 'rewrite/cloud/tests/app-misc.test.ts' },
+  // 企微推送 fail-soft（根因#13）：pushBotAlert 推送失败/网络异常/非企微 webhook 一律返回 ok:false
   // 而**绝不抛错**——可观测性不反噬主流程（钱链回调照常 ACK）。reverseTest 锁此行为。
-  { id: 'bot-alert-fail-soft', mechanism: 'test', roots: ['#13', '债#23'], reverseTest: 'rewrite/cloud/tests/botpush.test.ts' },
+  { id: 'bot-alert-fail-soft', mechanism: 'test', roots: ['#13'], reverseTest: 'rewrite/cloud/tests/botpush.test.ts' },
   // 下单库存预留 + 回补端到端（库存#1·根因#1/#2 防超卖）：createOrder 缺货拒单(OUT_OF_STOCK)、预留扣减记 reserved；
   // 超时关单回补且幂等；乐观 CAS 抢最后一件只一个赢；不限量(无文档)放行。reverseTest 锁此行为。
   { id: 'order-reserves-stock', mechanism: 'test', roots: ['#1', '#2'], reverseTest: 'rewrite/cloud/tests/e2e-inventory-oversell.test.ts' },

@@ -2,13 +2,13 @@
 // 支付结束（成功/取消/失败/云端拒）都要解锁，否则用户再也点不动。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { payMock } = vi.hoisted(() => ({ payMock: vi.fn() }))
+const { payMock, cancelMock } = vi.hoisted(() => ({ payMock: vi.fn(), cancelMock: vi.fn() }))
 vi.mock('../api/orders', () => ({
   pay: payMock,
   getOrderById: async () => ({ ok: false, error: 'NOT_FOUND' }),
   getMyOrders: async () => ({ ok: false, error: 'CALL_FAIL' }),
   confirmReceive: vi.fn(),
-  cancelOrder: vi.fn(),
+  cancelOrder: cancelMock,
   applyRefund: vi.fn(),
   getMyAfterSales: vi.fn(),
 }))
@@ -18,6 +18,7 @@ const PAYMENT = { timeStamp: '1', nonceStr: 'n', package: 'prepay_id=x', signTyp
 let wxMock: Record<string, any>
 beforeEach(() => {
   payMock.mockReset()
+  cancelMock.mockReset()
   wxMock = { showToast: vi.fn(), showLoading: vi.fn(), hideLoading: vi.fn(), requestPayment: vi.fn() }
   ;(globalThis as any).wx = wxMock
 })
@@ -46,6 +47,28 @@ const PAGES = [
   { name: '订单详情', path: '../pages/order/order', ev: undefined },
   { name: '订单列表', path: '../pages/order-list/order-list', ev: { currentTarget: { dataset: { id: 'o1' } } } },
 ]
+
+describe('继续支付时云端说微信那边已付、回调还没到（ORDER_ALREADY_PAID·#400）', () => {
+  it('大白话：订单详情——状态卡改成「已付款，正在确认」、不出取消/去支付；按住取消也不会真去取消（取消会把已付的钱关进已关闭单）', async () => {
+    const page = await mount('../pages/order/order')
+    page.data.vm = { id: 'o1', status: 'pending', items: [] }
+    payMock.mockResolvedValue({ ok: false, error: 'ORDER_ALREADY_PAID' })
+    await page.onPay()
+    expect(page.data.confirming).toBe(true)
+    expect(page.data.head).toBe('已付款，正在确认')
+    await page.cancelNow()
+    expect(cancelMock).not.toHaveBeenCalled()
+  })
+
+  it('大白话：订单列表——那张卡记成「正在确认」、按住取消也不会真去取消', async () => {
+    const page = await mount('../pages/order-list/order-list')
+    payMock.mockResolvedValue({ ok: false, error: 'ORDER_ALREADY_PAID' })
+    await page.onPay({ currentTarget: { dataset: { id: 'o1' } } })
+    expect(page.data.confirmingId).toBe('o1')
+    await page.cancelNow('o1')
+    expect(cancelMock).not.toHaveBeenCalled()
+  })
+})
 
 describe.each(PAGES)('$name 继续支付：在途锁 + 加载反馈', ({ path, ev }) => {
   it('大白话：发起支付还没回来时连点两次——只发一次 pay、只拉一次收银台，并显示加载', async () => {

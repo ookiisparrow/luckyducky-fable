@@ -4,6 +4,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import errorsSrc from '../../shared/src/errors.ts?raw'
 import ordersSrc from '../../cloud/src/functions/app/actions/orders.ts?raw'
+import payFlowSrc from '../lib/payFlow.ts?raw'
+import checkoutPageSrc from '../pages/checkout/checkout.ts?raw'
 import { callApp } from '../utils/cloud'
 import { CREATE_ORDER_ERR_COPY } from '../lib/checkout'
 import { ERR_REASON } from '../lib/mapLearning'
@@ -50,6 +52,12 @@ describe('手抄的失败码与云端一致', () => {
     for (const code of Object.keys(CREATE_ORDER_ERR_COPY)) {
       if (!CLIENT_CODES.includes(code)) expect(cloudHas(code), code).toBe(true)
     }
+  })
+
+  it('大白话：付款分诊和结算页单独认的失败码，云端都登记着（改名了这里红，不会悄悄落回「支付没成功」「下单没成功」）', () => {
+    const codes = [...(payFlowSrc + checkoutPageSrc).matchAll(/=== '([A-Z_]+)'/g)].map((m) => m[1])
+    expect(codes).toEqual(expect.arrayContaining(['ORDER_ALREADY_PAID', 'PRICE_CHANGED']))
+    for (const code of codes) expect(ERR_VALUES.has(code), code).toBe(true)
   })
 
   it('大白话：激活页认的每个失败码，云端都还发', () => {

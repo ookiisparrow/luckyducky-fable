@@ -636,7 +636,7 @@ describe('契约键集合哨兵（Object.keys 排序全等·增删改名都红�
   it('submitReview→getReviews 端到端：写侧 13 键真写入（含 picked:false）；未挑选公开读空；挑过才下发 7 键——_openid/orderId/lineId/productId/_id/picked 不出网关', async () => {
     control.seed('orders', [DONE_ORDER])
     control.seed('users', [{ _id: 'oME', _openid: 'oME', nickname: '幸运鸭' }])
-    const s = await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5, text: '很好', tags: ['手感好'], photos: ['cloud://rev-a.jpg'] })
+    const s = await call('submitReview', { orderId: 'oDone', lineId: 'p1__基础款', rating: 5, text: '很好', tags: ['手感好'], photos: ['cloud://env.x/reviews/oDone/rev-a.jpg'] })
     expect(keysOf(s)).toEqual(['ok']) // 成功零载荷（同 trackEvent：写类 action 刻意不回数据）
 
     // 写侧字段集（真写入回读·不是自造 seed）

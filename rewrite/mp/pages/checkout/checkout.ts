@@ -34,7 +34,7 @@ Page({
     addons: checkout.sellableAddons().map((a) => ({ ...a, added: false, priceNum: a.price.toFixed(2) })),
     goodsLabel: '',
     shipLabel: '',
-    amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；金额单源仍在云端/summaryFen）
+    amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；取 payableFen：本地现价合计或云端报回的现价应付）
     submitting: false,
     submitted: false, // 建单成功：按键打勾「已提交」（拉起支付前的 600ms 展示·锁仍由 submitting 管）
     paying: false, // 调支付参数在途：按键转圈「正在拉起支付」（只是展示·锁仍由 submitting 管）
@@ -70,7 +70,7 @@ Page({
     if (this.backTimer) clearTimeout(this.backTimer)
     this.backTimer = setTimeout(() => wx.navigateBack(), 600)
   },
-  async refresh() {
+  async refresh(afterQuote = false): Promise<void> {
     if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（与 onPickAddress/onToggleAddon 同闸）
     if (!checkout.getDraft().items.length) {
       if (this.unloaded) return // 页面已退出（守卫扩面统一不变量）：不再对下一页 navigateBack
@@ -86,10 +86,12 @@ Page({
     // 商品行/金额仍等最新价再渲染：宁可短暂留空，也不在付款页先显旧价再跳金额。
     const a0 = addr.defaultAddress()
     this.setData({ address: a0 && view(a0) })
-    const allRaw = (await getAllProducts()) || []
+    // afterQuote：云端刚拒单报回现价（PRICE_CHANGED），会话缓存里的目录是旧价——强刷一次让逐行单价也对上
+    const allRaw = (await getAllProducts({ force: afterQuote })) || []
     if (this.data.submitting || this.unloaded) return // 恢复点复核：await 期间用户提交（finishSubmitted 清空草稿）或页面已退出，禁止用陈旧/空草稿渲染
     // 草稿里是加购/进页时的价，云端按现价扣：按最新商品档覆盖后再算应付（不在货架的行不动，提交时云端拒单点名移出）
-    if (checkout.syncDraftPrices(allRaw)) fxHint(this, '价格有变动，已按最新价计算')
+    // afterQuote 时提示已在 onSubmit 给过，这里不重复
+    if (checkout.syncDraftPrices(allRaw) && !afterQuote) fxHint(this, '价格有变动，已按最新价计算')
     // draft 在 await 之后读：与 summaryFen() 取同一时刻的快照——
     // 若在前面读、await 期间又触发 onToggleAddon（改了 draftItems），items/addons 用旧 draft 渲染却和用
     // 当下 draftItems 算出的 s（总价/搭配购总额）拼进同一次 setData，画面出现「未勾选却已计入总价」的错位。
@@ -111,7 +113,7 @@ Page({
       addons: checkout.sellableAddons().map((a) => ({ ...a, added: draft.items.some((l) => l.id === a.id), priceNum: a.price.toFixed(2) })),
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
-      amountNum: (s.amountFen / 100).toFixed(2),
+      amountNum: (checkout.payableFen() / 100).toFixed(2),
     })
   },
   onPickAddress() {
@@ -148,12 +150,14 @@ Page({
     }
     tapHaptic()
     const draft = checkout.getDraft()
-    trackEvent('order_submit', 'checkout', '', { count: draft.items.reduce((n, l) => n + l.qty, 0), amountFen: checkout.summaryFen().amountFen }) // 电商漏斗埋点（R41）
+    const expectedFen = checkout.payableFen() // 页面显示的应付：云端现价对不上就拒单回 PRICE_CHANGED，不按用户没看到的价扣
+    trackEvent('order_submit', 'checkout', '', { count: draft.items.reduce((n, l) => n + l.qty, 0), amountFen: expectedFen }) // 电商漏斗埋点（R41）
     this.setData({ submitting: true })
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
       { name: a.name, phone: a.phone, region: a.region, detail: a.detail },
-      checkout.getIdemKey() // 同一草稿的重试复用同一个键（网络超时重试不重复建单）
+      checkout.getIdemKey(), // 同一草稿的重试复用同一个键（网络超时重试不重复建单）
+      expectedFen
     )
     // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/
     // requestPayment（真实支付授权框）/switchTab——建单失败且已退页直接收尾；建单成功则订单已真实生成，
@@ -166,8 +170,17 @@ Page({
     }
     if (!r.ok) {
       // 云端拒单如实反馈（缺货/停售/配置缺失等·不吞错）——唯一留在本页的路径·此处才解锁重试
-      this.setData({ submitting: false })
       const errCode = String(r.error || '')
+      if (errCode === 'PRICE_CHANGED') {
+        checkout.quoteAmountFen(r.amountFen) // 应付按云端现价显示，下次提交也带它
+        // 新应付与解锁同一次上屏、当场提示，不等强刷目录（要几百毫秒到几秒）：否则这段时间按钮已放开、
+        // 页面还是旧价，用户再点就按一个页面上没显示过的价建单了
+        this.setData({ submitting: false, amountNum: (checkout.payableFen() / 100).toFixed(2) })
+        fxHint(this, '价格有变动，已按最新价计算')
+        await this.refresh(true) // 逐行单价也对上现价
+        return
+      }
+      this.setData({ submitting: false })
       const dropped = checkout.dropRejectedLine(errCode)
       if (dropped) {
         // 那一行已移出本单（及购物车）：点名告诉用户是哪件。还有别的商品就重渲染、可直接再提交；
@@ -192,7 +205,7 @@ Page({
     // submitting 保持锁定不复位——防「支付发起期间草稿已被 finishSubmitted 清空、第二次点击绕过守卫再 createOrder」（病根#1 双提交）。
     // 成功页金额用回包权威值（order.amount）：前端 summaryFen 是本地估算，缺货重试/搭配购变化等场景可能与云端现算分叉；
     // 回包缺失才回退前端自算值（防御，正常必有）——透传成功页展示用。
-    const fallbackFen = checkout.summaryFen().amountFen // 捕获前端估算分（finishSubmitted 消费草稿前）·仅作回退兜底
+    const fallbackFen = checkout.payableFen() // 捕获前端应付分（finishSubmitted 消费草稿前）·仅作回退兜底
     const amountFen = checkout.resolveOrderAmountFen(r.order, fallbackFen)
     checkout.finishSubmitted() // 购物车按实际提交数量精确扣
     const order = (r.order || {}) as Record<string, any>
@@ -232,7 +245,8 @@ Page({
         confirmText: '知道了',
         single: true,
       }).then(() => wx.redirectTo({ url: '/pages/order/order?id=' + orderId }))
-    if (outcome.kind === 'paid') {
+    // confirming：微信侧已付、回调还没落库——钱已经付了，按成功走，别说「支付没成功」诱人换单重付
+    if (outcome.kind === 'paid' || outcome.kind === 'confirming') {
       this.toSuccess(orderId, amountFen)
       return
     }

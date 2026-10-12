@@ -126,8 +126,10 @@ export const main = defineNotifyCallback<any>({
     if (re.ok) {
       // 复活抛错（读或写失败）：先还刚抢的库存再抛、不 ACK——不还的话每轮重推都再抢一份，永久少记。
       // 只有回读看到单已是 paid（写其实落地、只是回包丢了）才不还：那份库存正被这单占着，还了就超卖。
+      // reserved 换成这次真抢到的：期间改成不限量的 SKU 这次没扣，留着旧值会让退款按旧值多还库存。
       const c = await transition(COLLECTIONS.orders, id, ['closed'], 'paid', () => ({
         ...payPatch(),
+        reserved: re.reserved,
         revivedAt: Date.now(),
       })).catch(async (err: unknown) => {
         const now: OrderDoc | null = await getDb().collection(COLLECTIONS.orders).doc(id).get().then((g: any) => g.data, () => null)
