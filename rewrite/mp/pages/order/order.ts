@@ -37,7 +37,6 @@ Page({
     loadFailed: false, // 失败≠不存在（根因#14·守卫 rw-mp-list-loadfailed-state）：刚付款用户弱网打开不该看到「订单不存在」
     vm: null as OrderVM | null,
     head: '', // 状态卡左侧短状态名（设计稿 ST）；有售后时叠加「售后中 / 已退款」（lib/mapAftersales afterSaleOverlay）
-    headColor: '', // 状态名字色：一律墨（空）·颜色只在灯上
     asLed: null as { tone: string; halo: string } | null, // 售后叠加状态灯（售后中紫 / 已退款绿），null＝不出灯
     asHas: false, // 该单有任何售后记录：出「查看售后进度」入口
     lineTags: {} as Record<string, string>, // 行标 lineId→「退款中 / 已退款」
@@ -48,7 +47,6 @@ Page({
     sub: { text: '', tone: '' } as { text: string; tone: string }, // 状态卡右侧小字（倒计时/签收日期…）
     help: false, // 待退款/支付异常：底部「返回 + 联系客服」
     dock: false, // 已关闭不出底部栏
-    amountNum: '',
     canAfterSale: false,
     ended: false, // 整单退完＝订单结束（reload 里算）
     paying: false, // 继续支付在途（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
@@ -171,7 +169,6 @@ Page({
       vm,
       confirming,
       head: confirming ? CONFIRMING.head : ov ? ov.head : statusHead(vm, Date.now()).label,
-      headColor: '', // 状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）
       asLed: ov ? ov.led : statusHead(vm, Date.now()).led,
       asHas: !!asOf,
       lineTags: asOf ? asOf.lines : {},
@@ -179,7 +176,6 @@ Page({
       sub: confirming ? CONFIRMING.sub : ov ? { text: ov.detail, tone: '' } : detailSub(vm, Date.now()),
       help: HELP.has(s),
       dock: s !== 'closed',
-      amountNum: (vm.amountLabel || '').replace(/[^0-9.]/g, ''),
       canAfterSale: ['paid', 'shipped', 'done'].includes(s) && !ended,
       ended,
       steps: orderSteps(s, ended),

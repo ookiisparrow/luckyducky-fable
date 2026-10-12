@@ -35,7 +35,6 @@ Page({
     goodsLabel: '',
     shipLabel: '',
     amountNum: '', // 实付金额数字（无符号·底坞/明细大字用；取 payableFen：本地现价合计或云端报回的现价应付）
-    count: 0, // 合计件数（草稿含已勾搭配购·底坞展示）
     submitting: false,
     submitted: false, // 建单成功：按键打勾「已提交」（拉起支付前的 600ms 展示·锁仍由 submitting 管）
     paying: false, // 调支付参数在途：按键转圈「正在拉起支付」（只是展示·锁仍由 submitting 管）
@@ -62,7 +61,7 @@ Page({
     void this.refresh()
   },
   // 600ms 空草稿自动返回起表纪律：navigateBack 若打在前向转场未落地的窗口内（冷启动
-  // 转场实测可迟至 ~800ms），开发者工具 Nightly≥2.02.2607232 的模拟器导航状态机会死锁（真机同族竞态未必死锁，
+  // 转场实测可迟至 ~800ms），开发者工具模拟器的导航状态机会死锁（真机同族竞态未必死锁，
   // 但会退化为「返回被吞·空结算页多停留」）。onReady 只在页面自身渲染就绪后触发一次，天然晚于 onShow，用它当
   // 「转场大概率已落地」的近似信号——ready 前检测到空草稿只记 pendingBackTimer，onReady 触发后再起 600ms 计时；
   // ready 已是 true（如从地址页返回，onReady 早已触发过）则照旧立即起表。600ms「可读时长」语义不变，toast 立即弹出。
@@ -72,7 +71,7 @@ Page({
     this.backTimer = setTimeout(() => wx.navigateBack(), 600)
   },
   async refresh(afterQuote = false): Promise<void> {
-    if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（第3轮审计·与 onPickAddress/onToggleAddon 同闸）
+    if (this.data.submitting) return // 提交在途不刷：草稿已被 finishSubmitted 清空·支付中后台返回触发 onShow→refresh 会误报「购物车空」+ navigateBack 弹掉支付中的本页（与 onPickAddress/onToggleAddon 同闸）
     if (!checkout.getDraft().items.length) {
       if (this.unloaded) return // 页面已退出（守卫扩面统一不变量）：不再对下一页 navigateBack
       fxHint(this, '还没有要结算的商品')
@@ -115,7 +114,6 @@ Page({
       goodsLabel: checkout.fenLabel(s.goodsFen),
       shipLabel: s.shipFen ? checkout.fenLabel(s.shipFen) : '包邮',
       amountNum: (checkout.payableFen() / 100).toFixed(2),
-      count: draft.items.reduce((n, l) => n + l.qty, 0),
     })
   },
   onPickAddress() {

@@ -1,8 +1,4 @@
 /* 支付成功（v5「字重」稿 A8） */
-page {
-  background: var(--v5-canvas);
-  color: var(--v5-ink);
-}
 /* 金币：落在与小货车同一条地面线（顶栏下 120px）——结算页开走的车与这枚金币接得上 */
 .ps-coin {
   padding: 0 16px 12px;

@@ -86,7 +86,7 @@ describe('订单列表切页签减负（#442）', () => {
     const page = await mount()
     await page.reload()
     const row = page.data.shown[0]
-    expect(Object.keys(row).sort()).toEqual(['amountNum', 'amountTitle', 'cd', 'count', 'expired', 'id', 'label', 'labelColor', 'led', 'reviewedAll', 'right', 'status', 'thumbs', 'truck'])
+    expect(Object.keys(row).sort()).toEqual(['amountNum', 'amountTitle', 'cd', 'count', 'expired', 'id', 'label', 'led', 'reviewedAll', 'right', 'status', 'thumbs', 'truck'])
     expect(row.thumbs).toEqual([{ lineId: 'L1', cover: 'https://x/c1.jpg' }, { lineId: 'L2', cover: 'https://x/c2.jpg' }])
     expect(JSON.stringify(page.data.shown)).not.toMatch(/张三|13800000000|SF123|云朵鸭/)
   })

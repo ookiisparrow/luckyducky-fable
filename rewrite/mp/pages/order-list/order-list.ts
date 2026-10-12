@@ -38,7 +38,6 @@ type OrderRow = {
   reviewedAll: boolean
   thumbs: { lineId: string; cover: string }[] // 缩略图最多 3 张（设计稿 thumbs.slice(0,3)）
   label: string
-  labelColor: string // 状态名字色（已退款绿字），空＝默认
   led: { tone: string; halo: string }
   truck: boolean // 待收货且没有售后叠加：状态灯位出小货车
   cd: string
@@ -62,7 +61,6 @@ function decorate(o: OrderVM, as: Record<string, OrderAfterSales>): OrderRow {
     reviewedAll: o.reviewedAll,
     thumbs: o.items.slice(0, 3).map((l: OrderLineVM) => ({ lineId: l.lineId, cover: l.cover })),
     label: ov ? ov.head : sh.label,
-    labelColor: '', // 状态名一律墨色（颜色只在灯上·UI 审查 15 问 6a）
     led: ov ? ov.led : sh.led,
     truck: !ov && o.status === 'shipped',
     cd: r.cd,
