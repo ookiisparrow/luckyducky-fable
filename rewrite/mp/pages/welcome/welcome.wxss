@@ -85,7 +85,6 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.wl-code-invalid,
 /* 状态灯 + 说明 */
 .wl-msg {
   padding: 12px 16px 0;
