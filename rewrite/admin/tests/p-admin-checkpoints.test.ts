@@ -86,7 +86,7 @@ describe('Checkpoints.vue 保存整课', () => {
     api.saveCheckpoints.mockResolvedValue({ ok: false, status: 400, error: 'BAD_ARGS' })
     const w = await mountPage()
     await save(w)
-    expect(status(w)).toBe('保存失败（BAD_ARGS）')
+    expect(status(w)).toBe('保存失败：要查或要存的内容不全，请检查后重试。')
   })
 
   it('大白话：旧节点没删净也算写成了——提示重存，并按新版本号继续', async () => {

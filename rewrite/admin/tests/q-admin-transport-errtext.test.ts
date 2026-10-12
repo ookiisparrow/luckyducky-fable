@@ -46,6 +46,18 @@ describe('网关通用码', () => {
     expect(writeFailText('保存失败', code)).toBe(texts[0])
   })
 
+  // 各 action 读库失败统一回 DOC_READ_FAIL：没自带码表的页（帮助视频、配置清单等）也不能甩「加载失败（DOC_READ_FAIL）」；
+  // 写操作（退款、发货、存配置）读库失败时什么都没做，要冠「X没成功：」，不能像超时那样只给一句
+  it('大白话：DOC_READ_FAIL 读写都说中文，写失败仍冠「X没成功：」', () => {
+    const T = '云端数据暂时读不出来。请稍后重试。'
+    expect(failText('加载失败', 'DOC_READ_FAIL')).toBe('加载失败：' + T)
+    expect(writeFailText('保存失败', 'DOC_READ_FAIL')).toBe('保存失败：' + T)
+    expect(writeFailText('退款没成功', 'DOC_READ_FAIL', orderErrorText)).toBe('退款没成功：' + T)
+    expect(writeFailText('发货没成功', 'DOC_READ_FAIL', orderErrorText)).toBe('发货没成功：' + T)
+    expect(writeFailText('清除失败', 'DOC_READ_FAIL', launchErrorText)).toBe('清除失败：' + T)
+    expect(loadErrors([[{ ok: false, error: 'DOC_READ_FAIL' }, '采购单']])).toBe('采购单加载失败：' + T)
+  })
+
   it('大白话：查不到的码兜底不扯「前面步骤」、编号挂括号；步骤指引只在向导步骤自己的码上', () => {
     const t = launchErrorText('SEC_CHECK_FAIL')
     expect(t).not.toMatch(/前面步骤/)

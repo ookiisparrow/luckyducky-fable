@@ -5,7 +5,7 @@
 // 收口不变量：note = 动作反馈（成功绿/失败红原文）；load = 后台加载态，失败写错误，成功只收回
 //   它自己上次写的那条错误——动作反馈因此不被随后的成功 reload 顶掉，重试成功也不留陈旧的失败横幅。
 import { ref, type Ref } from 'vue'
-import { transportErrorText } from './mapSystem'
+import { transportErrorText, readErrorText } from './mapSystem'
 
 export function useLoadStatus() {
   const message = ref('')
@@ -35,11 +35,11 @@ export function useLoadStatus() {
 }
 
 /** 读失败提示：点名哪块没出来（多处同文案分不清是谁挂了）。
- *  explain：本域业务码表（如 orderErrorText / launchErrorText），给了就「X：中文原因」；不给则业务码挂括号保留，给排查留线索。 */
+ *  explain：本域业务码表（如 orderErrorText / launchErrorText），查到就「X：中文原因」；没给或查不到（回空串）则业务码挂括号保留，给排查留线索。 */
 export function failText(what: string, code: unknown, explain?: (_c: unknown) => string): string {
   const c = String(code || '')
-  const t = transportErrorText(c)
-  return t ? `${what}：${t}` : explain ? `${what}：${explain(c)}` : c ? `${what}（${c}）` : `${what}，请重试`
+  const t = transportErrorText(c) || (explain && explain(c)) || readErrorText(c)
+  return t ? `${what}：${t}` : c ? `${what}（${c}）` : `${what}，请重试`
 }
 
 /** 写失败提示：公共表（mapSystem TRANSPORT_ERR）的码直接用表里整句、不冠「X失败」——超时这类可能已生效，冠「失败」会诱人重复提交；其余句子本身已说清没做成。 */
@@ -51,7 +51,7 @@ export function writeFailText(what: string, code: unknown, explain?: (_c: unknow
 export const loadErrors = (parts: Array<[{ ok: boolean; error?: unknown }, string]>): string =>
   parts
     .filter(([r]) => !r.ok)
-    .map(([r, name]) => `${name}加载失败：${transportErrorText(r.error) || failText('操作没成功', r.error)}`)
+    .map(([r, name]) => `${name}加载失败：${transportErrorText(r.error) || readErrorText(r.error) || failText('操作没成功', r.error)}`)
     .join('；')
 
 // 危险动作两步确认：第一次点只武装（armed 记下 key·按钮变确认态），同一 key 再点才放行并解除武装。

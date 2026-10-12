@@ -4,6 +4,7 @@ import { getSecureConfigFields } from './secureConfig'
 import { getDocOrNull } from './db'
 import { err } from './reply'
 import { pageQuery } from './paging'
+import { notifyAlert } from './observe'
 
 /** 库/API 金额（元，number 或数字串）→ 元 number。字符串绝不走 `+`。 */
 export function toYuanAmount(v: unknown): number {
@@ -60,29 +61,37 @@ export async function readWindow(
   }
 }
 
+// 每批并发写几行：逐行串行在上千行的账单日要跑很久、逼近函数超时，全并发又会一下把库打满
+const UPSERT_BATCH = 20
+
 /** 幂等落库：确定性 _id=`<date>:<transactionId>`（重拉同日覆盖不重复·根因#1）。非 SUCCESS 行加 `:<tradeState>` 后缀：
  *  ALL 账单的退款行沿用原单微信订单号，同日先付后退会用 REFUND 行盖掉 SUCCESS 行，getBillMatch 就误报「我方有微信无」。
  *  先建集合（wxBills 动态建·往不存在的集合 doc().set() 会失败）；只对真写成功的计数（不吞错装成功）。
- *  ensure 用本地 createCollection（kit 不 import functions/）。 */
+ *  单行写失败不阻断其余，事后告警一次（重拉同日即补齐）。ensure 用本地 createCollection（kit 不 import functions/）。 */
 async function upsertBills(db: any, date: string, rows: BillRow[]): Promise<number> {
   try {
     await db.createCollection(COLLECTIONS.wxBills) // 集合不存在则建（否则 set 静默失败·count 虚高）
   } catch {
     /* 已存在 */
   }
-  let n = 0
-  for (const r of rows) {
-    if (!r.transactionId) continue
+  const put = async (r: BillRow): Promise<boolean> => {
     try {
       await db
         .collection(COLLECTIONS.wxBills)
         .doc(`${date}:${r.transactionId}${r.tradeState === 'SUCCESS' ? '' : ':' + r.tradeState}`)
         .set({ data: { date, ...r, _syncedAt: Date.now() } })
-      n++ // 仅真写成功才计
+      return true
     } catch {
-      /* 单行写失败跳过·不阻断其余 */
+      return false
     }
   }
+  const todo = rows.filter((r) => r.transactionId)
+  let n = 0
+  for (let i = 0; i < todo.length; i += UPSERT_BATCH) {
+    const done = await Promise.all(todo.slice(i, i + UPSERT_BATCH).map(put))
+    n += done.filter(Boolean).length // 仅真写成功才计
+  }
+  if (n < todo.length) await notifyAlert('money', 'pullBillDay', 'BILL_UPSERT_FAIL', { date, failed: todo.length - n, total: todo.length })
   return n
 }
 

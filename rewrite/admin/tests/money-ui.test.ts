@@ -23,6 +23,13 @@ describe('deriveDashboardTodos（待处理计数：加载失败别伪装成 0/�
     expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: '2' } })).toMatchObject({ ship: 0, partial: true })
   })
 
+  it('大白话：看板待发货扫描触顶（approx.toShip=true）——数只是下限，shipApprox 标出来让页面显「N+」；没触顶/没回标都是 false', () => {
+    const base = { refundCounts: { ok: true, counts: {} }, inventory: { ok: true, list: [] }, drafts: { ok: true, rows: [] }, low: 10 }
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: 2000, approx: { toShip: true } } })).toMatchObject({ ship: 2000, shipApprox: true })
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: true, toShip: 3, approx: { toShip: false } } })).toMatchObject({ ship: 3, shipApprox: false })
+    expect(deriveDashboardTodos({ ...base, dashboard: { ok: false } })).toMatchObject({ shipApprox: false })
+  })
+
   it('大白话：四路全 ok 且真没待办时 partial=false、各计数为云端真值', () => {
     const t = deriveDashboardTodos({
       dashboard: { ok: true, toShip: 3 },

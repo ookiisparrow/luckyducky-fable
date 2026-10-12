@@ -74,8 +74,8 @@ export async function resolveAnomaly({ db, data, agentId }: Ctx) {
 
 const AUDIT_DEFAULT_LIMIT = 30 // 审计日志默认页大小（同订单/售后体量·bounded·根因#7）
 
-// 审计日志读出口（根因#3 信任边界可追溯）：kit/audit.ts::recordAudit 全量写 auditLog，
-// 本 action 是它的读出口（否则只能控制台裸翻数据库）。只读 auditLog（写侧单点仍在 kit/audit.ts）。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
+// 审计日志读出口（根因#3 信任边界可追溯）：auditLog 只经 kit/audit.ts::recordAudit 写（操作、登录、客服试用会话刷新），
+// 本 action 是它的读出口（否则只能控制台裸翻数据库），只读不写。未登记 ACTION_CAPS→默认拒 admin:write＝仅超管（同 listAnomalies/
 // getConfigChecklist 等「系统组」action 先例——不复用 customer:view，那是「客户是谁」越权面，这里是「谁动过
 // 系统」，权限语义不同）。cursor 分页复用 kit/paging.ts pageQuery（同 listCsatEntries 样板，无新分页实现）。
 //

@@ -70,6 +70,49 @@ describe('pullBillDay 落库', () => {
   })
 })
 
+describe('pullBillDay 大账单日分批并发落库（#400）', () => {
+  const HEAD = '交易时间,公众账号ID,商户号,微信订单号,商户订单号,交易状态,订单金额,退款金额'
+  const bigCsv = (n: number) =>
+    [HEAD, ...Array.from({ length: n }, (_, i) => `\`2026-07-15 10:00:00,\`wxapp,\`1113881793,\`tx-${i},\`m${i},\`SUCCESS,\`1.00,\`0.00`), '总交易单数,交易总金额,退款总金额', `\`${n},\`${n}.00,\`0.00`].join('\n')
+  const fetchN = (n: number) => async (url: string) =>
+    url.includes('/v3/bill/tradebill')
+      ? { status: 200, text: async () => JSON.stringify({ download_url: 'https://api.mch.weixin.qq.com/v3/billdownload/file?token=t' }) }
+      : { status: 200, text: async () => bigCsv(n) }
+  beforeEach(() => {
+    control.seed(COLLECTIONS.secureConfig, [{ _id: 'wxpay', mchSerial: 'S1', mchPrivateKey: PRIV }])
+    control.seed(COLLECTIONS.config, [{ _id: 'pay', subMchId: '1113881793' }])
+  })
+
+  it('45 行：同时在写的不止一行、但有上限；重拉同日不重复（确定性 _id）', async () => {
+    let inFlight = 0
+    let peak = 0
+    control.setBeforeUpdate(async ({ coll }: any) => {
+      if (coll !== COLLECTIONS.wxBills) return
+      peak = Math.max(peak, ++inFlight)
+      await new Promise((r) => setTimeout(r, 0))
+      inFlight--
+    })
+    const r: any = await pullBillDay(db, DATE, { fetchImpl: fetchN(45) })
+    expect(r.count).toBe(45)
+    expect(peak).toBeGreaterThan(1)
+    expect(peak).toBeLessThanOrEqual(20)
+    await pullBillDay(db, DATE, { fetchImpl: fetchN(45) })
+    expect(control.dump(COLLECTIONS.wxBills)).toHaveLength(45)
+  })
+
+  it('有行写失败：只计写成的，其余照写，并告警（不静默少记）', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    control.setBeforeUpdate(async ({ coll, id }: any) => {
+      if (coll === COLLECTIONS.wxBills && id === `${DATE}:tx-7`) throw new Error('DB_DOWN')
+    })
+    const r: any = await pullBillDay(db, DATE, { fetchImpl: fetchN(30) })
+    expect(r.ok).toBe(true)
+    expect(r.count).toBe(29)
+    expect(control.dump(COLLECTIONS.wxBills)).toHaveLength(29)
+    expect(control.dump(COLLECTIONS.anomalies).some((a: any) => a.code === 'BILL_UPSERT_FAIL')).toBe(true)
+  })
+})
+
 describe('matchBillRows 两种对上方式', () => {
   const wx = (over: Record<string, unknown>) => ({ tradeState: 'SUCCESS', orderAmount: 1, ...over })
 

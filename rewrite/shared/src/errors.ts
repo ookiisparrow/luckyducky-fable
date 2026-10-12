@@ -196,6 +196,7 @@ export const ERR = {
   BAD_RESP: 'BAD_RESP',
   // 商品 / 课程 / 内容 / 激活卡
   NO_ITEMS: 'NO_ITEMS',
+  PARTIAL_WRITE: 'PARTIAL_WRITE', // saveShowcase 部分条目没写成：随 failedIds 回，后台点名是哪几个
   NEED_INFO: 'NEED_INFO',
   NEED_COVER: 'NEED_COVER',
   NEED_SKUS: 'NEED_SKUS',
@@ -252,7 +253,6 @@ export type ErrCode =
   | `BAD_SKU_PRICE:${string}`
   | `BAD_PRICE:${string}`
   | `UNKNOWN_COURSE:${string}`
-  | `PARTIAL_WRITE:${string}`
   | `TOO_LONG:${string}`
   | `PUSH_FAIL:${string}`
   | `WXPAY_FETCH_FAIL:${string}`
