@@ -321,6 +321,29 @@ function auditOk(res: any): boolean {
   }
 }
 
+// 登录成功留痕（#400-8）：shouldAudit 排除了 login，分发处的操作审计记不到登录，事后查不到谁、何时、从哪登的。
+// 暂不走 recordAudit：它失败静默吞、不回报成败，这条丢了没人知道。这里写与 recordAudit 同字段的一行
+// （listAudit 照读；只少 error——审计页只在 ok:false 时读它），失败经 notifyAlert 进 anomalies 并推企微，但不挡登录。
+// ponytail: auditLog 因此有两个写点；recordAudit 改成回报成败后应并回它（kit/audit.ts 不归本单元，已记 Issue）。
+// IP 只留 IPv4 前三段 / IPv6 前三组（:: 压缩段之后一律不留）：够看出大致来源，不存完整地址；
+// x-forwarded-for 可被随便填，认不出的形态存空串，绝不原样落库。
+function maskedIp(tkey: string): string {
+  if (tkey === GLOBAL_KEY) return ''
+  const ip = tkey.slice('adminlogin:'.length)
+  const v4 = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}(:\d+)?$/.exec(ip)
+  if (v4) return v4[1] + '.*'
+  if (!/^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,7}$/i.test(ip) || (!ip.includes('::') && ip.split(':').length !== 8)) return ''
+  const head = ip.split('::')[0].split(':').filter(Boolean).slice(0, 3)
+  return head.length ? head.join(':') + ':*' : ''
+}
+async function auditLogin(operator: unknown, tkey: string, via: 'pwd' | 'wecom'): Promise<void> {
+  const ip = maskedIp(tkey)
+  await db
+    .collection(COLLECTIONS.auditLog)
+    .add({ data: { action: 'login', operator: String(operator || 'admin').slice(0, 60), ip, summary: { via }, ok: true, ts: Date.now() } })
+    .catch((e: unknown) => notifyAlert('security', 'adminLogin', 'LOGIN_AUDIT_FAIL', { via, ip, err: String(e) }))
+}
+
 // 口令登录：失败计爆破，成功只清独立 IP 的计数并签发会话令牌。
 async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
   const res = await checkKey(db, key, true)
@@ -337,6 +360,7 @@ async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
     alert('security', 'adminLogin', 'SESSION_ISSUE_FAIL', { via: 'pwd', docId, err: String(e) })
     return ''
   })
+  if (sessionToken) await auditLogin(res.operator, tkey, 'pwd') // 没签出令牌前端会拒登，不算登录成功
   return reply(200, { ...res, sessionToken })
 }
 
@@ -346,8 +370,11 @@ async function loginByPassword(key: unknown, tkey: string, globalWait: number) {
 // 否则办公室固定 IP 会在令牌冷窗期被无辜锁死。GLOBAL_BRUTE 告警跟随计数（authFail）：只有真鉴权失败才可能告警。
 async function loginByWecom(data: any, tkey: string, globalWait: number) {
   const res = await wecomLogin.loginByWecomCode({ db, data })
-  if (res.statusCode === 200 && tkey !== GLOBAL_KEY) await throttleReset(tkey)
-  else if (res.statusCode === 401 || res.statusCode === 403) await authFail(tkey, globalWait)
+  if (res.statusCode === 200) {
+    if (tkey !== GLOBAL_KEY) await throttleReset(tkey)
+    const body = JSON.parse(res.body)
+    if (body.sessionToken) await auditLogin(body.operator, tkey, 'wecom')
+  } else if (res.statusCode === 401 || res.statusCode === 403) await authFail(tkey, globalWait)
   // 503/400 等基建/客户端错：直接返回，不触碰频控（不计不 reset·不告警）
   return res
 }

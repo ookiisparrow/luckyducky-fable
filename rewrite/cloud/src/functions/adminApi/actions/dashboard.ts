@@ -14,17 +14,22 @@ const SAMPLE = 1000
 // 待发货＝shipOne 会放行的首发单：paid、无 feeMismatch、不被退款拦。退款从不改订单状态，全额退款的单
 // 永远停在 paid，只数 status=paid 会越积越多。refundHold 借 listOrders 算（与 shipOne 同一判据，不另抄一份）；
 // 调用方 caps 原样传：getDashboard 未登记 ACTION_CAPS、默认要 admin:write，listOrders 对它放行全店浏览。
-// ponytail: 逐页翻全部 paid 单（每页一次售后联查）。全额退款的单永不离开 paid，扫描量随历史全额退款单调增长、
-// 发货不会让它回落；翻到超 adminApi 30s 超时，整个看板连同 txAlerts 钱链告警一起 500。
+// 订单上没有能直接筛掉「全额退款」的字段（refunded 是逐行金额表），查询条件排不掉它们：全额退款的单永不离开 paid，
+// 全量翻会随历史线性变长、撞 adminApi 30s 超时，把整个看板连同 txAlerts 钱链告警一起拖成 500。
+// ponytail: 只从最新往回翻 TO_SHIP_SCAN 张 paid 单，触顶在 approx.toShip 标出来（数是下限），更老的可发单会漏数。
 // 升级：写侧维护待发货计数（付款/发货/退款落账处增减）。
-async function countToShip(ctx: Ctx): Promise<number> {
+const TO_SHIP_SCAN = 2000 // 10 页 × 每页约 3 次读，约 1~2 秒
+async function countToShip(ctx: Ctx): Promise<{ n: number; capped: boolean }> {
   let n = 0
+  let seen = 0
   let cursor: unknown = null
   for (;;) {
     const r = JSON.parse((await listOrders({ ...ctx, data: { status: 'paid', cursor, limit: 200 } })).body)
     if (!r.ok) throw new Error('TO_SHIP_READ_FAIL:' + r.error) // 查不到退款态≠都能发：同看板其余读失败，整体报错
     n += r.list.filter((o: any) => !o.feeMismatch && !o.refundHold).length
-    if (!r.hasMore) return n
+    seen += r.list.length
+    if (!r.hasMore) return { n, capped: false }
+    if (seen >= TO_SHIP_SCAN) return { n, capped: true }
     cursor = r.nextCursor
   }
 }
@@ -141,12 +146,19 @@ export async function getDashboard(ctx: Ctx) {
       codesActivated: codesActN,
       learners: learnersN,
     },
-    // 精确：计数/GMV(aggregate)/异常/最近单；近似：仅 热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」）
-    approx: { gmv: false, hot: learnersN > SAMPLE, stuck: learnersN > SAMPLE, sampleSize: SAMPLE },
+    // 精确：计数/GMV(aggregate)/异常/最近单；近似：热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」），
+    // 待发货扫描触顶时才带 toShip:true（没触顶不带这个键，响应形状不变）
+    approx: {
+      gmv: false,
+      hot: learnersN > SAMPLE,
+      stuck: learnersN > SAMPLE,
+      sampleSize: SAMPLE,
+      ...(toShip.capped ? { toShip: true } : {}),
+    },
     // 转化速览（指示性量级·非同批 cohort 追踪）：下单→支付→激活。访问/加购未采（前端无 page_view/add_cart
     // 埋点）、完课需逐课判定——均后续。各环节走 .count() 精确不封顶。
     funnel: { ordered: ordersN, paid: paidOrdersN, activated: codesActN },
-    toShip,
+    toShip: toShip.n,
     txAlerts,
     hot: top(doneCount),
     stuck: top(stuckCount),
