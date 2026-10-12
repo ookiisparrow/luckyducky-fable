@@ -92,9 +92,9 @@ describe('updateProfile（黄金：白名单+截断+归属·不信前端）', ()
     const r1: any = await call('updateProfile', { avatar: 'https://evil.com/x.png' })
     expect(r1).toEqual({ ok: false, error: 'EMPTY_PATCH' }) // 非法头像被剔，patch 空
 
-    const r2: any = await call('updateProfile', { avatar: 'cloud://env.x/a.png' })
+    const r2: any = await call('updateProfile', { avatar: 'cloud://env.x/avatars/a.png' })
     expect(r2.ok).toBe(true)
-    expect(control.dump('users')[0].avatar).toBe('cloud://env.x/a.png')
+    expect(control.dump('users')[0].avatar).toBe('cloud://env.x/avatars/a.png')
   })
 
   it('大白话：手机号白名单——合法号归一化纯数字入库；含字母/过短剔除（单字段→EMPTY_PATCH·不覆盖旧值）；空串清空放行', async () => {
@@ -127,7 +127,7 @@ describe('deleteAccount（删除资料·抹识别信息·课不可再看·订单
     expect(((await call('deleteAccount')) as any).error).toBe('NO_OPENID')
 
     control.setOpenId('oME')
-    await call('updateProfile', { nickname: '小鸭', bio: '钩织', phone: '13800000000', avatar: 'cloud://env.x/a.png' })
+    await call('updateProfile', { nickname: '小鸭', bio: '钩织', phone: '13800000000', avatar: 'cloud://env.x/avatars/a.png' })
     const r: any = await call('deleteAccount')
     expect(r).toEqual({ ok: true, deleted: true })
     const u = control.dump('users')[0]

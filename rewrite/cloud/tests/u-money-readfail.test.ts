@@ -10,7 +10,7 @@ import { sha } from '../src/functions/adminApi/lib'
 import { main as payCallback } from '../src/functions/callbacks/payCallback'
 import { main as refundCallback } from '../src/functions/callbacks/refundCallback'
 import { runBillReconcile } from '../src/functions/timers/billReconcile'
-import { getDb, refundNoFor } from '../src/kit'
+import { getDb, refundNoFor, RECON_WINDOW_MAX } from '../src/kit'
 
 const db = cloud.database()
 const post = (action: string, data: Record<string, unknown> = {}) =>
@@ -199,20 +199,18 @@ describe('对账页：读失败不显示成「零收入 / 全平 / 全是微信�
     expect(alerted('RECON_READ_FAIL')).toBe(true)
   })
 
-  it('getReconciliation：计数失败 → partial:true + RECON_READ_FAIL 告警', async () => {
-    control.seed('orders', [{ _id: 'r1', id: 'r1', _openid: 'x', status: 'paid', amount: 100, paidAt: d1, createdAt: d1, items: [] }])
-    control.setBeforeCount(async () => {
-      throw new Error('MOCK_COUNT_FAIL')
-    })
+  it('getReconciliation：退款明细读失败 → partial:true + RECON_READ_FAIL 告警', async () => {
+    control.seed('afterSales', [{ _id: 'a1', orderId: 'r1', status: 'refunded', refundAmount: 30, refundedAt: d1, appliedAt: d1 }])
+    failReads((a) => a.coll === 'afterSales' && a.filter && a.filter.status === 'refunded')
     const r = await post('getReconciliation', { from: '2026-07-01', to: '2026-07-01' })
     expect(r.partial).toBe(true)
     expect(alerted('RECON_READ_FAIL')).toBe(true)
   })
 
-  it('getReconciliation：已付单超 1000（云函数 limit 上限）→ approx:true', async () => {
+  it('getReconciliation：窗内已付单超读取上限 → approx:true', async () => {
     control.seed(
       'orders',
-      Array.from({ length: 1001 }, (_, i) => ({ _id: 'c' + i, id: 'c' + i, _openid: 'x', status: 'paid', amount: 1, paidAt: d1 + i, createdAt: 1, items: [] }))
+      Array.from({ length: RECON_WINDOW_MAX + 1 }, (_, i) => ({ _id: 'c' + i, id: 'c' + i, _openid: 'x', status: 'paid', amount: 1, paidAt: d1 + i, createdAt: 1, items: [] }))
     )
     const r = await post('getReconciliation', { from: '2026-07-01', to: '2026-07-01' })
     expect(r.approx).toBe(true)
@@ -239,10 +237,10 @@ describe('对账页：读失败不显示成「零收入 / 全平 / 全是微信�
     expect(r.billDays).toEqual([])
   })
 
-  it('getBillMatch：我方已付单拉满 1000（云函数 limit 上限）→ approx:true', async () => {
+  it('getBillMatch：窗内已付单超读取上限 → approx:true', async () => {
     control.seed(
       'orders',
-      Array.from({ length: 1000 }, (_, i) => ({ _id: 'c' + i, id: 'c' + i, _openid: 'x', status: 'paid', amount: 1, paidAt: d1 + i, createdAt: 1, items: [] }))
+      Array.from({ length: RECON_WINDOW_MAX + 1 }, (_, i) => ({ _id: 'c' + i, id: 'c' + i, _openid: 'x', status: 'paid', amount: 1, paidAt: d1 + i, createdAt: 1, items: [] }))
     )
     const r = await post('getBillMatch', { from: '2026-07-01', to: '2026-07-01' })
     expect(r.approx).toBe(true)
@@ -288,11 +286,11 @@ describe('每日对账 timer 与账单落库', () => {
     expect(alerted('BILL_RECON_ORDERS_READ_FAIL')).toBe(true)
   })
 
-  it('默认 cap 对齐云函数 limit 上限 1000：拉满即 truncated', async () => {
+  it('默认 cap 是对账窗读取上限：宽窗里的单比它多一条即 truncated', async () => {
     seedCreds()
     control.seed(
       'orders',
-      Array.from({ length: 1000 }, (_, i) => ({ _id: 'c' + i, id: 'c' + i, _openid: 'x', status: 'paid', amount: 1, transactionId: 'tc' + i, paidAt: paidAt + i, items: [] }))
+      Array.from({ length: RECON_WINDOW_MAX + 1 }, (_, i) => ({ _id: 'c' + i, id: 'c' + i, _openid: 'x', status: 'paid', amount: 1, transactionId: 'tc' + i, paidAt: paidAt + i, items: [] }))
     )
     const r: any = await runBillReconcile(db, { now: NOW, fetchImpl: billFetch(csv(['`2026-07-15 10:00:00,`wxapp,`1113881793,`tx-g,`g,`SUCCESS,`5.00,`0.00'])) })
     expect(r.truncated).toBe(true)

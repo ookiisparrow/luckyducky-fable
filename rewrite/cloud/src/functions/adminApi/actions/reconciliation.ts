@@ -13,6 +13,7 @@ import { reply, getTxAlerts, type Ctx } from '../lib'
 import {
   notifyAlert,
   matchBillRows,
+  readWindow,
   toFenAmount,
   toYuanAmount,
   DAY_MS as DAY,
@@ -25,12 +26,11 @@ import {
 //   · payment_exception 的到账额和标价不符（正是它异常的原因），收入按实际到账 paidFee（分）计，与它退款的
 //     分母同口径；缺 paidFee（待补录实付）的计 0——累计聚合对缺字段也是 0，两处一致。
 //   · 累计总额走 aggregate $.sum 精确（不封顶）——money 锚，恒可信。
-//   · 每日明细走有界拉取（CAP）+ JS 按 CST 日分桶（云端 aggregate 不便按日分组），超 CAP 标 approx
-//     （同 dashboard SAMPLE 诚实范式；低量业务远不触）。
+//   · 每日明细按窗读全（kit readWindow：窗口进 where、游标翻页）+ JS 按 CST 日分桶（云端 aggregate 不便按日分组）；
+//     窗内超过读取上限才标 approx。
 //   · 内部异常＝feeMismatch/refundMismatch/stuckRefunds（getTxAlerts 与看板同源·防漂移）。
 // 抓「我方内部不一致」；抓不到「微信收了款我方无单」——那需逐笔比对微信账单（外部对账·需商户凭证）。
 
-const CAP = 1000 // 明细有界拉取上限（超则 approx）：云函数端 .limit() 最多给 1000 条，CAP 设得比它大就会少报截断
 const isDate = (s: any) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 const AMOUNT_INCOME_STATUSES = MONEY_RECEIVED_STATUSES.filter((s) => s !== 'payment_exception')
 const receivedFen = (o: any): number =>
@@ -54,7 +54,7 @@ export async function getReconciliation({ db, data }: Ctx) {
   const fromMs = dayStartMs(from)
   const toMs = dayStartMs(to) + DAY - 1 // 含 to 当日
 
-  // 任一路读失败（累计聚合 / 每日明细 / 计数）都置 degraded + 告警，回传 partial 让前端标注数据不可信（病根#14）：
+  // 任一路读失败（累计聚合 / 每日明细）都置 degraded + 告警，回传 partial 让前端标注数据不可信（病根#14）：
   // 「查询失败」归零会被读成「这段时间没收入、没退款、已对平」。
   let degraded = false
   const sumAgg = (coll: CollectionName, status: any, field: string): Promise<number> =>
@@ -69,66 +69,35 @@ export async function getReconciliation({ db, data }: Ctx) {
         degraded = true
         return 0
       })
-  const rows = (q: any) =>
-    q
-      .get()
-      .then((r: any) => r.data)
-      .catch(() => {
-        degraded = true
-        return []
-      })
-  const cnt = (q: any) =>
-    q
-      .count()
-      .then((r: any) => r.total || 0)
-      .catch(() => {
-        degraded = true
-        return 0
-      })
+  const degrade = () => {
+    degraded = true
+    return { rows: [] as any[], capped: false }
+  }
 
-  const [amountCum, exceptionFenCum, refundCum, paidRows, refundRows, paidN, refundN, exceptions] =
-    await Promise.all([
-      // 累计（aggregate·全量精确·不封顶·money 锚）：按标价的单（元）与支付异常单的到账额（分）分开汇总
-      sumAgg(COLLECTIONS.orders, _.in(AMOUNT_INCOME_STATUSES), 'amount'),
-      sumAgg(COLLECTIONS.orders, 'payment_exception', 'paidFee'),
-      sumAgg(COLLECTIONS.afterSales, 'refunded', 'refundAmount'),
-      // 每日明细有界拉取（最近 CAP 笔·按时间倒序）
-      rows(
-        db
-          .collection(COLLECTIONS.orders)
-          .where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })
-          .orderBy('paidAt', 'desc')
-          .limit(CAP)
-      ),
-      rows(
-        db
-          .collection(COLLECTIONS.afterSales)
-          .where({ status: 'refunded' })
-          .orderBy('refundedAt', 'desc')
-          .limit(CAP)
-      ),
-      cnt(db.collection(COLLECTIONS.orders).where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })),
-      cnt(db.collection(COLLECTIONS.afterSales).where({ status: 'refunded' })),
-      getTxAlerts(db),
-    ])
+  const [amountCum, exceptionFenCum, refundCum, paid, refunded, exceptions] = await Promise.all([
+    // 累计（aggregate·全量精确·不封顶·money 锚）：按标价的单（元）与支付异常单的到账额（分）分开汇总
+    sumAgg(COLLECTIONS.orders, _.in(AMOUNT_INCOME_STATUSES), 'amount'),
+    sumAgg(COLLECTIONS.orders, 'payment_exception', 'paidFee'),
+    sumAgg(COLLECTIONS.afterSales, 'refunded', 'refundAmount'),
+    readWindow(db, COLLECTIONS.orders, { status: _.in([...MONEY_RECEIVED_STATUSES]) }, 'paidAt', fromMs, toMs + 1).catch(degrade),
+    readWindow(db, COLLECTIONS.afterSales, { status: 'refunded' }, 'refundedAt', fromMs, toMs + 1).catch(degrade),
+    getTxAlerts(db),
+  ])
   const incomeCum = fenToYuan(asFen(toFenAmount(amountCum) + Math.round(exceptionFenCum)))
 
-  // JS 按 CST 日分桶（窗内）：income 自 paidRows.paidAt，refund 自 refundRows.refundedAt（累加整数分）
+  // JS 按 CST 日分桶：income 自 paidAt，refund 自 refundedAt（累加整数分）
   const buckets = new Map<string, Bucket>()
   const bucket = (day: string): Bucket => {
     let b = buckets.get(day)
     if (!b) buckets.set(day, (b = { day, incomeFen: 0, refundFen: 0, orders: 0, refunds: 0 }))
     return b
   }
-  const inRange = (ts: any) => typeof ts === 'number' && ts >= fromMs && ts <= toMs
-  for (const o of paidRows) {
-    if (!inRange(o.paidAt)) continue
+  for (const o of paid.rows) {
     const b = bucket(dayKey(o.paidAt))
     b.incomeFen += receivedFen(o)
     b.orders += 1
   }
-  for (const a of refundRows) {
-    if (!inRange(a.refundedAt)) continue
+  for (const a of refunded.rows) {
     const b = bucket(dayKey(a.refundedAt))
     b.refundFen += toFenAmount(a.refundAmount)
     b.refunds += 1
@@ -168,8 +137,8 @@ export async function getReconciliation({ db, data }: Ctx) {
       refunds: sum('refunds'),
     },
     daily,
-    // 窗内明细可能被 CAP 截断（低量远不触·诚实标注）；累计/异常不受 CAP 影响
-    approx: paidN > CAP || refundN > CAP,
+    // 窗内明细超过读取上限（丢了窗内最早的一段）；累计/异常不受影响
+    approx: paid.capped || refunded.capped,
     exceptions,
   })
 }
@@ -185,34 +154,20 @@ export async function getBillMatch({ db, data }: Ctx) {
   const toMs = dayStartMs(to) + DAY - 1
   // 读失败不接住（交网关回 500，前端报加载失败）：订单读挂了会把每笔微信流水判成「微信有我方无」，账单读挂了
   // 会假装全平。集合未建＝wxBills 从没拉过账单，是合法空态。
-  const rows = (q: any) =>
-    q.get().then(
-      (r: any) => r.data,
-      (e: unknown) => {
-        if (isCollectionMissing(e)) return []
-        throw e
-      }
-    )
+  const missingOk = (e: unknown) => {
+    if (isCollectionMissing(e)) return { rows: [] as any[], capped: false }
+    throw e
+  }
 
-  // 取最近 CAP 条再按窗过滤；触顶＝更早的单没进比对面，老窗口里的真单会被误判 wxOnly——必须 approx 如实标注
+  // 窗内读全；真触读取上限＝窗内最早的单没进比对面，那几天的真单会被误判 wxOnly——必须 approx 如实标注
   //（同 getReconciliation 口径·守卫 billmatch-approx-flag），前端见 approx 提示「窗口可能不全」而非当真差异。
-  const [rawOur, rawWx] = await Promise.all([
-    rows(
-      db
-        .collection(COLLECTIONS.orders)
-        .where({ status: _.in([...MONEY_RECEIVED_STATUSES]) })
-        .orderBy('paidAt', 'desc')
-        .limit(CAP)
-    ),
-    rows(db.collection(COLLECTIONS.wxBills).orderBy('date', 'desc').limit(CAP)),
+  const [our, wx] = await Promise.all([
+    readWindow(db, COLLECTIONS.orders, { status: _.in([...MONEY_RECEIVED_STATUSES]) }, 'paidAt', fromMs, toMs + 1).catch(missingOk),
+    readWindow(db, COLLECTIONS.wxBills, {}, 'date', from, dayKey(toMs + 1)).catch(missingOk),
   ])
-  const approx = rawOur.length >= CAP || rawWx.length >= CAP
-  const ourOrders = rawOur.filter(
-    (o: any) => typeof o.paidAt === 'number' && o.paidAt >= fromMs && o.paidAt <= toMs
-  )
-  const wxRows = rawWx.filter(
-    (w: any) => w.date >= from && w.date <= to && String(w.tradeState) === 'SUCCESS'
-  )
+  const approx = our.capped || wx.capped
+  const ourOrders = our.rows
+  const wxRows = wx.rows.filter((w: any) => String(w.tradeState) === 'SUCCESS')
 
   const billDays = [...new Set(wxRows.map((w: any) => w.date))].sort()
   const wxByTxn = new Map(wxRows.map((w: any) => [String(w.transactionId || ''), w]))
@@ -245,6 +200,6 @@ export async function getBillMatch({ db, data }: Ctx) {
     },
     discrepancies: { wxOnly, oursOnly, amountMismatch },
     billDays,
-    approx, // 比对面触 CAP 截断：true 时差异可能是截断假象、勿当真差异（前端提示）
+    approx, // 比对面触读取上限：true 时差异可能是截断假象、勿当真差异（前端提示）
   })
 }

@@ -17,6 +17,11 @@ import { isOwnCheckpointFile, deleteOwnCheckpointFiles } from './checkpoint'
 
 const CAPS = { nickname: 20, bio: 60, avatar: 256, phone: 11 }
 
+// 头像只收 mp profile-edit 上传目录 avatars/ 下的单个文件（cloudPath 约定见该页）：内容安全会用管理权限把整个对象
+// 下载进内存，不限目录就能填付费课视频之类的大文件拖垮函数，或把别处的私有文件设成公开头像。文件名不许以点开头，挡 '..'。
+// ponytail: 该目录约定里没有 openid，挡得住跨目录，挡不住填别人的头像（本就公开）；要证本人得 mp 改传 avatars/<openid>/ 再收紧这里
+const isAvatarFile = (f: string) => /^cloud:\/\/[^/]+\/avatars\/[\w-][\w.-]*$/.test(f)
+
 /**
  * 微信登录（静默）：用可信 openid upsert users，返回用户。
  * 确定性 _id=OPENID（根因#1）：并发首登撞键即幂等；老随机 _id 档 where 命中即用（惰性迁移）。
@@ -72,7 +77,7 @@ async function storeUnionId(db: any, OPENID: string, user: any): Promise<void> {
 
 /**
  * 保存用户资料（白名单+截断+归属，不信前端）。
- * 白名单 {nickname,bio,avatar}；avatar 只接受云存储地址（cloud://）或空串（清除）——拒注入任意 URL。
+ * 白名单 {nickname,bio,avatar}；avatar 只接受 avatars/ 目录下的云存储文件或空串（清除），其余剔除。
  */
 export const updateProfile = withOpenId(
   withRateLimit('updateProfile', { max: 20, windowMs: 60_000 }, async ({ db, OPENID, event }) => {
@@ -82,9 +87,8 @@ export const updateProfile = withOpenId(
       patch.nickname = str(e.nickname.trim(), CAPS.nickname)
     }
     if (typeof e.bio === 'string') patch.bio = str(e.bio.trim(), CAPS.bio)
-    if (typeof e.avatar === 'string' && (e.avatar === '' || e.avatar.startsWith('cloud://'))) {
-      patch.avatar = str(e.avatar, CAPS.avatar)
-    }
+    const avatar = str(e.avatar, CAPS.avatar)
+    if (e.avatar === '' || isAvatarFile(avatar)) patch.avatar = avatar
     // 手机号（账户联系电话·供客服 360 检索·与地址电话独立）。**区分两类空**（防「纯非数字→误当清空→清掉旧号」）：
     // ① 真·空输入（trim 后为空）＝用户显式清空→存空串；② 非空输入归一化纯数字后按 7–11 位（与地址电话 ≥7 对齐）
     // 校验，合法才入·非法（含字母/过短/超长，归一化可能为空但用户本意是填号）一律剔除、**不覆盖旧号**。

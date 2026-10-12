@@ -2,6 +2,11 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!-- 令牌在同源 localStorage，坐席台还展示顾客发来的内容：一旦有注入，先挡住脚本执行。
+         只放不会误拦的几条——脚本只认本站（构建产物无内联脚本；打包里的 eval 只在 Node/老 IE 分支）、
+         无 object/base/form。连接/图片/媒体的源是运行时下发的上传与存储地址（直传签名、VOD SDK、临时链接），
+         本地证不了全集，先不收；frame-ancestors 在 meta 里无效，得在托管侧发响应头。 -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <title>小棉鸭 · 坐席台</title>
