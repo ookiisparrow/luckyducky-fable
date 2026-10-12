@@ -66,7 +66,7 @@ describe('Agents.vue 失败提示', () => {
     await stopBtn().trigger('click')
     await stopBtn().trigger('click')
     await flushPromises()
-    expect(w.find('.ld-status').text()).toBe('操作失败（NO_AGENT）')
+    expect(w.find('.ld-status').text()).toBe('停用失败：操作没成功。请稍后重试，反复失败请找技术。（技术编号 NO_AGENT）')
   })
 })
 

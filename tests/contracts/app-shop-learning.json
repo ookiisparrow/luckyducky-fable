@@ -1,0 +1,283 @@
+{
+  "$comment": [
+    "小程序 ↔ app 网关收银台、商品、评价、学习链读口的响应契约（Issue #400：小程序响应形状原先全靠手抄，云端改键小程序测试照样绿）。",
+    "两把锁共用本文件：rewrite/cloud/tests/p-contract-app-shape.test.ts 经真写侧造数、跑真 app 网关，断言整个响应与 sample 全等；",
+    "rewrite/mp/tests/p-contract-mp-mappers.test.ts 把 sample 喂给小程序映射层（payFlow / mapHome.mapProducts / mapDetail / mapReviews / mapLearning），断言页面看到的东西。",
+    "剧本：后台上架 p1（带图册、SKU、参数）和课程 c1（l1 两段一段未剪、l2 一段）；oME 买一单收货后评 5 星并被挑上墙；扫 CODE1 进课、学完 s1、看到 s3 的 90/240 秒；另有一单待付款拉收银台。",
+    "改本文件：先改云端代码或剧本，让云端测试告诉你新形状，再照抄进来；只改这里不改代码，云端测试会红。"
+  ],
+  "cases": {
+    "pay": {
+      "action": "pay",
+      "sample": {
+        "ok": true,
+        "payment": {
+          "timeStamp": "1782878400",
+          "nonceStr": "n0nce",
+          "package": "prepay_id=wx01",
+          "signType": "RSA",
+          "paySign": "sig=="
+        }
+      }
+    },
+    "getProducts": {
+      "action": "getProducts",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "id": "p1",
+            "name": "小棉鸭钩织礼盒",
+            "tag": "基础款",
+            "price": 198,
+            "was": 258,
+            "brief": "零基础友好",
+            "cover": "https://tmp/cloud://env/p1-cover.jpg",
+            "skus": [
+              {
+                "name": "基础款",
+                "price": 198
+              }
+            ],
+            "params": [
+              [
+                "材质",
+                "纯棉"
+              ]
+            ],
+            "detailSections": [
+              {
+                "lead": "关于",
+                "body": "正文"
+              }
+            ],
+            "kit": [
+              {
+                "icon": "",
+                "name": "钩针",
+                "qty": "1 支"
+              }
+            ],
+            "sold": 128,
+            "courseId": "c1",
+            "featured": false,
+            "sort": 1,
+            "updatedAt": 1782878400000,
+            "_id": "p1"
+          }
+        ]
+      }
+    },
+    "getProductDetail": {
+      "action": "getProductDetail",
+      "sample": {
+        "ok": true,
+        "product": {
+          "id": "p1",
+          "name": "小棉鸭钩织礼盒",
+          "tag": "基础款",
+          "price": 198,
+          "was": 258,
+          "brief": "零基础友好",
+          "cover": "https://tmp/cloud://env/p1-cover.jpg",
+          "images": [
+            "https://tmp/cloud://env/p1-a.jpg"
+          ],
+          "skus": [
+            {
+              "name": "基础款",
+              "price": 198
+            }
+          ],
+          "params": [
+            [
+              "材质",
+              "纯棉"
+            ]
+          ],
+          "detailSections": [
+            {
+              "lead": "关于",
+              "body": "正文"
+            }
+          ],
+          "kit": [
+            {
+              "icon": "",
+              "name": "钩针",
+              "qty": "1 支"
+            }
+          ],
+          "sold": 128,
+          "courseId": "c1",
+          "featured": false,
+          "sort": 1,
+          "updatedAt": 1782878400000,
+          "_id": "p1"
+        }
+      }
+    },
+    "getReviews": {
+      "action": "getReviews",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "name": "鸭鸭",
+            "rating": 5,
+            "tags": [
+              "手感好"
+            ],
+            "text": "好上手",
+            "spec": "基础款",
+            "createdAt": 1782878400000,
+            "photos": []
+          }
+        ],
+        "nextCursor": null,
+        "hasMore": false,
+        "summary": {
+          "score": "5.0",
+          "count": 1,
+          "approx": false,
+          "dist": [
+            [
+              "5 星",
+              100
+            ],
+            [
+              "4 星",
+              0
+            ],
+            [
+              "3 星",
+              0
+            ],
+            [
+              "2 星",
+              0
+            ]
+          ],
+          "tags": [
+            [
+              "手感好",
+              1
+            ]
+          ]
+        }
+      }
+    },
+    "getRatingSummary": {
+      "action": "getRatingSummary",
+      "sample": {
+        "ok": true,
+        "score": "5.0",
+        "count": 1
+      }
+    },
+    "activateCourse": {
+      "action": "activateCourse",
+      "sample": {
+        "ok": true,
+        "state": "activated",
+        "courseId": "c1"
+      }
+    },
+    "activateCourse:mine": {
+      "action": "activateCourse",
+      "sample": {
+        "ok": true,
+        "state": "mine",
+        "courseId": "c1"
+      }
+    },
+    "getMyCourses": {
+      "action": "getMyCourses",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "courseId": "c1",
+            "enteredAt": 1782878400000
+          }
+        ]
+      }
+    },
+    "getCourses": {
+      "action": "getCourses",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "id": "c1",
+            "title": "小棉鸭入门",
+            "chapters": [
+              {
+                "id": "ch1",
+                "title": "第一章",
+                "lessons": [
+                  {
+                    "id": "l1",
+                    "name": "起针",
+                    "dur": "8:00",
+                    "segments": [
+                      {
+                        "id": "s1",
+                        "name": "绕线",
+                        "dur": "5:00",
+                        "hasVideo": true
+                      },
+                      {
+                        "id": "s2",
+                        "name": "收尾",
+                        "dur": "3:00",
+                        "hasVideo": false
+                      }
+                    ]
+                  },
+                  {
+                    "id": "l2",
+                    "name": "短针",
+                    "dur": "4:00",
+                    "segments": [
+                      {
+                        "id": "s3",
+                        "name": "短针一圈",
+                        "dur": "4:00",
+                        "hasVideo": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "getMyProgress": {
+      "action": "getMyProgress",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "_id": "oME__c1",
+            "_openid": "oME",
+            "courseId": "c1",
+            "done": {
+              "s1": true
+            },
+            "last": {
+              "lessonId": "l2",
+              "segmentId": "s3",
+              "at": 90,
+              "dur": 240
+            },
+            "createdAt": 1782878400000,
+            "updatedAt": 1782878400000
+          }
+        ]
+      }
+    }
+  }
+}

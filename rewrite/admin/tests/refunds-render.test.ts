@@ -196,13 +196,13 @@ describe('Refunds.vue 越规退款弹层', () => {
     await submit()
     const lastMsg = () => w.findAll('.ov-msg')[w.findAll('.ov-msg').length - 1]
     const fail = lastMsg()
-    expect(fail.text()).toBe('越规退款没成功：这件商品已经没有可退金额了')
+    expect(fail.text()).toBe(`订单 ${ORDER} 越规退款没成功：这件商品已经没有可退金额了`)
     expect(fail.classes()).toContain('err')
 
     overrideRefundMock.mockResolvedValueOnce({ ok: true, id: 'af1' })
     await submit()
     const ok = lastMsg()
-    expect(ok.text()).toContain('✓ 已发起越规退款（售后单 af1）')
+    expect(ok.text()).toContain(`✓ 已对订单 ${ORDER} 发起越规退款（售后单 af1）`)
     expect(ok.classes()).toContain('ok')
     expect(ok.classes()).not.toContain('err')
   })

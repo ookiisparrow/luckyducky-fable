@@ -371,6 +371,20 @@ describe('admin 评价挑选（listReviews / setReviewPicked）', () => {
     expect((await call('getReviews', { productId: 'p1' })).list).toEqual([])
     expect((await call('getRatingSummary', { productId: 'p1' })).count).toBe(0)
   })
+
+  it('大白话：同一状态再点一次（连点/别的窗口先点了）照样成功；没这条评价才报不存在', async () => {
+    control.seed('reviews', [{ _id: 'r1', productId: 'p1', picked: true, rating: 5, text: '好', createdAt: 1 }])
+    expect((await adminPost('setReviewPicked', SUPER, { id: 'r1', picked: true })).ok).toBe(true)
+    expect(await adminPost('setReviewPicked', SUPER, { id: 'ghost', picked: true })).toMatchObject({ status: 400, error: 'NOT_FOUND' })
+  })
+
+  it('大白话：同一状态再点、读回那一下库挂了——报读库失败，不说成评价不存在', async () => {
+    control.seed('reviews', [{ _id: 'r1', productId: 'p1', picked: true, rating: 5, text: '好', createdAt: 1 }])
+    control.setBeforeGet((a: any) => {
+      if (a.coll === 'reviews' && a.id === 'r1') throw new Error('MOCK_DB_FAIL')
+    })
+    expect(await adminPost('setReviewPicked', SUPER, { id: 'r1', picked: true })).toMatchObject({ ok: false, error: 'DOC_READ_FAIL' })
+  })
 })
 
 describe('getPublicFaq（R37b·KB 精选 FAQ 公开读）', () => {

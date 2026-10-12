@@ -1,4 +1,5 @@
 // 后台 ↔ adminApi 钱相关响应契约锁（Issue #388）：跑真 adminApi，对照 tests/contracts/admin-money.json。
+// 同一套剧本也锁小程序 ↔ app 网关的订单/售后读口（tests/contracts/app-orders.json，见文件末尾）。
 // 订单/售后/库存行在响应里是整档透传（{...doc}），键集由写侧决定，所以剧本一律经真写侧造数
 // （createOrder → payCallback → shipOrder / applyRefund → approveRefund → refundCallback / saveStock）；
 // 自造 seed 只锁得住自己的回声。wxBills/courses/progress 仍用 seed：它们在响应里被逐字段重建，seed 的键进不了响应。
@@ -8,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { control } from 'wx-server-sdk'
 import CONTRACT from '../../../tests/contracts/admin-money.json'
+import APP_CONTRACT from '../../../tests/contracts/app-orders.json'
 import { main as app } from '../src/functions/app/index'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { main as payCallback } from '../src/functions/callbacks/payCallback'
@@ -145,6 +147,31 @@ describe('adminApi 钱相关响应契约（tests/contracts/admin-money.json）',
       expect(real.ok, JSON.stringify(real)).toBe(true)
       for (const [p, keys] of Object.entries(c.keys)) expect(keysOf(at(real, p)), `${name} ${p || '顶层'}`).toEqual(keys)
       for (const [p, unit] of Object.entries(c.units)) expect(at(real, p), `${name} ${p}（${unit}）`).toBe(at(c.sample, p))
+      expect(normalize(real), `${name} 整体`).toEqual(c.sample)
+    })
+  }
+})
+
+// 小程序那一侧：app 网关的订单/售后读口，同一套剧本（买家都是 oME）。小程序映射层测试 rewrite/mp/tests/p-contract-mp-mappers.test.ts
+// 喂的就是这里锁住的 sample——云端改键/改值先在这里红，改契约后小程序那边再红。
+const APP_CASES = APP_CONTRACT.cases as unknown as Record<string, { action: string; sample: unknown }>
+const APP_REQ: Record<string, () => Record<string, unknown>> = {
+  getMyOrders: () => ({ limit: 20 }),
+  getOrderById: () => ({ id: W.A }),
+  getMyAfterSales: () => ({ limit: 20 }),
+}
+
+describe('app 网关订单/售后响应契约（tests/contracts/app-orders.json）', () => {
+  it('契约自洽：每个 case 都有剧本', () => {
+    expect(Object.keys(APP_CASES).sort()).toEqual(Object.keys(APP_REQ).sort())
+  })
+
+  for (const [name, c] of Object.entries(APP_CASES)) {
+    it(`${name}：整个响应（单号归一后）与 sample 全等`, async () => {
+      control.setOpenId('oME')
+      const real = await call(c.action, APP_REQ[name]())
+      control.setOpenId('')
+      expect(real.ok, JSON.stringify(real)).toBe(true)
       expect(normalize(real), `${name} 整体`).toEqual(c.sample)
     })
   }

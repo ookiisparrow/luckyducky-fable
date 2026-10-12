@@ -24,14 +24,14 @@ const G = (globalThis.__cloudMock = globalThis.__cloudMock || {
 })
 
 // JSON 往返保留真云序列化语义（undefined 键被丢等），但 Date 要原样存取：真云存的是日期类型，不是 ISO 串
+function tagDate(k, x) {
+  return this[k] instanceof Date ? { __mockDate: this[k].getTime() } : x
+}
 const clone = (v) =>
   v === undefined
     ? undefined
-    : JSON.parse(
-        JSON.stringify(v, function (k, x) {
-          return this[k] instanceof Date ? { __mockDate: this[k].getTime() } : x
-        }),
-        (k, x) => (x && typeof x === 'object' && '__mockDate' in x ? new Date(x.__mockDate) : x)
+    : JSON.parse(JSON.stringify(v, tagDate), (k, x) =>
+        x && typeof x === 'object' && '__mockDate' in x ? new Date(x.__mockDate) : x
       )
 // 真云服务端 get()/聚合单次最多取 1000 条
 const MAX_LIMIT = 1000
@@ -77,14 +77,29 @@ function matchOne(docVal, cond) {
   }
   return docVal === cond
 }
+// 值为 undefined 的条件键不参与匹配：真 sdk（@cloudbase/database 序列化条件时）把它丢掉，等于没这个条件，
+// 不是「字段缺失」——当成缺失会让漏了版本号的 CAS 在测试里照样咬住、真云却无条件写
 function matchDoc(doc, filter) {
   if (!filter) return true
-  return Object.keys(filter).every((k) => matchOne(doc[k], filter[k]))
+  return Object.keys(filter).every((k) => filter[k] === undefined || matchOne(doc[k], filter[k]))
 }
 
-// 点路径 / 普通字段写入：'done.segId' → doc.done.segId
-function applyPatch(doc, data) {
+// 真 sdk update 先把嵌套普通对象拍平成点路径、逐叶 $set：嵌套对象是合并不是整体替换，空对象整键丢掉；
+// 数组、Date、算子是叶子（整体写）。要整体替换得用 set 算子，桩没实现，生产也没用
+const isPlainObj = (v) => Object.prototype.toString.call(v) === '[object Object]' && !v.__op
+function flatten(data, prefix = '', out = {}) {
   for (const [k, v] of Object.entries(data)) {
+    if (isPlainObj(v)) flatten(v, prefix + k + '.', out)
+    else out[prefix + k] = v
+  }
+  return out
+}
+
+// 点路径 / 普通字段写入：'done.segId' → doc.done.segId。返回文档是否真变了：
+// 真云 stats.updated 数的是改动了的文档，内容没变回 0（user.ts upsertUser 注释记着真机这样）
+function applyPatch(doc, data) {
+  const before = JSON.stringify(doc, tagDate)
+  for (const [k, v] of Object.entries(flatten(data))) {
     if (k.includes('.')) {
       const parts = k.split('.')
       let cur = doc
@@ -97,6 +112,7 @@ function applyPatch(doc, data) {
       writeLeaf(doc, k, v)
     }
   }
+  return JSON.stringify(doc, tagDate) !== before
 }
 
 const genId = () => 'mock_' + Math.random().toString(36).slice(2, 12)
@@ -141,8 +157,7 @@ class DocRef {
     if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
     const found = rows(this.coll).find((d) => d._id === this.id)
     if (!found) return { stats: { updated: 0 } }
-    applyPatch(found, clone(data))
-    return { stats: { updated: 1 } }
+    return { stats: { updated: applyPatch(found, clone(data)) ? 1 : 0 } }
   }
   async remove() {
     // 删前注入（测试：删失败不得被装成已删除）。回调收到 {coll,id}；Query.remove() 收到 {coll,filter}。默认无。
@@ -163,6 +178,10 @@ class Query {
     this._skip = null
   }
   where(cond) {
+    // 真 sdk where() 同步校验：必须是普通对象；有键但值全是 undefined 直接抛
+    if (Object.prototype.toString.call(cond) !== '[object Object]') throw new Error('查询参数必须为对象')
+    const keys = Object.keys(cond)
+    if (keys.length && keys.every((k) => cond[k] === undefined)) throw new Error('查询参数对象值不能均为undefined')
     this._filter = cond
     return this
   }
@@ -228,8 +247,7 @@ class Query {
     if (typeof G.beforeUpdate === 'function') await G.beforeUpdate({ coll: this.coll, data })
     // 真云 where().update() 改全部匹配文档，不受读取的默认 100 条截断
     const hit = rows(this.coll).filter((d) => matchDoc(d, this._filter))
-    hit.forEach((d) => applyPatch(d, clone(data)))
-    return { stats: { updated: hit.length } }
+    return { stats: { updated: hit.filter((d) => applyPatch(d, clone(data))).length } }
   }
   async remove() {
     ensureColl(this.coll)

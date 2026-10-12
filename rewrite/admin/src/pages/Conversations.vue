@@ -155,7 +155,12 @@ async function saveQc(row: QcRow) {
   const r = await saveQcMark(row.sessionKey, row.draftScore, row.draftNote.trim())
   row.busy = false
   if (!r.ok) {
-    row.err = r.error === 'ALREADY_MARKED' ? '已被评过分（可能是并发保存）' : writeFailText('保存失败', r.error)
+    row.err =
+      r.error === 'ALREADY_MARKED'
+        ? '已被评过分（可能是并发保存）'
+        : r.error === 'NOT_FOUND'
+          ? '找不到这条会话（可能已被清理），刷新列表后再评'
+          : writeFailText('保存失败', r.error)
     return
   }
   row.scored = true

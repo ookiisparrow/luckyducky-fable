@@ -75,6 +75,7 @@ const adj = ref({ materialId: '', delta: 0, reason: '' })
 const adjustId = ref('') // 本次调整意图的幂等键（生成一次·重试复用·成功才换新·根因#1·同 runAssembly）
 const adjustBusy = ref(false)
 const supBusy = ref(false) // 供应商建档在途锁（防双击建重复供应商）
+const matBusy = ref(false)
 
 // ── 批量盘点模式：一屏批量录实盘→差异预览→复用 adjustStock 幂等键一次提交
 // （期初盘点不录则账实必偏，逐行开调整单弹窗太慢，本模式一次拉全量对完）──
@@ -251,8 +252,11 @@ async function reload() {
 }
 
 async function doSaveMaterial() {
+  if (matBusy.value) return // 连点会并发首建同一料号：输家回 DUPLICATE，还会把赢家的「已建档」盖掉
+  matBusy.value = true
   const r = await saveMaterial({ ...matForm.value })
-  note(r.ok, r.ok ? `已建档：${r.materialId}` : '', scmErrorText(r.error))
+  matBusy.value = false
+  note(r.ok, r.ok ? `已建档：${r.materialId}` : '', scmErrorText(r.error, 'material'))
   void reload()
 }
 
@@ -344,7 +348,7 @@ onMounted(reload)
               <option v-for="s in sups" :key="s._id" :value="s._id">{{ s.name }}</option>
             </select>
             <input v-model.number="matForm.threshold" type="number" min="0" placeholder="安全库存阈值（低于报警·0=不报警）" />
-            <UiButton block @click="doSaveMaterial">建档 / 更新</UiButton>
+            <UiButton block :disabled="matBusy" @click="doSaveMaterial">{{ matBusy ? '保存中…' : '建档 / 更新' }}</UiButton>
           </div>
           <p class="hint">计量方式建档后锁死；毛线料号按 颜色×档位×形态 自动生成。安全库存阈值＝低于此值列表标红报警（B4：换皮漏了这个输入·恒 0 致低库存告警失效）。</p>
         </Card>
