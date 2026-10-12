@@ -92,6 +92,7 @@ describe.each(PAGES)('$name 继续支付：在途锁 + 加载反馈', ({ path, e
     await page.onPay(ev)
     expect(payMock).toHaveBeenCalledTimes(1)
     wxMock.requestPayment.mock.calls[0][0].fail({ errMsg: 'requestPayment:fail cancel' })
+    expect(!!page.data.confirming || !!page.data.confirmingId).toBe(false) // 取消≠已付：不进「正在确认」，照常可付可取消
     await page.onPay(ev)
     expect(payMock).toHaveBeenCalledTimes(2)
   })
