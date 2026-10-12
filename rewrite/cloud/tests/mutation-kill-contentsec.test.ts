@@ -107,9 +107,9 @@ describe('msgSecCheck（UGC 文本审核·fail-closed·空文本不外呼）', (
     expect(control.openapiCalls()[0]).toEqual({ openid: 'oUser-2', content: '鸭鸭本鸭', version: 2, scene: 1 })
   })
 
-  it('大白话：errCode 非 0（大小写两种壳都认）→ 保守拒；回包 {} / errCode:0 → 放行', async () => {
+  it('大白话：errCode 87014 算违规（TEXT_RISKY），其余非 0（大小写两种壳都认）→ 保守拒；回包 {} / errCode:0 → 放行', async () => {
     control.setOpenapiResult({ errCode: 87014 })
-    expect(await msgSecCheck('文本A', 'oU')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    expect(await msgSecCheck('文本A', 'oU')).toEqual({ ok: false, error: 'TEXT_RISKY' })
     control.setOpenapiResult({ errcode: 40001 }) // 小写壳（?? 变异成 && 会把它漏成放行）
     expect(await msgSecCheck('文本B', 'oU')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
     control.setOpenapiResult({})
@@ -118,9 +118,9 @@ describe('msgSecCheck（UGC 文本审核·fail-closed·空文本不外呼）', (
     expect(await msgSecCheck('文本D', 'oU')).toEqual({ ok: true })
   })
 
-  it('大白话：errCode 0 但平台建议 risky → 拒；pass/review/没有 suggest → 放行', async () => {
+  it('大白话：errCode 0 但平台建议 risky → 按违规拒（TEXT_RISKY）；pass/review/没有 suggest → 放行', async () => {
     control.setOpenapiResult({ errCode: 0, result: { suggest: 'risky' } })
-    expect(await msgSecCheck('擦边文本', 'oU')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    expect(await msgSecCheck('擦边文本', 'oU')).toEqual({ ok: false, error: 'TEXT_RISKY' })
     control.setOpenapiResult({ errCode: 0, result: { suggest: 'pass' } })
     expect(await msgSecCheck('正常文本', 'oU')).toEqual({ ok: true })
     control.setOpenapiResult({ errCode: 0, result: { suggest: 'review' } })
@@ -150,11 +150,11 @@ describe('msgSecCheck fail-open（客服/反馈·违规仍拒、抖动放行记�
 
   it('大白话：平台判违规（87014 / suggest=risky / 抛错带 87014）一律拦，不因 fail-open 放行', async () => {
     control.setOpenapiResult({ errCode: 87014 })
-    expect(await msgSecCheck('文本A', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    expect(await msgSecCheck('文本A', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'TEXT_RISKY' })
     control.setOpenapiResult({ errCode: 0, result: { suggest: 'risky' } })
-    expect(await msgSecCheck('擦边', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    expect(await msgSecCheck('擦边', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'TEXT_RISKY' })
     control.setOpenapiFail(true, 87014)
-    expect(await msgSecCheck('抛错违规', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'SEC_CHECK_FAIL' })
+    expect(await msgSecCheck('抛错违规', 'oU', SCENE_COMMENT, 'open')).toEqual({ ok: false, error: 'TEXT_RISKY' })
   })
 
   it('大白话：接口失败（非 0 非违规码 / 抛 48001）仍放行，并打 SEC_CHECK_INFRA 日志', async () => {

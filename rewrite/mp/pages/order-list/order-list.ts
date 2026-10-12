@@ -95,6 +95,7 @@ Page({
   _as: {} as Record<string, OrderAfterSales>, // 本人售后按订单汇总（reload 并行拉·翻页复用）：卡片叠加「售后中 / 已退款」
   _asAt: 0, // 上次带回售后的时刻（utils/fresh·#442）：30s 内且没做过订单写操作，切页签/重拉不再重带同一份售后
   _seq: 0, // reload 代次·同 tab 内多触发点（onShow/取消后 reload）并发时丢弃过期回包（tab-token 只挡切 tab·挡不住同 tab 乱序）
+  _pagingSeq: -1, // 翻页在途锁：记发起时的列表代次（-1＝没在翻）
   unloaded: false, // 页面已退出标记（同 checkout/review 范式）：onPay 支付回包在途用户退出列表页，迟到回包不再对已退页 toast/reload
   _swX: 0, // 手势起点 clientX（非渲染态直挂·仿 _seq 写法）
   _swY: 0, // 手势起点 clientY
@@ -198,12 +199,17 @@ Page({
     if (s !== this.data.scrolled) this.setData({ scrolled: s }) // 只在跨过顶端时 setData
   },
   async onReachBottom() {
-    if (!this.data.hasMore || this.data.cursor == null || this.data.paging) return // 在途重复触底：丢弃
+    // 在途锁按代次：本列表翻页在途时重复触底丢弃；旧 tab 的翻页还挂着时切了 tab，新列表照常能翻（不被旧请求拦住）
+    if (!this.data.hasMore || this.data.cursor == null || this._pagingSeq === this._seq) return
     const tab = this.data.tabKey
     const seq = this._seq // 捕获当前代次（翻页不 bump）：期间若发生 reload（_seq 递增）则本次 append 作废，不并入被替换的列表
+    this._pagingSeq = seq
     this.setData({ paging: true })
     const r = await getMyOrders(this.data.cursor, 20, tab)
-    this.setData({ paging: false })
+    if (this._pagingSeq === seq) {
+      this._pagingSeq = -1 // 成败都解锁（失败要能上拉重试）
+      this.setData({ paging: false }) // 新列表已开翻时，旧回包不收它的加载行
+    }
     if (seq !== this._seq || tab !== this.data.tabKey) return // reload 已取代当前列表 / 跨 tab 过期回包：丢弃·不错配游标（失败的过期回包也在此静默丢弃，不该对已离开的 tab 弹 toast）
     if (!r.ok) {
       fxHint(this, '加载失败，上拉重试') // 翻页失败不静默（根因#14）

@@ -277,10 +277,12 @@ export const submitReview = withOpenId(
 
     // UGC 文本内容安全（fail-closed·根因#3·守卫 ugc-imgsecchecked）：评价文本 + 标签（用户可填自由文本）
     // 合并一次 msgSecCheck 外呼，违规/校不了一律拒、整条不落库——「证明安全」才放行。
+    // 违规回 TEXT_RISKY（前端让改文字），校不了回 SEC_CHECK_FAIL（前端说稍后再试）：接口抖动/能力没开时说「文字不合适」，
+    // 用户拿正常文字怎么改都过不了。
     const textUgc = [text, ...tags].filter(Boolean).join(' ')
     if (textUgc) {
       const tsec = await msgSecCheck(textUgc, OPENID)
-      if (!tsec.ok) return err(ERR.SEC_CHECK_FAIL)
+      if (!tsec.ok) return err(tsec.error === ERR.TEXT_RISKY ? ERR.TEXT_RISKY : ERR.SEC_CHECK_FAIL)
     }
     // UGC 晒图内容安全（fail-closed·同闸）：逐张校，任一张违规/校不了一律拒、整条不落库（与 submitCheckpointPhoto 同闸）。
     for (const fid of photos) {

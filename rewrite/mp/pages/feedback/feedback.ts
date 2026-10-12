@@ -24,6 +24,8 @@ Page({
     focus: '', // 正在输入的框（content/contact）：凹槽亮紫描边
   },
   backTimer: null as ReturnType<typeof setTimeout> | null,
+  // 反馈是非幂等写：超时后原样重交复用同一个键，云端撞键只留一条；改了任何一栏就是新的一次提交，清掉换新键
+  idemKey: '',
   unloaded: false, // 提交在途页面已退出标记（同 review.ts 范式）：迟到回包别再对下一页 navigateBack+toast
   onUnload() {
     this.unloaded = true
@@ -36,12 +38,15 @@ Page({
     this.setData({ ...patch, ok, dirty: !d.busy && (ok || !!d.contact.trim()) })
   },
   onCat(e: WechatMiniprogram.TouchEvent) {
+    this.idemKey = ''
     this.setData({ cat: String(e.currentTarget.dataset.key) })
   },
   onContent(e: WechatMiniprogram.TextareaInput) {
+    this.idemKey = ''
     this.sync({ content: e.detail.value })
   },
   onContact(e: WechatMiniprogram.Input) {
+    this.idemKey = ''
     this.sync({ contact: e.detail.value })
   },
   onFocus(e: WechatMiniprogram.TouchEvent) {
@@ -63,7 +68,8 @@ Page({
     tapHaptic()
     this.sync({ busy: true })
     fxLoading(this, '提交中') // 设计稿「提交中」加载框（自绘·挡连点）
-    const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim())
+    if (!this.idemKey) this.idemKey = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10)
+    const r = await submitFeedback(this.data.content.trim(), this.data.cat, this.data.contact.trim(), this.idemKey)
     fxLoaded(this) // 先收加载框再提示
     if (this.unloaded) return // 迟到回包：已退页（onUnload 已清 backTimer）——不弹 toast、不 navigateBack
     if (r.ok) {
