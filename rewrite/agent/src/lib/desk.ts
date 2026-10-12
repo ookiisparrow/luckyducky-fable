@@ -211,6 +211,27 @@ export function deskErrorText(e: unknown): string {
     AUTH_UNAVAILABLE: '登录校验服务暂时不可用，稍后再试',
     BAD_JSON_RESPONSE: '服务器回包读不懂，刷新后再试',
     NETWORK: '网络不通，检查网络后重试',
+    ESCALATED_SUPER_ONLY: '这单已升级给商户处理，只有管理员能接',
+    NO_AGENT: '没认出你的坐席身份，请重新登录',
+    BAD_ARGS: '请求内容不全（比如消息是空的），检查后重试',
+    SERVER_ERROR: '服务器处理时出错了。如果刚才是提交操作，可能已部分生效——先刷新看看再决定要不要重试',
+    TOO_MANY_ATTEMPTS: '这个网络下口令试错太多次，已被暂时锁定，过几分钟再试',
   }
   return MAP[code] || MAP[code.split(':')[0]] || '操作没成功（' + code + '）'
+}
+
+/** 企微免登失败人话（落到口令登录页时显示）：没绑号/被停用这类换口令也许能进、也许不能，要说清。 */
+export function wecomLoginText(e: unknown): string {
+  const code = String(e || '')
+  const MAP: Record<string, string> = {
+    BAD_CODE: '企微免登没通过（链接已失效，或你不是企业成员）。请从企微里重新打开，或用口令登录',
+    NO_BOUND_ACCOUNT: '你的企微账号还没绑定坐席账号。请找管理员绑定，或先用口令登录',
+    WECOM_ID_TAKEN: '你的企微账号绑在了好几个坐席账号上，认不出是哪个。请找管理员处理，或先用口令登录',
+    ACCOUNT_DISABLED: '这个坐席账号已被停用，请找管理员恢复',
+    KF_TOKEN_UNAVAILABLE: '企微免登服务暂时不可用。请稍后从企微重新打开，或先用口令登录',
+    WECOM_ID_LOOKUP_FAIL: '查企微绑定时读库失败。请稍后从企微重新打开，或先用口令登录',
+    NO_SESSION_TOKEN: '企微认出你了，但云端没发下登录凭证。请稍后从企微重新打开，或先用口令登录',
+    TOO_MANY_ATTEMPTS: '这个网络下登录试错太多次，已被暂时锁定，过几分钟再试',
+  }
+  return MAP[code] || '企微免登没成功，请用口令登录（' + code + '）'
 }

@@ -8,7 +8,10 @@
         "updateProfile",
         "deleteAccount"
       ],
-      "adminActionFiles": [],
+      "adminActionFiles": [
+        "agents",
+        "wecomLogin"
+      ],
       "mpPages": [
         "me",
         "profile-edit",
@@ -173,13 +176,11 @@
       ],
       "adminActionFiles": [
         "agentDesk",
-        "agents",
         "checkpoints",
         "conversations",
         "csat",
         "customer360",
-        "kb",
-        "wecomLogin"
+        "kb"
       ],
       "mpPages": [
         "feedback"

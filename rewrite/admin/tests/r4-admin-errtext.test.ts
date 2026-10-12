@@ -56,7 +56,14 @@ describe('进销存 BAD_LINES', () => {
 describe('Showcase.vue 保存失败说原因', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    api.listShowcase.mockReset().mockResolvedValue({ ok: true, list: [{ _id: 'p1', name: '小鸭', sort: 1, featured: true, listed: true, price: '99' }], urls: {} })
+    api.listShowcase.mockReset().mockResolvedValue({
+      ok: true,
+      list: [
+        { _id: 'p1', name: '小鸭', sort: 1, featured: true, listed: true, price: '99' },
+        { _id: 'p2', name: '小鹅', sort: 2, featured: false, listed: true, price: '99' },
+      ],
+      urls: {},
+    })
     api.saveShowcase.mockReset()
   })
   afterEach(() => {
@@ -71,16 +78,16 @@ describe('Showcase.vue 保存失败说原因', () => {
     return w
   }
 
-  it('大白话：部分写入（PARTIAL_WRITE:2），说清「2 个没存上、其余已存」', async () => {
-    api.saveShowcase.mockResolvedValue({ ok: false, status: 400, error: 'PARTIAL_WRITE:2' })
+  it('大白话：部分写入（PARTIAL_WRITE + failedIds），点名哪几个商品没存上、其余已存', async () => {
+    api.saveShowcase.mockResolvedValue({ ok: false, status: 400, error: 'PARTIAL_WRITE', failedIds: ['p1', 'p2'] })
     const w = await toggleAndSave()
     const t = w.find('.ld-status').text()
-    expect(t).toContain('2 个商品')
+    expect(t).toContain('小鸭、小鹅')
     expect(t).toContain('其余已存')
   })
 
   it('大白话：部分写入别叫人刷新（刷新会丢这次的排序）；点「重存」把整表再发一遍，成功后提示收掉', async () => {
-    api.saveShowcase.mockResolvedValueOnce({ ok: false, status: 400, error: 'PARTIAL_WRITE:1' }).mockResolvedValueOnce({ ok: true })
+    api.saveShowcase.mockResolvedValueOnce({ ok: false, status: 400, error: 'PARTIAL_WRITE', failedIds: ['p1'] }).mockResolvedValueOnce({ ok: true })
     const w = await toggleAndSave()
     expect(w.find('.ld-status').text()).toContain('别刷新')
     await w.findAll('button').find((b) => b.text() === '重存')!.trigger('click')
@@ -99,7 +106,7 @@ describe('Showcase.vue 保存失败说原因', () => {
   })
 
   it('大白话：再存成功，失败原因收掉', async () => {
-    api.saveShowcase.mockResolvedValueOnce({ ok: false, status: 400, error: 'PARTIAL_WRITE:1' }).mockResolvedValueOnce({ ok: true })
+    api.saveShowcase.mockResolvedValueOnce({ ok: false, status: 400, error: 'PARTIAL_WRITE', failedIds: ['p1'] }).mockResolvedValueOnce({ ok: true })
     const w = await toggleAndSave()
     expect(w.find('.ld-status').exists()).toBe(true)
     await w.find('.panel .switch').trigger('click')

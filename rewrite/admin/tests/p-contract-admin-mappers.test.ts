@@ -156,7 +156,7 @@ describe('看板映射（getDashboard / 计数 / 库存 真实形状）', () => 
       drafts: { ok: true, rows: [] },
       low: 10,
     })
-    expect(t).toEqual({ ship: 0, refund: 1, lowStock: 0, prep: 0, partial: false })
+    expect(t).toEqual({ ship: 0, shipApprox: false, refund: 1, lowStock: 0, prep: 0, partial: false })
   })
 
   it('页面直读的原始字段在契约里（不经映射）：计数的 partial、列表的 nextCursor/hasMore', () => {

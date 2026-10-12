@@ -256,7 +256,7 @@ describe('操作审计（黄金 kit-security §H）', () => {
     expect(raw).not.toContain('secret-hook') // 凭证剥除
     expect(raw).not.toContain('pwd-123')
     expect(log.summary.note).toBe('改通知')
-    await expect(recordAudit({ action: 'x', ok: false })).resolves.toBeUndefined() // fail-soft
+    await expect(recordAudit({ action: 'x', ok: false })).resolves.toBe(true) // 写成回 true；写失败回 false 见 r4-appsec-login-audit
   })
 
   it('大白话：经分发处调用动状态 action 自动留痕（含失败留痕）', async () => {

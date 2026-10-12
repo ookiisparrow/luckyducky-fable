@@ -12,7 +12,7 @@ export const publishProduct = (id: string, opts?: { featured?: boolean }) =>
 export const unpublishProduct = (id: string) => typedPost<object>('unpublishProduct', { id })
 export const republishProduct = (id: string) => typedPost<object>('republishProduct', { id })
 export const listShowcase = () => typedPost<AdminShowcase>('listShowcase')
-export const saveShowcase = (items: Array<{ id: string; sort: number; featured: boolean }>) => typedPost<object>('saveShowcase', { items })
+export const saveShowcase = (items: Array<{ id: string; sort: number; featured: boolean }>) => typedPost<object, { failedIds: string[] }>('saveShowcase', { items })
 
 // 二维码卡片设计器（getCard/saveCard + cards 集合）
 export const getCard = (productId: string) => typedPost<AdminCard>('getCard', { productId })

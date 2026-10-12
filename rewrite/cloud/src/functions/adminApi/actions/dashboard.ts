@@ -147,13 +147,13 @@ export async function getDashboard(ctx: Ctx) {
       learners: learnersN,
     },
     // 精确：计数/GMV(aggregate)/异常/最近单；近似：热度/卡点（progress 超 SAMPLE 时标 true，前端显「近 N 估算」），
-    // 待发货扫描触顶时才带 toShip:true（没触顶不带这个键，响应形状不变）
+    // 待发货扫描触顶时 toShip:true（数是下限，前端显「N+」）
     approx: {
       gmv: false,
       hot: learnersN > SAMPLE,
       stuck: learnersN > SAMPLE,
       sampleSize: SAMPLE,
-      ...(toShip.capped ? { toShip: true } : {}),
+      toShip: toShip.capped,
     },
     // 转化速览（指示性量级·非同批 cohort 追踪）：下单→支付→激活。访问/加购未采（前端无 page_view/add_cart
     // 埋点）、完课需逐课判定——均后续。各环节走 .count() 精确不封顶。

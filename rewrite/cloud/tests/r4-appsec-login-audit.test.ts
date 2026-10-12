@@ -5,6 +5,7 @@ import { control } from 'wx-server-sdk'
 import { COLLECTIONS } from '@ldrw/shared'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
+import { recordAudit } from '../src/kit'
 
 const SUPER = 'super-secret-key'
 const post = (action: string, key: string, data: Record<string, unknown> = {}, ip = '1.2.3.4') =>
@@ -98,5 +99,20 @@ describe('企微免登成功留痕', () => {
     }
     expect(loginRows()).toHaveLength(1)
     expect(loginRows()[0]).toMatchObject({ operator: '小王', ip: '9.8.7.*', summary: { via: 'wecom' }, ok: true })
+  })
+})
+
+describe('recordAudit 回报写没写成', () => {
+  it('写成回 true；库写失败回 false、不抛——调用方据此决定要不要告警', async () => {
+    expect(await recordAudit({ action: 'saveSettings', operator: 'admin', ok: true })).toBe(true)
+    control.setBeforeAdd(({ coll }: { coll: string }) => {
+      if (coll === COLLECTIONS.auditLog) throw new Error('DB_DOWN')
+    })
+    expect(await recordAudit({ action: 'saveSettings', operator: 'admin', ok: true })).toBe(false)
+  })
+
+  it('登录审计也走 recordAudit：落库行与操作审计同一形状（含 error 字段）', async () => {
+    await post('login', SUPER)
+    expect(loginRows()[0]).toHaveProperty('error', '')
   })
 })

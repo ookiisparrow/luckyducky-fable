@@ -1,5 +1,5 @@
 // 看板「待发货」扫描有界：全额退款的单永远停在 paid，逐页翻全部 paid 单会随历史线性变长、撞 30s 超时。
-// 锁法：paid 单远超扫描上限时，读订单的次数有上限、标 approx.toShip；没触顶时不带这个标。
+// 锁法：paid 单远超扫描上限时，读订单的次数有上限、标 approx.toShip:true；没触顶时 approx.toShip:false。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as adminApi } from '../src/functions/adminApi/index'
@@ -37,10 +37,10 @@ describe('getDashboard.toShip：扫描有界、触顶如实标', () => {
     expect(paidReads).toBeLessThanOrEqual(20) // 10 页 × 每页至多两次查询
   })
 
-  it('大白话：没触顶——照数全，不带「约」标', async () => {
+  it('大白话：没触顶——照数全，「约」标是 false', async () => {
     control.seed('orders', Array.from({ length: 450 }, (_, i) => ord('o' + i, 1000 + i)))
     const d = await post('getDashboard')
     expect(d.toShip).toBe(450)
-    expect(d.approx.toShip).toBeUndefined()
+    expect(d.approx.toShip).toBe(false)
   })
 })

@@ -45,10 +45,11 @@ const flushSave = serialSave(async () => {
   const r = await saveShowcase(rows.value.map((x, i) => ({ id: x.id, sort: i + 1, featured: x.featured })))
   // 公共表的码（超时等）整句自成一句、可能已生效：徽标再亮「保存失败」就和下面那行自相矛盾
   saveState.value = r.ok ? 'saved' : transportErrorText(r.error) ? '' : 'error'
-  // 云端逐条写、失败只计数不回滚：其余已落库，只说「全失败」会让人以为整表没动
-  const failed = /^PARTIAL_WRITE:(\d+)$/.exec(String(r.error || ''))?.[1]
-  // 每次保存都发整表，重发即收敛；刷新反而会拿云端现状盖掉这次的排序。云端只回个数，点不出是哪几个
-  saveErr.value = r.ok ? '' : failed ? `有 ${failed} 个商品的排序或首页开关没存上，其余已存——别刷新（会丢掉这次的排序），点「重存」把整表再写一遍即可` : writeFailText('保存失败', r.error)
+  // 云端逐条写、失败只记下不回滚：其余已落库，只说「全失败」会让人以为整表没动
+  const failedIds = !r.ok && r.error === 'PARTIAL_WRITE' && Array.isArray(r.failedIds) ? r.failedIds.map(String) : []
+  const names = failedIds.map((id) => rows.value.find((x) => x.id === id)?.name || id).join('、')
+  // 每次保存都发整表，重发即收敛；刷新反而会拿云端现状盖掉这次的排序
+  saveErr.value = r.ok ? '' : failedIds.length ? `这几个商品的排序或首页开关没存上：${names}，其余已存——别刷新（会丢掉这次的排序），点「重存」把整表再写一遍即可` : writeFailText('保存失败', r.error)
 }, 'showcase')
 function resave() {
   saveState.value = 'saving'

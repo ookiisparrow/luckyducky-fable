@@ -197,10 +197,11 @@ const ACTIONS: Record<string, (ctx: Ctx) => Promise<any>> = Object.assign(Object
 // 顶层兜底按 action 归因：action 名不带文件名，故沿 ACTIONS 的真实 handler 引用反查所属 action 文件，
 // 再按模块归因。下表是 modules.json adminActionFiles 的镜像（云函数进不了 JSON）；未匹配的动态 action 回 unknown。
 const ADMIN_ACTION_MODULES: Record<string, Record<string, unknown>[]> = {
+  identity: [agents, wecomLogin],
   shop: [products, content, cards],
   orders: [ordersA, refunds, reconciliation, wxbill],
   learning: [courses, batches],
-  cs: [agentDesk, agents, checkpoints, conversations, csat, customer360, kb, wecomLogin],
+  cs: [agentDesk, checkpoints, conversations, csat, customer360, kb],
   scm: [scmAssembly, scmBom, scmMaterials, scmOutwork, scmOverview, scmPlanner, scmPurchase, inventoryA],
   ops: [ops, configChecklist, secureConfig, dashboard],
   reviews: [reviews],
@@ -322,9 +323,7 @@ function auditOk(res: any): boolean {
 }
 
 // 登录成功留痕（#400-8）：shouldAudit 排除了 login，分发处的操作审计记不到登录，事后查不到谁、何时、从哪登的。
-// 暂不走 recordAudit：它失败静默吞、不回报成败，这条丢了没人知道。这里写与 recordAudit 同字段的一行
-// （listAudit 照读；只少 error——审计页只在 ok:false 时读它），失败经 notifyAlert 进 anomalies 并推企微，但不挡登录。
-// ponytail: auditLog 因此有两个写点；recordAudit 改成回报成败后应并回它（kit/audit.ts 不归本单元，已记 Issue）。
+// 写失败经 notifyAlert 进 anomalies 并推企微（这条丢了没人知道），但不挡登录。
 // IP 只留 IPv4 前三段 / IPv6 前三组（:: 压缩段之后一律不留）：够看出大致来源，不存完整地址；
 // x-forwarded-for 可被随便填，认不出的形态存空串，绝不原样落库。
 function maskedIp(tkey: string): string {
@@ -338,10 +337,8 @@ function maskedIp(tkey: string): string {
 }
 async function auditLogin(operator: unknown, tkey: string, via: 'pwd' | 'wecom'): Promise<void> {
   const ip = maskedIp(tkey)
-  await db
-    .collection(COLLECTIONS.auditLog)
-    .add({ data: { action: 'login', operator: String(operator || 'admin').slice(0, 60), ip, summary: { via }, ok: true, ts: Date.now() } })
-    .catch((e: unknown) => notifyAlert('security', 'adminLogin', 'LOGIN_AUDIT_FAIL', { via, ip, err: String(e) }))
+  const logged = await recordAudit({ action: 'login', operator: String(operator || 'admin'), ip, data: { via }, ok: true })
+  if (!logged) await notifyAlert('security', 'adminLogin', 'LOGIN_AUDIT_FAIL', { via, ip })
 }
 
 // 口令登录：失败计爆破，成功只清独立 IP 的计数并签发会话令牌。

@@ -90,6 +90,17 @@ describe('Refunds.vue 写失败文案', () => {
     expect(w.find('.decide-err').text()).toBe('退款没成功：退款没发出去，请稍后重试')
   })
 
+  // 退款前读售后单/支付配置失败也回 DOC_READ_FAIL：这时钱没动，要冠「退款没成功」，不能只说「读不出来」让人以为可能退了
+  it('大白话：同意退款时读库失败（DOC_READ_FAIL），说「退款没成功：云端数据暂时读不出来」', async () => {
+    api.approveRefund.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
+    const w = await mountRefunds()
+    await openReview(w)
+    for (const c of w.findAll('.ck input[type=checkbox]')) await c.setValue(true)
+    await w.findAll('button').find((b) => b.text().includes('同意退款'))!.trigger('click')
+    await flushPromises()
+    expect(w.find('.decide-err').text()).toBe('退款没成功：云端数据暂时读不出来。请稍后重试。')
+  })
+
   it('大白话：越规退款提交超时，不冠「越规退款没成功」', async () => {
     api.listOrders.mockResolvedValue(sample('listOrders'))
     api.overrideRefund.mockResolvedValue(TIMEOUT)

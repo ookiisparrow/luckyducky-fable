@@ -352,7 +352,8 @@ describe('橱窗排序保存（saveShowcase·根因#14 部分失败不静默）'
     const r = await post('saveShowcase', { items: [{ id: 'p1', sort: 3, featured: true }, { id: 'p2', sort: 4, featured: false }] })
     control.setBeforeUpdate(null as never)
     expect(r.ok).toBe(false) // 原代码 .catch(()=>{}) 吞错会回 ok:true——前端永远「已保存」的假象
-    expect(String(r.error)).toContain('PARTIAL_WRITE')
+    expect(r.error).toBe('PARTIAL_WRITE')
+    expect(r.failedIds).toEqual(['p2']) // 点名哪几个没存上，后台才能告诉人是谁
     // 真留痕（P2·bug sweep Round2 复审补漏）：不能只打裸 alert()（只一行 console.error·admin 查不到）——
     // 须真落 anomalies 账本（同 app-learning.test.ts 的 ACT_PERSIST_UNVERIFIED 断言范式）。
     const anomalies = control.dump('anomalies')

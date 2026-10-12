@@ -183,6 +183,10 @@ export function mapStock(list: unknown, truncated: unknown): { rows: StockRow[];
 export const UNKNOWN_COURSE_HINT =
   '还没有发布课程，不能生成二维码。请先到第 4 步保存并点「发布课程」，再回来生成。'
 
+// 各 action 读库失败统一回的码。不进下面的 TRANSPORT_ERR：writeFailText 对那张表的码不冠「X失败」，而这句没说清写操作没做成
+const READ_ERR: Record<string, string> = { DOC_READ_FAIL: '云端数据暂时读不出来。请稍后重试。' }
+export const readErrorText = (code: unknown): string | undefined => READ_ERR[String(code || '')]
+
 // 按冒号前的主码查：UNKNOWN_COURSE 云端只以 UNKNOWN_COURSE:<课程号> 发出
 const LAUNCH_ERR: Partial<Record<ErrCode | 'UNKNOWN_COURSE', string>> = {
   UNKNOWN_COURSE: UNKNOWN_COURSE_HINT,
@@ -200,7 +204,7 @@ const LAUNCH_ERR: Partial<Record<ErrCode | 'UNKNOWN_COURSE', string>> = {
   BAD_IMAGE: '图片太大或格式不对。请换一张再传。',
   BAD_PRODUCT: '商品信息不完整，保存没成功。请检查名称、价格和规格。',
   NO_ID: '缺少商品编号。请从商品列表重新进入。',
-  DOC_READ_FAIL: '云端数据暂时读不出来。请稍后重试。',
+  DOC_READ_FAIL: READ_ERR.DOC_READ_FAIL,
   REMOVE_FAIL: '删除没成功。请刷新后再删一次。',
   GC_DELETE_FAIL: '商品已删掉，只是有几张图片没清理干净（已留记录给技术）。请刷新列表。',
   // 外包账号页（Agents）：LOOKUP_FAIL 在写后复核读失败时也回，云端已回滚，所以能说「没建成/没生效」
@@ -211,6 +215,7 @@ const LAUNCH_ERR: Partial<Record<ErrCode | 'UNKNOWN_COURSE', string>> = {
   WECOM_ID_TAKEN: '这个企微 userid 已绑在别的账号。',
   WECOM_ID_LOOKUP_FAIL: '查企微 userid 有没有被别的账号占用时读库失败，这次没生效。请稍后重试。',
   AGENT_NOT_FOUND: '找不到这个坐席账号（可能已被删）。请刷新后再试。',
+  BAD_ID: '缺账号编号，或这是超管账号（不能在这里停用）。请刷新后重试。',
 }
 
 // 任何 action 都可能回的码（client.ts 传输层与 adminApi/index.ts 网关产出）：各业务映射自己的表查不到时先问这里，文案单源。
