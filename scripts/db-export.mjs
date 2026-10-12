@@ -6,9 +6,10 @@
 //
 //   npm run db:export                              # 导出 DEFAULT_COLLECTIONS
 //   npm run db:export -- --collections=orders,users # 只导出指定集合
-//   npm run db:export -- --include-secrets          # 连 secureConfig 一起导出（慎用）
+//   SECRETS_EXPORT_ALLOWED=1 npm run db:export -- --collections=secureConfig --include-secrets
+//                                                   # secureConfig 只落字段名、不落值
 //
-// 退出码：0=全部集合成功；1=至少一个集合失败/超时；2=拿不到凭证（未跑，见错误提示如何配）。
+// 退出码：0=全部集合成功；1=至少一个集合失败/超时，或 --include-secrets 没显式确认；2=拿不到凭证（未跑，见错误提示如何配）。
 //
 // 【已知偏离规格】原规格设想导出完成后调 manager.storage.deleteFile([ObjectKey]) 清理导出用
 // 的 COS 临时对象——经真实类型定义核实，storage.deleteFile 内部走 storage.batchDeleteFile，
@@ -19,7 +20,8 @@
 // （只影响 Tencent 内部临时存储，非我方业务集合/文件），本脚本只关心下载到本地的副本。
 
 import { mkdirSync, createWriteStream, writeFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
 import { getManager, CredentialError } from './lib/cloud-manager.mjs'
@@ -33,6 +35,41 @@ function parseArgv(argv) {
     else if (arg.startsWith('--collections=')) out.collections = arg.slice('--collections='.length)
   }
   return out
+}
+
+// 凭证集合只留每条的 _id 与字段名：本地明文副本就是新的泄露面，恢复时凭证回各平台重取
+export function secretFieldNames(text) {
+  let docs
+  try {
+    const t = text.trim()
+    docs = t.startsWith('[')
+      ? JSON.parse(t)
+      : t
+          .split('\n')
+          .filter((l) => l.trim())
+          .map((l) => JSON.parse(l))
+  } catch {
+    // JSON.parse 的报错会带原文片段，不能透出
+    throw new Error('导出文件解析失败，未落盘')
+  }
+  return docs.map((d) => ({ _id: d?._id, fields: Object.keys(d ?? {}).filter((k) => k !== '_id').sort() }))
+}
+
+const isSecretCollection = (name) => resolveCollections({ collections: name }).droppedSecrets
+
+// 一个集合的下载结果落盘，返回本地文件路径。凭证集合按名字判、不看 --include-secrets，
+// 哪条路进来都只写字段名；其余集合原样流式写
+export async function saveExport(name, res, outDir) {
+  if (isSecretCollection(name)) {
+    const docs = secretFieldNames(await res.text())
+    const file = join(outDir, `${name}.fields.json`)
+    writeFileSync(file, JSON.stringify(docs, null, 2))
+    console.log(`[db-export] ${name} 只写字段名：${docs.map((d) => `${d._id}(${d.fields.join(',')})`).join(' ')}`)
+    return file
+  }
+  const file = join(outDir, `${name}.json`)
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(file))
+  return file
 }
 
 const POLL_INTERVAL_MS = 2000
@@ -49,10 +86,17 @@ async function pollMigrateStatus(manager, jobId) {
 
 async function main() {
   const { collections, includeSecrets } = parseArgv(process.argv.slice(2))
+  if (includeSecrets && process.env.SECRETS_EXPORT_ALLOWED !== '1') {
+    console.error(
+      '[db-export] --include-secrets 默认拒绝：secureConfig 是明文凭证。确需导出它的字段清单（只写字段名、不写值），加 SECRETS_EXPORT_ALLOWED=1 重跑'
+    )
+    process.exit(1)
+    return
+  }
   const { list, droppedSecrets } = resolveCollections({ collections, includeSecrets })
 
   if (droppedSecrets) {
-    console.warn('[db-export] 已从导出清单剔除 secureConfig（含明文凭证）——如确需导出，加 --include-secrets')
+    console.warn('[db-export] 已从导出清单剔除 secureConfig（含明文凭证）——确需它的字段清单，加 --include-secrets 并设 SECRETS_EXPORT_ALLOWED=1')
   }
   if (list.length === 0) {
     console.error('[db-export] 集合清单为空，无事可做')
@@ -93,8 +137,7 @@ async function main() {
       if (info.Status === 'success' && info.FileUrl) {
         const res = await fetch(info.FileUrl)
         if (!res.ok || !res.body) throw new Error(`下载失败 HTTP ${res.status}`)
-        const localFile = join(outDir, `${name}.json`)
-        await pipeline(Readable.fromWeb(res.body), createWriteStream(localFile))
+        const localFile = await saveExport(name, res, outDir)
         entry.status = 'success'
         entry.recordCount = info.RecordSuccess
         entry.bytes = statSync(localFile).size
@@ -141,7 +184,9 @@ async function main() {
   process.exit(hadFailure ? 1 : 0)
 }
 
-main().catch((e) => {
-  console.error('[db-export] 未预期错误：', e)
-  process.exit(1)
-})
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  main().catch((e) => {
+    console.error('[db-export] 未预期错误：', e)
+    process.exit(1)
+  })
+}

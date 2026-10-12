@@ -43,6 +43,9 @@
       "mcp__cloudbase__queryAgents"
     ],
     "deny": [
+      "Bash(tcb fn detail:*)",
+      "Bash(tcb secrets get:*)",
+      "Bash(tccli scf GetFunction:*)",
       "mcp__wechat-devtools__upload",
       "mcp__wechat-devtools__cloud_fn_deploy",
       "mcp__wechat-devtools__cloud_fn_inc_deploy",

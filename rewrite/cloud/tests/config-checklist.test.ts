@@ -142,11 +142,11 @@ describe('探测规则各态：ok / missing / check（超管可读·数据契约
     }
   })
 
-  it('大白话：WXPAY_MCH_* 未入库但 adminApi 自身环境变量已配 → 不误报 missing（规则②兜底）', async () => {
+  it('大白话：WXPAY_MCH_* 未入库但 adminApi 自身环境变量已配 → 不误报 missing（规则②兜底；私钥在环境变量要迁走，标 check）', async () => {
     process.env.WXPAY_MCH_PRIVATE_KEY = 'legacy-env-key'
     process.env.WXPAY_MCH_SERIAL = 'legacy-serial'
     const r = await post('getConfigChecklist', SUPER, {})
-    expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_PRIVATE_KEY').status).toBe('ok')
+    expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_PRIVATE_KEY').status).toBe('check')
     expect(itemOf(r.groups, WXPAY_GROUP, 'WXPAY_MCH_SERIAL').status).toBe('ok')
   })
 
