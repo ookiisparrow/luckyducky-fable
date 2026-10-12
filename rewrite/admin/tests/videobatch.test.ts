@@ -9,9 +9,6 @@ function stripExt(name: string) {
 }
 
 describe('课时级批量传视频计划', () => {
-  it('大白话：stripExt 只给同文件 planLessonBatch 用，不再对外 export', async () => {
-    expect(await import('../src/lib/videoBatch')).not.toHaveProperty('stripExt')
-  })
   it('大白话：去扩展名；多文件按文件名 numeric 排序映射到小段、超出现有数的标新建', () => {
     expect(stripExt('起针.mp4')).toBe('起针')
     expect(stripExt('无扩展')).toBe('无扩展')

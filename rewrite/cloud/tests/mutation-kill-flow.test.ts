@@ -58,9 +58,12 @@ describe('callFlow 调用形状', () => {
     control.setCallFunctionResult({ result: { data: { ok: 1 } } })
     expect(await callFlow('f0', { a: 1 })).toEqual({ ok: 1 })
     expect(control.callFunctionCalls()).toEqual([{ name: 'cloudbase_module', data: { name: 'f0', data: { a: 1 } } }])
+    expect(lines).toEqual([]) // 成功路径零告警噪声：有 data 正常返回、不落 [LD_ALERT]
   })
 })
 
+// 失败必留痕（调试案 A 逼出·守卫 rw-flow-observable）：「调用异常」与「有响应无 data」两分支都要在日志里看到
+// flowId + 平台报错摘要（[LD_ALERT] 行），否则退款触发失败只剩一句 REFUND_TRIGGER_FAIL、排障只能靠猜（2026-07-04 真单联测的教训）。
 describe('callFlow 告警行与 fail-soft 边角', () => {
   it('调用抛错：告警行的级别、函数、错误码、上下文逐字固定，错误摘要截到 300 字', async () => {
     control.setCallFunctionImpl(async () => {
