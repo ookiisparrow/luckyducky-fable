@@ -7,6 +7,7 @@ import { CHECKOUT_ADDONS, COUPON, SHIP } from '../src/checkout'
 import { anomalyFingerprint } from '../src/observability'
 import { isVodFileId } from '../src/learning'
 import { MAX_PRICE_YUAN, PAY_WINDOW_MS, isValidPriceYuan } from '../src/limits'
+import { formatRefreshDone } from '../src/csTrialPack'
 
 describe('statesOf（状态机声明的运行时派生）', () => {
   it('大白话：initial/terminal/转移表里出现过的状态全收齐、去重、按字典序排——少收/不排都红', () => {
@@ -67,5 +68,13 @@ describe('limits（交易输入边界·上架与下单共用单源）', () => {
     expect(isValidPriceYuan(Infinity)).toBe(false)
     expect(isValidPriceYuan('abc')).toBe(false)
     expect(isValidPriceYuan('99.9')).toBe(true) // 合法元价字符串收编（Number 化）
+  })
+})
+
+// 云端测试拿 formatRefreshDone(1) 当期望值去比云端回的话，函数坏了两边一起坏、照样绿，所以单独锁它的行为
+describe('formatRefreshDone（测版刷新回执）', () => {
+  it('大白话：把第几次进线填进话里，{epoch} 占位符不能原样发给客户', () => {
+    expect(formatRefreshDone(37)).toContain('37')
+    expect(formatRefreshDone(37)).not.toContain('{epoch}')
   })
 })

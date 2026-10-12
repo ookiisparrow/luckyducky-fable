@@ -9,6 +9,7 @@ import { listRefunds, refundCounts, approveRefund, rejectRefund, getRefundDetail
 import UiButton from '../components/ui/Button.vue'
 import { mapRefundRows, refundVerdict, mapOverrideOrder, canOverrideRefund, orderErrorText, type RefundRowVM, type RefundVerdictVM, type OverrideOrderVM } from '../lib/mapMoney'
 import { useLatest, usePager, appendNew } from '../lib/latest'
+import { writeFailText } from '../lib/status'
 import PageHeader from '../components/ui/PageHeader.vue'
 import Card from '../components/ui/Card.vue'
 import Badge from '../components/ui/Badge.vue'
@@ -175,7 +176,7 @@ async function doApprove() {
   } else if (stillHere) {
     // 失败：不关抽屉、不刷新——真实原因留在眼前（根因#14 admin 侧·别被 reload 的"加载中…"盖掉）；
     // 若抽屉已切别单则不挂错误（根因#8）
-    decideErr.value = '退款没成功：' + orderErrorText(r.error)
+    decideErr.value = writeFailText('退款没成功', r.error, orderErrorText)
   }
 }
 
@@ -198,7 +199,7 @@ async function doReject() {
     void reload()
   } else if (stillHere) {
     // 失败：留抽屉 + 红条（同 doApprove·不被刷新吞）；若抽屉已切别单则不挂错误
-    decideErr.value = '拒绝没成功：' + orderErrorText(r.error)
+    decideErr.value = writeFailText('拒绝没成功', r.error, orderErrorText)
   }
 }
 
@@ -220,7 +221,9 @@ const overrideReady = computed(() =>
   canOverrideRefund({ orderFound: !!overrideOrder.value, lineId: overrideLineId.value, reason: overrideReason.value, ack: overrideAck.value, busy: overrideBusy.value })
 )
 
+const findGen = useLatest() // 快速换单号连查：先发的旧回包后到会把卡片换回旧单
 function openOverride() {
+  findGen.begin() // 关掉重开也作废上一轮在途的查找，别让旧单落进新弹层
   showOverride.value = true
   overrideOrderId.value = ''
   overrideOrder.value = null
@@ -234,6 +237,8 @@ function closeOverride() {
   showOverride.value = false
 }
 async function findOverrideOrder() {
+  if (overrideBusy.value) return // 提交在途换单：回包会挂到新单卡片下，看着像新单的结果
+  const my = findGen.begin() // 空单号早返回也要取号：作废还在途的上一次查找
   const id = overrideOrderId.value.trim()
   if (!id) {
     overrideOrder.value = null
@@ -246,6 +251,7 @@ async function findOverrideOrder() {
   overrideResultMsg.value = ''
   overrideFindMsg.value = '查找中…'
   const r = await listOrders(undefined, undefined, 1, id)
+  if (findGen.isStale(my)) return
   if (!r.ok) {
     overrideFindMsg.value = '查找失败：' + orderErrorText(r.error)
     return
@@ -260,20 +266,23 @@ async function findOverrideOrder() {
 }
 async function submitOverride() {
   if (!overrideReady.value || !overrideOrder.value) return
+  const target = overrideOrder.value.id // 回包按发起时的单说话：在途期间弹层可能已关掉重开
   overrideBusy.value = true
   overrideResultMsg.value = ''
-  const r = await overrideRefund(overrideOrder.value.id, overrideLineId.value, overrideReason.value.trim())
+  const r = await overrideRefund(target, overrideLineId.value, overrideReason.value.trim())
   overrideBusy.value = false
   if (r.ok) {
-    overrideResultMsg.value = `✓ 已发起越规退款（售后单 ${String(r.id || '')}），等微信回调确认到账`
+    overrideResultMsg.value = `✓ 已对订单 ${target} 发起越规退款（售后单 ${String(r.id || '')}），等微信回调确认到账`
     void reload() // 列表/计数刷新——本单可能已出现在「退款处理中」栏
     // 提交成功后复位选择态（防误再次对同一行重复提交），保留结果横幅可见
-    overrideOrder.value = null
-    overrideLineId.value = ''
-    overrideReason.value = ''
-    overrideAck.value = false
+    if (overrideOrder.value?.id === target) {
+      overrideOrder.value = null
+      overrideLineId.value = ''
+      overrideReason.value = ''
+      overrideAck.value = false
+    }
   } else {
-    overrideResultMsg.value = '越规退款没成功：' + orderErrorText(r.error)
+    overrideResultMsg.value = writeFailText(`订单 ${target} 越规退款没成功`, r.error, orderErrorText)
   }
 }
 
@@ -469,7 +478,7 @@ onMounted(() => {
 
         <div class="ov-find">
           <input v-model="overrideOrderId" placeholder="输入订单号" @keyup.enter="findOverrideOrder" />
-          <UiButton size="sm" :disabled="!overrideOrderId.trim()" @click="findOverrideOrder">查找</UiButton>
+          <UiButton size="sm" :disabled="overrideBusy || !overrideOrderId.trim()" @click="findOverrideOrder">查找</UiButton>
         </div>
         <p v-if="overrideFindMsg" class="ov-msg" :class="{ err: overrideFindMsg !== '查找中…' }">{{ overrideFindMsg }}</p>
 
@@ -500,7 +509,7 @@ onMounted(() => {
           </div>
         </template>
 
-        <p v-if="overrideResultMsg" class="ov-msg" :class="{ err: overrideResultMsg.includes('没成功'), ok: overrideResultMsg.startsWith('✓') }">{{ overrideResultMsg }}</p>
+        <p v-if="overrideResultMsg" class="ov-msg" :class="overrideResultMsg.startsWith('✓') ? 'ok' : 'err'">{{ overrideResultMsg }}</p>
       </div>
     </div>
   </div>

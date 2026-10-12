@@ -6,7 +6,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { listAgents, createAgent, disableAgent, setAgentWecomUserId } from '../api/system'
 import { getCsatReport } from '../api/cs'
-import { mapAgents, type AgentRow } from '../lib/mapSystem'
+import { mapAgents, launchErrorText, type AgentRow } from '../lib/mapSystem'
 import { mapCsat } from '../lib/mapCs'
 import { useLoadStatus, confirmed, failText, writeFailText } from '../lib/status'
 import UiButton from '../components/ui/Button.vue'
@@ -39,7 +39,7 @@ async function reload() {
   // 报表失败 ≠ 还没人评：空均分「—」会把加载失败读成零评价（病根#14·同 Conversations loadReport）
   csatAvg.value = !csatVm ? '加载失败' : csatVm.total ? csatVm.avg : null
   csatApproxNote.value = csatVm ? csatVm.approxNote : ''
-  load(r.ok && !!csatVm, !r.ok ? failText('加载失败', r.error) : '满意度报表加载失败')
+  load(r.ok && !!csatVm, !r.ok ? failText('加载失败', r.error, launchErrorText) : '满意度报表加载失败')
 }
 
 async function doCreate() {
@@ -57,8 +57,7 @@ async function doCreate() {
     note(true, '', '')
     void reload()
   } else {
-    const e = String(r.error || '')
-    note(false, '', e === 'KEY_TAKEN' ? '这个口令已被占用（撞口令会串号）' : e === 'WECOM_ID_TAKEN' ? '这个企微 userid 已绑在别的账号' : writeFailText('建号失败', e))
+    note(false, '', writeFailText('建号失败', r.error, launchErrorText))
   }
 }
 
@@ -68,7 +67,7 @@ async function toggle(row: AgentRow) {
   confirmId.value = ''
   const r = await disableAgent(row.id, !row.disabled)
   if (!r.ok) {
-    note(false, '', writeFailText('操作失败', r.error))
+    note(false, '', writeFailText(row.disabled ? '恢复失败' : '停用失败', r.error, launchErrorText))
     return
   }
   note(true, row.disabled ? `已恢复 ${row.name}` : `已停用 ${row.name}（对方即刻登不了）`, '')
@@ -87,7 +86,7 @@ async function bindWecom(row: AgentRow) {
   editingId.value = ''
   const r = await setAgentWecomUserId(row.id, editingVal.value.trim())
   if (!r.ok) {
-    note(false, '', String(r.error) === 'WECOM_ID_TAKEN' ? '这个 userid 已绑在别的账号' : writeFailText('绑定失败', r.error))
+    note(false, '', writeFailText('绑定失败', r.error, launchErrorText))
     return
   }
   note(true, '', '')

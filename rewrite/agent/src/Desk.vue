@@ -91,6 +91,9 @@ let blurMsgs: Msg[] | null = null // 窗口失焦时刻当前会话消息快照�
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let listTimer: ReturnType<typeof setInterval> | null = null
+// 每次 open() 加一：回包按「哪一次打开」认领。只比会话 id 挡不住重开同一会话（A→A、A→B→A）——
+// 上一次打开发出的旧回包会被当成新一轮的，重开首拉又恰好失败时，窗口只剩半截、游标跳过前面的历史再也补不回
+let openGen = 0
 
 async function refreshLists() {
   const [q, m] = await Promise.all([post('listQueue'), post('listMyActive')])
@@ -105,8 +108,10 @@ async function refreshLists() {
 async function pollThread(loud = false) {
   if (!currentId.value) return
   const sid = currentId.value // 会话粒度快照（防切会话后旧轮询回包串号——await 期间用户可能已切会话）
+  const gen = openGen
   const r = await post('getThread', { sessionId: sid, cursor: cursor.value || undefined })
-  if (sid !== currentId.value) return // 期间已切别的会话·丢弃过期回包（不写进新会话的 msgs/cursor）
+  // 期间重开过（含切会话）或会话已被 act 清掉·丢弃过期回包（不写进当前窗口的 msgs/cursor）
+  if (gen !== openGen || sid !== currentId.value) return
   if (!r.ok) {
     if (loud) threadNote.value = deskErrorText(r.error) // 打开会话首拉失败出声；后台 setInterval 默认静默重试
     return
@@ -214,6 +219,7 @@ async function claim(sessionId: string) {
 async function open(sessionId: string) {
   // 切会话前清未发草稿（草稿留在输入框会随下一次 Ctrl+Enter 以新会话 sessionId 误发）
   if (sessionId !== currentId.value) draft.value = ''
+  openGen++
   currentId.value = sessionId
   msgs.value = []
   cursor.value = 0
@@ -280,19 +286,43 @@ function doLogout() {
   emit('logout')
 }
 
+// 包装只建一次：切回可见的补拉也走同一把在途闸，隐藏时发出的慢请求没回来就不重复发
+const tickLists = skipWhileBusy(refreshLists)
+const tickThread = skipWhileBusy(() => pollThread(), () => currentId.value)
+
+// 隐藏只降频不全停（#400-31）：坐席切去别的标签页时，标题角标+提示音（recomputeAlert）仍靠轮询发现新顾客/新消息，
+// 全停就等于人不回来顾客一直没人理。30s 是「发现延迟」与「后台计费」的折中旋钮。
+// 注意 Chrome 隐藏满 5 分钟后本就把链式定时器压到每分钟一次，所以降频省下的主要是隐藏后头 5 分钟；
+// 稳态计费大头是可见挂着的 3s/10s，不在这里。
+function schedule() {
+  if (pollTimer) clearInterval(pollTimer)
+  if (listTimer) clearInterval(listTimer)
+  const hidden = document.visibilityState === 'hidden'
+  listTimer = setInterval(tickLists, hidden ? 30_000 : 10_000)
+  pollTimer = setInterval(tickThread, hidden ? 30_000 : 3_000)
+}
+
+function onVisibilityChange() {
+  schedule()
+  if (document.visibilityState === 'hidden') return
+  void tickLists() // 切回来不等下一拍：后台那段最多落后 30s
+  void tickThread()
+}
+
 onMounted(() => {
   void refreshLists()
   void loadKb() // KB 拉一次·不轮询（改动契约 1）
-  listTimer = setInterval(skipWhileBusy(refreshLists), 10_000)
-  pollTimer = setInterval(skipWhileBusy(() => pollThread(), () => currentId.value), 3_000)
+  schedule()
   window.addEventListener('blur', onWindowBlur)
   window.addEventListener('focus', onWindowFocus)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (listTimer) clearInterval(listTimer)
   window.removeEventListener('blur', onWindowBlur)
   window.removeEventListener('focus', onWindowFocus)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   // 卸载必还原标题：失焦期间登出（如轮询收到 SESSION_LOST）会带着角标态卸载——不还原则标题
   // 永久停留在带角标字符串上；且下次重登 mount 时会把这个已污染的标题当新 baseTitle 捕获，
   // 跨多次「失焦掉线-重登」循环叠加复合（与 toggleNotify/onWindowFocus 的还原语义保持一致）。

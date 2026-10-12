@@ -41,7 +41,7 @@ describe('Kb.vue 加载', () => {
   it('大白话：加载失败显原因，不显「暂无 FAQ」引导；点保存不发请求', async () => {
     api.listKb.mockResolvedValue({ ok: false, status: 200, error: 'DOC_READ_FAIL' })
     const w = await mountPage()
-    expect(status(w)).toBe('加载失败（DOC_READ_FAIL）')
+    expect(status(w)).toBe('加载失败：云端数据暂时读不出来。请稍后重试。')
     expect(w.text()).not.toContain('暂无 FAQ')
     await save(w)
     expect(api.saveKb).not.toHaveBeenCalled()

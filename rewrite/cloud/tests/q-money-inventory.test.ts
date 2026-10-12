@@ -87,6 +87,15 @@ describe('管理端改库存：一律条件写', () => {
     expect(inv('p2__').stock).toBe(8)
   })
 
+  it('大白话：老档没有版本戳、页面也没带版本号——读写之间有人预留（盖了戳）就冲突，不覆盖', async () => {
+    control.seed(COLLECTIONS.inventory, [{ _id: 'p1__', productId: 'p1', spec: '', stock: 9 }])
+    competitorTakesOneBeforeEachWrite()
+    const r = await setStock('p1', '', 50)
+    control.setBeforeUpdate(null as never)
+    expect(r).toEqual({ ok: false, conflict: true })
+    expect(inv('p1__').stock).toBe(8)
+  })
+
   it('大白话：首次设库存（还没有档）照常建档', async () => {
     expect(await setStock('pNew', '', 5)).toEqual({ ok: true })
     expect(inv('pNew__').stock).toBe(5)

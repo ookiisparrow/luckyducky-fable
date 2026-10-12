@@ -1,0 +1,308 @@
+{
+  "$comment": [
+    "小程序 ↔ app 网关订单/售后读口的响应契约（Issue #400：小程序响应形状原先全靠手抄，云端改键小程序测试照样绿）。",
+    "两把锁共用本文件：rewrite/cloud/tests/p-contract-admin-shape.test.ts 用同一套剧本跑真 app 网关，断言整个响应（单号归一后）与 sample 全等；",
+    "rewrite/mp/tests/p-contract-mp-mappers.test.ts 把 sample 喂给小程序映射层（mapOrders / mapAftersales），断言页面看到的状态、金额、物流、可申请售后行。",
+    "剧本与单号同 admin-money.json：A 已发货、B 已全额退款、C 少付 100 元进支付异常、D 已付且售后待审核，买家都是 oME。",
+    "改本文件：先改云端代码或剧本，让云端测试告诉你新形状，再照抄进来；只改这里不改代码，云端测试会红。"
+  ],
+  "cases": {
+    "getMyOrders": {
+      "action": "getMyOrders",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "_openid": "oME",
+            "items": [
+              {
+                "productId": "p1",
+                "name": "小鸭礼盒",
+                "spec": "",
+                "price": 198,
+                "cover": "",
+                "lineId": "p1__",
+                "qty": 1,
+                "enteredQty": 0,
+                "refundable": true
+              }
+            ],
+            "reviewedLineIds": [],
+            "goods": 198,
+            "coupon": 0,
+            "ship": 0,
+            "amount": 198,
+            "address": {
+              "name": "张三",
+              "phone": "13800000000",
+              "region": "浙江·杭州",
+              "detail": "xx 路 1 号"
+            },
+            "reserved": [
+              {
+                "productId": "p1",
+                "spec": "",
+                "qty": 1
+              }
+            ],
+            "status": "paid",
+            "createdAt": 1782878400000,
+            "_id": "2026070112000004",
+            "id": "2026070112000004",
+            "paidAt": 1782878400000,
+            "transactionId": "wx-D",
+            "payerTotal": null
+          },
+          {
+            "_openid": "oME",
+            "items": [
+              {
+                "productId": "p1",
+                "name": "小鸭礼盒",
+                "spec": "",
+                "price": 198,
+                "cover": "",
+                "lineId": "p1__",
+                "qty": 1,
+                "enteredQty": 0,
+                "refundable": true
+              }
+            ],
+            "reviewedLineIds": [],
+            "goods": 198,
+            "coupon": 0,
+            "ship": 0,
+            "amount": 198,
+            "address": {
+              "name": "张三",
+              "phone": "13800000000",
+              "region": "浙江·杭州",
+              "detail": "xx 路 1 号"
+            },
+            "reserved": [
+              {
+                "productId": "p1",
+                "spec": "",
+                "qty": 1
+              }
+            ],
+            "status": "payment_exception",
+            "createdAt": 1782878400000,
+            "_id": "2026070112000003",
+            "id": "2026070112000003",
+            "paidAt": 1782878400000,
+            "transactionId": "wx-C",
+            "payerTotal": null,
+            "feeMismatch": true,
+            "expectedFee": 19800,
+            "paidFee": 10000,
+            "paymentMismatchDirection": "underpaid"
+          },
+          {
+            "_openid": "oME",
+            "items": [
+              {
+                "productId": "p1",
+                "name": "小鸭礼盒",
+                "spec": "",
+                "price": 198,
+                "cover": "",
+                "lineId": "p1__",
+                "qty": 1,
+                "enteredQty": 0,
+                "refundable": true
+              }
+            ],
+            "reviewedLineIds": [],
+            "goods": 198,
+            "coupon": 0,
+            "ship": 0,
+            "amount": 198,
+            "address": {
+              "name": "张三",
+              "phone": "13800000000",
+              "region": "浙江·杭州",
+              "detail": "xx 路 1 号"
+            },
+            "reserved": [
+              {
+                "productId": "p1",
+                "spec": "",
+                "qty": 1
+              }
+            ],
+            "status": "paid",
+            "createdAt": 1782878400000,
+            "_id": "2026070112000002",
+            "id": "2026070112000002",
+            "paidAt": 1782878400000,
+            "transactionId": "wx-B",
+            "payerTotal": null,
+            "refunded": {
+              "p1__": 198
+            }
+          },
+          {
+            "_openid": "oME",
+            "items": [
+              {
+                "productId": "p1",
+                "name": "小鸭礼盒",
+                "spec": "",
+                "price": 198,
+                "cover": "",
+                "lineId": "p1__",
+                "qty": 1,
+                "enteredQty": 0,
+                "refundable": true
+              }
+            ],
+            "reviewedLineIds": [],
+            "goods": 198,
+            "coupon": 0,
+            "ship": 0,
+            "amount": 198,
+            "address": {
+              "name": "张三",
+              "phone": "13800000000",
+              "region": "浙江·杭州",
+              "detail": "xx 路 1 号"
+            },
+            "reserved": [
+              {
+                "productId": "p1",
+                "spec": "",
+                "qty": 1
+              }
+            ],
+            "status": "shipped",
+            "createdAt": 1782878400000,
+            "_id": "2026070112000001",
+            "id": "2026070112000001",
+            "paidAt": 1782878400000,
+            "transactionId": "wx-A",
+            "payerTotal": null,
+            "shipping": {
+              "company": "顺丰",
+              "trackingNo": "SF001"
+            },
+            "shippedAt": 1782878400000,
+            "shipUploadLock": "idle",
+            "shipUploadLockAt": 1782878400000,
+            "wxShipUploaded": true,
+            "wxShipError": "",
+            "wxShipAt": 1782878400000
+          }
+        ],
+        "nextCursor": null,
+        "hasMore": false
+      }
+    },
+    "getOrderById": {
+      "action": "getOrderById",
+      "sample": {
+        "ok": true,
+        "order": {
+          "_openid": "oME",
+          "items": [
+            {
+              "productId": "p1",
+              "name": "小鸭礼盒",
+              "spec": "",
+              "price": 198,
+              "cover": "",
+              "lineId": "p1__",
+              "qty": 1,
+              "enteredQty": 0,
+              "refundable": true
+            }
+          ],
+          "reviewedLineIds": [],
+          "goods": 198,
+          "coupon": 0,
+          "ship": 0,
+          "amount": 198,
+          "address": {
+            "name": "张三",
+            "phone": "13800000000",
+            "region": "浙江·杭州",
+            "detail": "xx 路 1 号"
+          },
+          "reserved": [
+            {
+              "productId": "p1",
+              "spec": "",
+              "qty": 1
+            }
+          ],
+          "status": "shipped",
+          "createdAt": 1782878400000,
+          "_id": "2026070112000001",
+          "id": "2026070112000001",
+          "paidAt": 1782878400000,
+          "transactionId": "wx-A",
+          "payerTotal": null,
+          "shipping": {
+            "company": "顺丰",
+            "trackingNo": "SF001"
+          },
+          "shippedAt": 1782878400000,
+          "shipUploadLock": "idle",
+          "shipUploadLockAt": 1782878400000,
+          "wxShipUploaded": true,
+          "wxShipError": "",
+          "wxShipAt": 1782878400000
+        }
+      }
+    },
+    "getMyAfterSales": {
+      "action": "getMyAfterSales",
+      "sample": {
+        "ok": true,
+        "list": [
+          {
+            "_id": "2026070112000004__p1__",
+            "orderId": "2026070112000004",
+            "_openid": "oME",
+            "lineId": "p1__",
+            "productId": "p1",
+            "name": "小鸭礼盒",
+            "spec": "",
+            "qty": 1,
+            "itemTotal": 198,
+            "refundAmount": 198,
+            "reason": "尺寸不合适",
+            "addressName": "张三",
+            "phone": "13800000000",
+            "outRefundNo": "2026070112000004__p1__",
+            "status": "applied",
+            "appliedAt": 1782878400000
+          },
+          {
+            "_id": "2026070112000002__p1__",
+            "orderId": "2026070112000002",
+            "_openid": "oME",
+            "lineId": "p1__",
+            "productId": "p1",
+            "name": "小鸭礼盒",
+            "spec": "",
+            "qty": 1,
+            "itemTotal": 198,
+            "refundAmount": 198,
+            "reason": "尺寸不合适",
+            "addressName": "张三",
+            "phone": "13800000000",
+            "outRefundNo": "2026070112000002__p1__",
+            "status": "refunded",
+            "appliedAt": 1782878400000,
+            "approvedAt": 1782878400000,
+            "refundedAt": 1782878400000,
+            "refundTransactionId": "wx-rf"
+          }
+        ],
+        "nextCursor": null,
+        "hasMore": false
+      }
+    }
+  }
+}

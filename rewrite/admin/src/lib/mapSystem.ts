@@ -203,6 +203,14 @@ const LAUNCH_ERR: Partial<Record<ErrCode | 'UNKNOWN_COURSE', string>> = {
   DOC_READ_FAIL: '云端数据暂时读不出来。请稍后重试。',
   REMOVE_FAIL: '删除没成功。请刷新后再删一次。',
   GC_DELETE_FAIL: '商品已删掉，只是有几张图片没清理干净（已留记录给技术）。请刷新列表。',
+  // 外包账号页（Agents）：LOOKUP_FAIL 在写后复核读失败时也回，云端已回滚，所以能说「没建成/没生效」
+  BAD_NAME: '名字不能空。',
+  KEY_TOO_SHORT: '口令至少 6 位。',
+  KEY_TAKEN: '这个口令已被占用（撞口令会串号），请换一个。',
+  KEY_LOOKUP_FAIL: '查口令有没有撞号时读库失败，这次没建成。请稍后重试。',
+  WECOM_ID_TAKEN: '这个企微 userid 已绑在别的账号。',
+  WECOM_ID_LOOKUP_FAIL: '查企微 userid 有没有被别的账号占用时读库失败，这次没生效。请稍后重试。',
+  AGENT_NOT_FOUND: '找不到这个坐席账号（可能已被删）。请刷新后再试。',
 }
 
 // 任何 action 都可能回的码（client.ts 传输层与 adminApi/index.ts 网关产出）：各业务映射自己的表查不到时先问这里，文案单源。

@@ -3,7 +3,7 @@
 // orderErrorText：钱组 action 英文码→操作者中文（同 mapSystem.ts launchErrorText 手法）。
 import { yuan, orderStatusLabel, refundStatusLabel, dateTime } from './format'
 import { stockAlertOf } from './thresholds'
-import { transportErrorText } from './mapSystem'
+import { transportErrorText, launchErrorText } from './mapSystem'
 import { asFen, fenToYuan, type ErrCode } from '@ldrw/shared'
 
 // NO_RESULT 不是云端码：Orders.vue 批量发货回包里缺这一单时本地补的
@@ -34,6 +34,11 @@ const ORDER_ERR: Partial<Record<ErrCode | 'NO_RESULT', string>> = {
   CONFIG_READ_FAIL: '读不到商户号配置（库暂时故障），请稍后重试',
   NO_WXPAY_CREDS: '微信支付凭证还没配置，请先去系统设置检查',
   NO_MCHID: '商户号还没配置，请先去系统设置检查',
+  // 退款里售后单、支付配置读失败也回这个码，不能说成「订单数据」；跟全后台同一句
+  DOC_READ_FAIL: launchErrorText('DOC_READ_FAIL'),
+  BAD_DATE: '账单日期不对，要写成 YYYY-MM-DD',
+  NO_DOWNLOAD_URL: '微信没给这天账单的下载地址，请稍后重试',
+  BILL_FETCH_FAIL: '从微信拉账单没成功，请稍后重试；反复失败请找技术',
 }
 export function orderErrorText(e: unknown): string {
   const s = String(e || '')
@@ -44,6 +49,11 @@ export function orderErrorText(e: unknown): string {
     if (orderLabel !== raw) return `订单状态「${orderLabel}」不允许此操作`
     const refundLabel = refundStatusLabel(raw)
     return `${refundLabel !== raw ? '售后' : '当前'}状态「${refundLabel}」不允许此操作`
+  }
+  // 拉账单的 HTTP 失败/出站异常：码后面拼着微信原文，整串挂括号给技术排查
+  if (/^(BILL_QUERY_|BILL_DOWNLOAD_|WXPAY_FETCH_FAIL)/.test(s)) {
+    if (s.includes('NO_STATEMENT_EXIST')) return '微信这天还没有账单（当天的账单次日才出，或这天没有交易）'
+    return `${ORDER_ERR.BILL_FETCH_FAIL}（${s}）`
   }
   return ORDER_ERR[s as keyof typeof ORDER_ERR] || transportErrorText(s) || `操作失败（${s}）`
 }

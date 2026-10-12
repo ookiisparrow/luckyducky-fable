@@ -1,6 +1,8 @@
 // E2E·订单全生命周期（跨函数/跨状态转移的全链契约）：createOrder(real·扣库存) → payCallback SUCCESS →
 // shipOrder(admin) → confirmReceive(user)，一条真链跑到底，中间态逐一断言。补的是单 action 级测试之外的
 // 「一笔订单从下单到收货，状态/库存/流水/身份闸在每一跳都对得上」跨函数契约。
+// 退货权那条链（activateCourse→confirmEnter→applyRefund）也在这里真走：两半各自的单测都靠手工 seed 订单行标记，
+// 接缝对不上（比如下单写的行字段和进课找行的条件不一致）只有串起来才看得出。
 import { describe, it, expect, beforeEach } from 'vitest'
 import { control } from 'wx-server-sdk'
 import { main as app } from '../src/functions/app/index'
@@ -66,6 +68,27 @@ describe('订单全生命周期 E2E（下单→支付→发货→收货·钱与�
     expect(c.ok).toBe(true)
     expect(control.dump('orders').find((x: any) => x._id === oid).status).toBe('done')
     expect((await call('confirmReceive', { id: oid })).error).toContain('BAD_STATUS:done')
+  })
+
+  it('大白话：收到货扫码激活、确认进课后，这一行退货权随即失效——再申请退款被拒', async () => {
+    control.seed('products', [{ _id: 'p2', id: 'p2', name: '课程礼盒', price: 98, tag: '', courseId: 'c1' }])
+    control.seed('inventory', [{ _id: 'p2__', productId: 'p2', spec: '', stock: 5 }])
+    control.seed('qrcodes', [{ _id: 'CODE1', status: 'unused', courseId: 'c1' }]) // 盒里附的激活卡
+    const oid = (await call('createOrder', { items: [{ id: 'p2', qty: 1 }], address: ADDR })).order.id
+    control.setOpenId('')
+    await cb({ out_trade_no: oid, trade_state: 'SUCCESS', amount: { total: 9800 }, transaction_id: 'wx-t2' })
+    expect((await post('shipOrder', { id: oid, company: '顺丰', trackingNo: 'SF002' })).ok).toBe(true)
+    control.setOpenId('oME')
+    const line = () => control.dump('orders').find((x: any) => x._id === oid).items[0]
+    expect(line()).toMatchObject({ refundable: true, enteredQty: 0 }) // 下单写的，不是手工 seed
+
+    expect((await call('activateCourse', { code: 'CODE1' })).state).toBe('activated')
+    const enter = await call('confirmEnter', { code: 'CODE1' })
+    expect(enter.revoked).toEqual({ orderId: oid, lineId: line().lineId, productId: 'p2' })
+    expect(line()).toMatchObject({ refundable: false, enteredQty: 1 })
+
+    expect((await call('applyRefund', { orderId: oid, lineId: line().lineId })).error).toBe('NOT_REFUNDABLE')
+    expect(control.dump('afterSales')).toEqual([])
   })
 
   it('大白话：链上身份闸不串——他人不能确认我的收货，管理员发货前订单必须已支付', async () => {

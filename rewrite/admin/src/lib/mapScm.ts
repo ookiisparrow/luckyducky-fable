@@ -49,9 +49,13 @@ export const fenLabel = (fen: unknown): string => {
   return Number.isFinite(n) ? yuan(n / 100) : ''
 }
 
-/** SCM 错误码人话（原文兜底不吞）。 */
-export function scmErrorText(e: unknown): string {
+// DUPLICATE 在两处发、意思不同：组装是同一单已执行过；物料建档是并发首建撞同一料号，输家这次填的没写进去
+const MATERIAL_DUPLICATE = '这个料号刚被另一次提交先建好了，这次填的没写进去——看下面列表核对，内容不对再点一次「建档 / 更新」即可改'
+
+/** SCM 错误码人话（原文兜底不吞）。domain='material'：物料建档页，同名码按物料语境说。 */
+export function scmErrorText(e: unknown, domain?: 'material'): string {
   const code = String(e || '')
+  if (domain === 'material' && code === 'DUPLICATE') return MATERIAL_DUPLICATE
   const MAP: Partial<Record<ErrCode, string>> = {
     BAD_UOM: '计量只能选「件」或「克」',
     UOM_LOCKED: '建档后计量方式不能改（改了会混账）——需要改请新建料号',
@@ -89,6 +93,22 @@ export function scmErrorText(e: unknown): string {
     BAD_SPEC: '规格/料号含歧义下划线组合（连续 __ 或以 _ 结尾），请改名',
     NO_SPECIFIC: '专属件（包装/卡片料号）必须都选',
     BAD_PROFILE: 'BOM 档不完整，请先补齐三色与专属件',
+    NO_NAME: '名称不能空',
+    BAD_CATEGORY: '物料类别只能选毛线、包装、卡片或辅料',
+    BAD_TIER: '档位只能选大团、中团或小团',
+    BAD_FORM: '形态只能选原团或带结',
+    BAD_THRESHOLD: '安全库存阈值要是 0 或正整数',
+    BAD_ADJUST: '先选要调整的料号',
+    FG_NOT_ADJUSTABLE: '成品库存不在这里调——请到「实物库存」页改',
+    BAD_MOVE: '库存变动的料号或数量不对，整单没动账',
+    CONTENTION: '这个料号正被别的操作同时改动，这次没改成——稍后重试',
+    LEDGER_WRITE_FAILED: '库存流水没写进去，这次没改成——请重试；反复出现请找技术',
+    PRODUCE_FAIL: '原料已扣，但成品没入库（单据已留存）——别重复组装，请到「实物库存」页把成品数补上',
+    BAD_LINES: '明细行不对：有行没选料、同一料号重复、数量不是正整数，或整单没有行/行数超上限——检查后再提交',
+    BAD_ID: '缺单据编号——刷新后重试',
+    NO_PURCHASE: '找不到这张采购单——刷新后再看',
+    NO_OUTWORK: '找不到这张外协单——刷新后再看',
+    NO_WORKER: '没选织女，或这位织女已不存在',
   }
   const hit = MAP[code as ErrCode] || MAP[code.split(':')[0] as ErrCode]
   return hit || transportErrorText(code) || '操作没成功（' + code + '）' // 原文兜底
