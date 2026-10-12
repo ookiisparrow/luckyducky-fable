@@ -18,8 +18,9 @@ const REV_ERR = new Map([
   ['REVIEWED', '这条已经评过了'],
   ['NOT_DONE', '订单完成后才能评价'],
   ['IMG_RISKY', '图片没通过审核，换一张再试'],
-  // 云端文字违规 / 文字校不了 / 图片校不了都回 SEC_CHECK_FAIL（只有图片违规单独回 IMG_RISKY），分不开，统一说内容
-  ['SEC_CHECK_FAIL', '内容没通过审核，改一改再试'],
+  // 文字违规回 TEXT_RISKY、图片违规回 IMG_RISKY；文字和图片校不了（接口抖动/能力没开）都回 SEC_CHECK_FAIL
+  ['SEC_CHECK_FAIL', '内容没检查成功，稍后再试'],
+  ['TEXT_RISKY', '文字里有不合适的内容，请修改'],
 ])
 const BACK_AFTER_REVIEWED_MS = 1000 // 已评过：提示后自动返回
 
@@ -98,6 +99,7 @@ Page({
     this.setData({ anon: !this.data.anon })
   },
   // 选图 + 传云存储：拿临时路径逐张传 cloud://（内容安全在云端提交时逐张校·fail-closed）；单张失败跳过不阻塞。
+  // 必须传到 reviews/<本单号>/ 下：云端只收本人这张订单目录里的文件（防填别处 fileID 借管理权限下载/公开）。
   async onAddPhotos() {
     if (this.data.uploading) return
     const left = this.data.maxPhotos - this.data.photos.length
@@ -113,7 +115,7 @@ Page({
     for (const f of res.tempFiles) {
       try {
         const up = await wx.cloud.uploadFile({
-          cloudPath: `reviews/${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`,
+          cloudPath: `reviews/${this.orderId}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`,
           filePath: f.tempFilePath,
         })
         if (up.fileID) ups.push(up.fileID)

@@ -33,7 +33,8 @@ describe('写评价提交失败提示', () => {
   const cases: [unknown, string][] = [
     ['NOT_DONE', '订单完成后才能评价'],
     ['IMG_RISKY', '图片没通过审核，换一张再试'],
-    ['SEC_CHECK_FAIL', '内容没通过审核，改一改再试'], // 云端文字违规/图片校不了都回这个码，分不开，统一说内容
+    ['SEC_CHECK_FAIL', '内容没检查成功，稍后再试'],
+    ['TEXT_RISKY', '文字里有不合适的内容，请修改'],
     ['NETWORK', '提交没成功，稍后再试'],
     ['constructor', '提交没成功，稍后再试'],
     [undefined, '提交没成功，稍后再试'],
