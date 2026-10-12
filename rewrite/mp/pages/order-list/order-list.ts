@@ -10,7 +10,7 @@ import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxConfirm, fxHint, fxLoaded, fxLoading, fxToast } from '../../lib/pxFx'
 import { createHold, type Hold } from '../../lib/hold'
 import { navBottom } from '../../lib/ground'
-import { FRESH_MS, isFresh } from '../../utils/fresh'
+import { FRESH_MS, isFresh, markStale } from '../../utils/fresh'
 
 const HOLD_MS = 700 // 按住多久算取消（设计稿 data-ms=700·拍板 7）
 let hold: Hold | null = null // 当前按住取消的那张卡（lib/hold）
@@ -294,9 +294,15 @@ Page({
       settle()
       return
     }
+    // 微信那边已付、回调还没落库（云端回 ORDER_ALREADY_PAID / 收银台报成功）：卡片立刻改「正在确认」（不给再付、不给取消），
+    // 重拉失败也不退回「待付款」；30s 内回列表或「我」页都重拉（utils/fresh 保持期），回调一到就翻已付（#482）
+    const confirming = () => {
+      this.setData({ confirmingId: id })
+      markStale('orders', FRESH_MS)
+      settle()
+    }
     if (outcome.kind === 'confirming') {
-      this.setData({ confirmingId: id }) // 卡片立刻改显示，重拉失败也不退回「待付款」
-      settle() // 重新拉订单：回调到了就翻已付
+      confirming()
       return
     }
     if (outcome.kind === 'request') {
@@ -304,7 +310,7 @@ Page({
         ...outcome.payment,
         success: () => {
           fxToast(this, '支付成功')
-          settle()
+          confirming()
         },
         fail: settle, // 取消：订单保留·刷新即可
       })

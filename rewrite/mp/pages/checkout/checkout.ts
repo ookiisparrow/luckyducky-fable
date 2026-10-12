@@ -12,6 +12,7 @@ import { goHomeTab } from '../../lib/homeIntent'
 import { keyDown, keyUp } from '../../lib/keyFx'
 import { fxConfirm, fxHint } from '../../lib/pxFx'
 import { groundGap } from '../../lib/ground'
+import { FRESH_MS, markStale } from '../../utils/fresh'
 
 const SUBMITTED_MS = 600 // 设计稿 submitOrder：建单成功后按键打勾「已提交」停 600ms 再拉起支付
 // 取消支付提示（老板拍板 4·设计稿 payClose）。15 分钟＝云端付款时限 shared PAY_WINDOW_MS（小程序进不了 shared，
@@ -221,6 +222,7 @@ Page({
   },
   // 付款成功：小货车开走不回来（设计稿转场），出画面再换到成功页；车没动（组件未就绪/测试桩）就直接换
   toSuccess(orderId: string, amountFen: number) {
+    markStale('orders', FRESH_MS) // 回调可能还在路上：30s 内去「我」页/订单列表都重拉，别把「待付款」角标记成新鲜（#482）
     const go = () => wx.redirectTo({ url: '/pages/paysuccess/paysuccess?id=' + orderId + '&amount=' + amountFen })
     const truck = typeof this.selectComponent === 'function' ? (this.selectComponent('#truck') as { go?: (o: { back: boolean }) => number } | null) : null
     const ms = truck && truck.go ? truck.go({ back: false }) : 0

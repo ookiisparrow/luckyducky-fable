@@ -7,9 +7,11 @@ export const FRESH_MS = 30_000
 
 const staleAt: Record<string, number> = {}
 
-/** 某类数据刚被写过：此后所有早于此刻拉的都不算新鲜。 */
-export function markStale(key: string): void {
-  staleAt[key] = Date.now()
+/** 某类数据刚被写过：此后所有早于此刻拉的都不算新鲜。
+ *  holdMs：云端随后还会自己改这类数据（付完款等支付回调落库）——再往后 holdMs 内拉到的也不算新鲜，期间回来都重拉；
+ *  取较晚者，之后的普通标脏不会把保持期缩短。 */
+export function markStale(key: string, holdMs = 0): void {
+  staleAt[key] = Math.max(staleAt[key] || 0, Date.now() + holdMs)
 }
 
 /** 页面上次拉成功的时刻 fetchedAt 是否仍可复用：拉过、窗内、且拉完之后没人写过（同一毫秒内有写按不新鲜算，宁可多拉）。 */

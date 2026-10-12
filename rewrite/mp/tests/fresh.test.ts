@@ -25,6 +25,17 @@ describe('isFresh', () => {
     expect(isFresh('orders', t - 100, FRESH_MS, t)).toBe(true) // 写之后又拉过：新鲜
     expect(isFresh('learning', t - 1000, FRESH_MS, t)).toBe(true) // 别的 key 不受影响
   })
+
+  it('大白话：带保持期标脏（付完款等回调）——保持期内拉到的都不算新鲜，过了才算；之后普通标脏不会把保持期缩短', () => {
+    const t = 1_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(t)
+    markStale('orders', FRESH_MS)
+    vi.spyOn(Date, 'now').mockReturnValue(t + 5000)
+    markStale('orders') // 期间又做了别的订单写
+    vi.restoreAllMocks()
+    expect(isFresh('orders', t + 10_000, FRESH_MS, t + 11_000)).toBe(false) // 保持期内拉的
+    expect(isFresh('orders', t + FRESH_MS + 100, FRESH_MS, t + FRESH_MS + 200)).toBe(true) // 保持期过后拉的
+  })
 })
 
 describe('写类 api 完成即标脏（读类不标）', () => {
