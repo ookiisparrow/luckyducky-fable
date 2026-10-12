@@ -75,9 +75,12 @@ Component({
       }
       tapHaptic() // 禁用/未勾选早退之后、动作提交前（同 lib/haptics 调用纪律）
       this.setData({ submitting: true })
-      fxLoading(null, '登录中') // 设计稿「登录中」加载框（自绘·挡连点·挂在当前页的 px-fx）
+      // 设计稿「登录中」加载框（自绘·挡连点）挂在发起这页的 px-fx，收也收这页：在途时按返回键关半屏再切 tab，
+      // 栈顶已换页，按「此刻栈顶」收会收错页，原页挡板永远留着（#482）
+      const h = host()
+      fxLoading(h, '登录中')
       const res = await login(true) // 静默 openid 直接登录（零资料采集）+ 服务端记账；true＝刚勾了协议（云端默认开启数据共享·§40）
-      fxLoaded(null) // 先收加载框再提示
+      fxLoaded(h) // 先收加载框再提示
       this.setData({ submitting: false })
       if (!res.ok) {
         fxHint(host(), '网络不太好，请重试')

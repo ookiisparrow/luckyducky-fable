@@ -128,6 +128,16 @@ describe('结算页 startPay：每种支付结果的去向', () => {
     expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: SUCCESS_URL })
   })
 
+  it('大白话：付成功进成功页后，30 秒内去「我」页或订单列表都重拉——回调还在路上，别把「待付款」角标记成新鲜（#482）', async () => {
+    payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
+    const page = await mount()
+    await page.startPay('o1', 12800)
+    wxMock.requestPayment.mock.calls[0][0].success()
+    const { FRESH_MS, isFresh } = await import('../utils/fresh') // mount 重置过模块：取页面用的那份
+    const t = Date.now()
+    expect(isFresh('orders', t + 1000, FRESH_MS, t + 2000)).toBe(false)
+  })
+
   it('大白话：收银台里点了取消（老板拍板 4）——提示「订单已保存，请在 15 分钟内支付」并换到这张订单的详情页，不弹窗不回首页', async () => {
     payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
     const page = await mount()

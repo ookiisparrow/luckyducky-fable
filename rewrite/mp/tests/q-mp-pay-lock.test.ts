@@ -105,12 +105,37 @@ describe.each(PAGES)('$name 继续支付：在途锁 + 加载反馈', ({ path, e
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
   })
 
-  it('大白话：付成功后也解锁（刷新后若仍显示待付，可再点由云端判已付）', async () => {
-    const page = await mount(path)
+})
+
+describe('收银台报付款成功、回调还没落库（#482）', () => {
+  it('大白话：订单详情——解锁，状态卡改成「已付款，正在确认」、按住取消也不会真去取消；30 秒内回来都重拉，回调一到就翻已付', async () => {
+    const page = await mount('../pages/order/order')
+    page.data.vm = { id: 'o1', status: 'pending', items: [] }
     payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
-    await page.onPay(ev)
+    await page.onPay()
     wxMock.requestPayment.mock.calls[0][0].success()
-    await page.onPay(ev)
-    expect(payMock).toHaveBeenCalledTimes(2)
+    expect(page.data.paying).toBe(false)
+    expect(page.data.confirming).toBe(true)
+    expect(page.data.head).toBe('已付款，正在确认')
+    await page.cancelNow()
+    expect(cancelMock).not.toHaveBeenCalled()
+    const { FRESH_MS, isFresh } = await import('../utils/fresh') // mount 重置过模块：取页面用的那份
+    const t = Date.now()
+    expect(isFresh('orders', t + 1000, FRESH_MS, t + 2000)).toBe(false) // 付完 1 秒拉到的（多半还是待付）不算新鲜
+  })
+
+  it('大白话：订单列表——解锁，那张卡记成「正在确认」、按住取消也不会真去取消；30 秒内回列表或「我」页都重拉', async () => {
+    const page = await mount('../pages/order-list/order-list')
+    payMock.mockResolvedValue({ ok: true, payment: PAYMENT })
+    await page.onPay({ currentTarget: { dataset: { id: 'o1' } } })
+    wxMock.requestPayment.mock.calls[0][0].success()
+    expect(page.data.payingId).toBe('')
+    expect(page.data.confirmingId).toBe('o1')
+    await page.cancelNow('o1')
+    expect(cancelMock).not.toHaveBeenCalled()
+    const { FRESH_MS, isFresh } = await import('../utils/fresh')
+    const t = Date.now()
+    expect(isFresh('orders', t + 1000, FRESH_MS, t + 2000)).toBe(false)
+    expect(isFresh('orders', t + FRESH_MS + 1000, FRESH_MS, t + FRESH_MS + 2000)).toBe(true) // 保持期过了照常免重拉
   })
 })
