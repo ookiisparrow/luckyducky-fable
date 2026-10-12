@@ -13,7 +13,7 @@
     <view class="od-card px-skin px-card">
       <view class="od-state">
         <view class="od-state-l">
-          <px-anim wx:if="{{vm.status === 'pending' && !expired}}" name="hourglass" size="2" />
+          <px-anim wx:if="{{vm.status === 'pending' && !expired && !confirming}}" name="hourglass" size="2" />
           <px-i wx:elif="{{asLed}}" name="led" tone="{{asLed.tone}}" halo="{{asLed.halo}}" />
           <text class="od-head" style="{{headColor ? 'color:' + headColor : ''}}">{{head}}</text>
         </view>
@@ -103,7 +103,8 @@
   <view class="od-dock-space" wx:if="{{dock}}"></view>
   <view class="od-dock dock" wx:if="{{dock}}">
     <view class="k k-light k-48 od-back k-sq" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100" bind:tap="onBack" data-k="light" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="back" /></view>
-    <block wx:if="{{vm.status === 'pending'}}">
+    <!-- 正在确认（confirming）：微信已收到钱、回调没落库——不给取消（云端取消不问微信，会把已付的钱关进已关闭单）也不给再付 -->
+    <block wx:if="{{vm.status === 'pending' && !confirming}}">
       <!-- 按住 700ms 取消（设计稿 data-hold·键内红色进度条；轻点提示「按住取消订单」） -->
       <view class="od-side" catch:touchstart="onCancelStart" catch:touchmove="onCancelMove" catch:touchend="onCancelEnd" catch:touchcancel="onCancelEnd">
         <view class="k k-light k-48 od-danger {{holding ? 'od-hold-on' : ''}}" hover-start-time="20" hover-class="k-light-down" hover-stay-time="100"

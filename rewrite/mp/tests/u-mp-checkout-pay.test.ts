@@ -24,6 +24,7 @@ vi.mock('../lib/checkout', async (importOriginal) => ({
   sellableAddons: () => [],
   getDraft: () => ({ items: [{ id: 'p1', sku: '', qty: 1 }], fromCart: false }),
   summaryFen: () => ({ amountFen: 999 }),
+  payableFen: () => 999,
   getIdemKey: () => 'k1',
   finishSubmitted: vi.fn(),
   mapCreateOrderError: (e: string) => e,
@@ -107,6 +108,14 @@ describe('结算页 startPay：每种支付结果的去向', () => {
     await page.startPay('o1', 12800)
     expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: SUCCESS_URL })
     expect(wxMock.requestPayment).not.toHaveBeenCalled()
+  })
+
+  it('大白话：云端说微信那边其实已付、回调还没到（ORDER_ALREADY_PAID）——同样进成功页，不弹「支付没成功」', async () => {
+    payMock.mockResolvedValue({ ok: false, error: 'ORDER_ALREADY_PAID' })
+    const page = await mount()
+    await page.startPay('o1', 12800)
+    expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: SUCCESS_URL })
+    expect(wxMock.showModal).not.toHaveBeenCalled()
   })
 
   it('大白话：拉起收银台付成功——进成功页', async () => {

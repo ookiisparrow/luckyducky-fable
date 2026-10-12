@@ -192,13 +192,28 @@ describe('结算页：提交', () => {
         { id: 'p2', sku: '', qty: 1 },
       ],
       { name: '鸭', phone: '13800000000', region: '上海', detail: '1 号' },
-      expect.any(String)
+      expect.any(String),
+      27800
     )
     expect(wxMock.showToast).toHaveBeenLastCalledWith({ title: '网络不好，稍后再试', icon: 'none' })
     expect(page.data.submitting).toBe(false)
     await page.onSubmit()
     expect(createOrderMock.mock.calls[1][2]).toBe(createOrderMock.mock.calls[0][2])
     expect(createOrderMock.mock.calls[0][2]).not.toBe('')
+  })
+
+  it('大白话：云端说价变了（PRICE_CHANGED·#400）——不建单；应付当场换成云端给的现价、提示一次、强刷目录；再提交带的就是页面上这个数', async () => {
+    const page = await mount()
+    await page.refresh()
+    createOrderMock.mockResolvedValueOnce({ ok: false, error: 'PRICE_CHANGED', amountFen: 36800 })
+    await page.onSubmit()
+    expect(page.data.submitting).toBe(false)
+    expect(page.data.amountNum).toBe('368.00')
+    expect(wxMock.showToast.mock.calls.filter((c: any[]) => c[0].title === '价格有变动，已按最新价计算')).toHaveLength(1)
+    expect(getAllProductsMock).toHaveBeenLastCalledWith({ force: true })
+    createOrderMock.mockResolvedValueOnce({ ok: false, error: 'CALL_TIMEOUT' })
+    await page.onSubmit()
+    expect(createOrderMock.mock.calls[1][3]).toBe(36800)
   })
 
   it('大白话：有一件下架被移走、还剩别的——弹窗说其余可继续下单，并重画剩下的商品', async () => {

@@ -86,6 +86,9 @@ Page({
     cursor: null as unknown,
     holding: '', // 正在按住取消的订单 id（驱动键内红色进度条）
     payingId: '', // 继续支付在途的订单（锁 + 按钮 dim）：pay 往返最长 12s，连点会重复发 pay、重复拉起收银台
+    // 云端回过 ORDER_ALREADY_PAID 的单（微信已付、回调没落库）：仍是待付款时显示「已付款，正在确认」、不给去支付/取消。
+    // ponytail: 只记一单——两单同时卡在回调前时先那单会露回按钮；要全记就换成 id 集合
+    confirmingId: '',
     anim: '', // 切 tab 滑入动画类（anim-next/anim-prev）：由 switchTab 置向、reload 落新数据时应用一次；onShow/翻页不带
     paging: false, // 触底翻页在途（底部像素 loader 行·同时挡重复触底）
   },
@@ -287,6 +290,11 @@ Page({
       settle()
       return
     }
+    if (outcome.kind === 'confirming') {
+      this.setData({ confirmingId: id }) // 卡片立刻改显示，重拉失败也不退回「待付款」
+      settle() // 重新拉订单：回调到了就翻已付
+      return
+    }
     if (outcome.kind === 'request') {
       wx.requestPayment({
         ...outcome.payment,
@@ -343,6 +351,7 @@ Page({
     hold?.end()
   },
   async cancelNow(id: string) {
+    if (id === this.data.confirmingId) return // 钱已付：云端取消不问微信，会把已付的钱关进已关闭单
     tapHaptic()
     const r = await this.withLoading('正在取消', () => cancelOrder(id))
     if (!r || this.unloaded) return // 在途重复 / await 恢复点复核：用户已退出列表页——非钱副作用，静默收尾即可
