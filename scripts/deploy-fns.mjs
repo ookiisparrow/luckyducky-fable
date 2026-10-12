@@ -19,8 +19,7 @@
 import { execSync } from 'node:child_process'
 import { readdirSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { PROD_ENV as ENVID } from './lib/env.mjs' // 生产 env id 单源（病根#5·债#30①）
-import { deployTargets } from './lib/deploy-aliases.mjs' // 产物→云函数名映射单源（别名册已空·adminApi 只部署自身）
+import { PROD_ENV as ENVID } from './lib/env.mjs' // 生产 env id 单源（病根#5）
 // 产物 hash / 账本 / 部署前提单源（preflight 同源）
 import { deployBlockers, hashFnDist, readDeployLedger } from './lib/deploy-drift.mjs'
 
@@ -64,7 +63,7 @@ const cur = {}
 for (const name of readdirSync(DIST)) {
   const idx = join(DIST, name, 'index.js')
   if (!existsSync(idx)) continue
-  // hash 覆盖随产物部署的文件：index.js（恒有）+ config.json（云调用 openapi 权限声明·债#26）
+  // hash 覆盖随产物部署的文件：index.js（恒有）+ config.json（云调用 openapi 权限声明）
   // + package.json 除 version 外（deps 声明——@cloudbase/manager-node 增删也该触发重部署；version 是
   // 构建戳 `0.0.0-<sha>`，参与 hash 会让每次提交都全量重部署、diff 失去分辨力·2026-08-03 回归修复）。
   // 只算 index.js 会漏判「仅 config/package 变」→ hash 不变 → 不重部署 → 权限/依赖永不生效（根因#8）。
@@ -92,12 +91,9 @@ const functions = Object.fromEntries(Object.keys(cur).filter((n) => prev[n]).map
 const deployed = []
 try {
   for (const name of changed) {
-    // 别名展开入口仍在：DEPLOY_ALIASES 空则 deployTargets(name) === [name]。
-    // 2026-08-13 起 adminApi 只发自身，不要再部署 adminApiV2。
-    for (const target of deployTargets(name)) {
-      console.log(`\n部署 ${target}${target === name ? '' : `（${name} 产物·部署别名）`} …`)
-      execSync(`tcb fn deploy ${target} --dir ${join(DIST, name)} --force -e ${ENVID}`, { cwd: ROOT, stdio: 'inherit' })
-    }
+    // 产物名＝云端函数名（adminApi 只部署自身，线上不存在 adminApiV2·见运维手册）
+    console.log(`\n部署 ${name} …`)
+    execSync(`tcb fn deploy ${name} --dir ${join(DIST, name)} --force -e ${ENVID}`, { cwd: ROOT, stdio: 'inherit' })
     functions[name] = cur[name]
     deployed.push(name)
   }

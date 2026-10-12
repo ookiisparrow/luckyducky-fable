@@ -138,3 +138,10 @@ describe('结业页底栏不遮内容', () => {
     expect(live(finishWxml)).toMatch(/<view class="fn-dock-space"><\/view>\s*<view class="fn-dock dock"/)
   })
 })
+
+describe('激活码无效屏：码框与其它结果态同一排版', () => {
+  it('大白话：码框只吃 .wl-code 系列样式，不被说明行（.wl-msg）的 flex/上边距带偏（曾因删规则漏删选择器而靠左下沉）', () => {
+    expect(welcomeWxss).not.toMatch(/\.wl-code-invalid\s*,/)
+    expect(welcomeWxss).not.toMatch(/,\s*\n\s*\/\*/) // 选择器列表不被注释切断
+  })
+})

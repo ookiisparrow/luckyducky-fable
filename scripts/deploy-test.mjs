@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 部署到【测试环境】（债#19 配套）——把生产线（rewrite/cloud）函数部署到测试 env。
+ * 部署到【测试环境】——把生产线（rewrite/cloud）函数部署到测试 env。
  *
  * 【指针大迁移·盲区体检批3·病根#16 ⑤】函数清单从 rewrite/cloud/dist 产物目录取（与 deploy-fns 同源）。
  * cloudbaserc.json 的 functionRoot 已是 rewrite/cloud/dist；函数内存/超时以其中 functions 为准。

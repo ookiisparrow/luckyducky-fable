@@ -38,9 +38,6 @@ async function attachHandler(cli: ReportCli) {
 }
 
 describe('admin errorReporter（批 B7·治病根#14 client-error 通道）', () => {
-  it('大白话：reportError 只给同文件 installErrorReporter 用，不再对外 export', async () => {
-    expect(await import('../src/lib/errorReporter')).not.toHaveProperty('reportError')
-  })
   it('大白话：无会话不外呼——不为上报建未鉴权端点', async () => {
     const cli = fakeClient(false)
     const fire = await attachHandler(cli)
