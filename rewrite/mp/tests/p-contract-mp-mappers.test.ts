@@ -140,8 +140,8 @@ describe('学习链映射（activateCourse / getMyCourses / getCourses / getMyPr
         title: '第一章',
         lessonCount: 2,
         lessons: [
-          { lessonId: 'l1', no: '01', name: '起针', segCount: 2, minutes: 8, status: 'todo', lastLabel: '', firstPlayableSegId: 's1' },
-          { lessonId: 'l2', no: '02', name: '短针', segCount: 1, minutes: 4, status: 'current', lastLabel: '上次学到 段落 1', firstPlayableSegId: 's3' },
+          { lessonId: 'l1', no: '01', name: '起针', segCount: 2, minutes: 8, status: 'todo', lastLabel: '', firstPlayableSegId: 's1', segs: ['done', 'todo'] },
+          { lessonId: 'l2', no: '02', name: '短针', segCount: 1, minutes: 4, status: 'current', lastLabel: '上次学到 段落 1', firstPlayableSegId: 's3', segs: ['current'] },
         ],
       },
     ])

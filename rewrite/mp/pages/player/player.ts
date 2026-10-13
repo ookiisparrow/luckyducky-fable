@@ -39,26 +39,21 @@ const SEEK_TEXT_THROTTLE_MS = 100
 const MARK_SNAP_SEC = 3
 // 拖动预览浮层防出屏边距（rpx）。seekEdgePx() 换成 px，经 seekCfg.edgePx 交给 seek.wxs previewLeft() 夹取。
 const PREVIEW_EDGE_RPX = 64
-// 返回二次确认窗口（ms·设计拍板）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
-// 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
-const BACK_CONFIRM_MS = 2500
-// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
+// 首次离开播放页的加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
+// 手势返回二次提醒窗口（ms·老板 2026-10-13）：第一次被拦下只提示，窗口内再来一次才回本课目录。
+const GESTURE_CONFIRM_MS = 2000
+// 拦下后隔一拍再武装：page-container 要先走完离场，show 真→真不会重新挂上（同 utils/exitGuard REARM_SHEET_MS）。
+const REARM_MS = 100
 
-// segcap 文案三态：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
-// 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
-// 放纯函数（非方法）：与 strip 一起在多个 setData 点重算，避免同一逻辑在 playSegment/onEnded/onReplay/onVideoPlay 四处各自重写。
 // callMethod 把载荷直接当第一个实参，没有 .detail（根因#8：按事件形状读 detail 会恒得 0）。
 function wxsArgs<T extends object>(a: T | undefined | null): Partial<T> {
   return a ?? {}
 }
 
-function buildCapText(strip: LessonStrip | null, segDone: boolean, course: CoursePub | null, segId: string): string {
-  if (!strip) return ''
-  if (!segDone) return `段落 ${strip.segIndex} / ${strip.segTotal}`
-  if (strip.segIndex < strip.segTotal) return `段落 ${strip.segIndex} 完成 · 接下来 段落 ${strip.segIndex + 1}`
-  const next = navSegment(course, segId, 1)
-  return next ? `本课时完成 · 接下来 ${next.lessonName}` : '本课程已全部学完'
+// 段内剩余时长「-m:ss」（画面右下角·v6 Lite）；时长还没拿到就空着。
+function remainOf(curSec: number, durSec: number): string {
+  return durSec > 0 ? '-' + formatClock(durSec - curSec) : ''
 }
 
 Page({
@@ -66,7 +61,6 @@ Page({
   onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
-    title: '',
     current: null as FlatSegment | null,
     src: '',
     canPrev: false,
@@ -79,11 +73,10 @@ Page({
     curSec: 0,
     durSec: 0,
     curClock: '0:00',
-    durClock: '0:00',
+    remainClock: '', // 段内剩余时长（见 remainOf）
     seeking: false, // 拖动进度条中：阻断 timeupdate 覆盖显示值
-    segDone: false, // 段落播完：不自动切下一段，停在完成态给用户看通栏重播/自己切段
-    strip: null as LessonStrip | null, // 顶条两行标题 + 分段进度条浮层数据源（lib/player lessonStrip）
-    capText: '', // segstrip 左侧文案（三态，见 buildCapText）
+    segDone: false, // 段落播完：不自动切下一段，停在段末（画面底部重播横条、底栏下一段反相），由用户自己切段
+    strip: null as LessonStrip | null, // 视频顶部分段条 + 课时胶囊数据源（lib/player lessonStrip）
     started: false, // 本段是否已真开播（bind:play 置真·换段复位）：假时画面叠转圈，防首帧前黑屏（UI 审查 2026-09-29）
     blocked: false, // 元数据到了 1s 仍未开播＝iOS 拦了自动播放：转圈换成播放键（点画面即 play·见 onTapVideo）
     hintDismissed: false, // 单击提示条是否已被首次 tap 关闭（页面实例级·不持久化·无定时器）
@@ -99,6 +92,7 @@ Page({
     helpFaqList: [] as FaqItemVM[], // 精选 FAQ VM（mapPublicFaq 产出）
     helpSrc: '', // 内嵌播放地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
+    backGuard: false, // 手势返回拦截开关（驱动隐形 page-container·onShow 武装、自己导航离开前撤掉）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
     help: mapCatalogPlayer(null).help as CatalogPlayerVM['help'], // 求助面板三卡标题 + FAQ（CMS·首帧默认·到达覆盖）
@@ -134,7 +128,8 @@ Page({
   _seekTextAt: 0, // 拖动文案 setData 节流时间戳（SEEK_TEXT_THROTTLE_MS·onSeekTick 用·位置 WXS 60fps、文案 ~10fps）
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
-  _backAt: 0, // 返回二次确认判定锚点（BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
+  _gestureAt: 0, // 上一次手势返回被拦下的时刻（GESTURE_CONFIRM_MS 窗口内再来一次才回目录）
+  _guardTimer: null as ReturnType<typeof setTimeout> | null, // 拦下后重新武装的定时器（离页必清）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
   _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 成功把非空 src 交给挂载 video 才消费清零——取址失败/url 为空不消费，留给重试续到秒）
   _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
@@ -173,7 +168,6 @@ Page({
     }
     this.course = course
     const segments = flattenSegments(course)
-    this.setData({ title: String(course.title || '') })
     const want = this._wantSeg
     const start = segments.find((s) => s.segmentId === want && s.hasVideo) || segments.find((s) => s.hasVideo) || null
     if (!start) {
@@ -208,7 +202,7 @@ Page({
     // 换段清零字段单源（peek 直落 playing 与常规 loading→playing 两路共用这份 patch·勿两处各写漂移·病根#5）：
     // src 清空另在各自 setData 给（loading 给 ''·卸载旧/坏 <video> 显骨架；peek 直给新 url）。进度/暂停/播完通栏/
     // 自绘 seek 填充节点气泡/缓冲水位都属旧段，一律归零重算（completed=false）——新段是新的播放单元。
-    const strip = lessonStrip(this.course, seg.segmentId, false)
+    const strip = lessonStrip(this.course, seg.segmentId)
     const next = navSegment(this.course, seg.segmentId, 1)
     // canPrev/canNext 随换段一次算定：loading/denied 态不读它们，playing/empty/error 各落点共用
     const clearPatch = {
@@ -221,11 +215,10 @@ Page({
       curSec: 0,
       durSec: 0,
       curClock: '0:00',
-      durClock: '0:00',
+      remainClock: '',
       seeking: false,
       segDone: false,
       strip,
-      capText: buildCapText(strip, false, this.course, seg.segmentId),
       seekPct: 0,
       markVMs: [],
       snapName: '',
@@ -309,25 +302,21 @@ Page({
     if (this.data.segDone) this.exitSegDone()
   },
 
-  // 退出播完完成态单出口：恢复播放的三条路径（onVideoPlay 兜底/onReplay/onSeekCommit）共用——
-  // 重算 strip/capText（completed=false）+ 复位 segDone；extra 并入同一次 setData（onSeekCommit 要一并收口拖动态+落位秒）。
-  exitSegDone(extra: Partial<{ seeking: boolean; snapName: string; curSec: number; curClock: string; seekPct: number }> = {}) {
-    const cur = this.data.current
-    const strip = cur ? lessonStrip(this.course, cur.segmentId, false) : null
-    this.setData({ ...extra, segDone: false, strip, capText: buildCapText(strip, false, this.course, cur ? cur.segmentId : '') })
+  // 退出段末态单出口：恢复播放的三条路径（onVideoPlay 兜底/onReplay/onSeekCommit）共用——复位 segDone；
+  // extra 并入同一次 setData（onSeekCommit 要一并收口拖动态+落位秒）。
+  exitSegDone(extra: Partial<{ seeking: boolean; snapName: string; curSec: number; curClock: string; remainClock: string; seekPct: number }> = {}) {
+    this.setData({ ...extra, segDone: false })
   },
   onVideoPause() {
     this.setData({ paused: true })
   },
 
-  // 段落播完（设计拍板）：不自动切下一段——停在完成态（课时内＝「段间」浮层重播本段/继续下一段；课时末段＝C9
-  // 学完一节重看本节/继续下一节），文案三态见 buildCapText，由用户自己选（需求 R38）。
+  // 段落播完（需求 R38）：不自动切下一段——停在段末，画面底部出「重播本段」、底栏「下一段」反相，由用户自己选。
   onEnded() {
     const cur = this.data.current
     if (!cur) return
     trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
-    const strip = lessonStrip(this.course, cur.segmentId, true)
-    this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur.segmentId) })
+    this.setData({ segDone: true, paused: true })
   },
 
   // 通栏重播：从头重来一遍，退出完成态。
@@ -340,17 +329,9 @@ Page({
     this.exitSegDone()
   },
 
-  // 整门课最后一节播完「完成课程」→ C10 结业页（孵化小鸭）；redirect 不叠栈，返回回到进播放页之前那页
+  // 全课最后一段播完、段末点「下一段」→ C10 结业页（孵化小鸭）；redirect 不叠栈，返回回到进播放页之前那页
   onFinishCourse() {
     wx.redirectTo({ url: '/pages/finish/finish?courseId=' + this.courseId })
-  },
-  // C9 学完一节「重看本节」：回本课时第一段可播段起播；本课时只有这一段就原地重播（不重挂 <video>）。
-  onReplayLesson() {
-    const cur = this.data.current
-    if (!cur) return
-    const first = flattenSegments(this.course).find((s) => s.lessonId === cur.lessonId && s.hasVideo)
-    if (!first || first.segmentId === cur.segmentId) this.onReplay()
-    else void this.playSegment(first, 'seg')
   },
 
   // error 态手动重试：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
@@ -491,7 +472,7 @@ Page({
     const durSec = Math.floor(e.detail.duration || 0)
     if (curSec === this.data.curSec && durSec === this.data.durSec) return
     const seekPct = durSec ? Math.min(100, Math.round((curSec / durSec) * 10000) / 100) : 0
-    const patch: Record<string, unknown> = { curSec, durSec, curClock: formatClock(curSec), durClock: formatClock(durSec), seekPct }
+    const patch: Record<string, unknown> = { curSec, durSec, curClock: formatClock(curSec), remainClock: remainOf(curSec, durSec), seekPct }
     if (durSec && !this.data.durSec) {
       const cur = this.data.current
       const marks = cur ? cur.marks : []
@@ -575,6 +556,7 @@ Page({
       this._seekTextAt = now
       patch.curSec = sec
       patch.curClock = formatClock(sec)
+      patch.remainClock = remainOf(sec, this.data.durSec)
       patch.snapName = hit ? hit.name : ''
     }
     if (Object.keys(patch).length) this.setData(patch)
@@ -591,7 +573,7 @@ Page({
     ctx.seek(sec)
     const durSec = this.data.durSec
     const seekPct = durSec ? Math.min(100, Math.round((sec / durSec) * 10000) / 100) : 0
-    const patch = { seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct }
+    const patch = { seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), remainClock: remainOf(sec, durSec), seekPct }
     // 续播兜底：seek 触发重载时播放会停摆在首帧，没人补推就永远停在那——而播放一停就没有 timeupdate，
     // 进度条随之永久冻结在 WXS 最后落位处（用户看到的「拖动失效」实为播放停了）。play 幂等（已在播＝no-op），
     // 与 playSegment 的 autoplay 停摆兜底同型。用户主动暂停态（paused 由 bind:pause 真回报）不打扰。
@@ -698,22 +680,15 @@ Page({
   // wxml 事件绑定与 ts 方法定义是一对，抄一半＝真机报错）。
   noop() {},
 
-  // 返回（设计拍板：每次返回都出现二次确认；首次成功退出加桌引导）：求助面板开着时先逐层
-  // 收口（四级链：内嵌播放→videos/faq 列表→menu→关面板），不计入退出确认；面板已关时才走二次确认。
+  // 返回（v6 Lite·老板 2026-10-13：返回回到课程目录，不再二次确认）：求助面板开着时先逐层收口
+  // （四级链：内嵌播放→videos/faq 列表→menu→关面板）；面板已关才离开播放页。
   onBack() {
     const { helpSrc, helpPanel } = this.data
     if (helpSrc || helpPanel) {
       this.setData(helpSrc ? { helpSrc: '', helpSegName: '' } : { helpPanel: helpPanel === 'menu' ? '' : 'menu' })
       return
     }
-    const now = Date.now()
-    if (now - this._backAt > BACK_CONFIRM_MS) {
-      this._backAt = now
-      fxHint(this, '再按一次返回退出')
-      return
-    }
-    // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同
-    // 已展示——宁可少弹一次不可卡住用户退出）。
+    // 第一次离开先弹一次加桌引导、不走（storage 读失败 fail-open 视同已展示——宁可少弹一次不可卡住返回）。
     let shown = true
     try {
       shown = !!wx.getStorageSync(DESK_GUIDE_KEY)
@@ -735,26 +710,76 @@ Page({
       this.setData({ deskGuide: true, deskGuideIOS: ios })
       return
     }
-    goBackOrHome()
+    this.backToCatalog()
   },
-  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下（不退）；「知道了」＝继续原本的退出。
+  // 回本课目录：栈里有本课目录就退回去（不叠栈）；没有（分享链/「我」页直进）就把播放页换成目录；
+  // 连课程 id 都没有（坏链接）退回上一页兜底。先撤手势拦截再走——武装着的 page-container 连 navigateBack 也会拦。
+  backToCatalog() {
+    this.clearGuardTimer()
+    this.setData({ backGuard: false }, () => {
+      if (!this.courseId) {
+        goBackOrHome()
+        return
+      }
+      const pages = getCurrentPages()
+      let i = pages.length - 2
+      while (i >= 0 && !(pages[i].route === 'pages/catalog/catalog' && (pages[i].options || {}).courseId === this.courseId)) i--
+      if (i >= 0) wx.navigateBack({ delta: pages.length - 1 - i })
+      else wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.courseId })
+    })
+  },
+  // 手势返回（iOS 侧滑 / 安卓返回键）被隐形 page-container 接住（老板 2026-10-13：手势也回本课目录，加二次提醒防误触）：
+  // 加桌引导开着＝关掉留下；求助面板开着＝逐层收口；否则第一次只提示，窗口内再来一次＝点返回键（首次加桌引导 / 回本课目录）。
+  // 没离开就隔一拍重新武装。
+  onGestureBack() {
+    this.setData({ backGuard: false })
+    const { helpSrc, helpPanel, deskGuide } = this.data
+    if (deskGuide) this.onDeskGuideStay()
+    else if (helpSrc || helpPanel) this.onBack()
+    else if (Date.now() - this._gestureAt <= GESTURE_CONFIRM_MS) {
+      this._gestureAt = 0
+      this.onBack()
+      if (!this.data.deskGuide) return // 已在回目录的路上：不再武装
+    } else {
+      this._gestureAt = Date.now()
+      fxHint(this, '再返回一次回目录', { ms: GESTURE_CONFIRM_MS })
+    }
+    this.clearGuardTimer()
+    this._guardTimer = setTimeout(() => {
+      this._guardTimer = null
+      if (!this.unloaded) this.setData({ backGuard: true })
+    }, REARM_MS)
+  },
+  clearGuardTimer() {
+    if (this._guardTimer) {
+      clearTimeout(this._guardTimer)
+      this._guardTimer = null
+    }
+  },
+  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下；「知道了」＝继续回目录。
   onDeskGuideStay() {
     this.setData({ deskGuide: false })
   },
   onDeskGuideExit() {
     this.setData({ deskGuide: false })
-    goBackOrHome()
+    this.backToCatalog()
   },
 
+  // 上一段（v6 Lite）：本段播过 3 秒＝回本段开头（同常见播放器）；没过 3 秒退到上一段（跨课时·跳过无视频段）；
+  // 已是全课第一段就回开头。
   onPrev() {
     const cur = this.data.current
-    const prev = cur && navSegment(this.course, cur.segmentId, -1)
+    if (!cur) return
+    const prev = this.data.curSec > 3 ? null : navSegment(this.course, cur.segmentId, -1)
     if (prev) void this.playSegment(prev, 'seg')
+    else if (this.data.state === 'playing') this.onReplay()
   },
+  // 下一段：有下一段就切过去；全课最后一段播完（段末）点它＝完成课程，进结业页。
   onNext() {
     const cur = this.data.current
     const next = cur && navSegment(this.course, cur.segmentId, 1)
     if (next) void this.playSegment(next, 'seg')
+    else if (this.data.segDone) this.onFinishCourse()
   },
   onGoActivate() {
     wx.redirectTo({ url: '/pages/welcome/welcome' })
@@ -777,8 +802,10 @@ Page({
   // reportWatchAt 仍只在 state==='playing' 时真报，此处多复位几次（如首次 onLoad 紧随的 onShow）也是无害 no-op。
   onShow() {
     if (this.data.current) this.watchReported = false
+    this.setData({ backGuard: true }) // 武装手势返回拦截（回前台 / 从客服回来都重新武装）
   },
   onHide() {
+    this.clearGuardTimer()
     this.reportWatchAt()
     // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE.md）：挂起期无 timeupdate，10s 定时器醒来会把
     // 正常的后台停留误判成失速落 error 态；回前台若真在缓冲，waiting 会再次触发重建角标与定时器。
@@ -786,6 +813,7 @@ Page({
   },
   onUnload() {
     this.unloaded = true
+    this.clearGuardTimer()
     this.reportWatchAt()
     if (this._bufTimer) {
       clearTimeout(this._bufTimer) // 离页销毁定时器（timer 必清理）；不再 setData（页面已卸载）

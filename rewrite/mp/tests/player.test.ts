@@ -193,26 +193,17 @@ describe('lessonStrip（课时内分段条映射·P1/P4 segstrip 数据源）', 
       },
     ],
   }
-  it('大白话：跨章课时序号连续——第二章第 1 个课时序号接着第一章两个课时往下数', () => {
-    expect(lessonStrip(COURSE, 's6')!.lessonNo).toBe('03')
-    expect(lessonStrip(COURSE, 's1')!.lessonNo).toBe('01')
-    expect(lessonStrip(COURSE, 's4')!.lessonNo).toBe('02')
+  it('大白话：课时编号写「章.节」——第二章第 1 个课时是 2.1，不接着第一章往下数', () => {
+    expect(lessonStrip(COURSE, 's6')!.label).toBe('2.1')
+    expect(lessonStrip(COURSE, 's1')!.label).toBe('1.1')
+    expect(lessonStrip(COURSE, 's4')!.label).toBe('1.2')
   })
-  it('大白话：播放中（completed 缺省）——当前段之前 done、当前段 cur、之后 todo，按位置序诚实近似', () => {
+  it('大白话：当前段之前 done、当前段 cur、之后 todo，按位置序诚实近似', () => {
     const s = lessonStrip(COURSE, 's5')!
     expect(s.lessonName).toBe('收针')
     expect(s.segIndex).toBe(2)
     expect(s.segTotal).toBe(2)
     expect(s.cells).toEqual(['done', 'cur'])
-  })
-  it('大白话：段落播完态（completed=true）——当前段转 done，紧随其后一段转 cur，其余不变', () => {
-    const s = lessonStrip(COURSE, 's2', true)!
-    expect(s.segIndex).toBe(2)
-    expect(s.cells).toEqual(['done', 'done', 'cur']) // s1 之前=done·s2 当前转 done·s3 紧随其后=cur
-  })
-  it('大白话：当前段是课时末段时 completed=true 无 cur 格（没有紧随其后一段）', () => {
-    const s = lessonStrip(COURSE, 's3', true)!
-    expect(s.cells).toEqual(['done', 'done', 'done'])
   })
   it('大白话：找不到当前段 → null；脏 course 不崩', () => {
     expect(lessonStrip(COURSE, 'ghost')).toBeNull()

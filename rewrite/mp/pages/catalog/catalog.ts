@@ -1,5 +1,5 @@
-// 课程目录主页（v5 稿 C6）：hero 产品主图 + 像素分段进度 + 大章节>小课时两层目录（段落层级只活在播放页
-// segstrip，不在此出现）。数据源＝lib/mapLearning mapCatalog（课时状态判定/续播段解耦，见其头注）。
+// 课程目录主页（v6 Lite 稿 C6）：hero 产品主图 + 通栏续学键 + 可折叠的章>课时两层目录（课时带逐段细条）。
+// 数据源＝lib/mapLearning mapCatalog（课时状态判定/续播段解耦，见其头注）。
 // 课程结构走 lib/courses 会话缓存（本会话内不变·根因账本#15）；学习进度每次实时（onShow 重拉，同
 // my-courses.ts 注释口径）；hero 背景图与目录/进度拉取并行发起，互不阻塞。
 import { tapHaptic } from '../../lib/haptics'
@@ -20,10 +20,8 @@ Page({
     courseId: '',
     state: 'loading' as 'loading' | 'ok' | 'missing' | 'failed', // failed=目录拉取网络失败（可重试·根因#14），与 missing「课程不存在」分治
     bg: '',
-    chapters: [] as (CatalogChapterVM & { cur: boolean })[], // cur＝本章含当前课时（章序号标紫）
+    chapters: [] as (CatalogChapterVM & { cur: boolean; open: boolean })[], // cur＝本章含当前课时（章序号标紫）；open＝展开
     continueTarget: null as { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null,
-    resumeLabel: '', // 有学习记录时系统生成的续学文案（mapCatalog·优先于 resumeCta）
-    resumeCta: mapCatalogPlayer(null).catalog.resumeCta, // 「开始学习」CTA 文案·首帧默认（CMS 到达覆盖）
   },
   home: null as unknown,
   cmsHero: undefined as string | undefined, // CMS hero 图（优先于 bgFor 回退链·空则走既有链，见 applyHero）
@@ -33,7 +31,9 @@ Page({
     this.unloaded = true
   },
   _seq: 0, // onShow 代次·丢弃过期回包（同 my-courses.ts _seq 范式）
+  _open: {} as Record<number, boolean>, // 用户点过的章（下标→展开与否）；没点过的章默认只展开当前课时所在章（v6 Lite）
   onLoad(query: Record<string, string | undefined>) {
+    this._open = {}
     const courseId = String(query.courseId || '')
     this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight, courseId, state: courseId ? 'loading' : 'missing' })
     if (!courseId) return
@@ -45,7 +45,7 @@ Page({
     })
     void this.loadPageContent() // CMS 续播 CTA/空态文案/hero 图·与目录本体互不依赖，并行发起
   },
-  // CMS 目录页文案（fail-soft·拉不到维持默认）：resumeCta setData 覆盖 CTA；heroImage 优先于 bgFor（applyHero）；
+  // CMS 目录页内容（fail-soft·拉不到维持默认）：heroImage 优先于 bgFor（applyHero）；
   // emptyLesson 存实例字段供 onTapLesson 取。await 恢复点复核 unloaded（守卫纪律）。
   async loadPageContent() {
     const content = await getPageContent('catalogPlayer')
@@ -53,7 +53,6 @@ Page({
     const vm = mapCatalogPlayer(content)
     this.cmsHero = vm.catalog.heroImage
     this.emptyLessonText = vm.catalog.emptyLesson
-    this.setData({ resumeCta: vm.catalog.resumeCta })
     this.applyHero()
   },
   // hero 背景：CMS heroImage 优先，空则走既有 bgFor 回退链（只加一层优先·不改回退链本身）。
@@ -78,8 +77,12 @@ Page({
       this.setData({ state: 'missing' })
       return
     }
-    const { chapters, continueTarget, resumeLabel } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
-    this.setData({ state: 'ok', chapters: chapters.map((ch) => ({ ...ch, cur: ch.lessons.some((l) => l.status === 'current') })), continueTarget, resumeLabel })
+    const { chapters, continueTarget } = mapCatalog(d.course, progress.ok ? progress.list : [], courseId)
+    const vms = chapters.map((ch, i) => {
+      const cur = ch.lessons.some((l) => l.status === 'current')
+      return { ...ch, cur, open: i in this._open ? this._open[i] : cur }
+    })
+    this.setData({ state: 'ok', chapters: vms, continueTarget })
     // 续播段取址预热（根因#15）：目录展示后即预热续播段地址，用户点「开始学习」进播放器时 peek 命中零云往返；
     // 纯 cache 暖（不 setData·新鲜命中 no-op·在途去重·err 吞掉）。段为空（全课无可播）时 prefetch 自 no-op。
     if (continueTarget) void playbackCache.prefetch(courseId, continueTarget.segmentId)
@@ -113,6 +116,14 @@ Page({
     const at = t.resumeAt > 0 ? '&t=' + t.resumeAt : ''
     const url = '/pages/player/player?courseId=' + this.data.courseId + '&segmentId=' + t.segmentId + at
     void fxTransit(this, '.ct-start', () => wx.navigateTo({ url })) // 暗场铺满再进播放页（设计稿 fxEnter）
+  },
+  // 章行点击：展开 / 收起，并记住（从播放页回来 onShow 重拉目录时不被默认值冲掉）。
+  onToggleChapter(e: WechatMiniprogram.TouchEvent) {
+    const i = Number(e.currentTarget.dataset.i)
+    const ch = this.data.chapters[i]
+    if (!ch) return
+    this._open[i] = !ch.open
+    this.setData({ [`chapters[${i}].open`]: !ch.open })
   },
   // 课时行点击：firstPlayableSegId 非空跳该段；空＝本课时无可播视频（半上线），诚实提示。
   onTapLesson(e: WechatMiniprogram.TouchEvent) {

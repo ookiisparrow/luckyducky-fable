@@ -38,8 +38,7 @@ describe('v6 图标键：次键收成方键', () => {
     ['编辑地址·删除（按住）', addrEditWxml, 'ae-del ', 'trash'],
     ['播放页·求助', playerWxml, 'bind:tap="onHelp"', 'help'],
     ['播放页·上一段', playerWxml, 'bind:tap="onPrev"', 'prev'],
-    ['播放页·下一段', playerWxml, 'lp-ctl \\{\\{canNext', 'next'],
-    ['学完一节·重看本节', playerWxml, 'bind:tap="onReplayLesson"', 'replay'],
+    ['播放页·下一段', playerWxml, 'lp-next ', 'next'],
     ['登录半屏·暂不登录', loginWxml, 'ls-later', 'times'],
     ['隐私弹窗·拒绝', privacyWxml, 'ps-no', 'times'],
   ]
@@ -69,9 +68,9 @@ describe('v6 图标键：主键宽度不变，只换图标', () => {
     iconOnly(keyOf(profileWxml, 'bind:tap="onSave"'), 'check')
     expect(live(profileWxml)).toContain('>保存中</view>')
   })
-  it('大白话：学完一节「继续下一节」→ next（反相主键）；「完成课程」照旧带字', () => {
-    iconOnly(keyOf(playerWxml, 'lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext"'), 'next')
-    expect(live(playerWxml)).toContain('完成课程')
+  it('大白话：段末「重播本段」→ 画面底部 replay 通栏（v6 Lite·原「学完一节」页取消）', () => {
+    iconOnly(keyOf(playerWxml, 'lp-replay'), 'replay')
+    expect(live(playerWxml)).not.toContain('完成课程')
   })
 })
 

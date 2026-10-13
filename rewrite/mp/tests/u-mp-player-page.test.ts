@@ -71,6 +71,8 @@ beforeEach(() => {
     },
     getDeviceInfo: () => ({ platform: 'android' }),
     showToast: vi.fn(),
+    navigateBack: vi.fn(),
+    redirectTo: vi.fn(),
   }
   urlMock.mockReset().mockImplementation(async (_c: string, s: string) => ({ ok: true, url: 'https://v/' + s }))
   trackMock.mockReset()
@@ -211,8 +213,14 @@ describe('媒体错误自动重试预算', () => {
   })
 })
 
-describe('返回键：求助面板逐层收口，关了才走二次确认', () => {
-  it('大白话：内嵌播放 → 回列表；列表（视频/问答）→ 菜单；菜单 → 关面板', async () => {
+describe('返回键：求助面板逐层收口，关了就回本课目录（v6 Lite·老板 2026-10-13）', () => {
+  const stack = (...pages: [string, string][]) => {
+    ;(globalThis as any).getCurrentPages = () => pages.map(([route, courseId]) => ({ route, options: { courseId } }))
+  }
+  const CATALOG = 'pages/catalog/catalog'
+  const PLAYER = 'pages/player/player'
+
+  it('大白话：内嵌播放 → 回列表；列表（视频/问答）→ 菜单；菜单 → 关面板；这几步都不离开播放页', async () => {
     const page = await mount()
     Object.assign(page.data, { helpPanel: 'videos', helpSrc: 'https://h', helpSegName: '起针' })
     page.onBack()
@@ -225,28 +233,131 @@ describe('返回键：求助面板逐层收口，关了才走二次确认', () =
     page.onBack()
     expect(page.data.helpPanel).toBe('')
     expect(goBackMock).not.toHaveBeenCalled()
+    expect((globalThis as any).wx.navigateBack).not.toHaveBeenCalled()
+    expect((globalThis as any).wx.redirectTo).not.toHaveBeenCalled()
+  })
+
+  it('大白话：第一次离开——先弹加桌引导、不走；引导里点「知道了」回目录，不再要求按第二次', async () => {
+    stack([CATALOG, 'c1'], [PLAYER, 'c1'])
+    const page = await mount()
+    page.onBack()
+    expect(page.data.deskGuide).toBe(true)
+    expect((globalThis as any).wx.navigateBack).not.toHaveBeenCalled()
+    page.onDeskGuideExit()
+    expect(page.data.deskGuide).toBe(false)
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledWith({ delta: 1 })
     expect((globalThis as any).wx.showToast).not.toHaveBeenCalled()
   })
 
-  it('大白话：面板关着——第一按提示、窗口内第二按首次弹加桌引导；引导里点退出才真退', async () => {
-    const page = await mount()
-    page.onBack()
-    expect((globalThis as any).wx.showToast).toHaveBeenCalledTimes(1)
-    page.onBack()
-    expect(page.data.deskGuide).toBe(true)
-    expect(goBackMock).not.toHaveBeenCalled()
-    page.onDeskGuideExit()
-    expect(page.data.deskGuide).toBe(false)
-    expect(goBackMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('大白话：引导已展示过——窗口内第二按直接真退', async () => {
+  it('大白话：引导看过——一按就回本课目录：栈里有就退回去（别的课的目录不算），没有就把播放页换成本课目录', async () => {
     store['ld_player_desk_guide_shown'] = 1
     const page = await mount()
+    stack([CATALOG, 'c1'], [CATALOG, 'c2'], [PLAYER, 'c1'])
     page.onBack()
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledWith({ delta: 2 })
+    stack(['pages/me/me', ''], [PLAYER, 'c1'])
+    page.onBack()
+    expect((globalThis as any).wx.redirectTo).toHaveBeenCalledWith({ url: '/pages/catalog/catalog?courseId=c1' })
+    expect(page.data.deskGuide).toBe(false)
+  })
+
+  it('大白话：坏链接连课程 id 都没有——退回上一页兜底（不跳一个找不到课的目录）', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    const page = await mount()
+    page.courseId = ''
     page.onBack()
     expect(goBackMock).toHaveBeenCalledTimes(1)
-    expect(page.data.deskGuide).toBe(false)
+    expect((globalThis as any).wx.redirectTo).not.toHaveBeenCalled()
+  })
+})
+
+describe('手势返回（隐形 page-container·老板 2026-10-13）：第一次提醒，2 秒内再来一次回本课目录', () => {
+  const stack = (...pages: [string, string][]) => {
+    ;(globalThis as any).getCurrentPages = () => pages.map(([route, courseId]) => ({ route, options: { courseId } }))
+  }
+  const w = () => (globalThis as any).wx
+  const HINT = { title: '再返回一次回目录', icon: 'none', duration: 2000, mask: undefined }
+
+  it('大白话：进页就武装；第一次手势只提醒不走，隔一拍重新武装；2 秒内再来一次 → 回本课目录，走前先撤拦截、走后不再武装', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    stack(['pages/catalog/catalog', 'c1'], ['pages/player/player', 'c1'])
+    const page = await mount()
+    let guardAtLeave: unknown = 'unset'
+    w().navigateBack = vi.fn(() => (guardAtLeave = page.data.backGuard))
+    page.onShow()
+    expect(page.data.backGuard).toBe(true)
+    vi.useFakeTimers()
+    try {
+      page.onGestureBack()
+      expect(w().showToast).toHaveBeenCalledWith(HINT)
+      expect(w().navigateBack).not.toHaveBeenCalled()
+      expect(page.data.backGuard).toBe(false)
+      vi.advanceTimersByTime(100)
+      expect(page.data.backGuard).toBe(true)
+      vi.advanceTimersByTime(1500)
+      page.onGestureBack()
+      expect(w().navigateBack).toHaveBeenCalledWith({ delta: 1 })
+      expect(guardAtLeave).toBe(false)
+      vi.advanceTimersByTime(1000)
+      expect(page.data.backGuard).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：两次手势隔了 2 秒以上——第二次仍然只是提醒（误触保护恢复）', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    stack(['pages/catalog/catalog', 'c1'], ['pages/player/player', 'c1'])
+    const page = await mount()
+    vi.useFakeTimers()
+    try {
+      page.onGestureBack()
+      vi.advanceTimersByTime(2100)
+      page.onGestureBack()
+      expect(w().showToast).toHaveBeenCalledTimes(2)
+      expect(w().navigateBack).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：求助面板开着——手势只收一层、不提醒；加桌引导开着——手势关掉引导、留在播放页', async () => {
+    const page = await mount()
+    vi.useFakeTimers()
+    try {
+      Object.assign(page.data, { helpPanel: 'faq' })
+      page.onGestureBack()
+      expect(page.data.helpPanel).toBe('menu')
+      Object.assign(page.data, { helpPanel: '', deskGuide: true })
+      page.onGestureBack()
+      expect(page.data.deskGuide).toBe(false)
+      expect(w().showToast).not.toHaveBeenCalled()
+      expect(w().navigateBack).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(100)
+      expect(page.data.backGuard).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：点左上角返回键也先撤拦截再导航（武装着的 page-container 会把自己的 navigateBack 也拦下）；wxml 挂了拦截容器', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    stack(['pages/catalog/catalog', 'c1'], ['pages/player/player', 'c1'])
+    const page = await mount()
+    let guardAtLeave: unknown = 'unset'
+    w().navigateBack = vi.fn(() => (guardAtLeave = page.data.backGuard))
+    page.onShow()
+    page.onBack()
+    expect(guardAtLeave).toBe(false)
+    expect(playerWxml).toContain('<page-container show="{{backGuard}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onGestureBack" />')
+  })
+})
+
+describe('画面内 seek 条与原生视频手势（老板安卓真机 2026-10-13：拖动松手又回原位）', () => {
+  it('大白话：自绘 seek 条压在视频画面上——主视频必须关掉微信自带的「手势调进度」，否则横着拖时原生播放器也跟着跳、把我们的落点盖回去', () => {
+    const video = playerWxml.replace(/<!--[\s\S]*?-->/g, '').match(/<video[^>]*id="lp-video"[^>]*>/)?.[0] ?? ''
+    expect(video).toContain('id="lp-video"')
+    expect(video).toContain('enable-progress-gesture="{{false}}"')
   })
 })
 
@@ -419,38 +530,71 @@ describe('进页与拖动几何', () => {
   })
 })
 
-describe('学完一节「重看本节」', () => {
-  it('大白话：课时末段播完点重看本节 → 回本课时第一段起播；课时只有一段 → 原地从头重播', async () => {
+describe('上一段（v6 Lite）：播过 3 秒回本段开头，否则退上一段', () => {
+  it('大白话：本段播到第 4 秒点上一段 → 原地从头重播，不换段；第 3 秒内点 → 退到上一段（跨课时）', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s3'), 'enter')
+    await flush()
+    page.data.curSec = 4
+    video.calls = []
+    page.onPrev()
+    expect(video.calls).toEqual(['seek', 'play'])
+    expect(page.data.current.segmentId).toBe('s3')
+    page.data.curSec = 3
+    page.onPrev()
+    await flush()
+    expect(page.data.current.segmentId).toBe('s2')
+  })
+
+  it('大白话：全课第一段——没有上一段，但播放中上一段键照样能点，点了只回本段开头', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s1'), 'enter')
+    await flush()
+    expect(page.data.canPrev).toBe(false)
+    video.calls = []
+    page.onPrev()
+    expect(video.calls).toEqual(['seek', 'play'])
+    expect(page.data.current.segmentId).toBe('s1')
+    expect(playerWxml).toContain("lp-prev {{canPrev || state === 'playing' ? 'k-dk' : 'lp-key-off'}}")
+  })
+})
+
+describe('段末（v6 Lite）：重播横条 + 下一段反相；全课末段点下一段进结业页', () => {
+  it('大白话：段末停住——画面底部出重播横条、下一段键反相；点重播从头再放并退出段末', async () => {
+    const page = await mount()
+    await page.playSegment(seg('s1'), 'enter')
+    await flush()
+    page.onEnded()
+    expect(page.data).toMatchObject({ segDone: true, paused: true })
+    expect(playerWxml).toMatch(/<view wx:if="\{\{segDone\}\}" class="k-inv lp-replay"[^>]*bind:tap="onReplay"/)
+    expect(playerWxml).toContain("lp-next {{segDone ? 'k-inv' : (canNext ? 'k-dk' : 'lp-key-off')}}")
+    video.calls = []
+    page.onReplay()
+    expect(video.calls).toEqual(['seek', 'play'])
+    expect(page.data.segDone).toBe(false)
+  })
+
+  it('大白话：课时末段播完点下一段 → 进下一课时第一段（不另出「学完一节」页）', async () => {
     const page = await mount()
     await page.playSegment(seg('s2'), 'enter')
     await flush()
     page.onEnded()
-    expect(page.data.segDone).toBe(true)
-    page.onReplayLesson()
+    page.onNext()
     await flush()
-    expect(page.data).toMatchObject({ state: 'playing', src: 'https://v/s1', segDone: false })
-    expect(page.data.current.segmentId).toBe('s1')
-
-    await page.playSegment(seg('s3'), 'seg')
-    await flush()
-    page.onEnded()
-    video.calls = []
-    page.onReplayLesson()
-    expect(video.calls).toEqual(['seek', 'play'])
-    expect(page.data).toMatchObject({ src: 'https://v/s3', segDone: false })
+    expect(page.data).toMatchObject({ state: 'playing', src: 'https://v/s3', segDone: false })
   })
-})
 
-describe('整门课学完「完成课程」', () => {
-  it('大白话：全课最后一段播完没有下一节 → 点「完成课程」换到结业页（带课程 id），不叠栈', async () => {
+  it('大白话：全课最后一段播完 → 点下一段换到结业页（带课程 id），不叠栈；没播完时点它不动', async () => {
     const page = await mount()
     page.courseId = 'c1'
     ;(globalThis as any).wx.redirectTo = vi.fn()
     await page.playSegment(seg('s3'), 'enter')
     await flush()
-    page.onEnded()
     expect(page.data.canNext).toBe(false)
-    page.onFinishCourse()
+    page.onNext()
+    expect((globalThis as any).wx.redirectTo).not.toHaveBeenCalled()
+    page.onEnded()
+    page.onNext()
     expect((globalThis as any).wx.redirectTo).toHaveBeenCalledWith({ url: '/pages/finish/finish?courseId=c1' })
   })
 })

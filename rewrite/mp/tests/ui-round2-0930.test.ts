@@ -122,7 +122,7 @@ describe('10a 播放页控制行：上一段/下一段是像素图标（v6 换�
   it('大白话：不再写字，任何屏宽都是图标', () => {
     const w = live(playerWxml)
     expect(w).toMatch(/bind:tap="onPrev"[^>]*><px-i name="prev" \/><\/view>/)
-    expect(w).toMatch(/lp-ctl \{\{canNext[^>]*bind:tap="onNext"[^>]*><px-i name="next" \/><\/view>/)
+    expect(w).toMatch(/lp-next \{\{segDone[^>]*bind:tap="onNext"[^>]*><px-i name="next" \/><\/view>/)
     expect(w).not.toMatch(/>上一段<|>下一段</)
   })
 })
