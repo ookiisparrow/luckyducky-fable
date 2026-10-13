@@ -1,8 +1,9 @@
 /* 课程播放页（v6 Lite 稿 C7）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv（全局 app.wxss）。
    整页纵向 flex：顶栏 → 弹性视频舞台（上沿压分段条 + 课时胶囊，下沿压 seek 条）→ 底栏三键。求助面板与加桌引导是浅色 sheet（同设计稿 help/leave sheet）。
    seek 条节点（.lp-seek-fill/.lp-seek-handle/.lp-seek-preview）的 width/left/显隐由 seek.wxs 写，这里只给静态外观。 */
-/* 本页 page 底也用暗底：老板安卓真机（2026-10-13）播放页左右、底边露出全局浅色 page 底的白边——
-   根容器改 fixed 四边贴齐窗口（不靠 100vw/100vh 换算），万一再有缝露出的也是暗底 */
+/* 本页 page 底也用暗底、根容器 fixed 四边贴齐窗口：暗底页任何缝都不露浅色全局底。
+   注：老板安卓真机两侧 / 底边露白不是这层——诊断版实测网页铺满窗口（window = screen = 根容器），
+   白边来自小程序页面之外的整体缩放，页面代码管不到（#487） */
 page {
   background: var(--v5-dark);
 }
