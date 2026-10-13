@@ -155,41 +155,32 @@ export function createPlaybackCache(o: { fetcher: UrlFetcher; now?: () => number
 
 export interface LessonStrip {
   lessonName: string
-  lessonNo: string // 课时跨章连续序号，1-based，padStart(2,'0')，如 '04'
+  label: string // 「章.节」，如 '1.3'（章、节都按课程目录里的位置数·同 lib/mapMe contMainLine 口径）
   segIndex: number // 当前段在本课时内的 1-based 序
   segTotal: number // 本课时段数
   cells: ('done' | 'cur' | 'todo')[] // 长度 = segTotal
 }
 
-/** 课时内分段条映射（segstrip 数据源）：在 course 中定位 currentSegId 所在课时，
- *  按位置序给出播放中/播完两态的分段格状态（播放页无 progress 数据，这是诚实近似）。
- *  播放中（completed 缺省/false）：当前段之前 done、当前段 cur、之后 todo。
- *  播完态（completed===true）：当前段也转 done、紧随其后一段（若有）转 cur，其余不变（承播放中基线）——
- *  之前已完成段在播完态后仍是 done、不打回 todo（对齐设计稿：「done done cur …」→「done done done cur …」）。
+/** 课时内分段条映射（播放页视频顶部分段条 + 课时胶囊的数据源）：在 course 中定位 currentSegId 所在课时，
+ *  按位置序给出分段格状态（播放页无 progress 数据，这是诚实近似）：当前段之前 done、当前段 cur、之后 todo。
  *  找不到当前段所在课时 → null；脏结构安全（缺层归空、字段 String 化）。 */
-export function lessonStrip(course: unknown, currentSegId: string, completed?: boolean): LessonStrip | null {
+export function lessonStrip(course: unknown, currentSegId: string): LessonStrip | null {
   const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
-  let lessonNo = 0
-  for (const ch of Array.isArray(c.chapters) ? c.chapters : []) {
-    if (!ch) continue
-    for (const l of Array.isArray(ch.lessons) ? ch.lessons : []) {
+  const chapters: any[] = Array.isArray(c.chapters) ? c.chapters : []
+  for (let ci = 0; ci < chapters.length; ci++) {
+    const lessons: any[] = chapters[ci] && Array.isArray(chapters[ci].lessons) ? chapters[ci].lessons : []
+    for (let li = 0; li < lessons.length; li++) {
+      const l = lessons[li]
       if (!l || !l.id) continue
-      lessonNo++
       const segs = (Array.isArray(l.segments) ? l.segments : []).filter((s: any) => s && s.id)
       const idx = segs.findIndex((s: any) => String(s.id) === currentSegId)
       if (idx < 0) continue
-      const cells: ('done' | 'cur' | 'todo')[] = segs.map((_: any, i: number) => {
-        if (i < idx) return 'done' // 之前：播放中/播完两态均已看完
-        if (i === idx) return completed === true ? 'done' : 'cur' // 当前：播完态转 done
-        if (completed === true && i === idx + 1) return 'cur' // 紧随其后一段：播完态高亮下一段
-        return 'todo'
-      })
       return {
         lessonName: String(l.name || ''),
-        lessonNo: String(lessonNo).padStart(2, '0'),
+        label: `${ci + 1}.${li + 1}`,
         segIndex: idx + 1,
         segTotal: segs.length,
-        cells,
+        cells: segs.map((_: any, i: number) => (i < idx ? 'done' : i === idx ? 'cur' : 'todo')),
       }
     }
   }

@@ -1,4 +1,4 @@
-/* 课程目录（v5「字重」稿 C6） */
+/* 课程目录（v6 Lite 稿 C6） */
 .ct {
   padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
@@ -35,41 +35,26 @@
   background: linear-gradient(to bottom, rgba(250, 250, 248, 0), var(--v5-canvas) 88%);
 }
 
-/* 课时分段进度：高 4、间隔 2、直角 */
-.ct-segs {
-  padding: 4px 16px 0;
-  display: flex;
-  gap: 2px;
-}
-.ct-seg {
-  flex: 1;
-  height: 4px;
-  background: var(--v5-track);
-}
-.ct-seg-done {
-  background: var(--v5-ink);
-}
-.ct-seg-current {
-  background: var(--v5-violet);
-}
-
 .ct-cta-wrap {
-  padding: 12px 16px 0;
+  padding: 12px 24px 0;
 }
 
-/* 目录 */
+/* 目录：章行可点（展开 / 收起），课时行 = 方块播放图标 + 课时名 + 逐段细条 */
 .ct-toc {
-  padding: 4px 16px 0;
+  padding: 4px 24px 0;
 }
 .ct-ch {
-  padding: 24px 0 8px;
+  min-height: 44px;
+  margin-top: 12px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  font-size: 17px;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 700;
 }
 .ct-ch-title {
+  flex: 1;
+  min-width: 0;
   font-weight: 600; /* 后台来的文本走黑体（UI 审查 6 问 3a） */
 }
 .ct-ch-no {
@@ -78,58 +63,75 @@
 .ct-ch-no.cur {
   color: var(--v5-violet-text);
 }
+/* chev 原朝右：收起转朝下、展开转朝上 */
+.ct-chev {
+  display: flex;
+  transform: rotate(90deg);
+}
+.ct-chev.open {
+  transform: rotate(-90deg);
+}
 .ct-lesson {
-  height: 44px;
+  padding: 10px 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  border-top: 1px solid var(--v5-hair);
+  gap: 16px;
 }
-.ct-no {
-  min-width: 22px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--v5-ink-2);
-}
-/* 节点位宽取 nodeCur（7 格×2px），node/ring 居中对齐 */
-.ct-node {
-  width: 14px;
+.ct-tile {
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
+  box-sizing: border-box;
+  padding-left: 2px; /* 播放三角视觉居中 */
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--v5-track);
 }
-.ct-name {
+.ct-lesson.done .ct-tile {
+  background: var(--v5-key);
+}
+.ct-lesson.current .ct-tile {
+  background: var(--v5-violet);
+}
+.ct-body {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ct-name {
   font-size: 17px;
   font-weight: 400;
+  color: var(--v5-ink-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ct-dur {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--v5-ink-2);
-}
-.ct-lesson.done .ct-no,
-.ct-lesson.done .ct-dur {
-  color: var(--v5-ink-2);
-}
 .ct-lesson.done .ct-name {
-  color: var(--v5-ink-2);
-}
-.ct-lesson.current .ct-no {
-  color: var(--v5-violet-text);
+  color: var(--v5-ink);
 }
 .ct-lesson.current .ct-name {
+  color: var(--v5-ink);
   font-weight: 600;
 }
-.ct-toc-end {
-  border-top: 1px solid var(--v5-hair);
+/* 逐段细条：高 2、间隔 2、直角，最宽 96 */
+.ct-segs {
+  max-width: 96px;
+  display: flex;
+  gap: 2px;
+}
+.ct-seg {
+  flex: 1;
+  height: 2px;
+  background: rgba(17, 17, 17, 0.08);
+}
+.ct-seg.done {
+  background: rgba(17, 17, 17, 0.36);
+}
+.ct-seg.current {
+  background: rgba(138, 90, 224, 0.6);
 }
 
 /* 加载中骨架 */

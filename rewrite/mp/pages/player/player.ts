@@ -45,20 +45,14 @@ const BACK_CONFIRM_MS = 2500
 // 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
-// segcap 文案三态：播放中报「段落 x/y」；播完且课时内有下一段报「x 完成·接下来 x+1」；
-// 播完且课时末段——查 navSegment 是否有跨课时下一段，有则报下一课时名，无则「本课程已全部学完」。
-// 放纯函数（非方法）：与 strip 一起在多个 setData 点重算，避免同一逻辑在 playSegment/onEnded/onReplay/onVideoPlay 四处各自重写。
 // callMethod 把载荷直接当第一个实参，没有 .detail（根因#8：按事件形状读 detail 会恒得 0）。
 function wxsArgs<T extends object>(a: T | undefined | null): Partial<T> {
   return a ?? {}
 }
 
-function buildCapText(strip: LessonStrip | null, segDone: boolean, course: CoursePub | null, segId: string): string {
-  if (!strip) return ''
-  if (!segDone) return `段落 ${strip.segIndex} / ${strip.segTotal}`
-  if (strip.segIndex < strip.segTotal) return `段落 ${strip.segIndex} 完成 · 接下来 段落 ${strip.segIndex + 1}`
-  const next = navSegment(course, segId, 1)
-  return next ? `本课时完成 · 接下来 ${next.lessonName}` : '本课程已全部学完'
+// 段内剩余时长「-m:ss」（画面右下角·v6 Lite）；时长还没拿到就空着。
+function remainOf(curSec: number, durSec: number): string {
+  return durSec > 0 ? '-' + formatClock(durSec - curSec) : ''
 }
 
 Page({
@@ -66,7 +60,6 @@ Page({
   onKeyUp: keyUp,
   data: {
     statusBarHeight: 0,
-    title: '',
     current: null as FlatSegment | null,
     src: '',
     canPrev: false,
@@ -79,11 +72,10 @@ Page({
     curSec: 0,
     durSec: 0,
     curClock: '0:00',
-    durClock: '0:00',
+    remainClock: '', // 段内剩余时长（见 remainOf）
     seeking: false, // 拖动进度条中：阻断 timeupdate 覆盖显示值
-    segDone: false, // 段落播完：不自动切下一段，停在完成态给用户看通栏重播/自己切段
-    strip: null as LessonStrip | null, // 顶条两行标题 + 分段进度条浮层数据源（lib/player lessonStrip）
-    capText: '', // segstrip 左侧文案（三态，见 buildCapText）
+    segDone: false, // 段落播完：不自动切下一段，停在段末（画面底部重播横条、底栏下一段反相），由用户自己切段
+    strip: null as LessonStrip | null, // 视频顶部分段条 + 课时胶囊数据源（lib/player lessonStrip）
     started: false, // 本段是否已真开播（bind:play 置真·换段复位）：假时画面叠转圈，防首帧前黑屏（UI 审查 2026-09-29）
     blocked: false, // 元数据到了 1s 仍未开播＝iOS 拦了自动播放：转圈换成播放键（点画面即 play·见 onTapVideo）
     hintDismissed: false, // 单击提示条是否已被首次 tap 关闭（页面实例级·不持久化·无定时器）
@@ -173,7 +165,6 @@ Page({
     }
     this.course = course
     const segments = flattenSegments(course)
-    this.setData({ title: String(course.title || '') })
     const want = this._wantSeg
     const start = segments.find((s) => s.segmentId === want && s.hasVideo) || segments.find((s) => s.hasVideo) || null
     if (!start) {
@@ -208,7 +199,7 @@ Page({
     // 换段清零字段单源（peek 直落 playing 与常规 loading→playing 两路共用这份 patch·勿两处各写漂移·病根#5）：
     // src 清空另在各自 setData 给（loading 给 ''·卸载旧/坏 <video> 显骨架；peek 直给新 url）。进度/暂停/播完通栏/
     // 自绘 seek 填充节点气泡/缓冲水位都属旧段，一律归零重算（completed=false）——新段是新的播放单元。
-    const strip = lessonStrip(this.course, seg.segmentId, false)
+    const strip = lessonStrip(this.course, seg.segmentId)
     const next = navSegment(this.course, seg.segmentId, 1)
     // canPrev/canNext 随换段一次算定：loading/denied 态不读它们，playing/empty/error 各落点共用
     const clearPatch = {
@@ -221,11 +212,10 @@ Page({
       curSec: 0,
       durSec: 0,
       curClock: '0:00',
-      durClock: '0:00',
+      remainClock: '',
       seeking: false,
       segDone: false,
       strip,
-      capText: buildCapText(strip, false, this.course, seg.segmentId),
       seekPct: 0,
       markVMs: [],
       snapName: '',
@@ -309,25 +299,21 @@ Page({
     if (this.data.segDone) this.exitSegDone()
   },
 
-  // 退出播完完成态单出口：恢复播放的三条路径（onVideoPlay 兜底/onReplay/onSeekCommit）共用——
-  // 重算 strip/capText（completed=false）+ 复位 segDone；extra 并入同一次 setData（onSeekCommit 要一并收口拖动态+落位秒）。
-  exitSegDone(extra: Partial<{ seeking: boolean; snapName: string; curSec: number; curClock: string; seekPct: number }> = {}) {
-    const cur = this.data.current
-    const strip = cur ? lessonStrip(this.course, cur.segmentId, false) : null
-    this.setData({ ...extra, segDone: false, strip, capText: buildCapText(strip, false, this.course, cur ? cur.segmentId : '') })
+  // 退出段末态单出口：恢复播放的三条路径（onVideoPlay 兜底/onReplay/onSeekCommit）共用——复位 segDone；
+  // extra 并入同一次 setData（onSeekCommit 要一并收口拖动态+落位秒）。
+  exitSegDone(extra: Partial<{ seeking: boolean; snapName: string; curSec: number; curClock: string; remainClock: string; seekPct: number }> = {}) {
+    this.setData({ ...extra, segDone: false })
   },
   onVideoPause() {
     this.setData({ paused: true })
   },
 
-  // 段落播完（设计拍板）：不自动切下一段——停在完成态（课时内＝「段间」浮层重播本段/继续下一段；课时末段＝C9
-  // 学完一节重看本节/继续下一节），文案三态见 buildCapText，由用户自己选（需求 R38）。
+  // 段落播完（需求 R38）：不自动切下一段——停在段末，画面底部出「重播本段」、底栏「下一段」反相，由用户自己选。
   onEnded() {
     const cur = this.data.current
     if (!cur) return
     trackEvent('segment_done', 'player', cur.segmentId, { courseId: this.courseId, lessonId: cur.lessonId, segmentId: cur.segmentId, at: this._at, dur: this._dur })
-    const strip = lessonStrip(this.course, cur.segmentId, true)
-    this.setData({ segDone: true, paused: true, strip, capText: buildCapText(strip, true, this.course, cur.segmentId) })
+    this.setData({ segDone: true, paused: true })
   },
 
   // 通栏重播：从头重来一遍，退出完成态。
@@ -340,17 +326,9 @@ Page({
     this.exitSegDone()
   },
 
-  // 整门课最后一节播完「完成课程」→ C10 结业页（孵化小鸭）；redirect 不叠栈，返回回到进播放页之前那页
+  // 全课最后一段播完、段末点「下一段」→ C10 结业页（孵化小鸭）；redirect 不叠栈，返回回到进播放页之前那页
   onFinishCourse() {
     wx.redirectTo({ url: '/pages/finish/finish?courseId=' + this.courseId })
-  },
-  // C9 学完一节「重看本节」：回本课时第一段可播段起播；本课时只有这一段就原地重播（不重挂 <video>）。
-  onReplayLesson() {
-    const cur = this.data.current
-    if (!cur) return
-    const first = flattenSegments(this.course).find((s) => s.lessonId === cur.lessonId && s.hasVideo)
-    if (!first || first.segmentId === cur.segmentId) this.onReplay()
-    else void this.playSegment(first, 'seg')
   },
 
   // error 态手动重试：复用现有段加载方法，重置重试计数放行 onVideoError 再给一次自动重试预算。
@@ -491,7 +469,7 @@ Page({
     const durSec = Math.floor(e.detail.duration || 0)
     if (curSec === this.data.curSec && durSec === this.data.durSec) return
     const seekPct = durSec ? Math.min(100, Math.round((curSec / durSec) * 10000) / 100) : 0
-    const patch: Record<string, unknown> = { curSec, durSec, curClock: formatClock(curSec), durClock: formatClock(durSec), seekPct }
+    const patch: Record<string, unknown> = { curSec, durSec, curClock: formatClock(curSec), remainClock: remainOf(curSec, durSec), seekPct }
     if (durSec && !this.data.durSec) {
       const cur = this.data.current
       const marks = cur ? cur.marks : []
@@ -575,6 +553,7 @@ Page({
       this._seekTextAt = now
       patch.curSec = sec
       patch.curClock = formatClock(sec)
+      patch.remainClock = remainOf(sec, this.data.durSec)
       patch.snapName = hit ? hit.name : ''
     }
     if (Object.keys(patch).length) this.setData(patch)
@@ -591,7 +570,7 @@ Page({
     ctx.seek(sec)
     const durSec = this.data.durSec
     const seekPct = durSec ? Math.min(100, Math.round((sec / durSec) * 10000) / 100) : 0
-    const patch = { seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), seekPct }
+    const patch = { seeking: false, snapName: '', curSec: sec, curClock: formatClock(sec), remainClock: remainOf(sec, durSec), seekPct }
     // 续播兜底：seek 触发重载时播放会停摆在首帧，没人补推就永远停在那——而播放一停就没有 timeupdate，
     // 进度条随之永久冻结在 WXS 最后落位处（用户看到的「拖动失效」实为播放停了）。play 幂等（已在播＝no-op），
     // 与 playSegment 的 autoplay 停摆兜底同型。用户主动暂停态（paused 由 bind:pause 真回报）不打扰。
@@ -746,15 +725,21 @@ Page({
     goBackOrHome()
   },
 
+  // 上一段（v6 Lite）：本段播过 3 秒＝回本段开头（同常见播放器）；没过 3 秒退到上一段（跨课时·跳过无视频段）；
+  // 已是全课第一段就回开头。
   onPrev() {
     const cur = this.data.current
-    const prev = cur && navSegment(this.course, cur.segmentId, -1)
+    if (!cur) return
+    const prev = this.data.curSec > 3 ? null : navSegment(this.course, cur.segmentId, -1)
     if (prev) void this.playSegment(prev, 'seg')
+    else if (this.data.state === 'playing') this.onReplay()
   },
+  // 下一段：有下一段就切过去；全课最后一段播完（段末）点它＝完成课程，进结业页。
   onNext() {
     const cur = this.data.current
     const next = cur && navSegment(this.course, cur.segmentId, 1)
     if (next) void this.playSegment(next, 'seg')
+    else if (this.data.segDone) this.onFinishCourse()
   },
   onGoActivate() {
     wx.redirectTo({ url: '/pages/welcome/welcome' })

@@ -1,5 +1,5 @@
-/* 课程播放页（v5 设计稿 C7 播放页 / 段间 / C9 学完一节）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv（全局 app.wxss）。
-   整页纵向 flex：顶栏 → 弹性视频舞台 → 底部控制区。求助面板与加桌引导是浅色 sheet（同设计稿 help/leave sheet）。
+/* 课程播放页（v6 Lite 稿 C7）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv（全局 app.wxss）。
+   整页纵向 flex：顶栏 → 弹性视频舞台（上沿压分段条 + 课时胶囊，下沿压 seek 条）→ 底栏三键。求助面板与加桌引导是浅色 sheet（同设计稿 help/leave sheet）。
    seek 条节点（.lp-seek-fill/.lp-seek-handle/.lp-seek-preview）的 width/left/显隐由 seek.wxs 写，这里只给静态外观。 */
 .ld-player {
   position: relative;
@@ -12,7 +12,7 @@
   color: var(--v5-dark-ink);
 }
 
-/* —— 顶栏：返回键 + 一行课时名；右侧 104px 留给原生胶囊 —— */
+/* —— 顶栏：只有返回键；右侧 104px 留给原生胶囊 —— */
 .lp-topbar {
   flex: 0 0 auto;
 }
@@ -42,30 +42,15 @@
   height: 30px;
   padding: 0;
 }
-.lp-nav-cap {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* —— 视频舞台 —— */
 .lp-stage {
   position: relative;
   flex: 1;
   min-height: 180px;
-  margin: 0 16px;
+  margin: 0 8px;
   border-radius: 8px;
   overflow: hidden;
   background: repeating-linear-gradient(135deg, var(--v5-dark-2) 0 8px, var(--v5-dark-3) 8px 16px);
-}
-.lp-stage.lesson-done {
-  flex: 0 0 200px;
-  min-height: 0;
 }
 .lp-video {
   position: absolute;
@@ -102,7 +87,7 @@
 .lp-tap-hint {
   position: absolute;
   left: 50%;
-  top: 14px;
+  top: 96px; /* 让开顶部分段条与课时胶囊 */
   transform: translateX(-50%);
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.45);
@@ -124,7 +109,7 @@
 .lp-buffering {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  bottom: 56px; /* 让开底部 seek 条 */
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -137,31 +122,17 @@
   white-space: nowrap;
 }
 
-/* 段间 · 停在本段末：盖在最后一帧上的暗罩 + 文案 + 两颗暗色键 */
-.lp-segend {
+/* 段末：画面底部一条反相「重播本段」（外观取 .k-inv，这里只给位置与尺寸） */
+.lp-replay {
   position: absolute;
   left: 0;
-  top: 0;
   right: 0;
   bottom: 0;
   z-index: 3;
+  height: 48px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 0 16px;
-  background: rgba(18, 18, 18, 0.72);
-}
-.lp-segend-cap {
-  font-size: 17px;
-  font-weight: 500;
-  color: var(--v5-rule);
-  text-align: center;
-}
-.lp-segend-keys {
-  display: flex;
-  gap: 8px;
 }
 
 /* 非播放态（空/未激活/找不到/失败）：同尺寸暗框 + 标题 + 说明 + 键 */
@@ -197,34 +168,42 @@
   gap: 8px;
 }
 
-/* —— 底部：seek 条 + 段名/时长 + 控制键 —— */
-.lp-bottombar {
-  flex: 0 0 auto;
-  padding: 4px 16px max(28px, env(safe-area-inset-bottom));
+/* —— 画面底部：段内 seek 条 + 剩余时长（容器不接点按，只有 seek 条接；段末 visibility 隐藏、不卸载） —— */
+.lp-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 24px 12px 8px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.4));
+  pointer-events: none;
 }
-.lp-bottombar.is-off {
-  display: none;
+.lp-foot.is-off {
+  visibility: hidden;
 }
 .lp-seek {
   position: relative;
-  height: 24px;
+  flex: 1;
+  height: 32px;
   display: flex;
   align-items: center;
+  pointer-events: auto;
 }
 .lp-seek-track,
 .lp-seek-buffer,
 .lp-seek-fill {
   position: absolute;
   left: 0;
-  top: 10px;
+  top: 14px;
   height: 4px;
 }
 .lp-seek-track {
   right: 0;
-  background: var(--v5-dark-track);
+  background: rgba(255, 255, 255, 0.24);
 }
 /* 缓冲水位：介于轨道与紫填充之间的灰（DOM 序 track→buffer→fill） */
 .lp-seek-buffer {
@@ -236,7 +215,7 @@
 /* 关键动作节点：4px 黄方格（注意色·节点位置提示） */
 .lp-seek-node {
   position: absolute;
-  top: 10px;
+  top: 14px;
   width: 4px;
   height: 4px;
   margin-left: -2px;
@@ -244,17 +223,17 @@
 }
 .lp-seek-handle {
   position: absolute;
-  top: 6px;
-  width: 4px;
+  top: 10px;
+  width: 12px;
   height: 12px;
-  margin-left: -2px;
+  margin-left: -6px;
   background: var(--v5-dark-ink);
 }
 .lp-seek-handle.big {
-  top: 2px;
-  width: 6px;
-  height: 20px;
-  margin-left: -3px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
 }
 /* 拖动浮层（常驻 DOM·默认隐藏·left 与 .on 由 seek.wxs 控制） */
 .lp-seek-preview {
@@ -290,112 +269,90 @@
   white-space: nowrap;
 }
 
-.lp-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+/* 剩余时长：定宽（量轨只量一次，文字变宽会挤短 seek 条） */
+.lp-remain {
+  flex: 0 0 auto;
+  width: 48px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--v5-dark-ink);
 }
-.lp-info-l {
-  flex: 1;
-  min-width: 0;
+
+/* —— 视频顶部浮层：本课时分段条 + 课时胶囊（top 由 wxml 按状态栏给·不接点按） —— */
+.lp-top {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 4;
+  padding: 12px 8px 16px 12px;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  background: linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+.lp-cells {
+  display: flex;
   gap: 2px;
+  padding-right: 4px;
 }
-.lp-seg-no {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-4);
+.lp-cell {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.16);
 }
-.lp-seg-title {
-  font-size: 17px;
+.lp-cell.done {
+  background: var(--v5-dark-ink);
+}
+.lp-cell-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--v5-violet);
+}
+.lp-chip {
+  align-self: flex-start;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.lp-chip-t {
+  min-width: 0;
+  font-size: 15px;
   font-weight: 500;
   color: var(--v5-dark-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.lp-time {
+.lp-chip-n {
   flex: 0 0 auto;
-  font-size: 15px;
-  color: var(--v5-ink-4);
-}
-.lp-time.on {
-  color: var(--v5-dark-ink);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v5-rule);
 }
 
+/* —— 底栏：上一段 / 求助 / 下一段 三颗 48 方键，两端对齐 —— */
 .lp-controls {
+  flex: 0 0 auto;
+  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
   display: flex;
-  gap: 8px;
-}
-.lp-ctl {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  /* 上一段/下一段：v6 像素 prev/next 方键（颜色随键：可用亮字、首末段置灰） */
-}
-.lp-ctl-main {
-  flex: 1.2;
-  min-width: 0;
-  padding: 0;
+  justify-content: space-between;
+  align-items: center;
 }
 /* 暗底不可用键：平面、无键座、弱字 */
 .lp-key-off {
   background: var(--v5-dark-2);
   color: var(--v5-dark-off);
-}
-
-/* —— C9 学完一节 —— */
-.lp-done {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.lp-done-body {
-  flex: 1;
-  min-height: 0;
-  padding: 16px 16px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.lp-done-segs {
-  display: flex;
-  gap: 2px;
-}
-.lp-done-seg {
-  flex: 1;
-  height: 4px;
-  background: var(--v5-dark-track);
-}
-.lp-done-seg.done {
-  background: var(--v5-dark-ink);
-}
-.lp-done-seg.cur {
-  background: var(--v5-violet);
-}
-.lp-done-cap {
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--v5-ink-4);
-}
-.lp-done-title {
-  margin-top: -8px;
-  font-size: 30px;
-  font-weight: 900;
-  letter-spacing: -0.01em;
-  color: var(--v5-dark-ink);
-}
-.lp-done-keys {
-  flex: 0 0 auto;
-  padding: 12px 16px max(28px, env(safe-area-inset-bottom));
-  display: flex;
-  gap: 8px;
-}
-.lp-done-main {
-  flex: 1;
 }
 
 /* —— 求助面板（浅色 sheet·顶边落在顶栏下沿，由 wxml top 动态给） —— */

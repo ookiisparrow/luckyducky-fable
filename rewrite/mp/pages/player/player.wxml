@@ -1,7 +1,8 @@
-<!-- 课程播放页（v5 设计稿 C7 播放页 / 段间·停在本段末 / C9 学完一节）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv。
-     结构：顶栏（返回+一行课时名·右侧 104px 留白给原生胶囊）→ 视频舞台（弹性高·圆角）→ 底部（seek 条 + 段名/时长 + 上一段|播放暂停|下一段|求助）。
+<!-- 课程播放页（v6 Lite 稿 C7·2026-10-13）：暗底 #121212，暗色键 .k-dk，主键反相 .k-inv。
+     结构：顶栏（只有返回键·右侧 104px 留白给原生胶囊）→ 视频舞台（弹性高·圆角·顶部浮层＝本课时分段条 + 课时胶囊，
+     底部浮层＝段内 seek 条 + 剩余时长）→ 底栏（上一段 | 求助 | 下一段）。
      回归红线：playToken 乱序防护/首帧埋点/segment_done/watch_at/25min 地址缓存；
-     段落播完不自动切下一段（onEnded 停在完成态·段内停「段间」浮层、课时末段换 C9 学完一节版式，重播/切段交由用户，见 player.ts）。
+     段落播完不自动切下一段（onEnded 停在段末：画面底部一条「重播本段」、底栏「下一段」反相，重播/切段交由用户，见 player.ts）。
      自绘 seek 条两段式语义（WXS sk.onStart/onMove/onEnd + 逻辑层 onSeekTick/onSeekCommit：拖动中只改显示，松手才真 seek）+
      关键动作节点磁吸/震感（单源 lib/haptics）。seek.wxs 按 class 操作 .lp-seek-fill/.lp-seek-handle/.lp-seek-preview（setStyle + addClass），
      这些节点 class 不做数据绑定（错题本 E29：同一样式属性/类只能一个写入方）。
@@ -11,19 +12,18 @@
 <wxs src="./seek.wxs" module="sk" />
 <view class="ld-player">
 
-  <!-- 顶栏：暗色返回键 + 一行课时名（数据源 lib/player lessonStrip；拿不到课时按态兜底，missing/error 不写「正在学习」自相矛盾） -->
+  <!-- 顶栏：只有暗色返回键（课时名挪进视频顶部的课时胶囊） -->
   <view class="lp-topbar" style="padding-top: {{statusBarHeight}}px">
     <view class="lp-bar">
       <view class="lp-back" bind:tap="onBack" hover-start-time="20" hover-class="lp-back-down" hover-stay-time="100" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <view class="k k-sm k-dk lp-back-key"><px-i name="back" /></view>
       </view>
-      <text class="t-sys lp-nav-cap">{{strip ? strip.lessonNo + ' · ' + strip.lessonName : (title || (state === 'missing' ? '课程' : (state === 'error' ? '加载失败' : '正在学习')))}}</text>
     </view>
   </view>
 
-  <!-- 视频舞台：弹性高圆角框（C9 学完一节时收成 200px 留本段最后一帧·<video> 不卸载） -->
+  <!-- 视频舞台：弹性高圆角框 -->
   <block wx:if="{{state === 'playing' || state === 'loading'}}">
-    <view class="lp-stage {{segDone && strip && strip.segIndex === strip.segTotal ? 'lesson-done' : ''}}">
+    <view class="lp-stage">
       <video
         wx:if="{{src}}"
         id="lp-video"
@@ -62,13 +62,37 @@
         </view>
       </view>
 
-      <!-- 段间 · 停在本段末（课时内还有下一段）：本段完成文案 + 重播本段 / 继续下一段 -->
-      <view wx:if="{{segDone && !(strip && strip.segIndex === strip.segTotal)}}" class="lp-segend">
-        <text class="lp-segend-cap">{{capText}}</text>
-        <view class="lp-segend-keys">
-          <view class="k k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplay" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">重播本段</view>
-          <view wx:if="{{canNext}}" class="k k-dk" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onNext" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">继续下一段<px-i name="arrow" /></view>
+      <!-- 段末（停在本段最后一帧）：画面底部一条反相「重播本段」；继续看靠底栏反相的「下一段」 -->
+      <view wx:if="{{segDone}}" class="k-inv lp-replay" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onReplay" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="replay" /></view>
+
+      <!-- 段内 seek 条 + 剩余时长（压在画面底部·与点击层是兄弟节点，拖动不冒泡成播放/暂停）。
+           段末只隐藏不卸载（seek 节点与 WXS 状态留着）。 -->
+      <view wx:if="{{state === 'playing'}}" class="lp-foot {{segDone ? 'is-off' : ''}}">
+        <view
+          class="lp-seek hit44"
+          bind:touchstart="{{sk.onStart}}"
+          catch:touchmove="{{sk.onMove}}"
+          bind:touchend="{{sk.onEnd}}"
+          bind:touchcancel="{{sk.onEnd}}"
+          change:cfg="{{sk.onCfg}}"
+          cfg="{{seekCfg}}"
+          change:pct="{{sk.onPct}}"
+          pct="{{seekPct}}"
+        >
+          <!-- 拖动浮层（常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控）；命中关键动作节点再叠黄气泡 -->
+          <view class="lp-seek-preview">
+            <view class="lp-seek-preview-time mono px-clip-6">{{curClock}}</view>
+            <view wx:if="{{snapName}}" class="t-sys lp-seek-preview-bubble px-clip-6">关键动作 · {{snapName}}</view>
+          </view>
+          <view class="lp-seek-track"></view>
+          <!-- 缓冲水位（bind:progress 尽力而为·换段清零 bufferPct·WXS 不碰） -->
+          <view class="lp-seek-buffer" style="width: {{bufferPct}}%"></view>
+          <!-- fill 宽/handle left：非拖动期由 seekPct 经 change:pct→sk.onPct 落位；拖动期 seek.wxs setStyle 接管 -->
+          <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
+          <view class="lp-seek-node" wx:for="{{markVMs}}" wx:key="at" style="left: {{item.pct}}%"></view>
+          <view class="lp-seek-handle" style="left: {{seekPct}}%"></view>
         </view>
+        <text class="mono lp-remain">{{remainClock}}</text>
       </view>
     </view>
   </block>
@@ -98,64 +122,25 @@
     </view>
   </view>
 
-  <!-- 底部（仅播放中）：C9 学完一节时整块隐藏（不卸载·seek 节点与 WXS 状态留着），换学完版式 -->
-  <view wx:if="{{state === 'playing'}}" class="lp-bottombar {{segDone && strip && strip.segIndex === strip.segTotal ? 'is-off' : ''}}">
-    <view
-      class="lp-seek hit44"
-      bind:touchstart="{{sk.onStart}}"
-      catch:touchmove="{{sk.onMove}}"
-      bind:touchend="{{sk.onEnd}}"
-      bind:touchcancel="{{sk.onEnd}}"
-      change:cfg="{{sk.onCfg}}"
-      cfg="{{seekCfg}}"
-      change:pct="{{sk.onPct}}"
-      pct="{{seekPct}}"
-    >
-      <!-- 拖动浮层（常驻不 wx:if：显隐与 left 由 seek.wxs setStyle+addClass('on') 渲染层控）；命中关键动作节点再叠黄气泡 -->
-      <view class="lp-seek-preview">
-        <view class="lp-seek-preview-time mono px-clip-6">{{curClock}}</view>
-        <view wx:if="{{snapName}}" class="t-sys lp-seek-preview-bubble px-clip-6">关键动作 · {{snapName}}</view>
-      </view>
-      <view class="lp-seek-track"></view>
-      <!-- 缓冲水位（bind:progress 尽力而为·换段清零 bufferPct·WXS 不碰） -->
-      <view class="lp-seek-buffer" style="width: {{bufferPct}}%"></view>
-      <!-- fill 宽/handle left：非拖动期由 seekPct 经 change:pct→sk.onPct 落位；拖动期 seek.wxs setStyle 接管 -->
-      <view class="lp-seek-fill" style="width: {{seekPct}}%"></view>
-      <view class="lp-seek-node" wx:for="{{markVMs}}" wx:key="at" style="left: {{item.pct}}%"></view>
-      <view class="lp-seek-handle" style="left: {{seekPct}}%"></view>
+  <!-- 视频顶部浮层（压在舞台上沿·不接点按）：本课时分段条（看过白 / 当前段紫色跟着播放走 / 未到暗）+
+       课时胶囊「章.节 课时名」+ 段序。所有带段的舞台态（加载 / 播放 / 整理中 / 段级失败）共用一份。 -->
+  <view wx:if="{{strip && state !== 'denied'}}" class="lp-top" style="top: {{statusBarHeight + 44}}px">
+    <view class="lp-cells">
+      <view wx:for="{{strip.cells}}" wx:key="index" class="lp-cell {{item}}"><view wx:if="{{item === 'cur'}}" class="lp-cell-fill" style="width: {{segDone ? 100 : seekPct}}%"></view></view>
     </view>
-
-    <view class="lp-info">
-      <view class="lp-info-l">
-        <text class="t-sys lp-seg-no">{{strip ? '段落 ' + strip.segIndex + ' / ' + strip.segTotal : ''}}</text>
-        <text class="t-sys lp-seg-title">{{current ? current.segName : ''}}</text>
-      </view>
-      <text class="lp-time mono {{seeking ? 'on' : ''}}">{{curClock}} / {{durClock}}</text>
-    </view>
-
-    <view class="lp-controls">
-      <view class="k k-48 k-sq lp-ctl {{canPrev ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="prev" /></view>
-      <view class="k k-48 k-inv lp-ctl-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onTapVideo" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="{{paused ? 'play' : 'pause'}}" tone="var(--v5-ink)" /></view>
-      <view class="k k-48 k-sq lp-ctl {{canNext ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canNext ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onNext" data-k="{{canNext ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="next" /></view>
-      <view class="k k-48 k-dk k-sq" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="help" /></view>
+    <view class="lp-chip px-clip-4">
+      <text class="t-sys lp-chip-t">{{strip.label}} {{strip.lessonName}}</text>
+      <text class="mono lp-chip-n">{{strip.segIndex}}/{{strip.segTotal}}</text>
     </view>
   </view>
 
-  <!-- C9 学完一节（课时末段播完）：分段全亮 + 完成文案 + 重看本节 / 继续下一节。
-       全课最后一段（无下一节）：重看本节 / 完成课程（进 C10 结业页 pages/finish）。 -->
-  <view wx:if="{{state === 'playing' && segDone && strip && strip.segIndex === strip.segTotal}}" class="lp-done">
-    <view class="lp-done-body">
-      <view class="lp-done-segs">
-        <view class="lp-done-seg {{item}}" wx:for="{{strip.cells}}" wx:key="*this"></view>
-      </view>
-      <text class="t-sys lp-done-cap">{{capText}}</text>
-      <text class="lp-done-title">这一节学完了</text>
-    </view>
-    <view class="lp-done-keys">
-      <view class="k k-48 k-dk k-sq" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onReplayLesson" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="replay" /></view>
-      <view wx:if="{{canNext}}" class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onNext" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="next" /></view>
-      <view wx:else class="k k-48 k-inv lp-done-main" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onFinishCourse" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">完成课程</view>
-    </view>
+  <!-- 底栏：上一段 / 求助 / 下一段 三颗 48 方键。上一段：播放中总能点——本段播过 3 秒＝回本段开头，否则退上一段（跨课时），
+       全课第一段只回开头；
+       下一段：段末反相（＝继续），全课最后一段的段末点它进结业页。 -->
+  <view wx:if="{{current && state !== 'denied'}}" class="lp-controls">
+    <view class="k k-48 k-sq lp-prev {{canPrev || state === 'playing' ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev || state === 'playing' ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev || state === 'playing' ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="prev" /></view>
+    <view class="k k-48 k-dk k-sq" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="help" /></view>
+    <view class="k k-48 k-sq lp-next {{segDone ? 'k-inv' : (canNext ? 'k-dk' : 'lp-key-off')}}" hover-start-time="20" hover-class="{{segDone ? 'k-inv-down' : (canNext ? 'k-dk-down' : 'none')}}" hover-stay-time="100" bind:tap="onNext" data-k="{{segDone ? 'inv' : (canNext ? 'dk' : 'none')}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="next" /></view>
   </view>
 
   <!-- 求助面板：浅色底部 sheet，menu/videos/faq 三态，见 player.ts helpPanel。

@@ -1,5 +1,5 @@
-<!-- 课程目录（v5「字重」稿 C6·含「课程 · 主图」）：方形产品主图 + 课时像素分段进度 + 墨黑「开始/继续」键 +
-     大章节 > 小课时两层目录（段落层级只活在播放页 segstrip）。主图复用激活背景回退链（CMS heroImage 优先），取不到落凹槽灰。 -->
+<!-- 课程目录（v6 Lite 稿 C6·2026-10-13）：方形产品主图 + 通栏墨黑「继续学习」键 + 可折叠的章 > 课时两层目录
+     （课时＝方块播放图标 + 课时名 + 逐段细条）。主图复用激活背景回退链（CMS heroImage 优先），取不到落凹槽灰。 -->
 <v5-nav />
 
 <view class="ct">
@@ -39,47 +39,41 @@
       <view class="ct-fade-bot"></view>
     </view>
 
-    <!-- 课时像素分段进度：学完墨色 / 当前紫 / 未到凹槽灰（一课时一格·直角） -->
-    <view class="ct-segs">
-      <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch">
-        <view wx:for="{{ch.lessons}}" wx:key="lessonId" wx:for-item="sg" class="ct-seg ct-seg-{{sg.status}}"></view>
-      </block>
-    </view>
-
-    <!-- 「开始学习」：continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
+    <!-- 「继续学习」通栏墨黑键：播放图标 + 续学位置（决策 §42 老板定保留文案；v6 Lite 稿是纯图标，待拍板）。
+         continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
     <view class="ct-cta-wrap">
-      <view class="k ct-start {{continueTarget ? 'k-ink' : 'k-flat k-off'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
+      <view class="k k-48 ct-start {{continueTarget ? 'k-ink' : 'k-flat k-off'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="play" />
         <text>{{resumeLabel || resumeCta}}</text>
       </view>
     </view>
 
+    <!-- 目录：点章名展开 / 收起（默认只展开当前课时所在章）；课时方块 学完墨 / 当前紫 / 未学灰，细条一段一格 -->
     <view class="ct-toc">
       <block wx:for="{{chapters}}" wx:key="title" wx:for-item="ch" wx:for-index="ci">
-        <view class="ct-ch">
-          <text class="ct-ch-no {{ch.cur ? 'cur' : ''}}">{{ci + 1}}</text>
+        <view class="ct-ch" data-i="{{ci}}" bind:tap="onToggleChapter">
+          <text class="ct-ch-no {{ch.cur ? 'cur' : ''}}">{{ci + 1}}.</text>
           <text class="t-sys ct-ch-title">{{ch.title}}</text>
+          <view class="ct-chev {{ch.open ? 'open' : ''}}"><px-i name="chev" tone="var(--v5-ink-2)" /></view>
         </view>
-        <view
-          class="ct-lesson {{lesson.status}}"
-          wx:for="{{ch.lessons}}"
-          wx:key="lessonId"
-          wx:for-item="lesson"
-          data-seg="{{lesson.firstPlayableSegId}}"
-          bind:tap="onTapLesson"
-          hover-start-time="20" hover-class="k-row-down"
-        >
-          <text class="mono ct-no">{{lesson.no}}</text>
-          <view class="ct-node">
-            <px-i wx:if="{{lesson.status === 'current'}}" name="nodeCur" tone="var(--v5-violet)" />
-            <px-i wx:elif="{{lesson.status === 'done'}}" name="node" tone="var(--v5-ink)" />
-            <px-i wx:else name="ring" tone="var(--v5-ink-4)" />
+        <block wx:if="{{ch.open}}">
+          <view
+            class="ct-lesson {{lesson.status}}"
+            wx:for="{{ch.lessons}}"
+            wx:key="lessonId"
+            wx:for-item="lesson"
+            data-seg="{{lesson.firstPlayableSegId}}"
+            bind:tap="onTapLesson"
+            hover-start-time="20" hover-class="k-row-down"
+          >
+            <view class="ct-tile px-clip-6"><px-i name="play" tone="{{lesson.status === 'todo' ? 'var(--v5-ink-2)' : 'var(--v5-key-hi)'}}" /></view>
+            <view class="ct-body">
+              <text class="t-sys ct-name">{{lesson.name}}</text>
+              <view class="ct-segs"><view wx:for="{{lesson.segs}}" wx:key="index" wx:for-item="sg" class="ct-seg {{sg}}"></view></view>
+            </view>
           </view>
-          <text class="t-sys ct-name">{{lesson.name}}</text>
-          <text class="mono ct-dur" wx:if="{{lesson.minutes}}">{{lesson.minutes}} 分钟</text>
-        </view>
+        </block>
       </block>
-      <view class="ct-toc-end"></view>
     </view>
   </block>
 </view>

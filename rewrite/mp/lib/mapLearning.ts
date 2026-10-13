@@ -140,13 +140,14 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
 
 export interface CatalogLessonVM {
   lessonId: string
-  no: string // 跨章连续 1-based padStart(2,'0')（与 lessonStrip.lessonNo 同口径）
+  no: string // 跨章连续 1-based padStart(2,'0')（主键续学文案「继续第 N 课」用）
   name: string
   segCount: number
   minutes: number // Math.round(sum(seg.dur||0)/60)；无 dur 数据 = 0（页面隐藏时长）
   status: 'done' | 'current' | 'todo'
   lastLabel: string // 仅 current 且 last.segmentId 在本课时内：'上次学到 段落 N'（N=段 1-based 序）；否则 ''
   firstPlayableSegId: string // 点行起播段 id：current 课时=续播段（续播段须 hasVideo，否则回退课时内首个 hasVideo 段）；其余=课时内首个 hasVideo 段；无可播=''
+  segs: ('done' | 'current' | 'todo')[] // 逐段细条（v6 Lite 目录）：current 课时的起播段＝current；看过（进度 done）＝done；其余 todo
 }
 export interface CatalogChapterVM {
   title: string
@@ -275,7 +276,8 @@ export function mapCatalog(
     }
 
     const minutes = Math.round(l.segments.reduce((sum, s) => sum + s.dur, 0) / 60)
-    return { lessonId: l.lessonId, no: l.no, name: l.lessonName, segCount: l.segments.length, minutes, status, lastLabel, firstPlayableSegId }
+    const segs: CatalogLessonVM['segs'] = l.segments.map((s) => (isCurrent && s.id === firstPlayableSegId ? 'current' : doneSet.has(s.id) ? 'done' : 'todo'))
+    return { lessonId: l.lessonId, no: l.no, name: l.lessonName, segCount: l.segments.length, minutes, status, lastLabel, firstPlayableSegId, segs }
   })
 
   const chapters: CatalogChapterVM[] = chapterGroups.map((g) => ({

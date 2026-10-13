@@ -112,7 +112,7 @@ describe('播放页装课过期回包', () => {
     chapters: [{ id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true }] }] }],
   })
 
-  it('大白话：点了重试又装一次课、先发的那次后回——旧课丢掉，不覆盖新标题', async () => {
+  it('大白话：点了重试又装一次课、先发的那次后回——旧课丢掉，不覆盖新课', async () => {
     const old = deferred()
     courseMock.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ failed: false, course: course('新课') })
     const page = await mount('../pages/player/player')
@@ -122,7 +122,7 @@ describe('播放页装课过期回包', () => {
     await page.initCourse()
     old.resolve({ failed: false, course: course('旧课') })
     await first
-    expect(page.data.title).toBe('新课')
+    expect(page.course.title).toBe('新课')
   })
 
   it('大白话：装课回包时人已经退出播放页——什么都不写', async () => {

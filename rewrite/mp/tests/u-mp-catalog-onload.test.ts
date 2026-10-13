@@ -8,6 +8,7 @@ vi.mock('../api/catalog', () => ({ getContent: getContentMock }))
 vi.mock('../lib/pageContent', () => ({ getPageContent: vi.fn().mockResolvedValue(null), getHomeContent: () => getContentMock() })) // 缓存层本身见 home-content-cache.test
 vi.mock('../lib/courses', () => ({ getCourseByIdDetailed: vi.fn() }))
 vi.mock('../api/user', () => ({ getMyProgress: vi.fn() }))
+vi.mock('../lib/playbackCache', () => ({ playbackCache: { prefetch: vi.fn() } }))
 
 let pageOpts: Record<string, any> = {}
 ;(globalThis as any).Page = (o: unknown) => {
@@ -50,6 +51,26 @@ describe('课程目录 onLoad', () => {
     await flush()
     expect(page.home).toBe(HOME)
     expect(page.data.bg).toBe(bgFor(HOME, 'c1', 'activated'))
+  })
+
+  it('大白话：章默认只展开当前课时所在章；点过的章记住，从播放页回来重拉目录也不被冲掉', async () => {
+    getContentMock.mockResolvedValue({ ok: false })
+    const page = await mount()
+    const { getCourseByIdDetailed } = await import('../lib/courses')
+    const { getMyProgress } = await import('../api/user')
+    const seg = (id: string) => ({ id, hasVideo: true })
+    vi.mocked(getCourseByIdDetailed).mockResolvedValue({
+      failed: false,
+      course: { id: 'c1', chapters: [{ title: '身体', lessons: [{ id: 'l1', segments: [seg('s1')] }] }, { title: '帽子', lessons: [{ id: 'l2', segments: [seg('s2')] }] }] },
+    } as never)
+    vi.mocked(getMyProgress).mockResolvedValue({ ok: true, list: [{ courseId: 'c1', done: { s1: true }, last: { lessonId: 'l2', segmentId: 's2' }, updatedAt: 1 }] } as never)
+    page.onLoad({ courseId: 'c1' })
+    await page.onShow()
+    expect(page.data.chapters.map((c: { open: boolean }) => c.open)).toEqual([false, true])
+    expect(page.data.chapters[1].lessons[0].segs).toEqual(['current'])
+    page.onToggleChapter({ currentTarget: { dataset: { i: 0 } } })
+    await page.onShow()
+    expect(page.data.chapters.map((c: { open: boolean }) => c.open)).toEqual([true, true])
   })
 
   it('大白话：hero 内容拉取失败 → 不阻塞，home 置空走回退链', async () => {
