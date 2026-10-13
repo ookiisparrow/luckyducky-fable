@@ -3,6 +3,7 @@
 // Page 桩同 me-cont-failed.test.ts。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import playerWxml from '../pages/player/player.wxml?raw'
+import playerWxss from '../pages/player/player.wxss?raw'
 
 const { urlMock, trackMock, courseMock, goBackMock, faqMock } = vi.hoisted(() => ({
   urlMock: vi.fn(),
@@ -546,16 +547,16 @@ describe('上一段（v6 Lite）：播过 3 秒回本段开头，否则退上一
     expect(page.data.current.segmentId).toBe('s2')
   })
 
-  it('大白话：全课第一段——没有上一段，但播放中上一段键照样能点，点了只回本段开头', async () => {
+  it('大白话：全课第一段没有上一段——上一段键不显示（只藏不删、位置留着，中间求助键不跳位）；别的课时第一段能退回上一课时，照常显示（老板 2026-10-13）', async () => {
     const page = await mount()
     await page.playSegment(seg('s1'), 'enter')
     await flush()
     expect(page.data.canPrev).toBe(false)
-    video.calls = []
-    page.onPrev()
-    expect(video.calls).toEqual(['seek', 'play'])
-    expect(page.data.current.segmentId).toBe('s1')
-    expect(playerWxml).toContain("lp-prev {{canPrev || state === 'playing' ? 'k-dk' : 'lp-key-off'}}")
+    await page.playSegment(seg('s3'), 'seg') // 第 2 课时第 1 段：上一段＝第 1 课时末段
+    await flush()
+    expect(page.data.canPrev).toBe(true)
+    expect(playerWxml.replace(/<!--[\s\S]*?-->/g, '')).toContain(`class="k k-48 k-sq k-dk lp-prev {{canPrev ? '' : 'lp-hide'}}"`)
+    expect(playerWxss).toMatch(/\.lp-hide \{\s*visibility: hidden;/)
   })
 })
 

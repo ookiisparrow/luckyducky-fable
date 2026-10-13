@@ -766,7 +766,7 @@ Page({
   },
 
   // 上一段（v6 Lite）：本段播过 3 秒＝回本段开头（同常见播放器）；没过 3 秒退到上一段（跨课时·跳过无视频段）；
-  // 已是全课第一段就回开头。
+  // 全课第一段键是藏起来的（wxml lp-hide）；这里没有上一段时回开头只是兜底。
   onPrev() {
     const cur = this.data.current
     if (!cur) return

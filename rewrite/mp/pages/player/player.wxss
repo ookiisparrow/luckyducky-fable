@@ -361,6 +361,10 @@ page {
   background: var(--v5-dark-2);
   color: var(--v5-dark-off);
 }
+/* 全课第一段没有上一段：键藏起来但占位（visibility 不收空间、也不接点按），求助键留在正中 */
+.lp-hide {
+  visibility: hidden;
+}
 
 /* —— 求助面板（浅色 sheet·顶边落在顶栏下沿，由 wxml top 动态给） —— */
 .lp-help-mask {

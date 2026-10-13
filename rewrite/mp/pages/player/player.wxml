@@ -136,11 +136,11 @@
     </view>
   </view>
 
-  <!-- 底栏：上一段 / 求助 / 下一段 三颗 48 方键。上一段：播放中总能点——本段播过 3 秒＝回本段开头，否则退上一段（跨课时），
-       全课第一段只回开头；
+  <!-- 底栏：上一段 / 求助 / 下一段 三颗 48 方键。上一段：本段播过 3 秒＝回本段开头，否则退上一段（跨课时）；
+       全课第一段前面没有视频，键不显示（只藏不删·位置留着，求助键不跳位·老板 2026-10-13）；
        下一段：段末反相（＝继续），全课最后一段的段末点它进结业页。 -->
   <view wx:if="{{current && state !== 'denied'}}" class="lp-controls">
-    <view class="k k-48 k-sq lp-prev {{canPrev || state === 'playing' ? 'k-dk' : 'lp-key-off'}}" hover-start-time="20" hover-class="{{canPrev || state === 'playing' ? 'k-dk-down' : 'none'}}" hover-stay-time="100" bind:tap="onPrev" data-k="{{canPrev || state === 'playing' ? 'dk' : 'none'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="prev" /></view>
+    <view class="k k-48 k-sq k-dk lp-prev {{canPrev ? '' : 'lp-hide'}}" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onPrev" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="prev" /></view>
     <view class="k k-48 k-dk k-sq" hover-start-time="20" hover-class="k-dk-down" hover-stay-time="100" bind:tap="onHelp" data-k="dk" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="help" /></view>
     <view class="k k-48 k-sq lp-next {{segDone ? 'k-inv' : (canNext ? 'k-dk' : 'lp-key-off')}}" hover-start-time="20" hover-class="{{segDone ? 'k-inv-down' : (canNext ? 'k-dk-down' : 'none')}}" hover-stay-time="100" bind:tap="onNext" data-k="{{segDone ? 'inv' : (canNext ? 'dk' : 'none')}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="next" /></view>
   </view>
