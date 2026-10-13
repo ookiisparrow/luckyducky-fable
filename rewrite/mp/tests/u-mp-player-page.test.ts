@@ -353,6 +353,14 @@ describe('手势返回（隐形 page-container·老板 2026-10-13）：第一次
   })
 })
 
+describe('画面内 seek 条与原生视频手势（老板安卓真机 2026-10-13：拖动松手又回原位）', () => {
+  it('大白话：自绘 seek 条压在视频画面上——主视频必须关掉微信自带的「手势调进度」，否则横着拖时原生播放器也跟着跳、把我们的落点盖回去', () => {
+    const video = playerWxml.replace(/<!--[\s\S]*?-->/g, '').match(/<video[^>]*id="lp-video"[^>]*>/)?.[0] ?? ''
+    expect(video).toContain('id="lp-video"')
+    expect(video).toContain('enable-progress-gesture="{{false}}"')
+  })
+})
+
 describe('松手 seek', () => {
   const setup = async (over: Record<string, unknown>) => {
     const page = await mount()

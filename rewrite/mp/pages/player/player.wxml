@@ -32,6 +32,7 @@
         autoplay
         initial-time="{{initialTime}}"
         controls="{{false}}"
+        enable-progress-gesture="{{false}}"
         show-center-play-btn="{{false}}"
         show-loading="{{false}}"
         object-fit="contain"
@@ -66,7 +67,8 @@
       <view wx:if="{{segDone}}" class="k-inv lp-replay" hover-start-time="20" hover-class="k-inv-down" hover-stay-time="100" bind:tap="onReplay" data-k="inv" bind:touchstart="onKeyDown" bind:touchend="onKeyUp"><px-i name="replay" /></view>
 
       <!-- 段内 seek 条 + 剩余时长（压在画面底部·与点击层是兄弟节点，拖动不冒泡成播放/暂停）。
-           段末只隐藏不卸载（seek 节点与 WXS 状态留着）。 -->
+           段末只隐藏不卸载（seek 节点与 WXS 状态留着）。压在视频上，所以 <video> 关了原生「手势调进度」
+           （enable-progress-gesture 默认开：安卓真机横拖时原生播放器也跟着跳，松手把落点盖回原位）。 -->
       <view wx:if="{{state === 'playing'}}" class="lp-foot {{segDone ? 'is-off' : ''}}">
         <view
           class="lp-seek hit44"
