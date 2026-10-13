@@ -39,12 +39,11 @@
       <view class="ct-fade-bot"></view>
     </view>
 
-    <!-- 「继续学习」通栏墨黑键：播放图标 + 续学位置（决策 §42 老板定保留文案；v6 Lite 稿是纯图标，待拍板）。
+    <!-- 「继续学习」通栏墨黑键：只有播放图标（v6 Lite·老板 2026-10-13 定，取代 §42 的「图标 + 续学文案」）。
          continueTarget 为空（全课无可播段）换平面键，点按诚实提示，不留死跳转 -->
     <view class="ct-cta-wrap">
       <view class="k k-48 ct-start {{continueTarget ? 'k-ink' : 'k-flat k-off'}}" hover-start-time="20" hover-class="{{continueTarget ? 'k-ink-down' : 'k-flat-down'}}" hover-stay-time="100" bind:tap="onStart" data-k="{{continueTarget ? 'ink' : 'flat'}}" bind:touchstart="onKeyDown" bind:touchend="onKeyUp">
         <px-i name="play" />
-        <text>{{resumeLabel || resumeCta}}</text>
       </view>
     </view>
 

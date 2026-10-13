@@ -71,6 +71,8 @@ beforeEach(() => {
     },
     getDeviceInfo: () => ({ platform: 'android' }),
     showToast: vi.fn(),
+    navigateBack: vi.fn(),
+    redirectTo: vi.fn(),
   }
   urlMock.mockReset().mockImplementation(async (_c: string, s: string) => ({ ok: true, url: 'https://v/' + s }))
   trackMock.mockReset()
@@ -211,8 +213,14 @@ describe('媒体错误自动重试预算', () => {
   })
 })
 
-describe('返回键：求助面板逐层收口，关了才走二次确认', () => {
-  it('大白话：内嵌播放 → 回列表；列表（视频/问答）→ 菜单；菜单 → 关面板', async () => {
+describe('返回键：求助面板逐层收口，关了就回本课目录（v6 Lite·老板 2026-10-13）', () => {
+  const stack = (...pages: [string, string][]) => {
+    ;(globalThis as any).getCurrentPages = () => pages.map(([route, courseId]) => ({ route, options: { courseId } }))
+  }
+  const CATALOG = 'pages/catalog/catalog'
+  const PLAYER = 'pages/player/player'
+
+  it('大白话：内嵌播放 → 回列表；列表（视频/问答）→ 菜单；菜单 → 关面板；这几步都不离开播放页', async () => {
     const page = await mount()
     Object.assign(page.data, { helpPanel: 'videos', helpSrc: 'https://h', helpSegName: '起针' })
     page.onBack()
@@ -225,28 +233,41 @@ describe('返回键：求助面板逐层收口，关了才走二次确认', () =
     page.onBack()
     expect(page.data.helpPanel).toBe('')
     expect(goBackMock).not.toHaveBeenCalled()
+    expect((globalThis as any).wx.navigateBack).not.toHaveBeenCalled()
+    expect((globalThis as any).wx.redirectTo).not.toHaveBeenCalled()
+  })
+
+  it('大白话：第一次离开——先弹加桌引导、不走；引导里点「知道了」回目录，不再要求按第二次', async () => {
+    stack([CATALOG, 'c1'], [PLAYER, 'c1'])
+    const page = await mount()
+    page.onBack()
+    expect(page.data.deskGuide).toBe(true)
+    expect((globalThis as any).wx.navigateBack).not.toHaveBeenCalled()
+    page.onDeskGuideExit()
+    expect(page.data.deskGuide).toBe(false)
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledWith({ delta: 1 })
     expect((globalThis as any).wx.showToast).not.toHaveBeenCalled()
   })
 
-  it('大白话：面板关着——第一按提示、窗口内第二按首次弹加桌引导；引导里点退出才真退', async () => {
-    const page = await mount()
-    page.onBack()
-    expect((globalThis as any).wx.showToast).toHaveBeenCalledTimes(1)
-    page.onBack()
-    expect(page.data.deskGuide).toBe(true)
-    expect(goBackMock).not.toHaveBeenCalled()
-    page.onDeskGuideExit()
-    expect(page.data.deskGuide).toBe(false)
-    expect(goBackMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('大白话：引导已展示过——窗口内第二按直接真退', async () => {
+  it('大白话：引导看过——一按就回本课目录：栈里有就退回去（别的课的目录不算），没有就把播放页换成本课目录', async () => {
     store['ld_player_desk_guide_shown'] = 1
     const page = await mount()
+    stack([CATALOG, 'c1'], [CATALOG, 'c2'], [PLAYER, 'c1'])
     page.onBack()
+    expect((globalThis as any).wx.navigateBack).toHaveBeenCalledWith({ delta: 2 })
+    stack(['pages/me/me', ''], [PLAYER, 'c1'])
+    page.onBack()
+    expect((globalThis as any).wx.redirectTo).toHaveBeenCalledWith({ url: '/pages/catalog/catalog?courseId=c1' })
+    expect(page.data.deskGuide).toBe(false)
+  })
+
+  it('大白话：坏链接连课程 id 都没有——退回上一页兜底（不跳一个找不到课的目录）', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    const page = await mount()
+    page.courseId = ''
     page.onBack()
     expect(goBackMock).toHaveBeenCalledTimes(1)
-    expect(page.data.deskGuide).toBe(false)
+    expect((globalThis as any).wx.redirectTo).not.toHaveBeenCalled()
   })
 })
 

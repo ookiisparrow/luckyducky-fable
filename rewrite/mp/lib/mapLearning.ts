@@ -140,7 +140,7 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
 
 export interface CatalogLessonVM {
   lessonId: string
-  no: string // 跨章连续 1-based padStart(2,'0')（主键续学文案「继续第 N 课」用）
+  no: string // 跨章连续 1-based padStart(2,'0')
   name: string
   segCount: number
   minutes: number // Math.round(sum(seg.dur||0)/60)；无 dur 数据 = 0（页面隐藏时长）
@@ -234,7 +234,7 @@ export function mapCatalog(
   course: unknown,
   progressList: unknown,
   courseId: string
-): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null; resumeLabel: string } {
+): { chapters: CatalogChapterVM[]; continueTarget: { segmentId: string; lessonId: string; lessonName: string; resumeAt: number } | null } {
   const { lessons, chapterGroups } = flattenCatalog(course)
   const prog = latestProgress(progressList, courseId)
   const allSegIds = new Set<string>()
@@ -312,23 +312,7 @@ export function mapCatalog(
     }
   }
 
-  return { chapters, continueTarget, resumeLabel: resumeLabelOf(lessons, continueTarget, doneSet.size, last, allDone) }
-}
-
-// 主键续学文案（UI 审查 6 问 4b·老板 2026-09-29）：有学习记录且没全部学完 → 系统生成「继续第 N 课 · 段落 M」
-// （续学目标所在课时的跨章序号 + 段序），不拼接后台文案；没记录或全学完 → ''（页面用后台 resumeCta）。
-function resumeLabelOf(
-  lessons: CatalogLessonRaw[],
-  target: { segmentId: string; lessonId: string } | null,
-  doneCount: number,
-  last: Record<string, any> | null,
-  allDone: boolean,
-): string {
-  const started = doneCount > 0 || !!(last && last.segmentId)
-  if (!started || allDone || !target) return ''
-  const tl = lessons.find((l) => l.lessonId === target.lessonId)
-  const segNo = tl ? tl.segments.findIndex((s) => s.id === target.segmentId) + 1 : 0
-  return tl && segNo > 0 ? `继续第 ${Number(tl.no)} 课 · 段落 ${segNo}` : ''
+  return { chapters, continueTarget }
 }
 
 // 播放页求助面板·帮助视频：云端 getHelpVideos 返回两级主题→小段

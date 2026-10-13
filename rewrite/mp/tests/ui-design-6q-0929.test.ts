@@ -1,7 +1,6 @@
 // UI 审查 6 问（2026-09-29·Claude Design「Lucky Ducky UI 审查 6 问」老板选定 1c·2a·3a·4b·5b·6b）+ 结业页底栏遮挡修复。
 import { describe, it, expect, afterEach } from 'vitest'
 import { live, rule } from './helpers/wxmlStatic'
-import { mapCatalog } from '../lib/mapLearning'
 import { groundGap } from '../lib/ground'
 import welcomeWxml from '../pages/welcome/welcome.wxml?raw'
 import welcomeWxss from '../pages/welcome/welcome.wxss?raw'
@@ -94,24 +93,10 @@ describe('3a 延伸：商品名也走黑体（老板 2026-09-30·详情页后续
   })
 })
 
-describe('4b 目录页续学位置写在主键上', () => {
-  const COURSE = {
-    chapters: [
-      { id: 'ch1', lessons: [{ id: 'l1', name: '起针', segments: [{ id: 's1', hasVideo: true, dur: 60 }, { id: 's2', hasVideo: true, dur: 60 }] }] },
-      { id: 'ch2', lessons: [{ id: 'l2', name: '收针', segments: [{ id: 's3', hasVideo: true, dur: 60 }, { id: 's4', hasVideo: true, dur: 60 }] }] },
-    ],
-  }
-  it('大白话：没学过——主键用后台文案（resumeLabel 空）；学到第 2 课段落 2——「继续第 2 课 · 段落 2」', () => {
-    expect(mapCatalog(COURSE, [], 'c1').resumeLabel).toBe('')
-    const r = mapCatalog(COURSE, [{ courseId: 'c1', done: { s1: true }, last: { lessonId: 'l2', segmentId: 's4' }, updatedAt: 1 }], 'c1')
-    expect(r.resumeLabel).toBe('继续第 2 课 · 段落 2')
-  })
-  it('大白话：只有完成记录没有 last——按续学目标（下一节首段）写；全部学完——回到后台文案', () => {
-    expect(mapCatalog(COURSE, [{ courseId: 'c1', done: { s1: true, s2: true }, updatedAt: 1 }], 'c1').resumeLabel).toBe('继续第 2 课 · 段落 1')
-    expect(mapCatalog(COURSE, [{ courseId: 'c1', done: { s1: true, s2: true, s3: true, s4: true }, updatedAt: 1 }], 'c1').resumeLabel).toBe('')
-  })
-  it('大白话：页面主键优先显示系统生成的续学位置（v6 图标化后老板 2026-09-30 定目录主键还原：播放图标 + 续学文案）', () => {
-    expect(live(catalogWxml)).toContain('{{resumeLabel || resumeCta}}')
+describe('目录页续学键：通栏墨黑键只有播放图标（v6 Lite·老板 2026-10-13 取代 4b 的续学文案）', () => {
+  it('大白话：键里只有 ▶，不写字；仍是通栏键、不收成方键', () => {
+    const k = live(catalogWxml).match(/<view class="k k-48 ct-start[^"]*"[^>]*>([\s\S]*?)<\/view>/)
+    expect(k?.[1].trim()).toBe('<px-i name="play" />')
     expect(live(catalogWxml)).not.toMatch(/k-sq ct-start/)
   })
 })

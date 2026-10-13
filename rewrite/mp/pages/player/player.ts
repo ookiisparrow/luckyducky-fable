@@ -39,10 +39,7 @@ const SEEK_TEXT_THROTTLE_MS = 100
 const MARK_SNAP_SEC = 3
 // 拖动预览浮层防出屏边距（rpx）。seekEdgePx() 换成 px，经 seekCfg.edgePx 交给 seek.wxs previewLeft() 夹取。
 const PREVIEW_EDGE_RPX = 64
-// 返回二次确认窗口（ms·设计拍板）：每次返回都出现「再按一次返回退出」，非仅首次；侧滑/系统手势
-// 返回无法拦截（WebView 页无 onBackPress——平台限制），仅本页自绘返回箭头点击经此判定。
-const BACK_CONFIRM_MS = 2500
-// 首次成功退出加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
+// 首次离开播放页的加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
 
 // callMethod 把载荷直接当第一个实参，没有 .detail（根因#8：按事件形状读 detail 会恒得 0）。
@@ -126,7 +123,6 @@ Page({
   _seekTextAt: 0, // 拖动文案 setData 节流时间戳（SEEK_TEXT_THROTTLE_MS·onSeekTick 用·位置 WXS 60fps、文案 ~10fps）
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
-  _backAt: 0, // 返回二次确认判定锚点（BACK_CONFIRM_MS 窗口内二次按返回才真退，见 onBack）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
   _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 成功把非空 src 交给挂载 video 才消费清零——取址失败/url 为空不消费，留给重试续到秒）
   _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
@@ -677,22 +673,15 @@ Page({
   // wxml 事件绑定与 ts 方法定义是一对，抄一半＝真机报错）。
   noop() {},
 
-  // 返回（设计拍板：每次返回都出现二次确认；首次成功退出加桌引导）：求助面板开着时先逐层
-  // 收口（四级链：内嵌播放→videos/faq 列表→menu→关面板），不计入退出确认；面板已关时才走二次确认。
+  // 返回（v6 Lite·老板 2026-10-13：返回回到课程目录，不再二次确认）：求助面板开着时先逐层收口
+  // （四级链：内嵌播放→videos/faq 列表→menu→关面板）；面板已关才离开播放页。
   onBack() {
     const { helpSrc, helpPanel } = this.data
     if (helpSrc || helpPanel) {
       this.setData(helpSrc ? { helpSrc: '', helpSegName: '' } : { helpPanel: helpPanel === 'menu' ? '' : 'menu' })
       return
     }
-    const now = Date.now()
-    if (now - this._backAt > BACK_CONFIRM_MS) {
-      this._backAt = now
-      fxHint(this, '再按一次返回退出')
-      return
-    }
-    // 窗口内第二按：已展示过加桌引导直接真退；否则弹一次引导、不退（storage 读失败 fail-open 视同
-    // 已展示——宁可少弹一次不可卡住用户退出）。
+    // 第一次离开先弹一次加桌引导、不走（storage 读失败 fail-open 视同已展示——宁可少弹一次不可卡住返回）。
     let shown = true
     try {
       shown = !!wx.getStorageSync(DESK_GUIDE_KEY)
@@ -714,15 +703,28 @@ Page({
       this.setData({ deskGuide: true, deskGuideIOS: ios })
       return
     }
-    goBackOrHome()
+    this.backToCatalog()
   },
-  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下（不退）；「知道了」＝继续原本的退出。
+  // 回本课目录：栈里有本课目录就退回去（不叠栈）；没有（分享链/「我」页直进）就把播放页换成目录；
+  // 连课程 id 都没有（坏链接）退回上一页兜底。
+  backToCatalog() {
+    if (!this.courseId) {
+      goBackOrHome()
+      return
+    }
+    const pages = getCurrentPages()
+    let i = pages.length - 2
+    while (i >= 0 && !(pages[i].route === 'pages/catalog/catalog' && (pages[i].options || {}).courseId === this.courseId)) i--
+    if (i >= 0) wx.navigateBack({ delta: pages.length - 1 - i })
+    else wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.courseId })
+  },
+  // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下；「知道了」＝继续回目录。
   onDeskGuideStay() {
     this.setData({ deskGuide: false })
   },
   onDeskGuideExit() {
     this.setData({ deskGuide: false })
-    goBackOrHome()
+    this.backToCatalog()
   },
 
   // 上一段（v6 Lite）：本段播过 3 秒＝回本段开头（同常见播放器）；没过 3 秒退到上一段（跨课时·跳过无视频段）；

@@ -7,7 +7,7 @@
      关键动作节点磁吸/震感（单源 lib/haptics）。seek.wxs 按 class 操作 .lp-seek-fill/.lp-seek-handle/.lp-seek-preview（setStyle + addClass），
      这些节点 class 不做数据绑定（错题本 E29：同一样式属性/类只能一个写入方）。
      求助面板：底部 sheet（menu/videos/faq 三态），播放不阻断，唯一暂停例外＝帮助视频内嵌播放（原生 <video controls>）。
-     返回二次确认 + 首次成功退出加桌引导：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回键经此。 -->
+     返回键回本课目录（第一次离开先弹加桌引导）：手势/系统返回无法拦截（WebView 页无 onBackPress），仅自绘返回键经此。 -->
 <!-- 自绘 seek 拖动几何·渲染层驱动（根因#15）：外置 WXS 模块 sk（内联 <wxs> 里的 < 比较会被 rw-mp-wxml-well-formed 咬红，必须外置） -->
 <wxs src="./seek.wxs" module="sk" />
 <view class="ld-player">
@@ -250,7 +250,7 @@
     </view>
   </view>
 
-  <!-- 首次退出加桌引导（仅一次·分端文案·15 问 11a）：同全站浅色半屏。知道了＝继续退出；关闭键/遮罩＝留在播放页。
+  <!-- 首次离开加桌引导（仅一次·分端文案·15 问 11a）：同全站浅色半屏。知道了＝继续回目录；关闭键/遮罩＝留在播放页。
        iOS 标题含子集外的「序」，走黑体；两步说明是说明句，一律黑体。 -->
   <view class="lp-dg-mask sh-mask" wx:if="{{deskGuide}}" bind:tap="onDeskGuideStay" catch:touchmove="noop">
     <view class="lp-dg-sheet sh-panel" catch:tap="noop">
