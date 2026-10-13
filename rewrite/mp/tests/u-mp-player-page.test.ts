@@ -271,6 +271,88 @@ describe('返回键：求助面板逐层收口，关了就回本课目录（v6 L
   })
 })
 
+describe('手势返回（隐形 page-container·老板 2026-10-13）：第一次提醒，2 秒内再来一次回本课目录', () => {
+  const stack = (...pages: [string, string][]) => {
+    ;(globalThis as any).getCurrentPages = () => pages.map(([route, courseId]) => ({ route, options: { courseId } }))
+  }
+  const w = () => (globalThis as any).wx
+  const HINT = { title: '再返回一次回目录', icon: 'none', duration: 2000, mask: undefined }
+
+  it('大白话：进页就武装；第一次手势只提醒不走，隔一拍重新武装；2 秒内再来一次 → 回本课目录，走前先撤拦截、走后不再武装', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    stack(['pages/catalog/catalog', 'c1'], ['pages/player/player', 'c1'])
+    const page = await mount()
+    let guardAtLeave: unknown = 'unset'
+    w().navigateBack = vi.fn(() => (guardAtLeave = page.data.backGuard))
+    page.onShow()
+    expect(page.data.backGuard).toBe(true)
+    vi.useFakeTimers()
+    try {
+      page.onGestureBack()
+      expect(w().showToast).toHaveBeenCalledWith(HINT)
+      expect(w().navigateBack).not.toHaveBeenCalled()
+      expect(page.data.backGuard).toBe(false)
+      vi.advanceTimersByTime(100)
+      expect(page.data.backGuard).toBe(true)
+      vi.advanceTimersByTime(1500)
+      page.onGestureBack()
+      expect(w().navigateBack).toHaveBeenCalledWith({ delta: 1 })
+      expect(guardAtLeave).toBe(false)
+      vi.advanceTimersByTime(1000)
+      expect(page.data.backGuard).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：两次手势隔了 2 秒以上——第二次仍然只是提醒（误触保护恢复）', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    stack(['pages/catalog/catalog', 'c1'], ['pages/player/player', 'c1'])
+    const page = await mount()
+    vi.useFakeTimers()
+    try {
+      page.onGestureBack()
+      vi.advanceTimersByTime(2100)
+      page.onGestureBack()
+      expect(w().showToast).toHaveBeenCalledTimes(2)
+      expect(w().navigateBack).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：求助面板开着——手势只收一层、不提醒；加桌引导开着——手势关掉引导、留在播放页', async () => {
+    const page = await mount()
+    vi.useFakeTimers()
+    try {
+      Object.assign(page.data, { helpPanel: 'faq' })
+      page.onGestureBack()
+      expect(page.data.helpPanel).toBe('menu')
+      Object.assign(page.data, { helpPanel: '', deskGuide: true })
+      page.onGestureBack()
+      expect(page.data.deskGuide).toBe(false)
+      expect(w().showToast).not.toHaveBeenCalled()
+      expect(w().navigateBack).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(100)
+      expect(page.data.backGuard).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('大白话：点左上角返回键也先撤拦截再导航（武装着的 page-container 会把自己的 navigateBack 也拦下）；wxml 挂了拦截容器', async () => {
+    store['ld_player_desk_guide_shown'] = 1
+    stack(['pages/catalog/catalog', 'c1'], ['pages/player/player', 'c1'])
+    const page = await mount()
+    let guardAtLeave: unknown = 'unset'
+    w().navigateBack = vi.fn(() => (guardAtLeave = page.data.backGuard))
+    page.onShow()
+    page.onBack()
+    expect(guardAtLeave).toBe(false)
+    expect(playerWxml).toContain('<page-container show="{{backGuard}}" overlay="{{false}}" duration="{{0}}" bindbeforeleave="onGestureBack" />')
+  })
+})
+
 describe('松手 seek', () => {
   const setup = async (over: Record<string, unknown>) => {
     const page = await mount()

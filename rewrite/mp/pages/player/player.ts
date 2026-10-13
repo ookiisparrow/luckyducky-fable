@@ -41,6 +41,10 @@ const MARK_SNAP_SEC = 3
 const PREVIEW_EDGE_RPX = 64
 // 首次离开播放页的加桌引导 storage key（storage key 收敛·CLAUDE.md）：仅展示一次（设计拍板）。
 const DESK_GUIDE_KEY = 'ld_player_desk_guide_shown'
+// 手势返回二次提醒窗口（ms·老板 2026-10-13）：第一次被拦下只提示，窗口内再来一次才回本课目录。
+const GESTURE_CONFIRM_MS = 2000
+// 拦下后隔一拍再武装：page-container 要先走完离场，show 真→真不会重新挂上（同 utils/exitGuard REARM_SHEET_MS）。
+const REARM_MS = 100
 
 // callMethod 把载荷直接当第一个实参，没有 .detail（根因#8：按事件形状读 detail 会恒得 0）。
 function wxsArgs<T extends object>(a: T | undefined | null): Partial<T> {
@@ -88,6 +92,7 @@ Page({
     helpFaqList: [] as FaqItemVM[], // 精选 FAQ VM（mapPublicFaq 产出）
     helpSrc: '', // 内嵌播放地址：非空=切到播放视图；关面板/返回列表/退出播放视图清空
     helpSegName: '', // 内嵌播放视图顶部标题（=命中小段 name）
+    backGuard: false, // 手势返回拦截开关（驱动隐形 page-container·onShow 武装、自己导航离开前撤掉）
     deskGuide: false, // 首次成功退出加桌引导弹窗可见态（仅展示一次）
     deskGuideIOS: false, // 加桌引导分端文案（true=iOS「添加到我的小程序」·false=其余平台「添加到桌面」）
     help: mapCatalogPlayer(null).help as CatalogPlayerVM['help'], // 求助面板三卡标题 + FAQ（CMS·首帧默认·到达覆盖）
@@ -123,6 +128,8 @@ Page({
   _seekTextAt: 0, // 拖动文案 setData 节流时间戳（SEEK_TEXT_THROTTLE_MS·onSeekTick 用·位置 WXS 60fps、文案 ~10fps）
   lastTick: 0, // 拖动阻尼「嗒」时间戳（配方单源 lib/haptics）
   lastVibe: 0, // 事件震（vibe()）时间戳（同上·两类震共用时间地板防叠震）
+  _gestureAt: 0, // 上一次手势返回被拦下的时刻（GESTURE_CONFIRM_MS 窗口内再来一次才回目录）
+  _guardTimer: null as ReturnType<typeof setTimeout> | null, // 拦下后重新武装的定时器（离页必清）
   _wantSeg: '', // onLoad 期望起播段（存实例供 initCourse 课程级失败重试后仍定位到原目标段）
   _wantAt: 0, // onLoad 期望续播秒（query.t·仅对目标段 _wantSeg 生效·playSegment 成功把非空 src 交给挂载 video 才消费清零——取址失败/url 为空不消费，留给重试续到秒）
   _resumeAt: 0, // 本次起播待物理落位的续播秒（=本次 initialTime·onVideoMeta 双保险 seek 兜底 initial-time 失效后消费清零·每次 playSegment 重置）
@@ -706,17 +713,48 @@ Page({
     this.backToCatalog()
   },
   // 回本课目录：栈里有本课目录就退回去（不叠栈）；没有（分享链/「我」页直进）就把播放页换成目录；
-  // 连课程 id 都没有（坏链接）退回上一页兜底。
+  // 连课程 id 都没有（坏链接）退回上一页兜底。先撤手势拦截再走——武装着的 page-container 连 navigateBack 也会拦。
   backToCatalog() {
-    if (!this.courseId) {
-      goBackOrHome()
-      return
+    this.clearGuardTimer()
+    this.setData({ backGuard: false }, () => {
+      if (!this.courseId) {
+        goBackOrHome()
+        return
+      }
+      const pages = getCurrentPages()
+      let i = pages.length - 2
+      while (i >= 0 && !(pages[i].route === 'pages/catalog/catalog' && (pages[i].options || {}).courseId === this.courseId)) i--
+      if (i >= 0) wx.navigateBack({ delta: pages.length - 1 - i })
+      else wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.courseId })
+    })
+  },
+  // 手势返回（iOS 侧滑 / 安卓返回键）被隐形 page-container 接住（老板 2026-10-13：手势也回本课目录，加二次提醒防误触）：
+  // 加桌引导开着＝关掉留下；求助面板开着＝逐层收口；否则第一次只提示，窗口内再来一次＝点返回键（首次加桌引导 / 回本课目录）。
+  // 没离开就隔一拍重新武装。
+  onGestureBack() {
+    this.setData({ backGuard: false })
+    const { helpSrc, helpPanel, deskGuide } = this.data
+    if (deskGuide) this.onDeskGuideStay()
+    else if (helpSrc || helpPanel) this.onBack()
+    else if (Date.now() - this._gestureAt <= GESTURE_CONFIRM_MS) {
+      this._gestureAt = 0
+      this.onBack()
+      if (!this.data.deskGuide) return // 已在回目录的路上：不再武装
+    } else {
+      this._gestureAt = Date.now()
+      fxHint(this, '再返回一次回目录', { ms: GESTURE_CONFIRM_MS })
     }
-    const pages = getCurrentPages()
-    let i = pages.length - 2
-    while (i >= 0 && !(pages[i].route === 'pages/catalog/catalog' && (pages[i].options || {}).courseId === this.courseId)) i--
-    if (i >= 0) wx.navigateBack({ delta: pages.length - 1 - i })
-    else wx.redirectTo({ url: '/pages/catalog/catalog?courseId=' + this.courseId })
+    this.clearGuardTimer()
+    this._guardTimer = setTimeout(() => {
+      this._guardTimer = null
+      if (!this.unloaded) this.setData({ backGuard: true })
+    }, REARM_MS)
+  },
+  clearGuardTimer() {
+    if (this._guardTimer) {
+      clearTimeout(this._guardTimer)
+      this._guardTimer = null
+    }
   },
   // 加桌引导（15 问 11a）：关闭键/遮罩＝关弹窗留下；「知道了」＝继续回目录。
   onDeskGuideStay() {
@@ -764,8 +802,10 @@ Page({
   // reportWatchAt 仍只在 state==='playing' 时真报，此处多复位几次（如首次 onLoad 紧随的 onShow）也是无害 no-op。
   onShow() {
     if (this.data.current) this.watchReported = false
+    this.setData({ backGuard: true }) // 武装手势返回拦截（回前台 / 从客服回来都重新武装）
   },
   onHide() {
+    this.clearGuardTimer()
     this.reportWatchAt()
     // 后台挂起清缓冲升级定时器（timer 必清理·CLAUDE.md）：挂起期无 timeupdate，10s 定时器醒来会把
     // 正常的后台停留误判成失速落 error 态；回前台若真在缓冲，waiting 会再次触发重建角标与定时器。
@@ -773,6 +813,7 @@ Page({
   },
   onUnload() {
     this.unloaded = true
+    this.clearGuardTimer()
     this.reportWatchAt()
     if (this._bufTimer) {
       clearTimeout(this._bufTimer) // 离页销毁定时器（timer 必清理）；不再 setData（页面已卸载）
