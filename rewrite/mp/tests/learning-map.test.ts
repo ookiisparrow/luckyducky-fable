@@ -152,27 +152,22 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     ],
   }
 
-  it('大白话：无进度——全 todo，首个含可播段的课时为 current；no 跨章连续；minutes 按 dur 求和取整', () => {
+  it('大白话：无进度——全 todo，首个含可播段的课时为 current；章 / 课时只带目录页在用的字段（#485）', () => {
     const r = mapCatalog(COURSE, [], 'c1')
     expect(r.chapters).toHaveLength(2)
+    expect(Object.keys(r.chapters[0]).sort()).toEqual(['lessons', 'title'])
     const [l1, l2] = r.chapters[0].lessons
     const [l3] = r.chapters[1].lessons
+    expect(Object.keys(l1).sort()).toEqual(['firstPlayableSegId', 'lessonId', 'name', 'segs', 'status'])
     expect(l1.status).toBe('current')
     expect(l2.status).toBe('todo')
     expect(l3.status).toBe('todo')
-    expect(l1.no).toBe('01')
-    expect(l2.no).toBe('02')
-    expect(l3.no).toBe('03') // 跨章连续
-    expect(l1.minutes).toBe(4) // round((90+150)/60)
-    expect(l2.minutes).toBe(1)
-    expect(l3.minutes).toBe(3) // round(200/60)
-    expect(l1.lastLabel).toBe('')
     expect(l1.firstPlayableSegId).toBe('s1')
     expect(l3.firstPlayableSegId).toBe('s4') // s5 无视频跳过
     expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针', resumeAt: 0 })
   })
 
-  it('大白话：段 dur 是库内真实的 "m:ss" 字符串也能算出分钟——原 Number("5:00")=NaN 会把课时时长隐藏成 0（决策§31 批2 顺修）', () => {
+  it('大白话：段 dur 是库内真实的 "m:ss" 字符串也能算出时长（结业页「视频时长」）——原 Number("5:00")=NaN 会算成 0（决策§31 批2 顺修）', () => {
     const c = {
       chapters: [
         {
@@ -182,7 +177,7 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
       ],
     }
     const r = mapCatalog(c, [], 'c1')
-    expect(r.chapters[0].lessons[0].minutes).toBe(7) // round((300+96)/60)
+    expect(mapFinish(c).durLabel).toBe('7 分钟') // round((300+96)/60)
     expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针', resumeAt: 0 })
   })
 
@@ -196,31 +191,28 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 0 })
   })
 
-  it('大白话：last 命中——该课时标 current 且带 lastLabel「上次学到 段落 N」，续播＝last 段', () => {
+  it('大白话：last 命中——该课时标 current，续播＝last 段', () => {
     const r = mapCatalog(COURSE, [{ courseId: 'c1', done: {}, last: { lessonId: 'l2', segmentId: 's3' }, updatedAt: 200 }], 'c1')
     const [l1] = r.chapters[0].lessons
     const [, l2] = r.chapters[0].lessons
     expect(l1.status).toBe('todo')
     expect(l2.status).toBe('current')
-    expect(l2.lastLabel).toBe('上次学到 段落 1')
     expect(l2.firstPlayableSegId).toBe('s3')
     expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 0 })
   })
 
-  it('大白话：last 指向已删段——该课时仍标 current（lessonId 命中）但 lastLabel 空、续播回退课时内首个可播段', () => {
+  it('大白话：last 指向已删段——该课时仍标 current（lessonId 命中）、续播回退课时内首个可播段', () => {
     const r = mapCatalog(COURSE, [{ courseId: 'c1', done: {}, last: { lessonId: 'l2', segmentId: 'sGhost' }, updatedAt: 300 }], 'c1')
     const [, l2] = r.chapters[0].lessons
     expect(l2.status).toBe('current')
-    expect(l2.lastLabel).toBe('')
     expect(l2.firstPlayableSegId).toBe('s3')
     expect(r.continueTarget).toEqual({ segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 0 })
   })
 
-  it('大白话：last 命中段仍存在但已被 admin 撤下视频（hasVideo:false）——lastLabel 仍报「上次学到」（历史事实），但 firstPlayableSegId/continueTarget 不指向不可播段、回退课时内首个 hasVideo 段', () => {
+  it('大白话：last 命中段仍存在但已被 admin 撤下视频（hasVideo:false）——firstPlayableSegId/continueTarget 不指向不可播段、回退课时内首个 hasVideo 段', () => {
     const r = mapCatalog(COURSE, [{ courseId: 'c1', done: {}, last: { lessonId: 'l3', segmentId: 's5' }, updatedAt: 400 }], 'c1')
     const [l3] = r.chapters[1].lessons
     expect(l3.status).toBe('current')
-    expect(l3.lastLabel).toBe('上次学到 段落 2') // s5 是 l3 第 2 段，历史事实不因视频撤下而抹去
     expect(l3.firstPlayableSegId).toBe('s4') // s5 无视频，回退课时内首个 hasVideo 段
     expect(r.continueTarget).toEqual({ segmentId: 's4', lessonId: 'l3', lessonName: '成品', resumeAt: 0 }) // 不落在不可播的 s5 上
   })
@@ -241,16 +233,13 @@ describe('mapCatalog（目录页数据源·课时状态/续播/磁贴 VM）', ()
     expect(l3.status).toBe('current') // 唯一未完成且含可播段的课时
   })
 
-  it('大白话：全完成态——全部课时标 done、无 current、lastLabel 全空；但 last 命中时 continueTarget 仍回上次位置（重温）', () => {
+  it('大白话：全完成态——全部课时标 done、无 current；但 last 命中时 continueTarget 仍回上次位置（重温）', () => {
     const r = mapCatalog(
       COURSE,
       [{ courseId: 'c1', done: { s1: true, s2: true, s3: true, s4: true, s5: true }, last: { lessonId: 'l1', segmentId: 's1' }, updatedAt: 999 }],
       'c1'
     )
-    for (const ch of r.chapters) for (const l of ch.lessons) {
-      expect(l.status).toBe('done')
-      expect(l.lastLabel).toBe('')
-    }
+    for (const ch of r.chapters) for (const l of ch.lessons) expect(l.status).toBe('done')
     expect(r.continueTarget).toEqual({ segmentId: 's1', lessonId: 'l1', lessonName: '起针', resumeAt: 0 })
   })
 

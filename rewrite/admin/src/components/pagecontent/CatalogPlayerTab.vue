@@ -52,7 +52,7 @@ async function onHero(ev: Event) {
 
     <div class="pc-split">
       <div class="pc-forms">
-        <Card title="课程目录页" sub="目录顶部 hero 图 + 续播按钮文案 + 章节无课时的空态文案">
+        <Card title="课程目录页" sub="目录顶部 hero 图 + 章节无课时的空态文案">
           <div class="pc-field">
             <label>目录 hero 图（留空＝小程序用默认渐变）</label>
             <div class="pc-row">
@@ -63,7 +63,6 @@ async function onHero(ev: Event) {
               <span v-if="uploading" class="pc-hint">上传中…</span>
             </div>
           </div>
-          <div class="pc-field"><label>续播按钮文案（≤40 字·留空＝默认「继续学习」）</label><input v-model="model.catalog.resumeCta" class="pc-input" maxlength="40" placeholder="继续学习" /></div>
           <div class="pc-field"><label>课时空态文案（≤40 字·章节暂无课时时显示）</label><input v-model="model.catalog.emptyLesson" class="pc-input" maxlength="40" placeholder="课程内容整理中，敬请期待" /></div>
         </Card>
 
@@ -87,13 +86,13 @@ async function onHero(ev: Event) {
         </Card>
       </div>
 
-      <!-- 右侧手机预览：目录 hero + 续播 + 求助三卡标题 -->
+      <!-- 右侧手机预览：目录 hero + 续学键（小程序上只有 ▶ 图标·#485）+ 求助三卡标题 -->
       <div class="pc-phone-wrap">
         <div class="pc-phone">
           <div class="ph-hero" :class="{ 'ph-hero-img': !!thumb(model.catalog.heroImage) }" :style="thumb(model.catalog.heroImage) ? { backgroundImage: `url(${thumb(model.catalog.heroImage)})` } : {}">
             <span v-if="!thumb(model.catalog.heroImage)" class="pc-ph">（目录 hero 图）</span>
           </div>
-          <div class="ph-resume">▶ {{ model.catalog.resumeCta || '继续学习' }}</div>
+          <div class="ph-resume">▶</div>
           <div class="ph-empty pc-ph">空态：{{ model.catalog.emptyLesson || '（默认空态文案）' }}</div>
           <div class="ph-help">
             <div class="ph-help-cap">遇到问题了</div>

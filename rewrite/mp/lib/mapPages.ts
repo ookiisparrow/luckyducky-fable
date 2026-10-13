@@ -77,7 +77,7 @@ export function mapWelcome(content: unknown): WelcomeVM {
 
 // ═══════════════ 目录页 + 播放页共享内容 catalogPlayer ═══════════════
 export interface CatalogPlayerVM {
-  catalog: { heroImage: string | undefined; resumeCta: string; emptyLesson: string }
+  catalog: { heroImage: string | undefined; emptyLesson: string }
   help: {
     contactTitle: string
     videosTitle: string
@@ -87,7 +87,6 @@ export interface CatalogPlayerVM {
 }
 
 const CATALOG_DEFAULT = {
-  resumeCta: '开始学习', // catalog.wxml「开始学习」CTA
   emptyLesson: '这节课还在整理中', // catalog.ts onTapLesson 空态 toast
 }
 const HELP_DEFAULT = {
@@ -110,7 +109,6 @@ export function mapCatalogPlayer(content: unknown): CatalogPlayerVM {
   return {
     catalog: {
       heroImage: strOrUndef(catalog.heroImage),
-      resumeCta: str(catalog.resumeCta, CATALOG_DEFAULT.resumeCta),
       emptyLesson: str(catalog.emptyLesson, CATALOG_DEFAULT.emptyLesson),
     },
     help: {

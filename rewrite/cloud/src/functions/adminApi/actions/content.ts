@@ -84,12 +84,12 @@ function sanitizeWelcome(d: any) {
   }
 }
 
-// 课程目录页 hero/续播/空态 + 播放页求助面板三栏标题 + FAQ（至多 20 条）。heroImage 存云存储 fileID。
+// 课程目录页 hero/空态 + 播放页求助面板三栏标题 + FAQ（至多 20 条）。heroImage 存云存储 fileID。
+// 续学键已是纯图标（决策 §44），不再收续播文案 resumeCta——旧后台送来也随白名单丢弃（#485）。
 function sanitizeCatalogPlayer(d: any) {
   return {
     catalog: {
       heroImage: str(d?.catalog?.heroImage, 200),
-      resumeCta: str(d?.catalog?.resumeCta, 40),
       emptyLesson: str(d?.catalog?.emptyLesson, 40),
     },
     help: {
