@@ -25,6 +25,8 @@ export default [
       '.claude/**',
       // 变异测试运行时沙盒（npm run mutation·StrykerJS 把仓复制进去跑）＝同上「仓库另一份拷贝」
       '.stryker-tmp/**',
+      // 小程序网页预览（只读复刻·样例数据·不进生产）
+      'mp-web/**',
     ],
   },
 
