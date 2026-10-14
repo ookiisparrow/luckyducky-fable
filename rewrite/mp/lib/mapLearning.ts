@@ -140,18 +140,13 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
 
 export interface CatalogLessonVM {
   lessonId: string
-  no: string // 跨章连续 1-based padStart(2,'0')
   name: string
-  segCount: number
-  minutes: number // Math.round(sum(seg.dur||0)/60)；无 dur 数据 = 0（页面隐藏时长）
   status: 'done' | 'current' | 'todo'
-  lastLabel: string // 仅 current 且 last.segmentId 在本课时内：'上次学到 段落 N'（N=段 1-based 序）；否则 ''
   firstPlayableSegId: string // 点行起播段 id：current 课时=续播段（续播段须 hasVideo，否则回退课时内首个 hasVideo 段）；其余=课时内首个 hasVideo 段；无可播=''
   segs: ('done' | 'current' | 'todo')[] // 逐段细条（v6 Lite 目录）：current 课时的起播段＝current；看过（进度 done）＝done；其余 todo
 }
 export interface CatalogChapterVM {
   title: string
-  lessonCount: number
   lessons: CatalogLessonVM[]
 }
 
@@ -163,12 +158,11 @@ interface CatalogSeg {
 interface CatalogLessonRaw {
   lessonId: string
   lessonName: string
-  no: string
   segments: CatalogSeg[]
 }
 
 /** dur 口径（决策§31）：段 dur 库内是 'm:ss' 字符串（admin readDuration/VOD 转码回填同款），
- *  直接 Number('5:00')→NaN→0 会把全部课时时长隐藏成 0 分钟。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
+ *  直接 Number('5:00')→NaN→0 会把结业页视频时长算成 0。兼容三种历史写法：数字秒、纯数字串、'm:ss'。 */
 function parseDurSec(v: unknown): number {
   if (typeof v === 'number') return v > 0 ? v : 0
   const s = String(v || '').trim()
@@ -177,23 +171,21 @@ function parseDurSec(v: unknown): number {
   return Number(s) > 0 ? Number(s) : 0
 }
 
-/** 课程树摊平成课时列表 + 章分组（章里存课时下标）；无 id 课时跳过且不占编号，no 跨章连续。 */
+/** 课程树摊平成课时列表 + 章分组（章里存课时下标）；无 id 课时跳过。 */
 function flattenCatalog(course: unknown): { lessons: CatalogLessonRaw[]; chapterGroups: { title: string; lessonIdxs: number[] }[] } {
   const c = (course && typeof course === 'object' ? course : {}) as Record<string, any>
   const lessons: CatalogLessonRaw[] = []
   const chapterGroups: { title: string; lessonIdxs: number[] }[] = []
-  let no = 0
   for (const ch of Array.isArray(c.chapters) ? c.chapters : []) {
     if (!ch) continue
     const idxs: number[] = []
     for (const l of Array.isArray(ch.lessons) ? ch.lessons : []) {
       if (!l || !l.id) continue
-      no++
       const segments: CatalogSeg[] = (Array.isArray(l.segments) ? l.segments : [])
         .filter((s: any) => s && s.id)
         .map((s: any) => ({ id: String(s.id), hasVideo: !!s.hasVideo, dur: parseDurSec(s.dur) }))
       idxs.push(lessons.length)
-      lessons.push({ lessonId: String(l.id), lessonName: String(l.name || ''), no: String(no).padStart(2, '0'), segments })
+      lessons.push({ lessonId: String(l.id), lessonName: String(l.name || ''), segments })
     }
     chapterGroups.push({ title: String(ch.title || ''), lessonIdxs: idxs })
   }
@@ -261,28 +253,22 @@ export function mapCatalog(
     const isCurrent = i === currentIdx
     const status: CatalogLessonVM['status'] = allDone ? 'done' : isCurrent ? 'current' : lessonDone(l) ? 'done' : 'todo'
 
-    let lastLabel = ''
     let firstPlayableSegId = ''
     if (isCurrent && i === lastLessonIdx && last && last.segmentId) {
-      const segIdx = l.segments.findIndex((s) => s.id === String(last.segmentId))
-      if (segIdx >= 0) {
-        lastLabel = `上次学到 段落 ${segIdx + 1}` // 上次学到哪段是历史事实，与该段现在是否仍可播无关
-        if (l.segments[segIdx].hasVideo) firstPlayableSegId = l.segments[segIdx].id // 续播段须可播，否则落入下方兜底
-      }
+      const hit = l.segments.find((s) => s.id === String(last.segmentId))
+      if (hit && hit.hasVideo) firstPlayableSegId = hit.id // 续播段须可播，否则落入下方兜底
     }
     if (!firstPlayableSegId) {
       const fv = firstHasVideo(l)
       firstPlayableSegId = fv ? fv.id : ''
     }
 
-    const minutes = Math.round(l.segments.reduce((sum, s) => sum + s.dur, 0) / 60)
     const segs: CatalogLessonVM['segs'] = l.segments.map((s) => (isCurrent && s.id === firstPlayableSegId ? 'current' : doneSet.has(s.id) ? 'done' : 'todo'))
-    return { lessonId: l.lessonId, no: l.no, name: l.lessonName, segCount: l.segments.length, minutes, status, lastLabel, firstPlayableSegId, segs }
+    return { lessonId: l.lessonId, name: l.lessonName, status, firstPlayableSegId, segs }
   })
 
   const chapters: CatalogChapterVM[] = chapterGroups.map((g) => ({
     title: g.title,
-    lessonCount: g.lessonIdxs.length,
     lessons: g.lessonIdxs.map((i) => lessonVMs[i]),
   }))
 

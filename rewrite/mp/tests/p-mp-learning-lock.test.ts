@@ -31,11 +31,11 @@ describe('mapCatalog 未覆盖分支锁定', () => {
     )
     expect(r).toEqual({
       chapters: [
-        { title: '', lessonCount: 1, lessons: [
-          { lessonId: 'l1', no: '01', name: '', segCount: 1, minutes: 1, status: 'todo', lastLabel: '', firstPlayableSegId: '', segs: ['todo'] },
+        { title: '', lessons: [
+          { lessonId: 'l1', name: '', status: 'todo', firstPlayableSegId: '', segs: ['todo'] },
         ] },
-        { title: '第二章', lessonCount: 1, lessons: [
-          { lessonId: 'l2', no: '02', name: '收针', segCount: 2, minutes: 2, status: 'current', lastLabel: '上次学到 段落 2', firstPlayableSegId: 's3', segs: ['done', 'current'] },
+        { title: '第二章', lessons: [
+          { lessonId: 'l2', name: '收针', status: 'current', firstPlayableSegId: 's3', segs: ['done', 'current'] },
         ] },
       ],
       continueTarget: { segmentId: 's3', lessonId: 'l2', lessonName: '收针', resumeAt: 30 },

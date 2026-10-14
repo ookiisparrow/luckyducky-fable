@@ -26,7 +26,7 @@ export const welcomePayload = (m: WelcomeModel): Record<string, unknown> => ({ .
 
 // ———————————————————————————— catalogPlayer（目录与播放）————————————————————————————
 export interface CatalogPlayerModel {
-  catalog: { heroImage: string; resumeCta: string; emptyLesson: string }
+  catalog: { heroImage: string; emptyLesson: string }
   help: { contactTitle: string; videosTitle: string; faqTitle: string; faq: Array<{ q: string; a: string }> }
 }
 export function normalizeCatalogPlayer(raw: unknown): CatalogPlayerModel {
@@ -34,7 +34,7 @@ export function normalizeCatalogPlayer(raw: unknown): CatalogPlayerModel {
   const c = obj(d.catalog)
   const h = obj(d.help)
   return {
-    catalog: { heroImage: cut(c.heroImage, 200), resumeCta: cut(c.resumeCta, 40), emptyLesson: cut(c.emptyLesson, 40) },
+    catalog: { heroImage: cut(c.heroImage, 200), emptyLesson: cut(c.emptyLesson, 40) },
     help: {
       contactTitle: cut(h.contactTitle, 60),
       videosTitle: cut(h.videosTitle, 60),

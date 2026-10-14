@@ -37,18 +37,19 @@ describe('welcome 欢迎与激活往返', () => {
 })
 
 describe('catalogPlayer 目录与播放往返', () => {
-  it('大白话：hero/续播/空态 + 求助三卡标题 + FAQ 至多 20；缺块补形；payload 不夹带未知字段', () => {
+  it('大白话：hero/空态 + 求助三卡标题 + FAQ 至多 20；缺块补形；payload 不夹带未知字段（续播文案已删·#485）', () => {
     expect(normalizeCatalogPlayer(null)).toEqual({
-      catalog: { heroImage: '', resumeCta: '', emptyLesson: '' },
+      catalog: { heroImage: '', emptyLesson: '' },
       help: { contactTitle: '', videosTitle: '', faqTitle: '', faq: [] },
     })
-    const raw = { catalog: { heroImage: 'cloud://h.jpg', resumeCta: '继续学习' }, help: { faqTitle: '常见问题', faq: Array.from({ length: 25 }, (_, i) => ({ q: 'q' + i, a: 'a' + i })) } }
+    const raw = { catalog: { heroImage: 'cloud://h.jpg', resumeCta: '旧库里留着的续播文案' }, help: { faqTitle: '常见问题', faq: Array.from({ length: 25 }, (_, i) => ({ q: 'q' + i, a: 'a' + i })) } }
     const m = normalizeCatalogPlayer(raw)
     expect(m.catalog.heroImage).toBe('cloud://h.jpg')
     expect(m.catalog.emptyLesson).toBe('') // 缺块补空
     expect(m.help.faq).toHaveLength(20) // FAQ 封顶 20
     const p = catalogPlayerPayload(m) as any
     expect(Object.keys(p).sort()).toEqual(['catalog', 'help'])
+    expect(Object.keys(p.catalog).sort()).toEqual(['emptyLesson', 'heroImage']) // 旧库里的 resumeCta 不再带回去
     expect(Object.keys(p.help.faq[0]).sort()).toEqual(['a', 'q'])
     expect(p.help.faq).toHaveLength(20)
     // payload 封顶独立于 normalize（表单里被塞超 20 条时 payload 也必须裁到 20·反向自检咬点）

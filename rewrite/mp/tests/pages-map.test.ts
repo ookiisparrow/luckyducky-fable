@@ -53,9 +53,9 @@ describe('W2「求助」说明对得上播放页真实位置（UI 审查 2026-09
 })
 
 describe('mapCatalogPlayer（目录页 hero/CTA/空态 + 播放页求助三卡/FAQ·缺档回退默认）', () => {
-  it('大白话：整档 null → CTA/空态默认、三卡标题默认、FAQ 空数组、heroImage undefined（页面走 bgFor）', () => {
+  it('大白话：整档 null → 空态默认、三卡标题默认、FAQ 空数组、heroImage undefined（页面走 bgFor）；续学键只有图标，不再读后台文案（#485）', () => {
     const d = mapCatalogPlayer(null)
-    expect(d.catalog.resumeCta).toBeTruthy()
+    expect(Object.keys(d.catalog).sort()).toEqual(['emptyLesson', 'heroImage'])
     expect(d.catalog.emptyLesson).toBeTruthy()
     expect(d.catalog.heroImage).toBeUndefined() // 空 → undefined（让页面走 bgFor 回退链）
     expect(d.help.contactTitle).toBeTruthy()
@@ -70,11 +70,10 @@ describe('mapCatalogPlayer（目录页 hero/CTA/空态 + 播放页求助三卡/F
     expect(mapCatalogPlayer({ catalog: { heroImage: 'https://x/hero.png' } }).catalog.heroImage).toBe('https://x/hero.png')
   })
 
-  it('大白话：逐字段回退——只配 resumeCta，其余缺的回默认', () => {
+  it('大白话：逐字段回退——只配 emptyLesson，其余缺的回默认', () => {
     const def = mapCatalogPlayer(null)
-    const d = mapCatalogPlayer({ catalog: { resumeCta: '继续钩' }, help: { contactTitle: '找客服' } })
-    expect(d.catalog.resumeCta).toBe('继续钩')
-    expect(d.catalog.emptyLesson).toBe(def.catalog.emptyLesson) // 缺→默认
+    const d = mapCatalogPlayer({ catalog: { emptyLesson: '还没剪好' }, help: { contactTitle: '找客服' } })
+    expect(d.catalog.emptyLesson).toBe('还没剪好')
     expect(d.help.contactTitle).toBe('找客服')
     expect(d.help.videosTitle).toBe(def.help.videosTitle) // 缺→默认
   })

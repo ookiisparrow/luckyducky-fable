@@ -215,7 +215,7 @@ describe('welcome（欢迎流·超长截断 + w2 封顶 + 未知字段丢弃）'
 })
 
 describe('catalogPlayer（目录+播放页求助·FAQ 封顶 + 截断）', () => {
-  it('大白话：faq 封顶 20、q≤120/a≤1000 截断、heroImage(fileID)≤200、resumeCta/emptyLesson≤40', async () => {
+  it('大白话：faq 封顶 20、q≤120/a≤1000 截断、heroImage(fileID)≤200、emptyLesson≤40；续播文案 resumeCta 已删、旧后台送来也丢弃（#485）', async () => {
     const faq = Array.from({ length: 25 }, (_, i) => ({ q: 'q'.repeat(200), a: 'a'.repeat(1200), n: i }))
     await save('catalogPlayer', {
       catalog: { heroImage: 'cloud://' + 'h'.repeat(300), resumeCta: 'r'.repeat(60), emptyLesson: 'e'.repeat(60) },
@@ -227,7 +227,7 @@ describe('catalogPlayer（目录+播放页求助·FAQ 封顶 + 截断）', () =>
     expect(c.help.faq[0].a.length).toBe(1000)
     expect(c.help.faq[0].n).toBeUndefined() // 未知字段丢弃
     expect(c.catalog.heroImage.length).toBe(200)
-    expect(c.catalog.resumeCta.length).toBe(40)
+    expect(c.catalog.resumeCta).toBeUndefined()
     expect(c.catalog.emptyLesson.length).toBe(40)
   })
 })
@@ -370,7 +370,7 @@ describe('app 公开读（getPageContent·空兜底 + heroImage cloud:// 换址 
     expect(r0.ok).toBe(true)
     expect(r0.content).toBe(null)
 
-    await save('catalogPlayer', { catalog: { heroImage: 'cloud://hero.jpg', resumeCta: '继续', emptyLesson: '空' }, help: { faq: [] } })
+    await save('catalogPlayer', { catalog: { heroImage: 'cloud://hero.jpg', emptyLesson: '空' }, help: { faq: [] } })
     const r = await appCall('getPageContent', { page: 'catalogPlayer' })
     expect(r.ok).toBe(true)
     expect(r.content.catalog.heroImage).toBe('https://tmp/cloud://hero.jpg') // 换址后下发·fileID 不出口

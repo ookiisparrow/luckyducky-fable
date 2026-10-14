@@ -133,15 +133,14 @@ describe('学习链映射（activateCourse / getMyCourses / getCourses / getMyPr
     expect(c.enteredAtLabel).not.toBe('')
   })
 
-  it('课程目录：hasVideo 挑续播段、m:ss 算分钟，上次看到哪就从哪接着播', () => {
+  it('课程目录：hasVideo 挑续播段，上次看到哪就从哪接着播', () => {
     const { chapters, continueTarget } = mapCatalog(T('getCourses').list[0], T('getMyProgress').list, 'c1')
     expect(chapters).toEqual([
       {
         title: '第一章',
-        lessonCount: 2,
         lessons: [
-          { lessonId: 'l1', no: '01', name: '起针', segCount: 2, minutes: 8, status: 'todo', lastLabel: '', firstPlayableSegId: 's1', segs: ['done', 'todo'] },
-          { lessonId: 'l2', no: '02', name: '短针', segCount: 1, minutes: 4, status: 'current', lastLabel: '上次学到 段落 1', firstPlayableSegId: 's3', segs: ['current'] },
+          { lessonId: 'l1', name: '起针', status: 'todo', firstPlayableSegId: 's1', segs: ['done', 'todo'] },
+          { lessonId: 'l2', name: '短针', status: 'current', firstPlayableSegId: 's3', segs: ['current'] },
         ],
       },
     ])

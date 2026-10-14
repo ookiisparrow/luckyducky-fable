@@ -23,10 +23,10 @@ describe('payload 对编辑后的表单模型再裁一次', () => {
     expect(pw.w2.items[0]).toEqual({ title: 't'.repeat(60), desc: 'd'.repeat(2000) })
 
     const c = normalizeCatalogPlayer(null)
-    c.catalog.resumeCta = 'r'.repeat(50)
+    c.catalog.emptyLesson = 'e'.repeat(50)
     c.help.faq.push({ q: 'q'.repeat(130), a: 'a'.repeat(1100) })
     const pc = catalogPlayerPayload(c) as any
-    expect(pc.catalog.resumeCta).toHaveLength(40)
+    expect(pc.catalog.emptyLesson).toHaveLength(40)
     expect(pc.help.faq[0]).toEqual({ q: 'q'.repeat(120), a: 'a'.repeat(1000) })
 
     const a = normalizeAbout(null)
