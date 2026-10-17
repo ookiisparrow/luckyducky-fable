@@ -135,10 +135,12 @@ export interface AdminDashboard {
 // ── 后台商品组 action 的成功包字段（admin api/products.ts 用）──
 // 这组没有契约 JSON 锁，照 adminApi actions/products.ts、cards.ts 与 catalog.ts storeImage 的回包写。
 
-/** listDrafts：最新 100 个商品草稿（库内文档原样，字段不在这里建模）。urls：图片 fileID → 临时地址，换不到的不在里面。
+/** listDrafts：按创建时间最新的一页商品草稿（条数上限见 limits.ts 的 DRAFT_LIST_CAP，库内文档原样，字段不在这里建模）。
+ *  truncated：库里比这一页还多，list 不是全部。urls：图片 fileID → 临时地址，换不到的不在里面。
  *  listed、cardFinal 键是商品 id；hasVideo、coursePublished、hasBatch 键是课程 id。 */
 export interface AdminDrafts {
   list: Array<Record<string, unknown>>
+  truncated: boolean
   urls: Record<string, string>
   listed: Record<string, boolean>
   cardFinal: Record<string, boolean>

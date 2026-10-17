@@ -17,6 +17,9 @@ export const AFTERSALE_SCAN_CAP = 1000
 /** 支付窗口（毫秒）：关单 cron / 惰性关单 / 前端倒计时 三处共用单源。 */
 export const PAY_WINDOW_MS = 15 * 60 * 1000
 
+/** 后台商品草稿列表一次最多回这么多条。云端多取 1 条只判断有没有被截掉，名单本身不超过这个数。 */
+export const DRAFT_LIST_CAP = 100
+
 /** 有效价格：有限正数且 ≤ 上限（元）——拦 Number('-5')/Infinity 这类 truthy 非法值。 */
 export function isValidPriceYuan(v: unknown): boolean {
   const n = Number(v)

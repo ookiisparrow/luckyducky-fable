@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { DRAFT_LIST_CAP } from '@ldrw/shared'
 
 const { listDraftsMock, saveDraftMock, deleteDraftMock, uploadImageMock, publishProductMock, unpublishProductMock, republishProductMock } = vi.hoisted(() => ({
   listDraftsMock: vi.fn(),
@@ -410,6 +411,23 @@ describe('产品表空态 / 筛选 / 五步齐了（polish 自检）', () => {
     expect(wrapper.text()).toContain('去上新')
     expect(wrapper.text()).toContain('共 0 款商品')
     expect(wrapper.text()).not.toContain('筹备中待完成上新')
+    expect(wrapper.text()).not.toContain('只显示最新')
+  })
+
+  it('大白话：名单真被截断才在副标写只显示最新一页；没截断不提', async () => {
+    listDraftsMock.mockReset().mockResolvedValue({
+      ok: true,
+      list: [{ id: 'p1', name: '小熊', price: '99', cover: 'c', skus: [{ name: '标', price: '99' }] }],
+      urls: {},
+      listed: {},
+      truncated: true,
+      hasVideo: {},
+      cardFinal: {},
+      hasBatch: {},
+    })
+    const { wrapper } = await mountWithRouter()
+    await flushPromises()
+    expect(wrapper.text()).toContain(`只显示最新 ${DRAFT_LIST_CAP} 款`)
   })
 
   it('大白话：筛「在售」对不上时说「没有符合筛选的商品」，不是「还没有商品」', async () => {

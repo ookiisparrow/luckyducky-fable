@@ -1,4 +1,4 @@
-import { COLLECTIONS, isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
+import { COLLECTIONS, DRAFT_LIST_CAP, isValidPriceYuan, isValidScmProductId, isValidScmSpec } from '@ldrw/shared'
 import { reply, readDoc, ensure, type Ctx } from '../lib'
 import { cleanProduct, cleanSold, storeImage } from '../catalog'
 import { notifyAlert, getTempUrls, setOrAdd, isCollectionMissing, deleteFiles, str, err } from '../../../kit'
@@ -58,13 +58,16 @@ async function listedImageUrls(fileIds: Iterable<string>): Promise<Record<string
 export async function listDrafts({ db }: Ctx) {
   const drafts = db.collection(COLLECTIONS.productsDraft)
   await ensure(db, COLLECTIONS.productsDraft) // 草稿集合只在草稿动作用前建，不跟全局网关（进销存/体检等不顺手建）
-  const res = await drafts.orderBy('createdAt', 'desc').limit(100).get()
+  // 多取 1 条只用来判断有没有被截掉；回给页面的名单仍最多 DRAFT_LIST_CAP 条。
+  const res = await drafts.orderBy('createdAt', 'desc').limit(DRAFT_LIST_CAP + 1).get()
+  const truncated = res.data.length > DRAFT_LIST_CAP
+  const page = truncated ? res.data.slice(0, DRAFT_LIST_CAP) : res.data
   // 上架/下架状态映射（软下架显形）：listed 标记在 products、不在草稿，控制台靠它分
   // 「在售（onsale+listed≠false）/ 已下架（onsale+listed:false）/ 筹备中（未上架·无 products 文档）」。
-  // 一次性批量取（草稿 ≤100·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
-  // 6 步上新进度派生（由 cards/courses/qrcodes 批量 join·bounded 同 listed 范式·根因#7）：
+  // 一次性批量取（本页最多 DRAFT_LIST_CAP 条·bounded·根因#7），口径与 getProducts 一致（旧无字段=可售）。
+  // 5 步上新进度派生（由 cards/courses/qrcodes 批量 join·bounded 同 listed 范式·根因#7）：
   // 视频(课程有段带 videoFileId) / 卡片(card 定稿 final) / 批次(该课有 qrcode·aggregate group 只回有码的课·不扫全表)。
-  const draftIds = res.data.map((p: any) => p.id || p._id).filter(Boolean)
+  const draftIds = page.map((p: any) => p.id || p._id).filter(Boolean)
   let urls: Record<string, string> = {}
   const listed: Record<string, boolean> = {}
   const cardFinal: Record<string, boolean> = {}
@@ -73,12 +76,12 @@ export async function listDrafts({ db }: Ctx) {
   const hasBatch: Record<string, boolean> = {}
   if (draftIds.length) {
     const _ = db.command
-    const courseIds = res.data.map((p: any) => String(p.courseId || '') || 'course-' + (p.id || p._id))
+    const courseIds = page.map((p: any) => String(p.courseId || '') || 'course-' + (p.id || p._id))
     const cardIds = draftIds.map((id: string) => 'card-' + id)
     // 换址与各路联表互不依赖，一次并发取。读失败 fail-loud（整体 500）：.catch 空表会把已上架画成「筹备中」、
     // 已完成步画成未做。草稿课集合可能尚未建，只把「集合不存在」当空表。
     const [u, pr, cr, cor, cdr, br] = await Promise.all([
-      listedImageUrls(collectImgs(res.data).all),
+      listedImageUrls(collectImgs(page).all),
       db.collection(COLLECTIONS.products).where({ _id: _.in(draftIds) }).field({ listed: true }).get(),
       db.collection(COLLECTIONS.cards).where({ _id: _.in(cardIds) }).get(),
       db.collection(COLLECTIONS.courses).where({ _id: _.in(courseIds) }).get(),
@@ -112,7 +115,7 @@ export async function listDrafts({ db }: Ctx) {
     for (const c of (cdr as any).data || []) markVideo(c)
     for (const g of (br as any).list || []) hasBatch[String(g._id || '')] = true
   }
-  return reply(200, { ok: true, list: res.data, urls, listed, cardFinal, hasVideo, coursePublished, hasBatch })
+  return reply(200, { ok: true, list: page, truncated, urls, listed, cardFinal, hasVideo, coursePublished, hasBatch })
 }
 
 export async function saveDraft({ db, data }: Ctx) {
