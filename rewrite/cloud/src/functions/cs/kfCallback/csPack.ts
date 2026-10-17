@@ -1,17 +1,19 @@
 /**
  * Config Pack lucky-ducky-2026-09-19 挂进测版运行时。
- * 构建打进 kfCallback，运行时不拉 GitHub。Jev/原文 → triage_rules → 会话/交接（script id / lastScript）。
+ * 构建只打进分流规则、forbidden_transitions、交接必填字段名；运行时不拉 GitHub。
+ * Jev/原文 → triage_rules → 会话/交接（script id / lastScript）。
  * 包装破损对客正文只走 atomic-v1 assemblePackagingBubbles；Pack .txt 不发给顾客。
+ * 状态怎么走只看本文件 ALLOWED；forbidden_transitions 只额外禁跳。
  */
 
 import { COLLECTIONS } from '@ldrw/shared'
 import type { JevResult } from './jev'
 import PACK from './csPackAssets.generated.json'
 
-export type PackMachineState = 'new' | 'greet' | 'triage' | 'collect' | 'act' | 'resolve' | 'human'
+type PackMachineState = 'new' | 'greet' | 'triage' | 'collect' | 'act' | 'resolve' | 'human'
 export type PackHumanSub = 'queued' | 'connected' | 'failed' | ''
 
-export type PackSession = {
+type PackSession = {
   state: PackMachineState
   humanSubstate: PackHumanSub
   intent: string
@@ -22,7 +24,7 @@ export type PackSession = {
   lastScript: string
 }
 
-export type PackTriageHit = {
+type PackTriageHit = {
   ruleId: string
   action: string
   scriptId: string
@@ -33,7 +35,7 @@ export type PackTriageHit = {
   doNotAsk: string[]
 }
 
-export type HandoffPayload = {
+type HandoffPayload = {
   intent: string
   filled_slots: Record<string, string>
   summary: string
@@ -44,16 +46,10 @@ export type HandoffPayload = {
 
 type PackAssets = {
   pack_id: string
-  brief: { pack_id?: string; env?: string; gate?: { mode?: string } }
   state_machine: {
-    states: string[]
-    transitions: Array<{ from: string; to: string; when?: string }>
     forbidden_transitions: Array<{ from: string; to: string[] | string; unless?: string[] }>
   }
   triage_rules: {
-    default_confidence_threshold: number
-    consecutive_unknown_threshold: number
-    collect_rounds_handoff: number
     rules: Array<{
       id: string
       priority: number
@@ -63,22 +59,10 @@ type PackAssets = {
       required_slots?: string[]
       do_not_ask?: string[]
       comment?: string
-      human_substate?: string
     }>
     stage_keywords: Record<string, string[]>
   }
-  slots_schema: {
-    slots: Array<{
-      name: string
-      required_for?: string[]
-      optional_for?: string[]
-      ask?: string
-      ask_variants_packaging?: string[]
-      note?: string
-    }>
-  }
   handoff_payload: { required_fields: Array<{ name: string }> }
-  scripts: Record<string, string>
 }
 
 export const assets = PACK as PackAssets
