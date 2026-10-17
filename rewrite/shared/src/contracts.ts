@@ -65,14 +65,14 @@ interface AdminPage<T> {
   hasMore: boolean
 }
 /** listOrders 的单：库内文档 + 发货闸标记（与 shipOne 同一判据）。 */
-export interface AdminOrderRow extends OrderDoc {
+interface AdminOrderRow extends OrderDoc {
   /** 有在途售后或每行都退够件数：不能发货。 */
   refundHold: boolean
   /** 每行已退件数，键是 lineId（旧单 productId）。 */
   refundedQty: Record<string, number>
 }
 /** listRefunds 的售后单：库内文档 + 从订单 join 的收货人。 */
-export interface AdminRefundRow extends AfterSaleDoc {
+interface AdminRefundRow extends AfterSaleDoc {
   buyerName: string
   buyerPhone: string
 }
@@ -225,7 +225,7 @@ export interface AdminVideoUploadMeta {
 }
 
 // cs
-export interface AdminConversationMsg {
+interface AdminConversationMsg {
   id: string
   channel: string
   /** 'in' 客户 · 'out' 客服/机器人 */
@@ -300,7 +300,7 @@ export interface AdminCheckpoints {
   rev: number
 }
 /** 质检抽样行：sessionKey 是 csSession._id；该客户消息聚合读失败时不带 messageCount/avgResponseMs。 */
-export interface AdminQcRow {
+interface AdminQcRow {
   sessionKey: string
   externalUserId: string
   updatedAt: number

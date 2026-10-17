@@ -5,9 +5,9 @@ import { clampResumeAt } from './continueResolve' // 续播秒夹取单源（命
 /** 激活结果五态：activated 新激活（恭喜屏）/ mine 本人已进课（欢迎回来屏）/ taken 他人码（已被使用屏）/
  *  invalid 废码 / error 没兑成但码可能是好的（按 reason 分文案、可重试·fail-closed 不冒充激活）。 */
 export type ActivationKind = 'activated' | 'mine' | 'taken' | 'invalid' | 'error'
-export type ActivationErrReason = 'network' | 'throttled' | 'busy'
+type ActivationErrReason = 'network' | 'throttled' | 'busy'
 
-export interface ActivationView {
+interface ActivationView {
   kind: ActivationKind
   courseId: string
   reason?: ActivationErrReason
@@ -138,7 +138,7 @@ export function mapMyCourses(mine: unknown, courses: unknown, progress?: unknown
   return out
 }
 
-export interface CatalogLessonVM {
+interface CatalogLessonVM {
   lessonId: string
   name: string
   status: 'done' | 'current' | 'todo'
@@ -305,7 +305,7 @@ export function mapCatalog(
 // （rewrite/cloud/src/functions/app/actions/reviews.ts）。清洗脏结构：非数组归空、
 // id/title/sub/desc/dur String 化（dur 原样字符串，不重新格式化）、url 非串归 null（短时地址过期/未剪辑）；
 // 无 title 且无 segments 的主题剔除（脏档不占一个空分组位）。
-export interface HelpVideoSegVM {
+interface HelpVideoSegVM {
   id: string
   name: string
   dur: string
