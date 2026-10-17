@@ -124,7 +124,6 @@ function resolveStep(step: AtomicStep, rand: () => number): AtomicStep {
 }
 
 function stepApplies(step: AtomicStep, ctx: AtomicPlayCtx): boolean {
-  if (step.optional && ctx.skipOptional) return false
   if (step.when === 'severity_high_or_logistics_damage') return !!(ctx.severityHigh || ctx.logisticsSevere)
   return !step.when
 }
