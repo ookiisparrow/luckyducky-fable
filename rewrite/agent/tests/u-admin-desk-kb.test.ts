@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Desk.vue FAQ 面板「刷新」失败不冲掉已拉到的快捷回复（同 refreshLists「失败不清已有」·失败≠空态）。
+// Desk.vue：人点 FAQ「刷新」失败时留着已有快捷回复，并写一句错误；第一次没拉到则整行隐藏、不出错。
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -34,6 +34,22 @@ describe('Desk.vue 知识库刷新失败保留已有快捷回复', () => {
     expect(w.find('.faq-list').text()).toContain('多久发货')
     expect(w.find('.faq-list').text()).not.toContain('没有匹配的条目')
     expect(w.find('.quickbar').exists()).toBe(true)
+    expect(w.find('.faq-panel .note').text()).toContain('网络不通')
+    w.unmount()
+  })
+
+  it('大白话：第一次没拉到知识库，快捷回复整行不出现，也不报错', async () => {
+    vi.useFakeTimers()
+    postMock.mockImplementation(async (action: string) => {
+      if (action === 'listMyActive') return { ok: true, sessions: [] }
+      if (action === 'listQueue') return { ok: true, items: [] }
+      return { ok: true, panels: [] }
+    })
+    listKbMock.mockResolvedValue({ ok: false, error: 'NETWORK' })
+    const w = mount(Desk)
+    await flushPromises()
+    expect(w.find('.quickbar').exists()).toBe(false)
+    expect(w.text()).not.toContain('网络不通')
     w.unmount()
   })
 })

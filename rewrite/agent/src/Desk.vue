@@ -75,6 +75,7 @@ const NOTIFY_KEY = 'ldrw_agent_notify_enabled'
 const baseTitle = document.title // 还原基准单源＝index.html 定的标题，不复制字面量、避免漂移
 
 const availableReplies = ref<KbEntry[]>([]) // 过滤后全部（供 FAQ 面板/判断整行显隐）
+const kbNote = ref('') // 只有人点「刷新」失败才写；首次拉不到不出这句，整行照旧隐藏
 const quickReplies = computed(() => availableReplies.value.slice(0, 4)) // chips 只取前 4 条
 const faqOpen = ref(false)
 const faqQuery = ref('')
@@ -122,10 +123,16 @@ async function pollThread(loud = false) {
   recomputeAlert() // 当前会话新入站是提醒聚合公式另一半（改动契约 3）
 }
 
-/** 快捷回复读知识库（进入 Desk 拉一次·不轮询）：空→整行诚实隐藏；刷新失败不清已有（同 refreshLists）。 */
-async function loadKb() {
+/** 快捷回复读知识库（进页面拉一次，不轮询）。空或第一次没拉到：整行隐藏，不出错。
+ *  只有人点「刷新」失败才写一句错误，已有条目留着。待接队列是每次失败都出声，这里不是。 */
+async function loadKb(loud = false) {
   const r = await listKb()
-  if (r.ok) availableReplies.value = filterQuickReplies(r.list)
+  if (r.ok) {
+    availableReplies.value = filterQuickReplies(r.list)
+    kbNote.value = ''
+    return
+  }
+  if (loud) kbNote.value = deskErrorText(r.error)
 }
 
 /** 把答案追加进输入框（不自动发送）；无选中会话时无输入框可写，no-op。 */
@@ -431,9 +438,10 @@ onBeforeUnmount(() => {
       <div class="faq-panel">
         <div class="faq-head">
           <input v-model="faqQuery" class="faq-search" placeholder="搜关键字…" />
-          <button class="ghost" @click="loadKb">刷新</button>
+          <button class="ghost" @click="loadKb(true)">刷新</button>
           <button class="ghost" @click="faqOpen = false">关闭</button>
         </div>
+        <p v-if="kbNote" class="note">{{ kbNote }}</p>
         <div class="faq-list">
           <div v-for="e in faqFiltered" :key="e.key" class="faq-item" @click="pickFaq(e)">
             <strong>{{ e.question }}</strong>

@@ -77,4 +77,29 @@ describe('compressImage 行为', () => {
     const file = new File(['x'], 'a.jpg', { type: 'image/jpeg' })
     await expect(compressImage(file)).resolves.toBe('')
   })
+
+  it('大白话：这张图读不出来就交空串，不把异常抛出去，临时地址也要收回', async () => {
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null
+        onerror: ((err?: unknown) => void) | null = null
+        width = 10
+        height = 10
+        set src(_u: string) {
+          queueMicrotask(() => this.onerror?.(new Error('decode')))
+        }
+      },
+    )
+    vi.stubGlobal('document', {
+      createElement: () => {
+        throw new Error('读失败不该去画布')
+      },
+    })
+    const revoke = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL: () => 'blob:bad', revokeObjectURL: revoke })
+    const file = new File(['x'], 'bad.jpg', { type: 'image/jpeg' })
+    await expect(compressImage(file)).resolves.toBe('')
+    expect(revoke).toHaveBeenCalledWith('blob:bad')
+  })
 })
