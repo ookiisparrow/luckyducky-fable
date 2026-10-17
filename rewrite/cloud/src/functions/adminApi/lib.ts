@@ -168,7 +168,7 @@ const ROLES: Record<string, string[]> = {
   // 外包看客户 360 只能经「自己 claim 的会话」的 scoped 路径（assertOwnedByAgent + assertDataShareConsent·见 agentDesk.ts getSessionCustomer360）。
   outsourced: ['agent:handle'],
 }
-export const capsForRole = (role: string): string[] => ROLES[role] || []
+const capsForRole = (role: string): string[] => ROLES[role] || []
 
 // 账号档 → 认证主体（口令 / 会话令牌 / 企微免登共用一份，防同一账号换登录方式拿到不同权限）。
 // caps 优先级：role 派生（ROLES 单源）＞显式 caps 字段＞超管回退 ['*']（旧超管 'auth' doc 无 role/caps）。

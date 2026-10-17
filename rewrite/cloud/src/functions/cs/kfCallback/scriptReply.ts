@@ -225,7 +225,7 @@ export function routeFromJev(state: JevFlowState, ev: JevResult): JevRoute {
   return { topic, orderStatus, emotionStatus, severity, responsibility, needStatus, exceeds, hasLogisticsFacts: hasLogisticsFacts(ev) }
 }
 
-export function checkpointOf(node: ScriptNode): ActingCheckpoint {
+function checkpointOf(node: ScriptNode): ActingCheckpoint {
   if (node === 'greet' || node === 'greetIssue' || node === 'surprise' || node === 'awkward' || node === 'hesitate')
     return 'pick'
   if (node === 'severity' || node === 'restate' || node === 'askMore') return 'review'
@@ -334,7 +334,7 @@ function actingPool(acting: Acting): ScriptPoolId {
   return acting === 'light' ? 'askMore' : acting === 'steady' ? 'ack' : acting
 }
 
-export function compressNeed(text: string): string {
+function compressNeed(text: string): string {
   const t = String(text || '').replace(/\s+/g, '').slice(0, 24)
   return t || '您刚说的这件事'
 }

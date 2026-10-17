@@ -9,7 +9,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 export const JEV_URL = 'https://api.typesafe.ai/v1/systemone'
 export const JEV_MODEL = 'jev-latest'
 
-export type JevDepartment = 'billing' | 'technical' | 'sales'
+type JevDepartment = 'billing' | 'technical' | 'sales'
 export const JEV_TOPICS = [
   'logistics',
   'packaging',
@@ -21,7 +21,7 @@ export const JEV_TOPICS = [
   'other',
 ] as const
 export type JevTopic = (typeof JEV_TOPICS)[number]
-export const JEV_ORDER = [
+const JEV_ORDER = [
   'pre_order',
   'ordering',
   'pre_ship',
@@ -30,7 +30,7 @@ export const JEV_ORDER = [
   'unknown',
 ] as const
 export type JevOrderStatus = (typeof JEV_ORDER)[number]
-export const JEV_EMOTION = [
+const JEV_EMOTION = [
   'calm',
   'anxious',
   'upset',
@@ -43,9 +43,9 @@ export const JEV_EMOTION = [
   'other',
 ] as const
 export type JevEmotionStatus = (typeof JEV_EMOTION)[number]
-export const JEV_SEVERITY = ['low', 'medium', 'high'] as const
+const JEV_SEVERITY = ['low', 'medium', 'high'] as const
 export type JevSeverity = (typeof JEV_SEVERITY)[number]
-export const JEV_RESP = ['customer', 'merchant', 'logistics', 'unclear', 'n/a'] as const
+const JEV_RESP = ['customer', 'merchant', 'logistics', 'unclear', 'n/a'] as const
 export type JevResponsibility = (typeof JEV_RESP)[number]
 export const JEV_NEED = [
   'logistics',

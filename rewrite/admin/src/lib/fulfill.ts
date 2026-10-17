@@ -12,9 +12,9 @@ export const PAPER_PRESETS = [
   { key: '100x180', w: 100, h: 180, label: '100×180mm 面单纸' },
   { key: '76x130', w: 76, h: 130, label: '76×130mm 面单纸' },
 ]
-export type PaperPreset = (typeof PAPER_PRESETS)[number]
+type PaperPreset = (typeof PAPER_PRESETS)[number]
 
-export interface FulfillItem {
+interface FulfillItem {
   name?: string
   qty?: number
   // 该行已退的件数（后端 listOrders refundedQty）：退款按件退，没退的件照装，已退的件别装
@@ -44,7 +44,7 @@ export function shortCode(id: unknown): string {
   return /^\d{16}$/.test(s) ? `${s.slice(4, 8)}-${s.slice(12)}` : s
 }
 
-export interface PickSummary {
+interface PickSummary {
   orderCount: number
   totalQty: number
   mismatchCount: number
@@ -84,7 +84,7 @@ export function pickSummary(orders: unknown): PickSummary {
   return { orderCount, totalQty, mismatchCount, refundHoldCount, earliestCreatedAt: earliest, products }
 }
 
-export interface LabelData {
+interface LabelData {
   id: string
   shortCode: string
   name: string
@@ -127,7 +127,7 @@ export function sameAck(a: Record<string, number> = {}, b: Record<string, number
   return [...new Set([...Object.keys(a), ...Object.keys(b)])].every((k) => (Number(a[k]) || 0) === (Number(b[k]) || 0))
 }
 
-export type ScanResult =
+type ScanResult =
   | { type: 'empty' }
   | { type: 'order'; id: string }
   | { type: 'order-refund-hold'; id: string }
