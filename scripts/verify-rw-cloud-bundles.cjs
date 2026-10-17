@@ -38,7 +38,7 @@ async function main() {
     process.exit(1)
   }
   const fns = readdirSync(DIST).filter((n) => existsSync(join(DIST, n, 'index.js')))
-  assert(fns.length >= 13, `产物函数数 ${fns.length}（≥13·13 函数拓扑·2026-07-23 拓扑收编批，缺=build 掉队）`)
+  assert(fns.length >= 14, `产物函数数 ${fns.length}（下限以 cloudbaserc.json 为准，缺=build 掉队）`)
 
   for (const name of fns) {
     try {
