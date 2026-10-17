@@ -1,6 +1,7 @@
 // 意见反馈页行为：空内容拦截、提交参数（去空白·分类·联系方式）、成功锁到延时返回、三类失败文案、
 // 在途防重、在途退页与延时返回坞的收尾。只桩云调用（callApp），api 用真的。Page 桩同 p-mp-order-page.test.ts。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { APP_VERSION } from '../lib/appVersion'
 
 const { callAppMock } = vi.hoisted(() => ({ callAppMock: vi.fn() }))
 vi.mock('../utils/cloud', () => ({ callApp: callAppMock }))
@@ -60,7 +61,7 @@ describe('意见反馈：提交', () => {
       category: 'idea',
       contact: 'wx123',
       page: 'feedback',
-      version: 'rw-m2',
+      version: APP_VERSION,
       platform: 'mp',
       idempotencyKey: expect.any(String),
     })
