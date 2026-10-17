@@ -47,13 +47,13 @@ type AtomicAssets = {
   files: Record<string, string>
 }
 
-export type PackagingFacets = {
+type PackagingFacets = {
   packagingDamage: boolean
   logisticsSevere: boolean
   negative: boolean
 }
 
-export type AtomicPlayCtx = {
+type AtomicPlayCtx = {
   severityHigh?: boolean
   logisticsSevere?: boolean
   skipOptional?: boolean

@@ -4,7 +4,7 @@
 import { transportErrorText } from './mapSystem'
 import type { ErrCode } from '@ldrw/shared'
 
-export type ProductState = 'onsale' | 'unlisted' | 'preparing'
+type ProductState = 'onsale' | 'unlisted' | 'preparing'
 
 const STATE_LABELS: Record<ProductState, string> = {
   onsale: '在售',
@@ -19,7 +19,7 @@ export function productState(id: string, listedMap: unknown): ProductState {
   return m[id] === false ? 'unlisted' : 'onsale'
 }
 
-export interface StepMark {
+interface StepMark {
   key: string
   label: string
   done: boolean

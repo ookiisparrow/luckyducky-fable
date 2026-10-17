@@ -3,20 +3,20 @@
 // 工厂式依赖注入（fetcher/now）——缓存命中/过期/去重最易在边界出错，纯函数化单测钉死。
 import { createInflight } from './inflight'
 
-export interface SegmentPub {
+interface SegmentPub {
   id: string
   name?: string
   dur?: number
   hasVideo: boolean
   marks?: { at: number; name?: string }[] // 关键动作节点（后台 admin 标注，尚未投产·设计拍板·前端宽松读）
 }
-export interface LessonPub {
+interface LessonPub {
   id: string
   name?: string
   dur?: number
   segments: SegmentPub[]
 }
-export interface ChapterPub {
+interface ChapterPub {
   id: string
   title?: string
   lessons: LessonPub[]

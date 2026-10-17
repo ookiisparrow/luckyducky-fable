@@ -8,7 +8,7 @@ import { err } from './reply'
 // **fail-soft 铁律**：推送/网络/配置任何失败绝不抛错——可观测性不能反噬主流程（钱链回调照常 ACK）。
 // 安全（CLAUDE.md）：webhook URL 是凭证、不进日志；ctx 只放非敏感标识（沿用 observe 约束）。
 
-export type BotFetch = (
+type BotFetch = (
   url: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<{ json: () => Promise<any>; status?: number }> // status：全局 fetch 天然带；httpsFetch 补 statusCode（可选·旧注入 mock 不带也兼容）
