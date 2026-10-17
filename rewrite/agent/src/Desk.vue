@@ -102,7 +102,7 @@ async function refreshLists() {
   if (q.ok) queueMore.value = !!q.nextCursor
   mine.value = m.ok ? ((m.sessions as Record<string, any>[]) || []) : mine.value
   listNote.value = q.ok && m.ok ? '' : deskErrorText(q.ok ? m.error : q.error)
-  recomputeAlert() // 队列增量是提醒聚合公式一半（改动契约 3）
+  recomputeAlert() // 队列增量是提醒聚合公式一半
 }
 
 async function pollThread(loud = false) {
