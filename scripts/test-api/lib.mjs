@@ -15,7 +15,6 @@ assertMay(_target, 'test-api');
 export const ENV = _target.envId;
 export const FUNCS = {
   app: 'app',           // 用户端网关
-  inspect: 'inspect',   // 健康巡检
 };
 
 // ---------- callFunction 封装 ----------
