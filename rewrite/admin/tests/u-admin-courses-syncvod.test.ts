@@ -44,6 +44,7 @@ describe('Courses.vue 同步转码结论不被重载抹掉', () => {
     await clickSync(w)
     expect(syncVodMediaMock).toHaveBeenCalledWith('course-p1')
     expect(w.find('.status').text()).toContain('仍在转码 1 段')
+    expect(w.find('.status').classes()).toContain('ok')
   })
 
   it('大白话：输入框清空后点同步，照样重载刚同步的课并显示结论', async () => {
@@ -71,5 +72,21 @@ describe('Courses.vue 同步转码结论不被重载抹掉', () => {
     await clickSync(w)
     expect(w.find('.status').text()).not.toContain('仍在转码')
     expect(w.find('.status').text()).toContain('网络不通')
+    expect(w.find('.status').classes()).not.toContain('ok')
+    expect(w.find('.status').classes()).not.toContain('pending')
+  })
+
+  it('大白话：载入课程时「加载中」用灰字，不是失败红、也不是成功绿', async () => {
+    let release: (v: unknown) => void = () => {}
+    getCourseDraftMock.mockImplementation(() => new Promise((resolve) => { release = resolve }))
+    const w = mount(Courses, { props: { embed: true, wizardCourseId: 'course-p1' } })
+    await flushPromises()
+    const status = w.find('.status')
+    expect(status.text()).toBe('加载中…')
+    expect(status.classes()).toContain('pending')
+    expect(status.classes()).not.toContain('ok')
+    release({ ok: true, course: course('course-p1') })
+    await flushPromises()
+    w.unmount()
   })
 })

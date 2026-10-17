@@ -84,7 +84,7 @@ onMounted(load)
 
     <Card title="评价" :sub="status === 'pending' ? '还没上架的（含旧档未标挑选）' : status === 'picked' ? '已在小程序展示' : '待挑选 + 已上架'">
       <template #head>
-        <div class="range-chips ld-range-chips">
+        <div class="ld-range-chips">
           <UiButton
             v-for="c in STATUS_CHIPS"
             :key="c.key"
@@ -106,7 +106,7 @@ onMounted(load)
         </div>
         <div class="ld-tbody">
           <div v-for="row in rows" :key="row.id" class="ld-tr">
-            <div class="ld-td muted mono ld-muted ld-mono" :style="{ width: '150px' }">{{ row.timeLabel || '—' }}</div>
+            <div class="ld-td ld-muted ld-mono" :style="{ width: '150px' }">{{ row.timeLabel || '—' }}</div>
             <div class="ld-td" :style="{ width: '70px' }">{{ row.rating }} 星</div>
             <div class="ld-td grow">
               <div class="who">{{ row.name || '—' }}<span v-if="row.spec" class="spec"> · {{ row.spec }}</span></div>
@@ -126,9 +126,9 @@ onMounted(load)
             </div>
           </div>
         </div>
-        <div class="more-wrap ld-more-wrap">
+        <div class="ld-more-wrap">
           <UiButton v-if="hasMore" size="sm" variant="ghost" @click="more">加载更多</UiButton>
-          <p v-else class="end-mark ld-end-mark">— 已到最早 —</p>
+          <p v-else class="ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
     </Card>

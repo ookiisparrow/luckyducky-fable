@@ -35,6 +35,13 @@ function backToLaunch() {
 const course = ref<Record<string, any> | null>(null)
 const fromPublished = ref(false)
 const message = ref('')
+// 成功绿、失败红、加载中灰。只认现有句子，不改文案。
+const ok = computed(() =>
+  message.value.startsWith('草稿已保存') ||
+  message.value.startsWith('已发布，') ||
+  message.value.startsWith('转码状态已同步'),
+)
+const pending = computed(() => message.value === '加载中…')
 const busy = ref(false)
 const progress = ref('')
 const publishConfirm = ref(false)
@@ -427,7 +434,7 @@ onMounted(() => {
       <UiButton variant="ghost" :disabled="batchUploading" @click="load"><RotateCcw :size="14" :stroke-width="1.8" /><span>载入</span></UiButton>
     </div>
 
-    <p v-if="message" class="status">{{ message }}</p>
+    <p v-if="message" class="status" :class="{ ok, pending }">{{ message }}</p>
     <p v-if="progress" class="uploading ld-uploading">{{ progress }}</p>
 
     <template v-if="course">
@@ -519,6 +526,13 @@ onMounted(() => {
 .status {
   font-size: 13px;
   color: var(--ld-red);
+}
+.status.ok {
+  color: var(--ld-green);
+}
+/* 加载中：与全局 .ld-status 同色 */
+.status.pending {
+  color: var(--ld-content-2);
 }
 /* 课程信息行（外框由 Card 提供） */
 .course-head {
