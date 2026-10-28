@@ -20,6 +20,10 @@ export const profileProvider: CustomerPanelProvider = {
     const rows = (qy: any) => qy.get().then((r: any) => (r && r.data) || [])
     // 订单破上限必须是最近一批：按 createdAt 倒序再截断（下单必写）。
     // 不排的话总消费/已付单数是库随手返回的一批。
+    // 激活记录不排序。仓里没有「客人 + 创建时间」这类索引（现有：客人+课程+进课时间、
+    // 激活码+客人、进课时间），硬加 createdAt 排序会让画像整块读失败。
+    // 超过 100 条时进课率是近似：已激活数、已进课数同样只是库随手返回的至多 100 条，不是最近 100 条。
+    // 不新建索引、不改控制台期望表；那张表还在改，落地后再补排序。
     const [orders, acts, lastEvt] = await Promise.all([
       rows(db.collection(COLLECTIONS.orders).where({ _openid: openid }).orderBy('createdAt', 'desc').limit(ORDER_LIMIT)),
       rows(db.collection(COLLECTIONS.activations).where({ _openid: openid }).limit(ACT_LIMIT)),
@@ -36,7 +40,7 @@ export const profileProvider: CustomerPanelProvider = {
       totalSpent, // 元
       activatedCount: acts.length,
       enteredCount: entered,
-      // 进课率（百分比·已进课 ÷ 已激活）
+      // 进课率（百分比·已进课 ÷ 已激活）。超过 100 条时是近似，见上面激活查询的说明。
       enterRate: acts.length ? Math.round((entered / acts.length) * 100) : 0, // structure-ok：百分比非金额换算
       lastActiveAt: (lastEvt[0] && lastEvt[0].createdAt) || null,
     }
