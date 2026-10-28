@@ -1,4 +1,4 @@
-// 备份默认集合清单（db-export.mjs 消费）。挑 P0 关键子集而非全量 37 集合——理由见
+// 备份默认集合清单（db-export.mjs 消费）。挑 P0 关键子集而非全量（全量名单以 rewrite/shared/src/collections.ts 的 COLLECTIONS 为准）——理由见
 // git 历史本批提交信息（重构日志已退役 2026-08-21）：全量镜像清单会重蹈「样板复制即漂移」（根因#5）覆辙，需要时
 // 用 --collections 显式指定即可，不预先立一份用不上的全量维护负担（YAGNI）。
 //
