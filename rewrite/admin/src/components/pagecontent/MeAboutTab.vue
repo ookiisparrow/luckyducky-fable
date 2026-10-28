@@ -44,9 +44,10 @@ async function saveBoth() {
 }
 
 // 手工保存失败后 save() 会把两边 autoState 复位成空，失败只留在上面两个标记里。
-// 之后只要两边自动保存都不再是失败，就撤掉标记和旧句子，否则成功了仍显示「自动保存失败」。
+// 空和 saving 都还没存成：只改一边时另一边仍是空，不能当成已经好了，否则失败句被清掉，
+// 剩下的成功句会装成两边都存上了。两边自动保存都落到 saved，才撤掉标记和旧失败句。
 watch([() => me.autoState.value, () => about.autoState.value], ([a, b]) => {
-  if (a === 'error' || b === 'error' || !saveBothError.value) return
+  if (!saveBothError.value || a !== 'saved' || b !== 'saved') return
   saveBothError.value = false
   saveBothMessage.value = ''
   if (me.message.value !== SAVE_OK_MESSAGE) me.message.value = ''
