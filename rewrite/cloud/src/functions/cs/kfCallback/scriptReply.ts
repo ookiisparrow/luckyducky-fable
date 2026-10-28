@@ -23,7 +23,7 @@ import { fillSlots, pickLine, rememberUsed, type ScriptPoolId } from './scriptPo
 import { looksPackagingDamage, loadAndAdvancePack, resolvePackagingMainScript } from './csPack'
 import { assemblePackagingBubbles, stitchUtterance } from './csAtomic'
 
-export type ScriptNode =
+type ScriptNode =
   | 'greet'
   | 'greetIssue'
   | 'restate'
@@ -40,7 +40,7 @@ export type ScriptNode =
   | 'humanAsk'
   | 'humanAsk2'
 
-export type Acting =
+type Acting =
   | 'reassure'
   | 'empathy'
   | 'apology'
@@ -51,11 +51,11 @@ export type Acting =
   | 'surprise'
   | 'awkward'
 
-export type ActingCheckpoint = 'pick' | 'review' | 'promise' | 'coop' | 'solve' | ''
+type ActingCheckpoint = 'pick' | 'review' | 'promise' | 'coop' | 'solve' | ''
 
-export type ScriptTopic = JevTopic
+type ScriptTopic = JevTopic
 
-export type JevFlowState = {
+type JevFlowState = {
   node: ScriptNode | ''
   topic: ScriptTopic | ''
   orderStatus: JevOrderStatus | ''
@@ -75,7 +75,7 @@ export type JevFlowState = {
   stitchAt: number
 }
 
-export type JevRoute = {
+type JevRoute = {
   topic: ScriptTopic
   orderStatus: JevOrderStatus
   emotionStatus: JevEmotionStatus
@@ -410,7 +410,7 @@ export function applyNode(
   }
 }
 
-export type ComposeCtx = {
+type ComposeCtx = {
   hasRecentOrder?: boolean
 }
 
