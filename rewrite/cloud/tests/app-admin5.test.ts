@@ -70,6 +70,22 @@ describe('客户 360 聚合（黄金 §十三：只本人·钱链口径·错误�
     expect(empty.panels.length).toBe(5)
   })
 
+  it('大白话：单子超过上限时，总消费和已付单数按最近创建的一批算，更早的不混进来', async () => {
+    const orders: any[] = [
+      { _id: 'old-paid', _openid: 'oU1', status: 'paid', amount: 9999, createdAt: 1 },
+    ]
+    for (let i = 0; i < 200; i++) {
+      orders.push({ _id: 'new-' + i, _openid: 'oU1', status: 'pending', amount: 1, createdAt: 1000 + i })
+    }
+    control.seed('orders', orders)
+    const r = await post('getCustomer360', SUPER, { openid: 'oU1' })
+    const profile = r.panels.find((p: any) => p.key === 'profile').data
+    expect(profile.ordersCapped).toBe(true)
+    expect(profile.orderCount).toBe(200)
+    expect(profile.paidCount).toBe(0)
+    expect(profile.totalSpent).toBe(0)
+  })
+
   it('大白话：学习完成度不被 stale done 键顶爆——doneCount 与课程真实段集取交集·percent 封顶 100（与 C 端 mapMyCourses 同口径）', async () => {
     control.seed('courses', [
       { _id: 'c1', id: 'c1', title: '钩织入门', chapters: [{ id: 'ch1', lessons: [{ id: 'l1', segments: [{ id: 's1' }, { id: 's2' }] }] }] },
