@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 填充按钮·自建原语单源（收敛 admin UI·病根#5 样板复制即漂移）。
-// 视觉对齐 design/控制台.pen：primary=幸运紫 brand 填充·圆角 8·白字 600（旧态是 purple-ink 药丸·随新设计重写换掉）。
+// 视觉对齐 design/控制台.pen：primary=幸运紫 brand 填充·圆角 8·白字 600。
 // 页面禁再手搓填充按钮，一律用本组件。
 // variant：primary（主 CTA·brand 底）· ghost（次操作·白底描边）· danger（危险·红底）。
 // 属性（@click / :disabled / type / title / class）经单根 <button> 原生穿透。

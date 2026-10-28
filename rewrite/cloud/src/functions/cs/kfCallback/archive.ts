@@ -63,7 +63,7 @@ export function payloadText(payload: any): string {
 
 /**
  * 归档一条入站客户消息（fail-soft·绝不抛错）。确定性 _id 幂等：同 msgid 重投不重档。
- * 非客户文本（事件/图片等）本期不归档（incomingText 给占位·检索以客户文本为主）——只归档有 msgid 的真消息。
+ * 平台事件不归档。图片会归档（正文 incomingText 只留占位，mediaId 供坐席台拉图）。只归档有 msgid 的真消息。
  * knownOpenid：调用方已读过该顾客映射时传入（'' = 已知未绑定），不再重读；undefined 才在此读。
  */
 export async function archiveInbound(db: any, msg: any, openKfId: string, knownOpenid?: string): Promise<void> {

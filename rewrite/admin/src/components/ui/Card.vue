@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // 卡片/面板容器·自建原语（design/控制台.pen：白底·圆角12·$line 描边）。
-// 16-19 页重复手搓 .panel/.stat-card 容器——收敛单源。
 // title/sub 给标准卡头（右侧操作走 #head 具名槽）；不传 title 则纯容器（表格卡用 flush 去内边距）。
 withDefaults(
   defineProps<{
