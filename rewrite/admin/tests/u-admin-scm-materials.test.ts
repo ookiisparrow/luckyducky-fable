@@ -201,13 +201,16 @@ describe('ScmMaterials.vue 读失败不装空（失败≠空态）', () => {
     expect(w.find('.sup-cell .sup-name').text()).toBe('读取失败')
   })
 
-  it('大白话：进批量盘点时物料读超时，不显「没有物料档可盘点」，也不甩英文码', async () => {
+  it('大白话：进批量盘点时物料读超时，停在物料页并说出人话，不进盘点、不发盘点单号', async () => {
     const w = await mountPage()
     api.listMaterials.mockResolvedValue({ ok: false, status: 0, error: 'CALL_TIMEOUT' })
     await clickText(w, '批量盘点')
     expect(w.text()).not.toContain('没有物料档可盘点')
     expect(w.text()).toContain('服务器太久没回话')
     expect(w.text()).not.toContain('CALL_TIMEOUT')
+    expect(w.find('.stocktake-entry').exists()).toBe(true)
+    expect(w.find('.stocktake-no').exists()).toBe(false)
+    expect(w.text()).not.toContain('退出盘点')
   })
 
   it('大白话：流水读失败说人话，不甩英文码', async () => {

@@ -195,6 +195,22 @@ describe('Products.vue 图片上传回包晚到', () => {
     expect(api.uploadImage).toHaveBeenCalledWith('b64', 'p1', 'jpg')
   })
 
+  it('大白话：相册压图抛错——忙碌松开，同一批文件能再选', async () => {
+    await open(0)
+    vi.mocked(compressImage).mockRejectedValueOnce(new Error('decode'))
+    const input = w.find('.gallery .g-add input')
+    const el = input.element as HTMLInputElement
+    const setValue = vi.fn()
+    Object.defineProperty(el, 'files', { configurable: true, value: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] })
+    Object.defineProperty(el, 'value', { configurable: true, get: () => 'C:\\fakepath\\a.jpg', set: setValue })
+    await input.trigger('change').catch(() => {})
+    await flushPromises()
+    const save = w.findAll('button').find((b) => b.text() === '保存草稿')!
+    expect(save.attributes('disabled')).toBeUndefined()
+    expect(setValue).toHaveBeenCalledWith('')
+    vi.mocked(compressImage).mockResolvedValue('b64')
+  })
+
   it('大白话：相册上传没切商品——图进本商品相册', async () => {
     await open(0)
     api.uploadImage.mockResolvedValueOnce({ ok: true, fileID: 'cloud://g1', url: 'https://u/g1' })
