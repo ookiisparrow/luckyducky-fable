@@ -88,7 +88,8 @@ const qcPager = usePager()
 const qcHasMore = qcPager.hasMore
 const qcMsg = ref('')
 const qcSampling = ref(false)
-// 进页就会拉「已抽」，「随机抽取」同时可点。抽样一开始把进行中的列表作废，后到的首页不得整表盖掉刚抽出的行。
+// 进页就会拉「已抽」，「随机抽取」同时可点。只有真抽出新样本，才把进行中的列表作废，
+// 后到的首页不得整表盖掉刚抽出的行。抽样失败或抽空不作废：否则晚到的已有样本不出现，列表错误也被吞掉。
 // 计数单独走，不调 qcPager.begin()：begin 会把「首页还没回来」卡住，抽样不解，加载更多就永久点不了。
 let qcListSeq = 0
 
@@ -112,8 +113,13 @@ async function loadQcSampled() {
   const r = await listQcSampled({})
   if (qcPager.isStale(my)) return // 先对上翻页代际，解开「首页还没回来」
   if (listGen !== qcListSeq) {
-    // 抽样已作废这次整表替换。游标仍落地，否则「还有下一页」一起丢，加载更多出不来。
-    if (r.ok) qcPager.reset(r)
+    // 已经抽出新行，这次整表替换作废。失败不能吞：有新行、游标又是空的时候，会看起来像「已到最早」。
+    if (!r.ok) {
+      qcMsg.value = failText('加载失败', r.error, csErrorText)
+      return
+    }
+    // 游标仍落地，否则「还有下一页」一起丢，加载更多出不来。
+    qcPager.reset(r)
     return
   }
   if (!r.ok) {
@@ -137,7 +143,6 @@ async function moreQc() {
 }
 
 async function doSampleQc() {
-  qcListSeq += 1
   qcSampling.value = true
   qcMsg.value = ''
   const r = await sampleQc(10)
@@ -151,6 +156,8 @@ async function doSampleQc() {
     qcMsg.value = '候选池已抽完（所有已结束会话都已抽样或已评分）'
     return
   }
+  // 只在新样本落地前作废在途列表。与下面赋值之间不能再 await，否则晚到的首页仍可能整表盖掉。
+  qcListSeq += 1
   const freshKeys = new Set(fresh.map((row) => row.sessionKey))
   qcRows.value = [...fresh, ...qcRows.value.filter((row) => !freshKeys.has(row.sessionKey))] // 新抽的置顶·dedup 防重复点击
 }

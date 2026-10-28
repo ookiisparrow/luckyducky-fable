@@ -132,4 +132,102 @@ describe('Conversations.vue 抽样与在途列表', () => {
     expect(w.text()).toContain('NEWROW')
     expect(w.text()).toContain('PAGE02')
   })
+
+  it('大白话：抽样失败时，后到的已抽列表仍要出现，不能被当成作废丢掉', async () => {
+    const late = pending<{ ok: boolean; list: unknown[]; hasMore: boolean; nextCursor: string | null }>()
+    listQcSampledMock.mockImplementationOnce(() => late.p)
+    sampleQcMock.mockResolvedValue({ ok: false, error: 'DB_READ_FAIL' })
+    conversationsReportMock.mockResolvedValue({ ok: true })
+    searchConversationsMock.mockResolvedValue({ ok: true, messages: [], hasMore: false })
+
+    const w = mount(Conversations)
+    await flushPromises()
+    await btn(w, '随机抽取 10 条')!.trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('抽样失败（DB_READ_FAIL）')
+
+    late.release({ ok: true, list: [qcRow('s-old', 'extuser-OLDROW')], hasMore: false, nextCursor: null })
+    await flushPromises()
+
+    expect(w.text()).toContain('OLDROW')
+    expect(w.text()).not.toContain('候选池已抽完')
+  })
+
+  it('大白话：抽不到新样本时，后到的已有样本仍要出现', async () => {
+    const late = pending<{ ok: boolean; list: unknown[]; hasMore: boolean; nextCursor: string | null }>()
+    listQcSampledMock.mockImplementationOnce(() => late.p)
+    sampleQcMock.mockResolvedValue({ ok: true, count: 0, sampled: [] })
+    conversationsReportMock.mockResolvedValue({ ok: true })
+    searchConversationsMock.mockResolvedValue({ ok: true, messages: [], hasMore: false })
+
+    const w = mount(Conversations)
+    await flushPromises()
+    await btn(w, '随机抽取 10 条')!.trigger('click')
+    await flushPromises()
+
+    late.release({ ok: true, list: [qcRow('s-old', 'extuser-OLDROW')], hasMore: true, nextCursor: 'c-old' })
+    await flushPromises()
+
+    expect(w.text()).toContain('OLDROW')
+    expect(w.text()).not.toContain('候选池已抽完')
+    expect(btn(w, '加载更多')).toBeTruthy()
+  })
+
+  it('大白话：抽样失败或抽空，后到的列表如果也失败，错误要看得见，不能看起来像已经到底', async () => {
+    const late = pending<{ ok: boolean; error: string }>()
+    listQcSampledMock.mockImplementationOnce(() => late.p)
+    sampleQcMock.mockResolvedValue({ ok: false, error: 'DB_READ_FAIL' })
+    conversationsReportMock.mockResolvedValue({ ok: true })
+    searchConversationsMock.mockResolvedValue({ ok: true, messages: [], hasMore: false })
+
+    const w = mount(Conversations)
+    await flushPromises()
+    await btn(w, '随机抽取 10 条')!.trigger('click')
+    await flushPromises()
+
+    late.release({ ok: false, error: 'DB_READ_FAIL' })
+    await flushPromises()
+
+    expect(w.text()).toContain('加载失败（DB_READ_FAIL）')
+    expect(w.text()).not.toContain('已到最早')
+  })
+
+  it('大白话：抽空后列表失败，同样要把列表错误说出来', async () => {
+    const late = pending<{ ok: boolean; error: string }>()
+    listQcSampledMock.mockImplementationOnce(() => late.p)
+    sampleQcMock.mockResolvedValue({ ok: true, count: 0, sampled: [] })
+    conversationsReportMock.mockResolvedValue({ ok: true })
+    searchConversationsMock.mockResolvedValue({ ok: true, messages: [], hasMore: false })
+
+    const w = mount(Conversations)
+    await flushPromises()
+    await btn(w, '随机抽取 10 条')!.trigger('click')
+    await flushPromises()
+
+    late.release({ ok: false, error: 'CALL_TIMEOUT' })
+    await flushPromises()
+
+    expect(w.text()).toContain('加载失败：' + transportErrorText('CALL_TIMEOUT'))
+    expect(w.text()).not.toContain('已到最早')
+  })
+
+  it('大白话：抽到新行之后，后到的列表失败不能吞掉，新行也不能被盖掉', async () => {
+    const late = pending<{ ok: boolean; error: string }>()
+    listQcSampledMock.mockImplementationOnce(() => late.p)
+    sampleQcMock.mockResolvedValue({ ok: true, count: 1, sampled: [qcRow('s-new', 'extuser-NEWROW')] })
+    conversationsReportMock.mockResolvedValue({ ok: true })
+    searchConversationsMock.mockResolvedValue({ ok: true, messages: [], hasMore: false })
+
+    const w = mount(Conversations)
+    await flushPromises()
+    await btn(w, '随机抽取 10 条')!.trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('NEWROW')
+
+    late.release({ ok: false, error: 'DB_READ_FAIL' })
+    await flushPromises()
+
+    expect(w.text()).toContain('NEWROW')
+    expect(w.text()).toContain('加载失败（DB_READ_FAIL）')
+  })
 })
