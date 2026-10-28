@@ -100,11 +100,22 @@ describe('Cards.vue 读失败显示错误', () => {
     expect(m.saveCard).toHaveBeenCalledWith(expect.objectContaining({ name: '小熊 · 激活卡', courseId: 'c-bear' }))
   })
 
-  it('大白话：商品列表读到了但里面没有这个商品（超 100 个时列表不全）——显示错误，不拿「新商品」拼新卡', async () => {
-    m.listDrafts.mockResolvedValue({ ok: true, list: [{ id: 'p2', name: '别的' }], urls: {}, listed: {} })
+  it('大白话：名单完整却没有这个商品——说可能已删除，不拿「新商品」拼新卡', async () => {
+    m.listDrafts.mockResolvedValue({ ok: true, list: [{ id: 'p2', name: '别的' }], urls: {}, listed: {}, truncated: false })
     const w = mount(Cards, { props: { wizardProductId: 'p1' } })
     await flushPromises()
     expect(w.find('.err-line').text()).toContain('没找到这个商品')
+    expect(w.find('.err-line').text()).toContain('可能已删除')
+    expect(w.find('.err-line').text()).not.toContain('名单不全')
+    expect(w.find('.work').exists()).toBe(false)
+  })
+
+  it('大白话：名单被截断才说列表不全，不把删除说成超页', async () => {
+    m.listDrafts.mockResolvedValue({ ok: true, list: [{ id: 'p2', name: '别的' }], urls: {}, listed: {}, truncated: true })
+    const w = mount(Cards, { props: { wizardProductId: 'p1' } })
+    await flushPromises()
+    expect(w.find('.err-line').text()).toContain('名单不全')
+    expect(w.find('.err-line').text()).not.toContain('可能已删除')
     expect(w.find('.work').exists()).toBe(false)
   })
 

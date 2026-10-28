@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { control } from 'wx-server-sdk'
+import { DRAFT_LIST_CAP } from '@ldrw/shared'
 import { main as adminApi } from '../src/functions/adminApi/index'
 import { sha } from '../src/functions/adminApi/lib'
 import { getDb } from '../src/kit'
@@ -144,7 +145,7 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     expect(control.dump('productsDraft').length).toBe(0)
   })
 
-  it('大白话：listDrafts 派生 6 步分步态（换皮误判「无源」）——卡片定稿/课程有视频/该课有批次 各由 cards/courses/qrcodes bounded join 得；无则不误报', async () => {
+  it('大白话：listDrafts 派生 5 步分步态（换皮误判「无源」）——卡片定稿/课程有视频/该课有批次 各由 cards/courses/qrcodes bounded join 得；无则不误报', async () => {
     await post('saveDraft', { product: DRAFT }) // p1·courseId 缺→course-p1
     control.seed('cards', [{ _id: 'card-p1', productId: 'p1', status: 'final' }])
     control.seed('courses', [{ _id: 'course-p1', id: 'course-p1', chapters: [{ lessons: [{ segments: [{ videoFileId: 'cloud://v.mp4' }] }] }] }])
@@ -167,6 +168,28 @@ describe('商品草稿与上架（黄金：白名单/四道门/软下架不隐�
     const r3 = await post('listDrafts')
     expect(r3.hasVideo['course-p3']).toBe(true)
     expect(r3.coursePublished['course-p3']).toBeFalsy()
+  })
+
+  it('大白话：草稿正好一页不算被截断；再多一件更旧的不进名单，并标明截断', async () => {
+    const page = Array.from({ length: DRAFT_LIST_CAP }, (_, i) => ({
+      _id: 'n' + i,
+      id: 'n' + i,
+      name: 'n' + i,
+      createdAt: 1000 + i,
+    }))
+    control.seed('productsDraft', page)
+    const full = await post('listDrafts')
+    expect(full.ok).toBe(true)
+    expect(full.truncated).toBe(false)
+    expect(full.list).toHaveLength(DRAFT_LIST_CAP)
+
+    control.seed('productsDraft', [{ _id: 'old', id: 'old', name: '更旧', createdAt: 1 }])
+    control.seed('cards', [{ _id: 'card-old', productId: 'old', status: 'final' }])
+    const over = await post('listDrafts')
+    expect(over.truncated).toBe(true)
+    expect(over.list).toHaveLength(DRAFT_LIST_CAP)
+    expect(over.list.some((p: { id?: string }) => p.id === 'old')).toBe(false)
+    expect(over.cardFinal.old).toBeUndefined()
   })
 
   it('大白话：超过 20 门课有码，批次步也不被聚合默认 20 条截断', async () => {

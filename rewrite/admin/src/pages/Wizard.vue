@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Store, ArrowLeft, ChevronLeft, ChevronRight, Check } from 'lucide-vue-next'
 import { listDrafts, publishProduct, republishProduct, saveDraft } from '../api/products'
 import {
+  draftNotFoundHint,
   productSteps,
   productState,
   basicsMissing,
@@ -52,6 +53,7 @@ const extras = ref<{
 }>({})
 const listed = ref<Record<string, boolean>>({})
 const loading = ref(!!route.params.id)
+const listTruncated = ref(false) // listDrafts 标明这一页不是全部
 const loadError = ref(false) // 载入失败（网络波动）≠ 商品不存在——分开显「重试」态而非误报「商品不存在」死胡同
 const { message, note, load } = useLoadStatus() // 回刷成功只收回「加载失败」横幅，不误清上架等动作反馈
 const busy = ref(false)
@@ -95,6 +97,10 @@ const nextTodo = computed(() => {
   return i < 0 ? null : { n: i + 1, name: STEP_NAMES[i] }
 })
 const videoMarks = computed(() => steps.value.find((s) => s.key === 'video')?.marks || [])
+const missingDraftText = computed(() => {
+  if (id.value === createdDraftId.value) return '草稿已创建，列表还在同步，点「重试」继续（编号 ' + id.value + '）'
+  return '没有找到这个商品（' + draftNotFoundHint(listTruncated.value) + '，编号 ' + id.value + '）'
+})
 
 // 载入商品档 + 5 步派生真值（listDrafts 一次给 list/listed/urls + hasVideo/cardFinal/hasBatch）
 async function reloadProduct() {
@@ -115,6 +121,7 @@ async function reloadProduct() {
     return
   }
   load(true, '')
+  listTruncated.value = r.truncated === true
   const found = (r.list as Record<string, any>[]).find((p) => String(p.id || p._id) === id.value)
   if (found) {
     product.value = found
@@ -266,7 +273,7 @@ onMounted(() => {
     <EmptyState
       v-else-if="!product"
       :icon="Store"
-      :text="id === createdDraftId ? '草稿已创建，列表还在同步，点「重试」继续（编号 ' + id + '）' : '没有找到这个商品（编号 ' + id + '）'"
+      :text="missingDraftText"
     >
       <UiButton variant="primary" size="sm" @click="retryLoad">重试</UiButton>
       <UiButton variant="ghost" size="sm" @click="router.push('/products')"><ArrowLeft :size="14" :stroke-width="1.8" /><span>回产品管理</span></UiButton>
