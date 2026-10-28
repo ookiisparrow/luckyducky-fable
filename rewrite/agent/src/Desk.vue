@@ -18,6 +18,7 @@ import {
   type QueueItem,
   type KbEntry,
 } from './lib/desk'
+import { mapPanels, type PanelVM } from './lib/customer360'
 
 const emit = defineEmits<{ logout: [] }>()
 
@@ -28,7 +29,7 @@ const currentId = ref('')
 const msgs = ref<Msg[]>([])
 const cursor = ref(0)
 const draft = ref('')
-const panels = ref<Array<Record<string, any>>>([])
+const panels = ref<PanelVM[]>([])
 const panelNote = ref('')
 const listNote = ref('') // 队列/我在接拉失败出声（病根#14）：首屏失败不得装成「队列空 ✓」
 const queueMore = ref(false) // 云端只回一页待接（nextCursor 在＝后面还有人在等），不说坐席会以为就这几个
@@ -236,7 +237,7 @@ async function open(sessionId: string) {
   await pollThread(true) // 首拉失败写出 threadNote（与 360 panelNote 同形）；后台轮询仍走默认静默
   const p = await post('getSessionCustomer360', { sessionId })
   if (currentId.value !== sessionId) return // 期间又切了别的会话·丢弃过期 360 回包（同 pollThread 治法）
-  if (p.ok) panels.value = (p.panels as Record<string, any>[]) || []
+  if (p.ok) panels.value = mapPanels(p)
   else panelNote.value = deskErrorText(p.error) // NO_BRIDGE/NO_CONSENT 如实显示
 }
 
@@ -426,11 +427,19 @@ onBeforeUnmount(() => {
       <p v-if="panelNote" class="note">{{ panelNote }}</p>
       <div v-for="p in panels" :key="p.key" class="panel">
         <strong>{{ p.label }}</strong>
-        <p v-if="p.error" class="note">取数失败</p>
-        <template v-else-if="p.data && typeof p.data === 'object' && !Array.isArray(p.data)">
-          <p v-for="(v, k) in p.data" :key="k" class="kv">{{ k }}：{{ v }}</p>
+        <p v-if="p.failed" class="note">取数失败</p>
+        <template v-else>
+          <p v-for="(row, i) in p.rows" :key="'r' + i" class="kv">{{ row.k }}：{{ row.v }}</p>
+          <div v-for="g in p.groups" :key="g.name">
+            <p class="kv">{{ g.name }}（{{ g.count }}）</p>
+            <p v-if="!g.items.length" class="empty">暂无</p>
+            <template v-for="(item, i) in g.items" :key="i">
+              <p v-for="(f, j) in item" :key="j" class="kv">{{ f.k }}：{{ f.v }}</p>
+            </template>
+            <p v-if="g.capped" class="empty">共 {{ g.count }} 条·仅显前 {{ g.items.length }}（余略）</p>
+          </div>
+          <p v-if="!p.rows.length && !p.groups.length" class="empty">无数据</p>
         </template>
-        <p v-else-if="Array.isArray(p.data)" class="kv">{{ p.data.length }} 条</p>
       </div>
     </aside>
 
