@@ -93,7 +93,7 @@ export function flowStateId(euid: string): string {
   return 'jevflow:' + euid
 }
 
-export function isRefreshMenuId(menuId: string): boolean {
+function isRefreshMenuId(menuId: string): boolean {
   return menuId === REFRESH_MENU_ASK || menuId === REFRESH_MENU_OK || menuId === REFRESH_MENU_NO
 }
 
@@ -115,7 +115,7 @@ export function trialRefreshDenyStatus(): 403 | 404 {
   return 403
 }
 
-export function trialRefreshConfirmMenu(kind: 'passphrase' | 'button' = 'button'): {
+function trialRefreshConfirmMenu(kind: 'passphrase' | 'button' = 'button'): {
   head_content: string
   list: { type: 'click'; click: { id: string; content: string } }[]
   tail_content: string
@@ -243,7 +243,7 @@ export async function applyTrialRefresh(
   return { ok: true, externalUserId: euid, epochFrom, epochTo, forced: force && !!held.length }
 }
 
-export type IncomingLite = { externalUserId: string; menuId: string; text: string }
+type IncomingLite = { externalUserId: string; menuId: string; text: string }
 
 /** 闸开时拦在 Jev/话术前。闸关：口令当普通字，菜单点了也不提示「这是口令」。 */
 export async function interceptTrialRefresh(

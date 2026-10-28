@@ -4,7 +4,7 @@
 // 合计走「分」整数累加再回两位小数展示（元浮点直加会漂·金额恒两位小数）。
 import { readStorage, writeStorage } from '../utils/storage'
 
-export interface CartItem {
+interface CartItem {
   id: string
   sku: string
   name: string
