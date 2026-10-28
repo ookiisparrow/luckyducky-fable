@@ -50,13 +50,17 @@ async function loadCourseOptions() {
   // 此时本就无可武装对象，复位是幂等的安全动作
   confirmKey.value = ''
   publishConfirm.value = false
-  message.value = '加载中…'
+  if (!course.value) message.value = '加载中…'
+  // 等商品列表时人可能已经手输课号并点了载入。load() 会自己取号：
+  // 取过号，或编辑器已经打开，这条下拉回包就不再改状态行（成败都留给载入自己写）。
+  const loadToken = loadGen.peek()
   const dr = await listDrafts().catch(() => null)
+  const loadTookOver = loadGen.peek() !== loadToken || !!course.value
   if (!dr?.ok) {
-    message.value = launchErrorText(dr?.error || '网络异常')
+    if (!loadTookOver) message.value = launchErrorText(dr?.error || '网络异常')
     return
   }
-  message.value = ''
+  if (!loadTookOver) message.value = ''
   const seen = new Map<string, string>()
   for (const p of dr.list || []) {
     const cid = String(p.courseId || '')
