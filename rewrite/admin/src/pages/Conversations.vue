@@ -313,9 +313,9 @@ onMounted(() => {
             <div v-if="m.text" class="text">{{ m.text }}</div>
           </div>
         </div>
-        <div class="more-wrap ld-more-wrap">
+        <div class="ld-more-wrap">
           <UiButton v-if="hasMore" size="sm" variant="ghost" @click="more">更早的消息</UiButton>
-          <p v-else class="end-mark ld-end-mark">— 已到最早 —</p>
+          <p v-else class="ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
       <EmptyState v-else-if="!message" :icon="Search" text="输入 openid / 外部用户号 / 关键词后检索会话时间轴" />
@@ -347,10 +347,10 @@ onMounted(() => {
         </div>
         <div class="ld-tbody">
           <div v-for="row in qcRows" :key="row.sessionKey" class="ld-tr">
-            <div class="ld-td mono ld-mono" :style="{ width: '110px' }">{{ row.tailId }}</div>
-            <div class="ld-td muted ld-muted" :style="{ width: '150px' }">{{ row.sampledLabel }}</div>
+            <div class="ld-td ld-mono" :style="{ width: '110px' }">{{ row.tailId }}</div>
+            <div class="ld-td ld-muted" :style="{ width: '150px' }">{{ row.sampledLabel }}</div>
             <div class="ld-td" :style="{ width: '80px' }">{{ row.messageCount == null ? '—' : row.messageCount }}</div>
-            <div class="ld-td muted ld-muted" :style="{ width: '90px' }">{{ row.avgResponseLabel }}</div>
+            <div class="ld-td ld-muted" :style="{ width: '90px' }">{{ row.avgResponseLabel }}</div>
             <!-- 已评行只读显示 qc（不可覆盖·后端 409 ALREADY_MARKED 拒二次保存也在此兜底不再露编辑控件） -->
             <template v-if="row.scored">
               <div class="ld-td" :style="{ width: '90px' }"><Badge :tone="row.score <= 3 ? 'red' : 'green'">{{ row.score }} 分</Badge></div>
@@ -376,9 +376,9 @@ onMounted(() => {
           </div>
         </div>
         <p v-for="row in qcRows.filter((r) => r.err)" :key="'err:' + row.sessionKey" class="ld-status qc-row-err">{{ row.tailId }}：{{ row.err }}</p>
-        <div class="more-wrap ld-more-wrap">
+        <div class="ld-more-wrap">
           <UiButton v-if="qcHasMore" size="sm" variant="ghost" @click="moreQc">加载更多</UiButton>
-          <p v-else-if="qcRows.length" class="end-mark ld-end-mark">— 已到最早 —</p>
+          <p v-else-if="qcRows.length" class="ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
       <EmptyState v-else-if="!qcMsg" :icon="ClipboardCheck" text="点「随机抽取 10 条」从已结束会话里抽样质检" />

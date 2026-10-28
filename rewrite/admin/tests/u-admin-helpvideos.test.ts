@@ -137,14 +137,16 @@ describe('HelpVideos.vue 保存链', () => {
     expect(api.saveHelpVideos).toHaveBeenCalledTimes(1)
     expect(api.saveHelpVideos.mock.calls[0][0][0].title).toBe('改一下')
     expect(w.find('.status').text()).toBe('已保存（无视频的小段会被云端剔除）')
+    expect(w.find('.status').classes()).toContain('ok')
   })
 
-  it('大白话：「保存全部」失败提示重试', async () => {
+  it('大白话：「保存全部」失败提示重试，红字不是成功绿', async () => {
     api.saveHelpVideos.mockResolvedValue({ ok: false, status: 500, error: 'X' })
     w = mount(HelpVideos)
     await flushPromises()
     await w.findAll('button').find((b) => b.text() === '保存全部')!.trigger('click')
     await flushPromises()
     expect(w.find('.status').text()).toBe('保存失败，请重试')
+    expect(w.find('.status').classes()).not.toContain('ok')
   })
 })

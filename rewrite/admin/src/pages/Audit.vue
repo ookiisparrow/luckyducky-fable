@@ -104,7 +104,7 @@ onMounted(load)
 
     <Card title="操作记录" sub="按时间倒序 · 可按操作人 / action 前缀 / 时间窗筛选">
       <template #head>
-        <div class="range-chips">
+        <div class="ld-range-chips">
           <UiButton
             v-for="c in RANGE_CHIPS"
             :key="c.key"
@@ -135,20 +135,20 @@ onMounted(load)
         </div>
         <div class="ld-tbody">
           <div v-for="row in entries" :key="row.id" class="ld-tr" :class="{ bad: !row.ok }">
-            <div class="ld-td muted mono" :style="{ width: '160px' }">{{ row.timeLabel }}</div>
+            <div class="ld-td ld-muted ld-mono" :style="{ width: '160px' }">{{ row.timeLabel }}</div>
             <div class="ld-td" :style="{ width: '110px' }">{{ row.operator }}</div>
-            <div class="ld-td mono" :style="{ width: '150px' }">{{ row.action }}</div>
+            <div class="ld-td ld-mono" :style="{ width: '150px' }">{{ row.action }}</div>
             <div class="ld-td" :style="{ width: '120px' }">
               <Badge :tone="row.ok ? 'green' : 'red'">{{ row.statusLabel }}</Badge>
               <div v-if="!row.ok && row.error" class="err-note">{{ row.error }}</div>
             </div>
-            <div class="ld-td mono" :style="{ width: '120px' }">{{ row.ip }}</div>
+            <div class="ld-td ld-mono" :style="{ width: '120px' }">{{ row.ip }}</div>
             <div class="ld-td grow">{{ row.summaryText }}</div>
           </div>
         </div>
-        <div class="more-wrap">
+        <div class="ld-more-wrap">
           <UiButton v-if="hasMore" size="sm" variant="ghost" @click="more">加载更多</UiButton>
-          <p v-else class="end-mark">— 已到最早 —</p>
+          <p v-else class="ld-end-mark">— 已到最早 —</p>
         </div>
       </div>
       <EmptyState v-else-if="!message" :icon="ShieldCheck" text="还没有操作记录" />
@@ -157,22 +157,8 @@ onMounted(load)
 </template>
 
 <style scoped>
-.range-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 .audit-filter {
   margin-bottom: 12px;
-}
-.mono {
-  font-family: var(--ld-font-mono);
-  font-size: 12px;
-  color: var(--ld-content-2);
-}
-.muted {
-  color: var(--ld-content-2);
-  font-size: 12.5px;
 }
 .err-note {
   margin-top: 3px;
@@ -181,17 +167,5 @@ onMounted(load)
 }
 .ld-tr.bad {
   background: var(--ld-bg-red-soft);
-}
-.more-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: 6px;
-}
-.end-mark {
-  width: 100%;
-  margin: 6px 0 0;
-  text-align: center;
-  font-size: 11px;
-  color: var(--ld-content-2);
 }
 </style>
