@@ -4,7 +4,7 @@ import { COLLECTIONS } from '@ldrw/shared'
 import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
 // 进销存采购线（见 docs/业务逻辑架构.md 链 12·门5 文件级隔离：本文件=采购面）。
-// 状态机 draft→ordered→received（+draft/ordered→cancelled·声明表 shared/scm.spec.ts·门2 transition 收口·
+// 状态机 draft→ordered→received（+draft/ordered→cancelled·声明表 rewrite/shared/src/scm.ts（手改单源）·门2 transition 收口·
 // 守卫 rw-status-transitions-declared 对账）；received 首次流转绑入库副作用（门1
 // applyStockMoves·docType purchase_in·确定性流水幂等——重放 moved=false 直接返回已入库、不双记账）。
 // 金额全链整数分（unitPriceFen/totalFen·totalFen 服务端算不信前端·根因#4）；数量正整数（守卫 scm-uom-integer 纪律）。
@@ -13,12 +13,12 @@ import { asFen, PURCHASE_ORDER_TRANSITIONS } from '@ldrw/shared'
 
 const MAX_LINES = 50 // 单据行数上限（bounded·一张采购单不至于超·防垃圾大单）
 
-/** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
- *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
- *  本函数自动跟着变——不在各 transition() 调用点手写字面量、与生成物各背各的。 */
+/** 从手改单源 rewrite/shared/src/scm.ts 的声明流转表按目标态取合法 from 集合——该表内每个 to 只出现一次，
+ *  故按 to 反查唯一。改流转边只改 rewrite/shared/src/scm.ts，
+ *  本函数自动跟着变——不在各 transition() 调用点手写字面量、与手改单源各背各的。 */
 function fromFor(to: string): string[] {
   const t = PURCHASE_ORDER_TRANSITIONS.find((x) => x.to === to)
-  if (!t) throw new Error(`PURCHASE_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmPurchase.ts 不同步）`)
+  if (!t) throw new Error(`PURCHASE_ORDER_TRANSITIONS 未声明 to='${to}'（rewrite/shared/src/scm.ts 与 scmPurchase.ts 不同步）`)
   return [...t.from]
 }
 
@@ -130,7 +130,7 @@ export async function receivePurchase({ db, data, agentId }: Ctx) {
     // 几乎不可达（正数入库无 INSUFFICIENT·主档无删除路径无 NO_MATERIAL·CAS 重试 5 次）——万一到此：状态已
     // received 而账未动。放着不管会让「已完整入库」和「入库失败过、从未真正入库」在数据里表现成同一个
     // status='received'——重放会命中上面「已 received」幂等分支直接报 200 成功，把后者伪装成前者、掩盖
-    // 真实欠账。技术性复原（非业务逆向流转，同 scmOutwork 口径·scm.spec 未声明 received→ordered 边、
+    // 真实欠账。技术性复原（非业务逆向流转，同 scmOutwork 口径·rewrite/shared/src/scm.ts 未声明 received→ordered 边、
     // 声明了就开放成业务动作了）：条件 CAS 复原 ordered，让下次 receivePurchase 重新走一次真实入库
     // （门1 幂等：已应用行撞确定性流水 _id 跳过、未应用行补齐，见 scmStock.applyStockMoves）；
     // 复原本身若不成功须告警，否则单据卡死在假 received、无信号可查。

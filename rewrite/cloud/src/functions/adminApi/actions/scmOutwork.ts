@@ -40,12 +40,12 @@ async function knownMaterialIds(): Promise<Set<string>> {
   return new Set((await listMaterialDocs(500)).map((m: any) => String(m._id)))
 }
 
-/** 从声明流转表（scm.spec.ts→scm.ts 生成物）按目标态取合法 from 集合——该表内每个 to 只出现一次
- *  （见 shared/scm.spec.ts 头注），故按 to 反查唯一。改流转边只改 scm.spec.ts 再跑生成器，
- *  本函数自动跟着变——不在各 transition() 调用点手写字面量、与生成物各背各的。 */
+/** 从手改单源 rewrite/shared/src/scm.ts 的声明流转表按目标态取合法 from 集合——该表内每个 to 只出现一次，
+ *  故按 to 反查唯一。改流转边只改 rewrite/shared/src/scm.ts，
+ *  本函数自动跟着变——不在各 transition() 调用点手写字面量、与手改单源各背各的。 */
 function fromFor(to: string): string[] {
   const t = OUTWORK_ORDER_TRANSITIONS.find((x) => x.to === to)
-  if (!t) throw new Error(`OUTWORK_ORDER_TRANSITIONS 未声明 to='${to}'（scm.spec.ts 与 scmOutwork.ts 不同步）`)
+  if (!t) throw new Error(`OUTWORK_ORDER_TRANSITIONS 未声明 to='${to}'（rewrite/shared/src/scm.ts 与 scmOutwork.ts 不同步）`)
   return [...t.from]
 }
 
@@ -147,7 +147,7 @@ export async function issueOutwork({ db, data, agentId }: Ctx) {
     // 告警，此时账实确有偏差，需人工对账回补，非本函数可自愈），
     // 但状态已被上面 transition 抢占成 issued——须复原 draft,否则单据「已发料」而库存一件没出（账实必偏且无法重试）。
     // 用条件更新而非 transition()：issued→draft 是本次未完成发料的技术性复原,不是业务逆向流转（业务上
-    // 不做逆向流转,scm.spec 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方
+    // 不做逆向流转,rewrite/shared/src/scm.ts 故意不声明这条边——声明了就开放成业务动作了）；条件绑 status:'issued' 防覆盖并发方
     // （若有人已 receiveOutwork 翻 delivered,此处 no-op,错误照返、人工经调整单对账）。
     // 复原本身若不成功（异常/条件不匹配即 updated≠1）须告警——否则单据永久卡在假「已发料」而库存实际未出，
     // 后续可能被继续走完流程甚至结算工钱,账实不符且无信号可查（同 scmStock.rollback 的 ROLLBACK_FAIL 口径）。

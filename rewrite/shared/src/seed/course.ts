@@ -3,7 +3,7 @@
  * 根因账本 #5：目录与时长只改这一处，cloud `ops/seedCourses` 从这派生。
  *
  * - 目录只显 chapter + lesson 两层；segment 只在播放页（顶部分段进度条）。
- * - 每个 segment 将来是独立视频文件（videoFileId）；素材未剪前为 null，播放页按时长等分回退。
+ * - 每个 segment 将来是独立视频文件（videoFileId）；素材未剪前为 null。
  * - 用户学习进度（done/watched）是用户态，不在课程内容里。
  */
 interface SeedSegment {
