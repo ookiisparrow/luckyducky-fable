@@ -35,7 +35,7 @@ export function currentNavGroup(
 }
 
 /** 上新向导 5 步（封面并进第 1 步、卡片上传并进第 5 步·不要「设计」） */
-export interface WizardStep {
+interface WizardStep {
   n: number
   label: string
   hint: string

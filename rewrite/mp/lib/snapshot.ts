@@ -19,7 +19,7 @@ const SNAP_VERSION = 1
 const IMG_TTL_MS = 90 * 60 * 1000
 
 // 商品白名单字段（只落首页卡片渲染要的·不落 images 等长字段·省 storage 且不把详情图册塞进首屏快照）
-export interface SnapProduct {
+interface SnapProduct {
   id: string
   name: string
   tag: string

@@ -58,7 +58,7 @@ export function orderErrorText(e: unknown): string {
   return ORDER_ERR[s as keyof typeof ORDER_ERR] || transportErrorText(s) || `操作失败（${s}）`
 }
 
-export interface StatCard {
+interface StatCard {
   label: string
   value: string
   note?: string
@@ -66,16 +66,16 @@ export interface StatCard {
   pct?: number // 进度条百分比（激活率）
 }
 
-export interface SegStat {
+interface SegStat {
   name: string
   count: number
 }
-export interface ActivityItem {
+interface ActivityItem {
   type: string
   text: string
   at: number
 }
-export interface DashboardVM {
+interface DashboardVM {
   cards: StatCard[]
   funnel: StatCard[]
   alerts: Array<{ label: string; ids: string[] }>
@@ -91,7 +91,7 @@ export interface DashboardVM {
 // 把「加载失败/未知」伪装成「真没待办」→ 运营据此漏发货。此处以 `.ok` 显式判失败并回传 partial，
 // 让上层区分「真为 0」与「没加载到」：partial=true 时不显绿色全清、提示刷新。drafts.rows 由调用方先
 // mapDraftRows（避免本层反向依赖 mapProducts）。
-export interface TodoInputs {
+interface TodoInputs {
   // 待发货取 toShip 不取 orderCounts 的 paid：paid 里还有全额退款没翻状态、售后待审被拦的单，发不了
   dashboard: { ok?: boolean; toShip?: unknown; approx?: { toShip?: unknown } }
   // partial：服务端 refundCounts 自身可能整体 ok:true、但内部某状态 count() 失败时回传
@@ -101,7 +101,7 @@ export interface TodoInputs {
   drafts: { ok?: boolean; rows?: Array<{ state?: string }> }
   low: number
 }
-export interface TodoCounts {
+interface TodoCounts {
   ship: number
   shipApprox: boolean // 云端待发货扫描触顶：ship 只是下限，页面显「N+」
   refund: number
@@ -182,7 +182,7 @@ export function maskPhone(p: unknown): string {
   return s.length >= 7 ? s.slice(0, 3) + '****' + s.slice(-4) : s
 }
 
-export interface OrderItemVM {
+interface OrderItemVM {
   productId: string
   lineKey: string // 与后端 refundedQty 同一行键：新单 lineId，旧单回退 productId
   name: string
@@ -370,7 +370,7 @@ export function refundVerdict(v: { lineRefundable: boolean; entered: boolean; re
 // 后端 overrideRefund 只收 { orderId, lineId, reason }，金额/退货资格一律云端裁决（不越权在前端伪造金额）；
 // 这里只提供「按订单号查订单→选行」的查找态 VM + 提交按钮门控纯函数，售后行选择走 listOrders(q=orderId)。
 
-export interface OverrideLineVM {
+interface OverrideLineVM {
   lineId: string
   label: string // 商品名（规格）×数量 · 单价，供选择时辨认——不是退款额（退款额=服务端分摊结果，前端不算）
 }

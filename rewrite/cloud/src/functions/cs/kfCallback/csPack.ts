@@ -11,7 +11,7 @@ import type { JevResult } from './jev'
 import PACK from './csPackAssets.generated.json'
 
 type PackMachineState = 'new' | 'greet' | 'triage' | 'collect' | 'act' | 'resolve' | 'human'
-export type PackHumanSub = 'queued' | 'connected' | 'failed' | ''
+type PackHumanSub = 'queued' | 'connected' | 'failed' | ''
 
 type PackSession = {
   state: PackMachineState
@@ -237,7 +237,7 @@ export function emptyPackSession(): PackSession {
   }
 }
 
-export function loadPackSession(raw: unknown): PackSession {
+function loadPackSession(raw: unknown): PackSession {
   const next = emptyPackSession()
   if (!raw || typeof raw !== 'object') return next
   const src = raw as Record<string, unknown>
@@ -253,7 +253,7 @@ export function loadPackSession(raw: unknown): PackSession {
   return next
 }
 
-export function persistablePack(state: PackSession): Record<string, unknown> {
+function persistablePack(state: PackSession): Record<string, unknown> {
   return { ...state, at: Date.now() }
 }
 

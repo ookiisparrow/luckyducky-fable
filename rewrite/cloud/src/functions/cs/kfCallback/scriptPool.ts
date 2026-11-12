@@ -70,7 +70,7 @@ export function parseNumberedLines(md: string): string[] {
   return out
 }
 
-export function parseSections(md: string): { heading: string; body: string }[] {
+function parseSections(md: string): { heading: string; body: string }[] {
   const sections: { heading: string; body: string[] }[] = [{ heading: '', body: [] }]
   for (const line of String(md || '').split(/\r?\n/)) {
     const h = /^(#{2,3})\s+(.+?)\s*$/.exec(line)

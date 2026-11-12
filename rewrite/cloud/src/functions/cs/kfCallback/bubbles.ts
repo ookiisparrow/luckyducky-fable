@@ -7,7 +7,7 @@
 const DEFAULT_GAP_MIN = 300
 const DEFAULT_GAP_MAX = 800
 const GAP_CAP_MS = 5000
-export const DEFAULT_MAX_BUBBLES = 3
+const DEFAULT_MAX_BUBBLES = 3
 const MAX_BUBBLES_CAP = 20
 
 /** 按换行或。！？～切成非空短段；标点留在本段末尾。 */

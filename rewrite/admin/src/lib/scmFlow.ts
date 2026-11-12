@@ -5,7 +5,7 @@
 import { Warehouse, Blocks, CalendarRange, ClipboardList, Handshake } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
-export interface ScmFlowStep {
+interface ScmFlowStep {
   to: string
   label: string
   icon: Component

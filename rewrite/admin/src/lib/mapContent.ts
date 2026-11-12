@@ -1,7 +1,7 @@
 // 内容组映射（纯函数）：首页内容表单模型往返/帮助视频两级归一/
 // 课程视频统计/**直传表单字段构造**（凭证只认 POST 表单·key 从 fileId 截取·字段名精确——
 // 错一个字段云存储 403，这类坑必须钉在测试里）。
-export interface HomeModel {
+interface HomeModel {
   heroTitle: string
   heroTagline: string
   heroSearch: string

@@ -27,7 +27,7 @@ export function msHuman(v: unknown): string {
   return `${Math.floor(m / 60)} 小时 ${m % 60} 分`
 }
 
-export interface ReportItem {
+interface ReportItem {
   label: string
   value: string
   bad?: boolean // 异常指标（未答复/超时 > 0）·模板据此标红（与正常指标同色的话质检扫不到）
@@ -99,11 +99,11 @@ export function mapMessages(list: unknown): MsgVM[] {
 const MATCH_LABELS: Record<string, string> = { openid: '账号', phone: '手机号', nickname: '昵称', orderId: '订单号' }
 export const matchLabel = (by: unknown): string => (Array.isArray(by) ? by.map((b) => MATCH_LABELS[String(b)] || String(b)).join('/') : '')
 
-export interface PanelField {
+interface PanelField {
   k: string
   v: string
 }
-export interface PanelGroupVM {
+interface PanelGroupVM {
   name: string // 明细段名（订单/激活·课程/学习位置/节点照片）
   count: number
   capped: boolean // 超上界（余略）

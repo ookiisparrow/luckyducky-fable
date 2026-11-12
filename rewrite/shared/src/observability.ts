@@ -26,7 +26,7 @@ export function anomalyFingerprint(kind: AnomalyKind, code: string, scope?: stri
 export type CheckLayer = 'infra' | 'invariant'
 
 /** 检查结果灯：绿=过·黄=可疑降级·红=违反。 */
-export type CheckStatus = 'green' | 'yellow' | 'red'
+type CheckStatus = 'green' | 'yellow' | 'red'
 
 /** 一条检查结果（控制台体检面板按此渲染红绿灯）。 */
 export interface CheckResult {

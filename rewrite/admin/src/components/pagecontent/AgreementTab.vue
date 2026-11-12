@@ -3,12 +3,14 @@
 // 顶部琥珀警示：文案已过审、改动须同步微信后台《隐私保护指引》；保存时服务端自动留版本档（history 只读展示·无回滚）。
 import { Plus, Trash2, AlertTriangle } from 'lucide-vue-next'
 import { usePageContent } from '../../lib/usePageContent'
-import { normalizeAgreement, agreementPayload, type AgreementClause } from '../../lib/mapPageContent'
+import { normalizeAgreement, agreementPayload } from '../../lib/mapPageContent'
 import UiButton from '../ui/Button.vue'
 import SaveToolbar from './SaveToolbar.vue'
 import Badge from '../ui/Badge.vue'
 import Card from '../ui/Card.vue'
 import EmptyState from '../ui/EmptyState.vue'
+
+type AgreementClause = ReturnType<typeof normalizeAgreement>['user']
 
 const { model, message, busy, autoState, save } = usePageContent('agreement', normalizeAgreement, agreementPayload)
 

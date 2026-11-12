@@ -7,7 +7,7 @@ import { getContent, getPageContent as apiGetPageContent } from '../api/catalog'
 import type { ApiResult } from '../utils/cloud'
 import { createInflight } from './inflight'
 
-export type PageKey = 'welcome' | 'catalogPlayer' | 'mePage' | 'about' | 'agreement'
+type PageKey = 'welcome' | 'catalogPlayer' | 'mePage' | 'about' | 'agreement'
 
 const cache: Partial<Record<PageKey, unknown>> = {}
 const flight = createInflight<unknown>()

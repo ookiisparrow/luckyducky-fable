@@ -1,7 +1,7 @@
 // 详情页数据映射（纯函数·vitest 钉行为）：云端商品档 → 详情视图模型。
 // 展示面 fail-closed 同首页（脏行剔除·绝不渲染 undefined）；价格「元」原样标不做算术。
 
-export interface SkuVM {
+interface SkuVM {
   name: string
   price: number // 元数字（加购用·展示用 priceLabel）
   priceLabel: string
