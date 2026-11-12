@@ -5,6 +5,6 @@
   "requiresRecentOrder": false,
   "steps": [
     { "priority": 0, "lib": "gate/no_order", "pick": "random_one", "pool": ["clarify_01","clarify_02"] },
-    { "priority": 0, "lib": "gate/no_order", "pick": "one", "files": ["human_01"], "optional": true }
+    { "priority": 0, "lib": "gate/no_order", "pick": "one", "files": ["human_01"] }
   ]
 }

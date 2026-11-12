@@ -2,7 +2,7 @@
 // 「靠人记住哪个导出没人用了/哪个依赖其实没声明」迟早漂移——本模块把判定做成可测的纯函数，
 // 供 rw-dead-exports / rw-phantom-deps / rw-lock-budget 等守卫复用，基线单源
 // scripts/slim-baseline.json（守卫侧维护，本模块只提供判定，不读该文件）。
-// IO 收集层（collectImportSpecifiers/countLoc）薄封装真实文件系统，不进单测断言——
+// IO 收集层（collectImportSpecifiers）薄封装真实文件系统，不进单测断言——
 // 单测只喂字符串固件锁纯逻辑（tests/scripts/slimScan.test.js），IO 层的正确性靠守卫跑起来时的真实产物验。
 import { readdirSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
@@ -147,16 +147,4 @@ export function collectImportSpecifiers(dir) {
     if (specifiers.size > 0) results.push({ path: file, specifiers: [...specifiers] })
   })
   return results
-}
-
-// 薄 IO 收集层：递归 dir 下指定扩展名文件的总行数，供 checkBudget 的 current 参数用。
-export function countLoc(dir, exts) {
-  const extSet = new Set(exts)
-  let total = 0
-  walk(dir, (file) => {
-    if (!extSet.has(extname(file))) return
-    const text = readFileSync(file, 'utf8')
-    total += text.split('\n').length
-  })
-  return total
 }
