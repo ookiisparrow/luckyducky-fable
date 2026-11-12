@@ -42,3 +42,35 @@ describe('submitReview：文字与图片审核失败分开报', () => {
     expect(control.dump('reviews')).toEqual([])
   })
 })
+
+describe('submitReview：晒图只收本人这张订单目录下的文件', () => {
+  it('大白话：本单目录下的图——照收', async () => {
+    expect((await call({ ...base, photos: [own('a.jpg'), own('b.jpg')] })).ok).toBe(true)
+    expect(control.dump('reviews')[0].photos).toEqual([own('a.jpg'), own('b.jpg')])
+  })
+
+  it('大白话：混进一张别处的文件——整条拒 FILE_NOT_OWNED，一张都不去下载审核，也不落库', async () => {
+    const outside = [
+      'cloud://env.x/videos/course1/seg1.mp4', // 付费视频
+      'cloud://env.x/checkpoints/oOTHER/x.jpg', // 别人的节点照片
+      'cloud://env.x/products/p1.jpg', // 商品图
+      'cloud://env.x/reviews/oOther/a.jpg', // 别人订单目录
+      'cloud://env.x/reviews/a.jpg', // 不带订单号的旧平铺路径
+      'cloud://env.x/reviews/o1/sub/a.jpg', // 本单目录下再套一层
+      'cloud://env.x/reviews/o1/', // 只有目录
+      'https://evil.example/reviews/o1/a.jpg', // 不是云存储
+    ]
+    for (const bad of outside) {
+      const r = await call({ ...base, photos: [own('a.jpg'), bad] })
+      expect(r, bad).toEqual({ ok: false, error: 'BAD_ARGS:FILE_NOT_OWNED' })
+    }
+    expect(control.openapiCalls()).toEqual([])
+    expect(control.dump('reviews')).toEqual([])
+  })
+
+  it('大白话：拿别人的订单号当目录也没用——那张单不是我的，照样查无此单', async () => {
+    const r = await call({ orderId: 'oOther', lineId: 'p1__红', rating: 5, photos: ['cloud://env.x/reviews/oOther/a.jpg'] })
+    expect(r.error).toBe('NOT_FOUND')
+    expect(control.openapiCalls()).toEqual([])
+  })
+})

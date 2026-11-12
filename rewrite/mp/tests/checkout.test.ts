@@ -155,6 +155,21 @@ describe('结算幂等键（批E·P1 防网络超时重试双建单）', () => {
     checkout.finishSubmitted() // 提交成功清草稿 → 键随之失效
     expect(checkout.getIdemKey()).toBe('')
   })
+
+  it('大白话：键还跟着「页面上显示的收货地址和应付」走——超时（单其实已建）后换了地址或价格变了再提交，是一张新单，不折回旧地址/旧价的那张', () => {
+    checkout.prepareBuyNow({ id: 'p9', name: '直买鸭', price: 98 })
+    const a1 = '张三|13800000000|浙江·杭州|旧地址 1 号|9800'
+    const k1 = checkout.getIdemKey(a1)
+    expect(k1).toBeTruthy()
+    expect(checkout.getIdemKey(a1)).toBe(k1) // 地址、应付都没变：重试复用同一个键
+    expect(checkout.getIdemKey('李四|13900000000|上海·浦东|新地址 9 号|9800')).not.toBe(k1) // 换了地址
+    expect(checkout.getIdemKey('张三|13800000000|浙江·杭州|旧地址 1 号|10800')).not.toBe(k1) // 应付变了
+    expect(checkout.getIdemKey('张三|13800000000|浙江·杭州|旧地址 2 号|9800')).not.toBe(k1) // 只差一个字也算换
+    expect(k1).not.toContain('13800000000') // 键里不带手机号、地址原文
+    expect(k1).not.toContain('旧地址')
+    checkout.finishSubmitted()
+    expect(checkout.getIdemKey(a1)).toBe('') // 草稿空了仍是空键
+  })
 })
 
 describe('建单成功页金额取权威回包值（bug sweep R1 #1）', () => {
