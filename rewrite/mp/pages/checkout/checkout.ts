@@ -157,7 +157,8 @@ Page({
     const r = await createOrder(
       draft.items.map((l) => ({ id: l.id, sku: l.sku, qty: l.qty })),
       { name: a.name, phone: a.phone, region: a.region, detail: a.detail },
-      checkout.getIdemKey(), // 同一草稿的重试复用同一个键（网络超时重试不重复建单）
+      // 同一草稿、同一地址、同一应付的重试复用同一个键（网络超时重试不重复建单）；地址或应付变了就是另一张单
+      checkout.getIdemKey([a.name, a.phone, a.region, a.detail, expectedFen].join('|')),
       expectedFen
     )
     // 建单请求在途用户手动退出结算页（同 refresh() unloaded 范式）：不再对无关页面 setData/toast/redirectTo/

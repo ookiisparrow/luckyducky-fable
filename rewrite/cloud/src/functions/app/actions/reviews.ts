@@ -229,6 +229,16 @@ export const getRatingSummary = async (event: any = {}) => {
 }
 
 /**
+ * 晒图只收 reviews/<本单号>/<文件名>（小程序上传路径见 mp pages/review/review.ts）：订单归属在 submitReview 里核过，
+ * 目录对上单号＝本人为这单传的。别处的 fileID（付费视频、别人的节点照片、商品图）会被管理权限整个下载去审，
+ * 挑上墙时还会换成公开地址。
+ */
+function isOwnReviewFile(fileId: string, orderId: string): boolean {
+  const m = /^cloud:\/\/[^/]+\/reviews\/([^/]+)\/[^/]+$/.exec(fileId)
+  return !!m && m[1] === orderId
+}
+
+/**
  * 提交评价：多重闸门（身份/评分 1–5/订单归属/已完成/商品在单内）；
  * 一单一行一评（确定性 _id=orderId__lineId 库级唯一·同商品多 SKU 各自可评）；匿名/昵称云端快照。
  * 按 openid 限频（根因#13·防刷库堆垃圾）；内容安全外呼（图 imgSecCheck ≤9 张 + 文本 msgSecCheck）跑在
@@ -247,11 +257,12 @@ export const submitReview = withOpenId(
       .filter((t: any) => typeof t === 'string' && t.trim())
       .slice(0, 6)
       .map((t: string) => t.trim().slice(0, 10))
-    // 买家秀晒图（UGC·白名单收 cloud:// fileID·≤9 去空）；内容安全在幂等预检后校（见下）。
+    // 买家秀晒图（UGC·只收本单目录下的 cloud:// fileID·≤9 去空）；内容安全在幂等预检后校（见下）。
     const photos = (Array.isArray(e.photos) ? e.photos : [])
       .filter((p: any) => typeof p === 'string' && p)
       .slice(0, 9)
       .map((p: string) => p.slice(0, 256))
+    if (!photos.every((p: string) => isOwnReviewFile(p, orderId))) return err('BAD_ARGS:FILE_NOT_OWNED')
 
     const got = await db
       .collection(COLLECTIONS.orders)

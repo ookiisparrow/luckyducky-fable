@@ -25,8 +25,9 @@ vi.mock('../lib/checkout', async (importOriginal) => ({
   getDraft: () => ({ items: [{ id: 'p1', sku: '', qty: 1 }], fromCart: false }),
   summaryFen: () => ({ amountFen: 999 }),
   payableFen: () => 999,
-  getIdemKey: () => 'k1',
+  getIdemKey: (shown = '') => 'k1#' + shown,
   finishSubmitted: vi.fn(),
+  dropRejectedLine: () => '',
   mapCreateOrderError: (e: string) => e,
 }))
 
@@ -98,6 +99,20 @@ describe('结算页：建单即付进成功页', () => {
     await page.onSubmit()
     expect(payMock).not.toHaveBeenCalled()
     expect(wxMock.redirectTo).toHaveBeenCalledWith({ url: SUCCESS_URL })
+  })
+})
+
+describe('结算页：幂等键带上页面显示的地址与应付', () => {
+  it('大白话：提交时把收货四要素和应付交给取键——换地址/变价后再提交拿到的是另一个键，不会被云端折回旧地址那张单', async () => {
+    createOrderMock.mockResolvedValue({ ok: false, error: 'CALL_TIMEOUT' })
+    const page = await mount()
+    page.data.address = { name: '张三', phone: '138', region: '浙江', detail: '旧地址' }
+    await page.onSubmit()
+    page.data.address = { name: '张三', phone: '138', region: '浙江', detail: '新地址' }
+    await page.onSubmit()
+    const [k1, k2] = createOrderMock.mock.calls.map((c) => c[2])
+    expect(k1).toBe('k1#张三|138|浙江|旧地址|999')
+    expect(k2).toBe('k1#张三|138|浙江|新地址|999')
   })
 })
 

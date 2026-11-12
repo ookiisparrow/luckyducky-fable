@@ -58,9 +58,19 @@ export function getDraft(): { items: DraftLine[]; fromCart: boolean } {
   return { items: draftItems.map((l) => ({ ...l })), fromCart }
 }
 
-/** 本次结算草稿的幂等键（提交/重试传给 createOrder；草稿为空时返回空串——没有可提交的草稿）。 */
-export function getIdemKey(): string {
-  return draftItems.length ? idemKey : ''
+/** 本次结算草稿的幂等键（提交/重试传给 createOrder；草稿为空时返回空串——没有可提交的草稿）。
+ *  shown＝页面上显示的收货地址与应付：云端同键只回放旧单、不比对内容，所以这两样变了也得是另一个键——否则网络超时
+ *  （单其实已建）后换地址再提交，会被折回旧地址那张单、发错货。只取摘要进键：不带手机号/地址原文，也不怕超云端键长。 */
+export function getIdemKey(shown = ''): string {
+  if (!draftItems.length) return ''
+  return shown ? idemKey + '_' + digest(shown) : idemKey
+}
+
+// 32 位 FNV-1a：只用来分辨「同一草稿下地址/应付变没变」，不是安全用途
+function digest(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193)
+  return (h >>> 0).toString(36)
 }
 
 /** 搭配购增删（id ∈ CHECKOUT_ADDONS·qty 恒 1·重复添加幂等）。草稿内容变了换幂等键（同 bumpQty 的理由）。 */
